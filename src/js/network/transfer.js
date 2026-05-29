@@ -7,89 +7,103 @@ class TransferManager {
   constructor(socketManager) {
     this.socketManager = socketManager;
     this.CHUNK_SIZE = 64 * 1024; // 64KB
-    
-    // tracking active receiving transfers: { fileId: { metadata, chunks: [], receivedChunks: 0 } }
     this.activeReceives = new Map(); 
+    this.onProgress = null; // callback(fileId, { received, total, isSending })
   }
 
-  // Called from main process when UI wants to send a file
   async sendFile(toPeerId, toIp, filePath) {
     if (!fs.existsSync(filePath)) return false;
 
     const stats = fs.statSync(filePath);
-    if (stats.size > 500 * 1024 * 1024) {
-      throw new Error("File exceeds 500MB limit.");
+    if (stats.size > 250 * 1024 * 1024) {
+      throw new Error("File exceeds 250MB limit.");
     }
+
+    const crypto = require('crypto');
+    const hash = crypto.createHash('sha256');
+    const hashStream = fs.createReadStream(filePath);
+    await new Promise((resolve, reject) => {
+      hashStream.on('data', chunk => hash.update(chunk));
+      hashStream.on('end', resolve);
+      hashStream.on('error', reject);
+    });
+    const fileHash = hash.digest('hex');
 
     const fileName = path.basename(filePath);
-    const fileId = window.orbitAPI ? window.orbitAPI.getUuid() : require('uuid').v4(); // Generate unique ID
+    const fileId = require('crypto').randomUUID();
     const totalChunks = Math.ceil(stats.size / this.CHUNK_SIZE);
 
-    // Read and send in chunks
-    // In a real app we would use streams to avoid reading 500MB into memory all at once.
-    // For simplicity, we use sync read or simple async stream here.
-    const fileBuffer = fs.readFileSync(filePath);
+    this.socketManager.sendMessage(toPeerId, toIp, Protocol.Types.FILE_TRANSFER_START, {
+      fileId, fileName, fileSize: stats.size, totalChunks, hash: fileHash
+    });
+
+    const readStream = fs.createReadStream(filePath, { highWaterMark: this.CHUNK_SIZE });
+    let chunkIndex = 0;
     
-    for (let i = 0; i < totalChunks; i++) {
-      const start = i * this.CHUNK_SIZE;
-      const end = Math.min(start + this.CHUNK_SIZE, fileBuffer.length);
-      const chunkData = fileBuffer.subarray(start, end).toString('base64');
-
-      const payload = {
-        fileId: fileId,
-        fileName: fileName,
-        fileSize: stats.size,
-        chunkIndex: i,
-        totalChunks: totalChunks,
-        data: chunkData
-      };
-
-      // Use socket manager to send chunk
+    for await (const chunk of readStream) {
+      const payload = { fileId, chunkIndex, data: chunk.toString('base64') };
       this.socketManager.sendMessage(toPeerId, toIp, Protocol.Types.FILE_CHUNK, payload);
+      
+      if (this.onProgress) {
+        this.onProgress(fileId, { received: chunkIndex + 1, total: totalChunks, isSending: true });
+      }
+      
+      // Progress event for frontend (optional, emit via socketManager if needed)
+      // await small delay to prevent JSON serialization blocking the event loop
+      await new Promise(r => setTimeout(r, 2));
+      chunkIndex++;
     }
-
+    
+    this.socketManager.sendMessage(toPeerId, toIp, Protocol.Types.FILE_TRANSFER_END, { fileId, hash: fileHash });
     return fileId;
   }
 
-  // Handle incoming chunk
-  handleChunk(packet, onComplete) {
+  handleStart(packet) {
     const payload = packet.payload;
-    const fileId = payload.fileId;
-
-    if (!this.activeReceives.has(fileId)) {
-      this.activeReceives.set(fileId, {
-        fileName: payload.fileName,
-        fileSize: payload.fileSize,
-        totalChunks: payload.totalChunks,
-        chunks: new Array(payload.totalChunks),
-        receivedCount: 0
-      });
-    }
-
-    const transfer = this.activeReceives.get(fileId);
+    const tempPath = path.join(os.tmpdir(), `orbit_${payload.fileId}`);
+    const writeStream = fs.createWriteStream(tempPath);
     
-    // Only process if we don't already have this chunk
-    if (!transfer.chunks[payload.chunkIndex]) {
-      transfer.chunks[payload.chunkIndex] = Buffer.from(payload.data, 'base64');
-      transfer.receivedCount++;
-      
-      // Check if complete
-      if (transfer.receivedCount === transfer.totalChunks) {
-        // Reassemble and save
-        const fullBuffer = Buffer.concat(transfer.chunks);
-        const downloadsDir = path.join(os.homedir(), 'Downloads', 'Orbit');
-        if (!fs.existsSync(downloadsDir)) {
-          fs.mkdirSync(downloadsDir, { recursive: true });
-        }
-        
-        const savePath = path.join(downloadsDir, transfer.fileName);
-        fs.writeFileSync(savePath, fullBuffer);
-        
-        this.activeReceives.delete(fileId);
-        
-        // Notify completion
-        if (onComplete) onComplete(savePath, payload.fileName);
-      }
+    this.activeReceives.set(payload.fileId, {
+      fileName: payload.fileName,
+      fileSize: payload.fileSize,
+      totalChunks: payload.totalChunks,
+      hash: payload.hash,
+      receivedCount: 0,
+      stream: writeStream,
+      tempPath: tempPath,
+      sha256: require('crypto').createHash('sha256')
+    });
+  }
+
+  handleChunk(packet) {
+    const payload = packet.payload;
+    const transfer = this.activeReceives.get(payload.fileId);
+    if (!transfer) return;
+    
+    const buffer = Buffer.from(payload.data, 'base64');
+    transfer.stream.write(buffer);
+    transfer.sha256.update(buffer);
+    transfer.receivedCount++;
+    
+    if (this.onProgress) {
+      this.onProgress(payload.fileId, { received: transfer.receivedCount, total: transfer.totalChunks, isSending: false });
+    }
+  }
+
+  handleEnd(packet, onComplete, onError) {
+    const payload = packet.payload;
+    const transfer = this.activeReceives.get(payload.fileId);
+    if (!transfer) return;
+    
+    transfer.stream.end();
+    const finalHash = transfer.sha256.digest('hex');
+    this.activeReceives.delete(payload.fileId);
+    
+    if (finalHash !== transfer.hash) {
+      if (onError) onError('Hash mismatch! Transfer corrupted.');
+      if (fs.existsSync(transfer.tempPath)) fs.unlinkSync(transfer.tempPath);
+    } else {
+      if (onComplete) onComplete(transfer.tempPath, transfer.fileName, payload.fileId);
     }
   }
 }

@@ -3,6 +3,8 @@
 window.ImageViewer = {
   currentImg: null,
   zoomLevel: 1,
+  galleryImages: [],
+  currentIndex: 0,
 
   init() {
     this.container = document.getElementById('image-viewer-modal');
@@ -37,7 +39,9 @@ window.ImageViewer = {
         </div>
       </div>
       <div style="flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative;" id="iv-canvas-area">
+        <button id="iv-btn-prev" style="position:absolute; left: 20px; top: 50%; transform: translateY(-50%); background:rgba(0,0,0,0.5); border:none; border-radius:50%; color:white; width:48px; height:48px; display:none; align-items:center; justify-content:center; cursor:pointer; z-index: 10;"><i data-lucide="chevron-left"></i></button>
         <img id="iv-image" src="" style="max-width: 90%; max-height: 90%; object-fit: contain; transition: transform 0.2s ease;">
+        <button id="iv-btn-next" style="position:absolute; right: 20px; top: 50%; transform: translateY(-50%); background:rgba(0,0,0,0.5); border:none; border-radius:50%; color:white; width:48px; height:48px; display:none; align-items:center; justify-content:center; cursor:pointer; z-index: 10;"><i data-lucide="chevron-right"></i></button>
       </div>
     `;
     lucide.createIcons({ root: this.container });
@@ -101,6 +105,20 @@ window.ImageViewer = {
         window.store.setState({ activeTab: 'dms' });
       }
     });
+
+    document.getElementById('iv-btn-prev').addEventListener('click', () => {
+      if (self.galleryImages.length > 1) {
+        self.currentIndex = (self.currentIndex - 1 + self.galleryImages.length) % self.galleryImages.length;
+        self.showImage(self.galleryImages[self.currentIndex]);
+      }
+    });
+
+    document.getElementById('iv-btn-next').addEventListener('click', () => {
+      if (self.galleryImages.length > 1) {
+        self.currentIndex = (self.currentIndex + 1) % self.galleryImages.length;
+        self.showImage(self.galleryImages[self.currentIndex]);
+      }
+    });
   },
 
   updateZoom() {
@@ -112,14 +130,46 @@ window.ImageViewer = {
 
   open(imgObj) {
     if (!this.container) return;
+    this.galleryImages = [imgObj];
+    this.currentIndex = 0;
+    this.showImage(imgObj);
+    this.container.style.display = 'flex';
+  },
+
+  openFromMessage(msgId, attId) {
+    if (!this.container) return;
+    var state = window.store.getState();
+    var msgList = state.messages[state.activeChatId] || [];
+    var msg = msgList.find(function(m) { return String(m.id) === String(msgId); });
+    
+    if (msg && msg.attachments) {
+      // Filter only images for the gallery
+      this.galleryImages = msg.attachments.filter(function(a) { return a.type === 'image'; });
+      if (this.galleryImages.length === 0) return;
+      
+      var index = this.galleryImages.findIndex(function(a) { return String(a.id) === String(attId); });
+      this.currentIndex = index !== -1 ? index : 0;
+      
+      this.showImage(this.galleryImages[this.currentIndex]);
+      this.container.style.display = 'flex';
+    }
+  },
+
+  showImage(imgObj) {
     this.currentImg = imgObj;
     this.zoomLevel = 1;
     
     document.getElementById('iv-image').src = imgObj.url;
-    document.getElementById('iv-title').innerText = imgObj.name || 'Image Preview';
+    var titleText = imgObj.name || 'Image Preview';
+    if (this.galleryImages.length > 1) {
+      titleText += ' (' + (this.currentIndex + 1) + '/' + this.galleryImages.length + ')';
+    }
+    document.getElementById('iv-title').innerText = titleText;
+    
+    document.getElementById('iv-btn-prev').style.display = this.galleryImages.length > 1 ? 'flex' : 'none';
+    document.getElementById('iv-btn-next').style.display = this.galleryImages.length > 1 ? 'flex' : 'none';
     
     this.updateZoom();
-    this.container.style.display = 'flex';
   },
 
   close() {

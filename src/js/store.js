@@ -54,6 +54,7 @@ class Store {
       activeTab: uiState.activeTab || 'dms',
       activeChatId: uiState.activeChatId || 'local-echo',
       messages: dbMessages,
+      transferProgress: {}, // { fileId: { received, total, isSending } }
       ...initialState
     };
     this.listeners = [];
@@ -73,17 +74,32 @@ class Store {
     this.setState({ friends });
   }
 
+  handleTransferProgress(data) {
+    const { fileId, received, total, isSending } = data;
+    const currentProgress = { ...this.state.transferProgress };
+    
+    if (received >= total) {
+      delete currentProgress[fileId];
+    } else {
+      currentProgress[fileId] = { received, total, isSending };
+    }
+    
+    this.setState({ transferProgress: currentProgress });
+  }
+
   handleIncomingPacket(packet) {
     // Basic message handling logic for now
     if (packet.type === 'MESSAGE' || !packet.type) {
       const fromId = packet.from;
-      const text = packet.payload.text || packet.payload;
+      const text = packet.payload.text || (typeof packet.payload === 'string' ? packet.payload : '');
       
       this.addMessage(fromId, {
-        id: packet.packetId || Date.now(),
+        id: packet.payload.msgId || packet.packetId || Date.now(),
         sender: fromId,
         text: text,
-        timestamp: packet.timestamp || new Date().toISOString()
+        timestamp: packet.timestamp || new Date().toISOString(),
+        replyTo: packet.payload.replyTo,
+        attachments: packet.payload.attachments
       });
 
       // Notifications
@@ -104,9 +120,14 @@ class Store {
       // Handle edit/delete sync
       const payload = packet.payload;
       if (payload && payload.action === 'delete' && payload.msgId) {
-        // We assume the chat ID is the sender's ID for 1-on-1 chats
         this.deleteMessage(packet.from, payload.msgId);
       }
+    } else if (packet.type === 'MESSAGE_EDIT') {
+      const { msgId, newText } = packet.payload;
+      this.editMessage(packet.from, msgId, newText);
+    } else if (packet.type === 'MESSAGE_DELETE') {
+      const { msgId } = packet.payload;
+      this.deleteMessage(packet.from, msgId);
     }
   }
 
@@ -117,6 +138,19 @@ class Store {
     
     if (window.orbitAPI) window.orbitAPI.dbAddMessage(chatId, messageObj);
     this.setState({ messages: msgs });
+  }
+
+  editMessage(chatId, msgId, newText) {
+    const msgs = { ...this.state.messages };
+    if (msgs[chatId]) {
+      const msg = msgs[chatId].find(m => m.id == msgId);
+      if (msg) {
+        msg.text = newText;
+        msg.edited = true;
+        if (window.orbitAPI) window.orbitAPI.dbEditMessage(chatId, msgId, newText);
+        this.setState({ messages: msgs });
+      }
+    }
   }
 
   deleteMessage(chatId, msgId) {

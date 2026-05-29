@@ -209,7 +209,8 @@ document.addEventListener('DOMContentLoaded', () => {
     window.orbitAPI.on('file-received', (data) => {
       console.log('File received:', data);
       
-      const isImage = data.name.match(/\\.(jpeg|jpg|gif|png|webp|svg)$/i) != null;
+      const isImage = data.name.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) != null;
+      const attId = data.fileId || (window.orbitAPI ? window.orbitAPI.getUuid() : Date.now().toString());
       
       window.store.handleIncomingPacket({
         type: window.Protocol.Types.MESSAGE,
@@ -217,14 +218,19 @@ document.addEventListener('DOMContentLoaded', () => {
         payload: { 
           text: '',
           attachments: [{
+            id: attId,
             type: isImage ? 'image' : 'file',
             name: data.name,
             size: 0,
             path: data.path,
-            url: 'orbit-file://' + encodeURIComponent(data.path)
+            url: `orbit-db://attachment/${attId}`
           }]
         }
       });
+    });
+
+    window.orbitAPI.on('transfer-progress', (data) => {
+      window.store.handleTransferProgress(data);
     });
   }
 

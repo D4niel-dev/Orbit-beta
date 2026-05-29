@@ -33,6 +33,28 @@ app.whenReady().then(() => {
   protocol.handle('orbit-db', (request) => {
     try {
       const url = new URL(request.url);
+      if (url.hostname === 'thumbnail' || url.pathname.startsWith('/thumbnail/')) {
+        const id = url.hostname === 'thumbnail' ? url.pathname.slice(1) : url.pathname.replace('/thumbnail/', '');
+        return new Promise((resolve) => {
+          if (globalDb) {
+            const att = globalDb.getAttachmentThumbnail(id);
+            if (att && att.thumbnail) {
+              resolve(new Response(att.thumbnail, {
+                headers: { 'Content-Type': 'image/webp' }
+              }));
+              return;
+            } else if (att && att.data) {
+              // Fallback to original image if no thumbnail yet
+              resolve(new Response(att.data, {
+                headers: { 'Content-Type': att.type || 'application/octet-stream' }
+              }));
+              return;
+            }
+          }
+          resolve(new Response(null, { status: 404 }));
+        });
+      }
+
       if (url.hostname === 'attachment' || url.pathname.startsWith('/attachment/')) {
         const id = url.hostname === 'attachment' ? url.pathname.slice(1) : url.pathname.replace('/attachment/', '');
         return new Promise((resolve) => {
@@ -56,6 +78,21 @@ app.whenReady().then(() => {
 
   // Init DB
   globalDb = new OrbitDatabase(app.getPath('userData'));
+
+  // Start background attachment cleanup
+  setInterval(() => {
+    if (globalDb) {
+      const settings = globalDb.getSetting('settings', {});
+      // Default to >365d (525600 minutes) if not set. If 0, it means never.
+      let cleanupMinutes = 525600; 
+      if (settings.deleteAttachmentsAfter !== undefined) {
+        cleanupMinutes = settings.deleteAttachmentsAfter;
+      }
+      if (cleanupMinutes > 0) {
+        globalDb.cleanupOldAttachments(cleanupMinutes);
+      }
+    }
+  }, 60000); // Check every minute
 
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -182,6 +219,22 @@ app.whenReady().then(() => {
   ipcMain.on('db-get-attachment', (event, attachmentId) => {
     event.returnValue = globalDb.getAttachment(attachmentId);
   });
+  ipcMain.on('db-delete-attachment', (event, attachmentId) => {
+    globalDb.stmts.deleteAttachment.run(attachmentId);
+    event.returnValue = true;
+  });
+  ipcMain.on('db-edit-message', (event, chatId, msgId, newText) => {
+    globalDb.editMessage(chatId, msgId, newText);
+    event.returnValue = true;
+  });
+  ipcMain.on('db-delete-message', (event, chatId, msgId) => {
+    globalDb.deleteMessage(chatId, msgId);
+    event.returnValue = true;
+  });
+  ipcMain.on('db-clear-attachments', (event) => {
+    globalDb.clearAllAttachments();
+    event.returnValue = true;
+  });
   ipcMain.on('db-get-setting', (event, key, def) => {
     event.returnValue = globalDb.getSetting(key, def);
   });
@@ -199,10 +252,22 @@ app.whenReady().then(() => {
       socketInstance = new SocketManager(() => currentIdentity);
       transferInstance = new TransferManager(socketInstance);
       
+      transferInstance.onProgress = (fileId, progressData) => {
+        if (mainWindow) {
+          mainWindow.webContents.send('transfer-progress', { fileId, ...progressData });
+        }
+      };
+      
       socketInstance.on('message', (packet) => {
-        if (packet.type === Protocol.Types.FILE_CHUNK) {
-          transferInstance.handleChunk(packet, (savedPath, fileName) => {
-             mainWindow.webContents.send('file-received', { path: savedPath, name: fileName, sender: packet.from });
+        if (packet.type === Protocol.Types.FILE_TRANSFER_START) {
+          transferInstance.handleStart(packet);
+        } else if (packet.type === Protocol.Types.FILE_CHUNK) {
+          transferInstance.handleChunk(packet);
+        } else if (packet.type === Protocol.Types.FILE_TRANSFER_END) {
+          transferInstance.handleEnd(packet, (savedPath, fileName, fileId) => {
+             mainWindow.webContents.send('file-received', { path: savedPath, name: fileName, sender: packet.from, fileId: fileId });
+          }, (errorMsg) => {
+             console.error('File Transfer Error:', errorMsg);
           });
         } else {
           mainWindow.webContents.send('network-message', packet);

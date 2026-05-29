@@ -63,6 +63,7 @@ class Discovery {
       usertag: identity.usertag,
       avatarHash: identity.avatar ? 'has_avatar' : null,
       status: identity.status,
+      bio: identity.bio,
       tcpPort: 46000 // default port
     };
 

@@ -38,12 +38,14 @@ class OrbitDatabase {
       getMessages: this.db.prepare('SELECT * FROM messages WHERE chatId = ? ORDER BY timestamp ASC'),
       getAllMessagesRaw: this.db.prepare('SELECT * FROM messages'),
       addMessage: this.db.prepare('INSERT INTO messages (id, chatId, sender, text, timestamp) VALUES (@id, @chatId, @sender, @text, @timestamp)'),
+      editMessage: this.db.prepare('UPDATE messages SET text = ? WHERE id = ? AND chatId = ?'),
       deleteMessage: this.db.prepare('DELETE FROM messages WHERE id = ? AND chatId = ?'),
       
       // Attachments
-      saveAttachment: this.db.prepare('INSERT INTO attachments (id, messageId, type, name, size, data) VALUES (@id, @messageId, @type, @name, @size, @data)'),
+      saveAttachment: this.db.prepare('INSERT INTO attachments (id, messageId, type, name, size, data, hash) VALUES (@id, @messageId, @type, @name, @size, @data, @hash)'),
       getAttachmentsForMessage: this.db.prepare('SELECT id, type, name, size FROM attachments WHERE messageId = ?'),
       getAttachmentData: this.db.prepare('SELECT type, name, data FROM attachments WHERE id = ?'),
+      getAttachmentThumbnail: this.db.prepare('SELECT type, name, thumbnail FROM attachments WHERE id = ?'),
       deleteAttachment: this.db.prepare('DELETE FROM attachments WHERE id = ?'),
       
       // Settings
@@ -177,10 +179,16 @@ class OrbitDatabase {
           const attId = att.id || require('crypto').randomUUID();
           
           let bufferData = Buffer.alloc(0);
-          if (att.data) {
-             bufferData = att.data;
-          } else if (att.path && fs.existsSync(att.path)) {
-             bufferData = fs.readFileSync(att.path);
+          
+          const settings = this.getSetting('settings', {});
+          const isPrivacyMode = settings.privacyMode === true;
+          
+          if (!isPrivacyMode) {
+            if (att.data) {
+               bufferData = att.data;
+            } else if (att.path && fs.existsSync(att.path)) {
+               bufferData = fs.readFileSync(att.path);
+            }
           }
 
           try {
@@ -190,8 +198,22 @@ class OrbitDatabase {
               type: att.type,
               name: att.name,
               size: att.size || bufferData.length,
-              data: bufferData
+              data: bufferData,
+              hash: att.hash || null
             });
+            
+            // Async thumbnail generation
+            if (att.type === 'image' && bufferData.length > 0) {
+              const sharp = require('sharp');
+              sharp(bufferData)
+                .resize(200, 200, { fit: 'inside' })
+                .webp({ quality: 80 })
+                .toBuffer()
+                .then(thumbBuffer => {
+                  this.db.prepare('UPDATE attachments SET thumbnail = ? WHERE id = ?').run(thumbBuffer, attId);
+                })
+                .catch(err => console.error('Failed to generate thumbnail for ' + attId, err));
+            }
           } catch(e) {
              // Handle duplicate attachment
              if (e.code !== 'SQLITE_CONSTRAINT_PRIMARYKEY') throw e;
@@ -206,13 +228,22 @@ class OrbitDatabase {
     this.stmts.deleteMessage.run(msgId.toString(), chatId);
   }
 
+  editMessage(chatId, msgId, newText) {
+    this.stmts.editMessage.run(newText, msgId.toString(), chatId);
+  }
+
   // --- Attachments ---
   saveAttachment(msgId, attachment) {
     const attId = attachment.id || require('crypto').randomUUID();
     
     let bufferData = Buffer.alloc(0);
-    if (attachment.data) bufferData = attachment.data;
-    else if (attachment.path && fs.existsSync(attachment.path)) bufferData = fs.readFileSync(attachment.path);
+    const settings = this.getSetting('settings', {});
+    const isPrivacyMode = settings.privacyMode === true;
+    
+    if (!isPrivacyMode) {
+      if (attachment.data) bufferData = attachment.data;
+      else if (attachment.path && fs.existsSync(attachment.path)) bufferData = fs.readFileSync(attachment.path);
+    }
 
     this.stmts.saveAttachment.run({
       id: attId,
@@ -220,13 +251,37 @@ class OrbitDatabase {
       type: attachment.type,
       name: attachment.name,
       size: attachment.size || bufferData.length,
-      data: bufferData
+      data: bufferData,
+      hash: attachment.hash || null
     });
     return attId;
   }
   
   getAttachment(attachmentId) {
     return this.stmts.getAttachmentData.get(attachmentId);
+  }
+
+  clearAllAttachments() {
+    this.db.prepare('UPDATE attachments SET data = zeroblob(0), thumbnail = NULL').run();
+  }
+
+  cleanupOldAttachments(minutes) {
+    // if minutes is 0, we don't delete. If no setting, user requested > 365 days (525600 min)
+    if (minutes <= 0) return;
+    
+    // SQLite datetime('now', '-N minutes')
+    const query = `
+      UPDATE attachments SET data = zeroblob(0), thumbnail = NULL 
+      WHERE messageId IN (
+        SELECT id FROM messages 
+        WHERE timestamp < datetime('now', '-${minutes} minutes')
+      ) AND (data != zeroblob(0) OR thumbnail IS NOT NULL)
+    `;
+    this.db.prepare(query).run();
+  }
+
+  getAttachmentThumbnail(attachmentId) {
+    return this.stmts.getAttachmentThumbnail.get(attachmentId);
   }
 
   // --- Settings ---

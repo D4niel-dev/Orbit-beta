@@ -33,8 +33,11 @@ contextBridge.exposeInMainWorld('orbitAPI', {
   dbAllMessagesRaw: () => ipcRenderer.sendSync('db-all-messages-raw'),
   dbAddMessage: (chatId, msg) => ipcRenderer.sendSync('db-add-message', chatId, msg),
   dbDeleteMessage: (chatId, msgId) => ipcRenderer.sendSync('db-delete-message', chatId, msgId),
+  dbEditMessage: (chatId, msgId, newText) => ipcRenderer.sendSync('db-edit-message', chatId, msgId, newText),
   dbSaveAttachment: (msgId, attachment) => ipcRenderer.sendSync('db-save-attachment', msgId, attachment),
   dbGetAttachment: (attachmentId) => ipcRenderer.sendSync('db-get-attachment', attachmentId),
+  dbDeleteAttachment: (attachmentId) => ipcRenderer.sendSync('db-delete-attachment', attachmentId),
+  dbClearAttachments: () => ipcRenderer.sendSync('db-clear-attachments'),
   dbGetSetting: (key, def) => ipcRenderer.sendSync('db-get-setting', key, def),
   dbSetSetting: (key, val) => ipcRenderer.sendSync('db-set-setting', key, val)
 });

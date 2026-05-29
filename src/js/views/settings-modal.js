@@ -20,6 +20,7 @@ window.SettingsModal = {
             '<button class="settings-tab active" data-tab="account" style="text-align:left;padding:10px 16px;border-radius:8px;background:var(--bg-hover);color:var(--text-primary);font-weight:500;border:none;cursor:pointer;">Account</button>' +
             '<button class="settings-tab" data-tab="appearance" style="text-align:left;padding:10px 16px;border-radius:8px;color:var(--text-secondary);background:transparent;border:none;cursor:pointer;">Appearance</button>' +
             '<button class="settings-tab" data-tab="network" style="text-align:left;padding:10px 16px;border-radius:8px;color:var(--text-secondary);background:transparent;border:none;cursor:pointer;">Network</button>' +
+            '<button class="settings-tab" data-tab="privacy" style="text-align:left;padding:10px 16px;border-radius:8px;color:var(--text-secondary);background:transparent;border:none;cursor:pointer;">Privacy & Storage</button>' +
           '</div>' +
           '<div style="flex:1;"></div>' +
           '<button id="btn-close-settings" style="padding:10px;border:1px solid var(--border-subtle);border-radius:8px;color:var(--text-secondary);background:transparent;cursor:pointer;">Close</button>' +
@@ -95,7 +96,10 @@ window.SettingsModal = {
             banner: content.querySelector('#input-banner').value.trim() || null
           });
           content.querySelector('#save-msg').textContent = "Saved!";
-          setTimeout(function() { content.querySelector('#save-msg').textContent = ""; }, 3000);
+          setTimeout(function() { 
+            var msgEl = content.querySelector('#save-msg');
+            if (msgEl) msgEl.textContent = ""; 
+          }, 3000);
         } catch (e) {
           content.querySelector('#save-msg').style.color = "var(--accent-danger)";
           content.querySelector('#save-msg').textContent = e.message;
@@ -189,6 +193,130 @@ window.SettingsModal = {
       content.querySelector('#net-clear').addEventListener('click', function(e) {
          e.target.textContent = 'Cleared!';
          setTimeout(function(){ e.target.textContent = 'Clear Network Cache'; }, 2000);
+      });
+    } else if (tabName === 'privacy') {
+      var s = state.settings;
+      var currentDelete = s.deleteAttachmentsAfter || 0; // 0 = never
+      var presetOptions = [
+        { label: 'Never', value: 0 },
+        { label: '1 minute', value: 1 },
+        { label: '5 minutes', value: 5 },
+        { label: '10 minutes', value: 10 },
+        { label: '25 minutes', value: 25 },
+        { label: '60 minutes', value: 60 },
+        { label: 'Custom', value: -1 }
+      ];
+      var isCustom = currentDelete > 0 && ![1,5,10,25,60].includes(currentDelete);
+      var selectVal = isCustom ? -1 : currentDelete;
+
+      var optionsHtml = '';
+      presetOptions.forEach(function(opt) {
+        optionsHtml += '<option value="' + opt.value + '"' + (selectVal === opt.value ? ' selected' : '') + '>' + opt.label + '</option>';
+      });
+
+      content.innerHTML =
+        '<h3 style="font-family:var(--font-display);font-size:24px;margin-bottom:24px;">Privacy & Storage</h3>' +
+        '<div style="display:flex;flex-direction:column;gap:24px;">' +
+          '<div style="padding:16px;background:var(--bg-hover);border-radius:8px;border:1px solid var(--border-subtle);">' +
+            '<label style="display:flex;align-items:center;gap:12px;font-size:16px;color:var(--text-primary);cursor:pointer;font-weight:bold;">' +
+              '<input id="set-privacy" type="checkbox" '+(s.privacyMode?'checked':'')+'> Enable Privacy Mode' +
+            '</label>' +
+            '<p style="margin-top:8px;font-size:13px;color:var(--text-secondary);">When enabled, attachments (images, files) are NOT saved to the database. They are only kept in a temporary folder and cleared when the app closes. Messages and profile data are still saved.</p>' +
+          '</div>' +
+
+          '<div style="padding:16px;background:var(--bg-hover);border-radius:8px;border:1px solid var(--border-subtle);">' +
+            '<label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;margin-bottom:8px;">Delete attachments after</label>' +
+            '<select id="set-delete-after" style="width:100%;padding:12px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);outline:none;">' +
+              optionsHtml +
+            '</select>' +
+            '<div id="custom-time-row" style="display:' + (isCustom ? 'flex' : 'none') + ';gap:8px;align-items:center;margin-top:12px;">' +
+              '<input id="custom-time-value" type="number" min="1" max="1440" value="' + (isCustom ? currentDelete : 30) + '" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);outline:none;">' +
+              '<select id="custom-time-unit" style="padding:10px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);outline:none;">' +
+                '<option value="1"' + (isCustom && currentDelete < 60 ? ' selected' : '') + '>Minutes</option>' +
+                '<option value="60"' + (isCustom && currentDelete >= 60 ? ' selected' : '') + '>Hours</option>' +
+              '</select>' +
+              '<button id="btn-custom-done" style="padding:10px 20px;background:var(--accent-primary);color:white;border-radius:8px;border:none;font-weight:600;cursor:pointer;">Done</button>' +
+            '</div>' +
+            '<p style="margin-top:8px;font-size:12px;color:var(--text-muted);">Attachments older than this will be automatically removed from the database. Max: 24 hours (1440 minutes).</p>' +
+          '</div>' +
+
+          '<div>' +
+            '<h4 style="font-size:14px;color:var(--text-primary);margin-bottom:8px;">Storage Management</h4>' +
+            '<button id="btn-clear-attachments" style="padding:10px 24px;background:var(--accent-danger);color:white;border-radius:8px;border:none;font-weight:600;cursor:pointer;">Clear All Saved Attachments</button>' +
+            '<span id="clear-msg" style="margin-left:16px;font-size:14px;color:var(--accent-success);"></span>' +
+          '</div>' +
+        '</div>';
+        
+      var updateSettings = function(key, val) {
+        var newSettings = { ...window.store.getState().settings };
+        newSettings[key] = val;
+        window.store.setState({ settings: newSettings });
+        window.Storage.set('settings', newSettings);
+      };
+
+      content.querySelector('#set-privacy').addEventListener('change', function(e) {
+        var isChecked = e.target.checked;
+        if (isChecked) {
+          e.target.checked = false; // Revert visually until confirmed
+          if (window.ConfirmModal) {
+            window.ConfirmModal.show({
+              title: 'Enable Privacy Mode',
+              message: "WARNING! When you toggle this mode, you'll enter Privacy Mode, which will NOT save any sended Images, Files, Folders but, you keep your messages, profile data!",
+              confirmText: 'Enable',
+              danger: true,
+              onConfirm: function() {
+                e.target.checked = true;
+                updateSettings('privacyMode', true);
+              }
+            });
+          }
+        } else {
+          updateSettings('privacyMode', false);
+        }
+      });
+
+      content.querySelector('#set-delete-after').addEventListener('change', function(e) {
+        var val = parseInt(e.target.value);
+        if (val === -1) {
+          content.querySelector('#custom-time-row').style.display = 'flex';
+        } else {
+          content.querySelector('#custom-time-row').style.display = 'none';
+          updateSettings('deleteAttachmentsAfter', val);
+        }
+      });
+
+      var btnCustomDone = content.querySelector('#btn-custom-done');
+      if (btnCustomDone) {
+        btnCustomDone.addEventListener('click', function() {
+          var timeVal = parseInt(content.querySelector('#custom-time-value').value) || 30;
+          var unitVal = parseInt(content.querySelector('#custom-time-unit').value) || 1;
+          var totalMinutes = Math.min(1440, Math.max(1, timeVal * unitVal));
+          content.querySelector('#custom-time-value').value = Math.floor(totalMinutes / unitVal);
+          updateSettings('deleteAttachmentsAfter', totalMinutes);
+          btnCustomDone.textContent = 'Saved!';
+          setTimeout(function() { btnCustomDone.textContent = 'Done'; }, 1500);
+        });
+      }
+      
+      content.querySelector('#btn-clear-attachments').addEventListener('click', function(e) {
+        if (window.ConfirmModal) {
+          window.ConfirmModal.show({
+            title: 'Clear Attachments',
+            message: 'Are you sure you want to permanently delete all saved attachments from the database? This cannot be undone.',
+            confirmText: 'Clear All',
+            danger: true,
+            onConfirm: function() {
+              if (window.orbitAPI) {
+                window.orbitAPI.dbClearAttachments();
+                content.querySelector('#clear-msg').textContent = 'Attachments cleared!';
+                setTimeout(function(){ 
+                  var clearMsgEl = content.querySelector('#clear-msg');
+                  if (clearMsgEl) clearMsgEl.textContent = ''; 
+                }, 3000);
+              }
+            }
+          });
+        }
       });
     } else {
       content.innerHTML = '<h3 style="font-family:var(--font-display);font-size:24px;margin-bottom:24px;">' + tabName + '</h3><p style="color:var(--text-muted);">Coming soon...</p>';

@@ -48,6 +48,13 @@ const migrations = [
         value TEXT
       );
     `);
+  },
+  // v2
+  (db) => {
+    db.exec(`
+      ALTER TABLE attachments ADD COLUMN hash TEXT;
+      ALTER TABLE attachments ADD COLUMN thumbnail BLOB;
+    `);
   }
 ];
 
