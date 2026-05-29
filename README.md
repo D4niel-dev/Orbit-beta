@@ -31,7 +31,7 @@ Pre-built Windows installers are published on [GitHub Releases](https://github.c
 **Requirements:** [Node.js](https://nodejs.org/) 18+ (LTS recommended), npm, Windows/macOS/Linux for development.
 
 ```bash
-git clone https://github.com/D4niel-dev/Orbit-v.0.0.1-beta.git
+git clone https://github.com/D4niel-dev/Orbit-beta.git
 cd Orbit-beta-main
 npm install
 npm start
