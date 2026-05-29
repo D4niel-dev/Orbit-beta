@@ -1,0 +1,19 @@
+appId: com.orbit.desktop
+productName: Orbit
+directories:
+  output: dist/
+win:
+  target: nsis
+  # icon: assets/icons/icon.ico
+  requestedExecutionLevel: asInvoker
+mac:
+  target: dmg
+  # icon: assets/icons/icon.icns
+linux:
+  target: AppImage
+  # icon: assets/icons/icon.png
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true

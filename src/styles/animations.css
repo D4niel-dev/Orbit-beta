@@ -1,0 +1,82 @@
+/* src/styles/animations.css */
+
+/* Online Status Pulse */
+@keyframes onlinePulse {
+  0% { box-shadow: 0 0 0 0 rgba(77, 217, 160, 0.4); }
+  70% { box-shadow: 0 0 0 4px rgba(77, 217, 160, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(77, 217, 160, 0); }
+}
+
+.status-indicator.online {
+  animation: onlinePulse 2s infinite;
+}
+
+/* Typing Indicator Bounce */
+@keyframes bounce {
+  0%, 80%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-4px); }
+}
+
+.typing-dot {
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  background-color: var(--text-secondary);
+  border-radius: 50%;
+  animation: bounce 1.4s infinite ease-in-out both;
+  margin: 0 2px;
+}
+
+.typing-dot:nth-child(1) { animation-delay: -0.32s; }
+.typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+/* Modal Scale & Fade */
+@keyframes modalOpen {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.modal-enter {
+  animation: modalOpen 180ms ease-out forwards;
+}
+
+/* Chat Panel Transitions */
+.chat-fade-out {
+  opacity: 0;
+  transition: opacity 80ms ease-in;
+}
+
+.chat-fade-in {
+  opacity: 1;
+  transition: opacity 120ms ease-out;
+}
+
+/* Message Hover Actions (Fade + Slide) */
+.msg-actions {
+  opacity: 0;
+  transform: translateY(4px);
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.message-row:hover .msg-actions {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* File Drag Overlay */
+@keyframes dashSpin {
+  to { stroke-dashoffset: -100; }
+}
+
+.drag-overlay {
+  background: rgba(28, 29, 48, 0.85); /* Dark bg */
+  backdrop-filter: blur(4px);
+  border: 4px dashed var(--accent-primary);
+  /* The dashed border animation would be applied via SVG or complex background, using simple border for now */
+}

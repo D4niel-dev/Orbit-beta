@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Content Security Policy to allow external fonts and scripts safely -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: orbit-db: orbit-file: https://media.giphy.com; media-src 'self' blob: orbit-db: orbit-file:; connect-src 'self' https://cdn.jsdelivr.net;">
+  
+  <title>Orbit</title>
+  
+  <!-- Google Fonts CDN as fallback/default -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- CSS Architecture -->
+  <link rel="stylesheet" href="styles/variables.css">
+  <link rel="stylesheet" href="styles/themes/light.css">
+  <link rel="stylesheet" href="styles/themes/dark.css">
+  <link rel="stylesheet" href="styles/base.css">
+  <link rel="stylesheet" href="styles/layout.css">
+  <link rel="stylesheet" href="styles/components.css">
+  <link rel="stylesheet" href="styles/animations.css">
+
+  <!-- Lucide Icons -->
+  <script src="../node_modules/lucide/dist/umd/lucide.min.js"></script>
+
+  <!-- Emoji Picker Element -->
+  <script type="module" src="../node_modules/emoji-picker-element/index.js"></script>
+</head>
+<body>
+  <!-- Custom Titlebar -->
+  <div id="titlebar">
+    <div class="titlebar-drag-area"></div>
+    <div class="controls">
+      <button id="btn-minimize" class="control-btn" title="Minimize">
+        <i data-lucide="minus"></i>
+      </button>
+      <button id="btn-maximize" class="control-btn" title="Maximize">
+        <i data-lucide="square"></i>
+      </button>
+      <button id="btn-close" class="control-btn control-btn-close" title="Close">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- App Layout Grid -->
+  <div id="app-layout">
+    
+    <!-- Panel 1: Main Sidebar (Icon Rail) -->
+    <aside id="panel-left">
+      <div id="left-sidebar-container"></div>
+    </aside>
+
+    <!-- Panel 2: Middle Sidebar (Friends / Groups) -->
+    <aside id="panel-middle" style="position:relative;">
+      <div id="middle-sidebar-container"></div>
+      <div id="sidebar-resizer" style="position:absolute; top:0; right:-3px; width:6px; height:100%; cursor:col-resize; z-index:10;"></div>
+    </aside>
+
+    <!-- Panel 3: Chat Window & Global Gallery -->
+    <main id="panel-right">
+      <div id="chat-container"></div>
+      <div id="global-gallery-container" style="display:none; height:100%; width:100%; flex-direction:column; background:var(--bg-base);"></div>
+      
+      <!-- Panel 4: Gallery Sidebar (Overlay) -->
+      <aside id="panel-gallery" style="display:none; position:absolute; top:0; right:0; bottom:0; width:320px; background:var(--bg-surface); border-left:1px solid var(--border-subtle); box-shadow:var(--shadow-xl); z-index:100; flex-direction:column;">
+        <div style="height:64px; border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center; padding:0 var(--spacing-lg);">
+          <span style="font-weight:600; font-family:var(--font-display);">Image Gallery</span>
+          <button id="btn-close-gallery" style="background:transparent; border:none; cursor:pointer; color:var(--text-secondary);"><i data-lucide="x"></i></button>
+        </div>
+        <div id="gallery-content" style="flex:1; overflow-y:auto; padding:var(--spacing-md); display:grid; grid-template-columns:1fr 1fr; gap:8px; align-content:start;"></div>
+      </aside>
+    </main>
+
+  </div>
+
+  <!-- Modals & Overlays -->
+  <div id="modal-container"></div>
+  <div id="image-viewer-modal"></div>
+  <div id="toast-container"></div>
+
+  <!-- App Scripts -->
+  <script src="js/utils/storage.js"></script>
+  <script src="js/utils/format.js"></script>
+  <script src="js/utils/sanitize.js"></script>
+  <script src="js/utils/profanity.js"></script>
+  <script src="js/network/protocol.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/identity.js"></script>
+  <script src="js/components/emoji-picker.js"></script>
+  <script src="js/components/toast.js"></script>
+  <script src="js/components/context-menu.js"></script>
+  <script src="js/components/image-viewer.js"></script>
+  <script src="js/views/sidebar-left.js"></script>
+  <script src="js/views/sidebar-middle.js"></script>
+  <script src="js/views/chat-panel.js"></script>
+  <script src="js/views/gallery-sidebar.js"></script>
+  <script src="js/views/global-gallery.js"></script>
+  <script src="js/components/profile-card.js"></script>
+  <script src="js/views/settings-modal.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

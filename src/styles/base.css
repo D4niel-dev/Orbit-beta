@@ -1,0 +1,66 @@
+/* src/styles/base.css */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-body);
+  font-size: var(--font-base-size);
+  color: var(--text-primary);
+  background-color: var(--bg-base);
+  overflow: hidden; /* Prevent body scroll, handle scroll in panels */
+  user-select: none; /* Disable text selection by default for app feel */
+}
+
+/* Allow text selection in message areas and inputs */
+.selectable, input, textarea, [contenteditable="true"], .message-content {
+  user-select: text;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  color: inherit;
+}
+
+input, textarea {
+  font-family: inherit;
+  font-size: inherit;
+  outline: none;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bg-hover);
+  border-radius: var(--radius-pill);
+}
+
+:hover::-webkit-scrollbar-thumb {
+  background: var(--accent-primary);
+}
+
+/* Focus outline for accessibility */
+*:focus-visible:not(.chat-input-field) {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary) !important;
+  border-radius: var(--radius-xs);
+}

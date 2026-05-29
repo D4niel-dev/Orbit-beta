@@ -1,0 +1,132 @@
+/* src/styles/layout.css */
+
+/* Custom Titlebar */
+#titlebar {
+  -webkit-app-region: drag;
+  height: 32px;
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: var(--z-titlebar);
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  background-color: var(--bg-sidebar);
+}
+
+.titlebar-drag-area {
+  flex: 1;
+  height: 100%;
+}
+
+#titlebar .controls {
+  -webkit-app-region: no-drag;
+  display: flex;
+  height: 100%;
+}
+
+.control-btn {
+  width: 46px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  transition: var(--transition);
+}
+
+.control-btn i {
+  width: 16px;
+  height: 16px;
+}
+
+.control-btn:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.control-btn-close:hover {
+  background-color: #e81123;
+  color: white;
+}
+
+/* App Grid Layout */
+#app-layout {
+  display: grid;
+  grid-template-columns: 64px 260px 1fr;
+  grid-template-rows: 100vh;
+  height: 100vh;
+  overflow: hidden;
+  padding-top: 32px; /* Avoid titlebar overlap */
+}
+
+#panel-left {
+  background-color: var(--bg-sidebar);
+  border-right: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0;
+  z-index: 2;
+}
+
+#panel-middle {
+  background-color: var(--bg-surface);
+  border-right: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  z-index: 1;
+}
+
+#panel-right {
+  background-color: var(--bg-base);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* Mobile Responsive Layout */
+@media (max-width: 768px) {
+  #app-layout {
+    grid-template-columns: 100vw;
+    grid-template-rows: 1fr 64px;
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  
+  #titlebar {
+    display: none;
+  }
+
+  #panel-left {
+    grid-row: 2;
+    grid-column: 1;
+    flex-direction: row;
+    justify-content: space-around;
+    padding: 0 16px;
+    border-right: none;
+    border-top: 1px solid var(--border-subtle);
+    z-index: 100;
+  }
+  
+  .spacer {
+    display: none; /* hide spacers on mobile nav */
+  }
+
+  #panel-middle {
+    grid-row: 1;
+    grid-column: 1;
+  }
+
+  #panel-right {
+    grid-row: 1;
+    grid-column: 1;
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 64px;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    z-index: 10;
+  }
+  
+  #panel-right.active {
+    transform: translateX(0);
+  }
+}

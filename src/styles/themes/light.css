@@ -1,0 +1,35 @@
+/* src/styles/themes/light.css */
+:root[data-theme="light"] {
+  /* Backgrounds */
+  --bg-base:        #F4F6FB;   /* Main window — slightly blue-tinted white */
+  --bg-surface:     #FFFFFF;   /* Cards, modals, panels */
+  --bg-sidebar:     #EDF0F8;   /* Left/middle sidebars */
+  --bg-hover:       #E3E8F4;   /* Hover state */
+  --bg-active:      #D8DFFE;   /* Selected/active item */
+
+  /* Text */
+  --text-primary:   #1A1D2E;
+  --text-secondary: #5A6080;
+  --text-muted:     #9499B0;
+  --text-inverse:   #FFFFFF;
+
+  /* Accents */
+  --accent-primary: #5B7FFF;   /* Soft royal blue */
+  --accent-hover:   #4A6EEE;
+  --accent-soft:    #EEF1FF;   /* Light-tinted bg for selected items */
+  --accent-danger:  #F04E4E;
+  --accent-success: #3BC98A;
+  --accent-warning: #F5A623;
+
+  /* Borders */
+  --border-subtle:  rgba(90, 96, 128, 0.12);
+  --border-strong:  rgba(90, 96, 128, 0.25);
+
+  /* Shadows */
+  --shadow-sm:      0 1px 3px rgba(30, 40, 80, 0.08);
+  --shadow-md:      0 4px 16px rgba(30, 40, 80, 0.10);
+  --shadow-lg:      0 8px 32px rgba(30, 40, 80, 0.14);
+
+  /* Transitions */
+  --transition:  all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
