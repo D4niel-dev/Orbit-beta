@@ -32,7 +32,7 @@ Pre-built Windows installers are published on [GitHub Releases](https://github.c
 
 ```bash
 git clone https://github.com/D4niel-dev/Orbit-v.0.0.1-beta.git
-cd Orbit-v.0.0.1-beta
+cd Orbit-beta-main
 npm install
 npm start
 ```
