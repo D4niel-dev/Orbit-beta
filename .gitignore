@@ -3,6 +3,7 @@ dist/
 release/
 build/
 plans/
+.agent/
 .env
 orbit.db
 *.sqlite
