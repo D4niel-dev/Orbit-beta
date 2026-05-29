@@ -4,7 +4,7 @@ directories:
   output: dist/
 win:
   target: nsis
-  icon: src/icons/app/orbit.ico
+  icon: src/icons/app/orbit_256.png
   requestedExecutionLevel: asInvoker
 mac:
   target: dmg
