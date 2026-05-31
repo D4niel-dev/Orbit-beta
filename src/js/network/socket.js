@@ -116,6 +116,28 @@ class SocketManager extends EventEmitter {
     }
   }
 
+  broadcastToGroup(members, type, payload, senderId) {
+    const identity = this.identityProvider();
+    if (!identity || !identity.userId) return false;
+
+    let sentCount = 0;
+    members.forEach(m => {
+      if (m.userId !== senderId && m.ip) {
+        const packet = Protocol.createPacket(type, identity.userId, m.userId, { ...payload, chatId: m.groupId || payload.chatId });
+        const serialized = Protocol.serialize(packet);
+        let socket = this.connections.get(m.userId);
+        if (!socket) {
+          socket = this.connectToPeer(m.userId, m.ip);
+        }
+        if (socket && !socket.destroyed) {
+          socket.write(serialized);
+          sentCount++;
+        }
+      }
+    });
+    return sentCount;
+  }
+
   stop() {
     if (this.server) {
       this.server.close();

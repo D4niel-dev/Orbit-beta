@@ -103,7 +103,7 @@ class TransferManager {
       if (onError) onError('Hash mismatch! Transfer corrupted.');
       if (fs.existsSync(transfer.tempPath)) fs.unlinkSync(transfer.tempPath);
     } else {
-      if (onComplete) onComplete(transfer.tempPath, transfer.fileName, payload.fileId);
+      if (onComplete) onComplete(transfer.tempPath, transfer.fileName, payload.fileId, transfer.fileSize);
     }
   }
 }

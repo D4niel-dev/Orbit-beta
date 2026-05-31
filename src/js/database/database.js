@@ -7,6 +7,8 @@ const Store = require('electron-store');
 class OrbitDatabase {
   constructor(userDataPath) {
     this.dbPath = path.join(userDataPath, 'orbit.db');
+    this.userDataPath = userDataPath;
+    this.tempDirPath = path.join(userDataPath, 'temp');
     this.db = new Database(this.dbPath);
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
@@ -21,6 +23,11 @@ class OrbitDatabase {
     this.migrateFromElectronStore();
     // Force re-migrate avatars since they were dropped in v1
     this.migrateFromElectronStore(true);
+
+    // Ensure temp directory exists
+    if (!fs.existsSync(this.tempDirPath)) {
+      try { fs.mkdirSync(this.tempDirPath, { recursive: true }); } catch(e) {}
+    }
   }
 
   initStatements() {
@@ -42,11 +49,22 @@ class OrbitDatabase {
       deleteMessage: this.db.prepare('DELETE FROM messages WHERE id = ? AND chatId = ?'),
       
       // Attachments
-      saveAttachment: this.db.prepare('INSERT INTO attachments (id, messageId, type, name, size, data, hash) VALUES (@id, @messageId, @type, @name, @size, @data, @hash)'),
-      getAttachmentsForMessage: this.db.prepare('SELECT id, type, name, size FROM attachments WHERE messageId = ?'),
-      getAttachmentData: this.db.prepare('SELECT type, name, data FROM attachments WHERE id = ?'),
-      getAttachmentThumbnail: this.db.prepare('SELECT type, name, thumbnail FROM attachments WHERE id = ?'),
+      saveAttachment: this.db.prepare('INSERT INTO attachments (id, messageId, type, name, size, data, hash, localPath) VALUES (@id, @messageId, @type, @name, @size, @data, @hash, @localPath)'),
+      getAttachmentsForMessage: this.db.prepare('SELECT id, type, name, size, localPath FROM attachments WHERE messageId = ?'),
+      getAttachmentData: this.db.prepare('SELECT type, name, data, localPath FROM attachments WHERE id = ?'),
+      getAttachmentThumbnail: this.db.prepare('SELECT type, name, thumbnail, localPath FROM attachments WHERE id = ?'),
       deleteAttachment: this.db.prepare('DELETE FROM attachments WHERE id = ?'),
+      
+      // Groups
+      getGroups: this.db.prepare('SELECT g.*, COUNT(gm.userId) as memberCount FROM groups g LEFT JOIN group_members gm ON g.groupId = gm.groupId GROUP BY g.groupId ORDER BY g.pinned DESC, g.createdAt DESC'),
+      getGroup: this.db.prepare('SELECT * FROM groups WHERE groupId = ?'),
+      saveGroup: this.db.prepare('INSERT OR REPLACE INTO groups (groupId, groupName, ownerId, createdAt, avatarPath, description, pinned, notificationMuted, inviteCode) VALUES (@groupId, @groupName, @ownerId, @createdAt, @avatarPath, @description, @pinned, @notificationMuted, @inviteCode)'),
+      deleteGroup: this.db.prepare('DELETE FROM groups WHERE groupId = ?'),
+      // no updateGroupField prepared statement — uses dynamic sql via method
+      getGroupByInviteCode: this.db.prepare('SELECT * FROM groups WHERE inviteCode = ?'),
+      addGroupMember: this.db.prepare('INSERT OR REPLACE INTO group_members (groupId, userId, username, usertag, status, avatar, ip, joinedAt) VALUES (@groupId, @userId, @username, @usertag, @status, @avatar, @ip, @joinedAt)'),
+      removeGroupMember: this.db.prepare('DELETE FROM group_members WHERE groupId = ? AND userId = ?'),
+      getGroupMembers: this.db.prepare('SELECT * FROM group_members WHERE groupId = ?'),
       
       // Settings
       getSetting: this.db.prepare('SELECT value FROM settings WHERE key = ?'),
@@ -107,6 +125,71 @@ class OrbitDatabase {
     });
   }
 
+  // --- Groups ---
+  getGroups() {
+    return this.stmts.getGroups.all().map(g => {
+      g.members = this.stmts.getGroupMembers.all(g.groupId);
+      return g;
+    });
+  }
+
+  getGroup(groupId) {
+    const group = this.stmts.getGroup.get(groupId);
+    if (!group) return null;
+    group.members = this.stmts.getGroupMembers.all(groupId);
+    return group;
+  }
+
+  saveGroup(group) {
+    this.stmts.saveGroup.run({
+      groupId: group.groupId,
+      groupName: group.groupName,
+      ownerId: group.ownerId,
+      createdAt: group.createdAt || new Date().toISOString(),
+      avatarPath: group.avatarPath || null,
+      description: group.description || '',
+      pinned: group.pinned ? 1 : 0,
+      notificationMuted: group.notificationMuted ? 1 : 0,
+      inviteCode: group.inviteCode || null
+    });
+    if (group.members && Array.isArray(group.members)) {
+      group.members.forEach(m => this.addGroupMember(group.groupId, m));
+    }
+  }
+
+  updateGroupField(groupId, field, value) {
+    // field is controlled by our code, not user input — safe for dynamic sql
+    this.db.prepare(`UPDATE groups SET ${field} = ? WHERE groupId = ?`).run(value, groupId);
+  }
+
+  getGroupByInviteCode(code) {
+    const group = this.stmts.getGroupByInviteCode.get(code);
+    if (!group) return null;
+    group.members = this.stmts.getGroupMembers.all(group.groupId);
+    return group;
+  }
+
+  addGroupMember(groupId, user) {
+    this.stmts.addGroupMember.run({
+      groupId: groupId,
+      userId: user.userId,
+      username: user.username,
+      usertag: user.usertag || '',
+      status: user.status || 'online',
+      avatar: user.avatar || null,
+      ip: user.ip || null,
+      joinedAt: user.joinedAt || new Date().toISOString()
+    });
+  }
+
+  removeGroupMember(groupId, userId) {
+    this.stmts.removeGroupMember.run(groupId, userId);
+  }
+
+  getGroupMembers(groupId) {
+    return this.stmts.getGroupMembers.all(groupId);
+  }
+  
   // --- Messages ---
   getMessages(chatId) {
     const msgs = this.stmts.getMessages.all(chatId);
@@ -117,7 +200,7 @@ class OrbitDatabase {
         type: a.type,
         name: a.name,
         size: a.size,
-        url: `orbit-db://attachment/${a.id}` // DB-backed protocol URL
+        url: a.localPath ? `orbit-file://${encodeURIComponent(a.localPath)}` : `orbit-db://attachment/${a.id}`
       }));
       
       return {
@@ -141,7 +224,7 @@ class OrbitDatabase {
         type: a.type,
         name: a.name,
         size: a.size,
-        url: `orbit-db://attachment/${a.id}`
+        url: a.localPath ? `orbit-file://${encodeURIComponent(a.localPath)}` : `orbit-db://attachment/${a.id}`
       }));
       
       result[m.chatId].push({
@@ -156,8 +239,9 @@ class OrbitDatabase {
   }
 
   addMessage(chatId, msg) {
+    const pendingThumbnails = [];
+
     this.db.transaction(() => {
-      // Need to handle potential duplicate IDs if client generates same ID on retry
       try {
         this.stmts.addMessage.run({
           id: msg.id.toString(),
@@ -167,27 +251,57 @@ class OrbitDatabase {
           timestamp: msg.timestamp || new Date().toISOString()
         });
       } catch (e) {
-        if (e.code === 'SQLITE_CONSTRAINT_PRIMARYKEY') {
-          // ignore or update
-        } else {
-          throw e;
-        }
+        if (e.code !== 'SQLITE_CONSTRAINT_PRIMARYKEY') throw e;
       }
       
       if (msg.attachments && msg.attachments.length > 0) {
+        const settings = this.getSetting('settings', {});
+        const isPrivacyMode = settings.privacyMode === true;
+
         msg.attachments.forEach(att => {
           const attId = att.id || require('crypto').randomUUID();
           
           let bufferData = Buffer.alloc(0);
-          
-          const settings = this.getSetting('settings', {});
-          const isPrivacyMode = settings.privacyMode === true;
-          
-          if (!isPrivacyMode) {
+          let localPath = att.localPath || null;
+
+          if (isPrivacyMode) {
+            if (att.path && fs.existsSync(att.path)) {
+              localPath = path.join(this.tempDirPath || require('os').tmpdir(), 'orbit_att_' + attId + '_' + (att.name || 'file'));
+              try {
+                const dir = path.dirname(localPath);
+                if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+                fs.copyFileSync(att.path, localPath);
+              } catch(e) {
+                console.error('Failed to copy attachment to temp dir:', e.message);
+                localPath = null;
+              }
+            } else if (att.data) {
+              localPath = path.join(this.tempDirPath || require('os').tmpdir(), 'orbit_att_' + attId + '_' + (att.name || 'file'));
+              try {
+                const dir = path.dirname(localPath);
+                if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+                fs.writeFileSync(localPath, att.data);
+              } catch(e) {
+                console.error('Failed to write attachment to temp dir:', e.message);
+                localPath = null;
+              }
+            }
+          } else {
             if (att.data) {
-               bufferData = att.data;
-            } else if (att.path && fs.existsSync(att.path)) {
-               bufferData = fs.readFileSync(att.path);
+              if (Buffer.isBuffer(att.data) && att.data.length > 0) {
+                bufferData = att.data;
+              } else if (att.data instanceof ArrayBuffer && att.data.byteLength > 0) {
+                bufferData = Buffer.from(att.data);
+              } else if (typeof att.data === 'object' && att.data !== null && typeof att.data.length === 'number' && att.data.length > 0) {
+                try { bufferData = Buffer.from(att.data); } catch(e) { /* ignore */ }
+              }
+            }
+            if (bufferData.length === 0 && att.path && fs.existsSync(att.path)) {
+               try {
+                 bufferData = fs.readFileSync(att.path);
+               } catch(e) {
+                 console.error('Failed to read attachment from path ' + att.path + ':', e.message);
+               }
             }
           }
 
@@ -199,28 +313,41 @@ class OrbitDatabase {
               name: att.name,
               size: att.size || bufferData.length,
               data: bufferData,
-              hash: att.hash || null
+              hash: att.hash || null,
+              localPath: localPath
             });
-            
-            // Async thumbnail generation
-            if (att.type === 'image' && bufferData.length > 0) {
-              const sharp = require('sharp');
-              sharp(bufferData)
-                .resize(200, 200, { fit: 'inside' })
-                .webp({ quality: 80 })
-                .toBuffer()
-                .then(thumbBuffer => {
-                  this.db.prepare('UPDATE attachments SET thumbnail = ? WHERE id = ?').run(thumbBuffer, attId);
-                })
-                .catch(err => console.error('Failed to generate thumbnail for ' + attId, err));
-            }
           } catch(e) {
-             // Handle duplicate attachment
              if (e.code !== 'SQLITE_CONSTRAINT_PRIMARYKEY') throw e;
+          }
+
+          if (!isPrivacyMode && att.type === 'image' && bufferData.length > 0) {
+            pendingThumbnails.push({ bufferData, attId });
           }
         });
       }
     })();
+
+    // Generate thumbnails AFTER the transaction commits (sharp native
+    // binary may not be installed, and we must not let it roll back saves).
+    for (const job of pendingThumbnails) {
+      this._generateThumbnail(job.bufferData, job.attId);
+    }
+  }
+
+  _generateThumbnail(bufferData, attId) {
+    try {
+      const sharp = require('sharp');
+      sharp(bufferData)
+        .resize(200, 200, { fit: 'inside' })
+        .webp({ quality: 80 })
+        .toBuffer()
+        .then(thumbBuffer => {
+          this.db.prepare('UPDATE attachments SET thumbnail = ? WHERE id = ?').run(thumbBuffer, attId);
+        })
+        .catch(err => console.error('Failed to generate thumbnail for ' + attId, err));
+    } catch(e) {
+      console.error('Thumbnail generation unavailable (sharp not installed):', e.message);
+    }
   }
   
   deleteMessage(chatId, msgId) {
@@ -261,6 +388,10 @@ class OrbitDatabase {
     return this.stmts.getAttachmentData.get(attachmentId);
   }
 
+  getAttachmentThumbnail(attachmentId) {
+    return this.stmts.getAttachmentThumbnail.get(attachmentId);
+  }
+
   clearAllAttachments() {
     this.db.prepare('UPDATE attachments SET data = zeroblob(0), thumbnail = NULL').run();
   }
@@ -278,10 +409,6 @@ class OrbitDatabase {
       ) AND (data != zeroblob(0) OR thumbnail IS NOT NULL)
     `;
     this.db.prepare(query).run();
-  }
-
-  getAttachmentThumbnail(attachmentId) {
-    return this.stmts.getAttachmentThumbnail.get(attachmentId);
   }
 
   // --- Settings ---
@@ -328,7 +455,7 @@ class OrbitDatabase {
           status: identity.status || 'online',
           avatar: identity.avatar || null,
           banner: identity.banner || null,
-          bio: ''
+          bio: identity.bio || ''
         });
       }
       

@@ -77,6 +77,48 @@ window.handleMediaError = function(el, url) {
   if (window.lucide) window.lucide.createIcons({ root: container });
 };
 
+// Notification sound via Web Audio API (no audio files needed)
+window.NotificationSound = {
+  _ctx: null,
+  _getContext() {
+    if (!this._ctx) {
+      this._ctx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    return this._ctx;
+  },
+  play() {
+    try {
+      var ctx = this._getContext();
+      var now = ctx.currentTime;
+
+      // Short pleasant chime - two ascending tones
+      var osc1 = ctx.createOscillator();
+      var gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(523.25, now); // C5
+      gain1.gain.setValueAtTime(0.3, now);
+      gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.15);
+
+      var osc2 = ctx.createOscillator();
+      var gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(659.25, now + 0.1); // E5
+      gain2.gain.setValueAtTime(0.3, now + 0.1);
+      gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.1);
+      osc2.stop(now + 0.3);
+    } catch (e) {
+      // Audio not available - silent fail
+    }
+  }
+};
+
 document.addEventListener('DOMContentLoaded', () => {
   console.log('Orbit Shell Booting...');
   
@@ -94,20 +136,39 @@ document.addEventListener('DOMContentLoaded', () => {
     window.orbitAPI?.send('window-controls', 'close');
   });
 
+  // Detect system dark mode preference
+  const darkModeMedia = window.matchMedia('(prefers-color-scheme: dark)');
+
   // Apply settings from store
   const applySettings = (settings) => {
-    document.documentElement.setAttribute('data-theme', settings.theme || 'dark');
+    var theme = settings.theme || 'dark';
+    if (theme === 'system') {
+      theme = darkModeMedia.matches ? 'dark' : 'light';
+    }
+    document.documentElement.setAttribute('data-theme', theme);
     
     // Zoom
     document.body.style.zoom = (settings.appZoom || 100) + '%';
     
-    // Animations
+    // Animation Speed
+    var speed = settings.animSpeed || 'normal';
+    var durations = { slow: '0.35s', normal: '0.18s', fast: '0.1s' };
+    var dur = durations[speed] || '0.18s';
+    document.documentElement.style.setProperty('--transition-duration', dur);
+
+    // Animations on/off
     if (settings.animations === false) {
       document.documentElement.style.setProperty('--transition', 'none');
     } else {
-      document.documentElement.style.removeProperty('--transition');
+      document.documentElement.style.setProperty('--transition', 'all ' + dur + ' cubic-bezier(0.4, 0, 0.2, 1)');
     }
     
+    // Reduce Motion
+    document.documentElement.classList.toggle('reduce-motion', !!settings.reduceMotion);
+
+    // Message Animation
+    document.body.setAttribute('data-message-anim', settings.messageAnim || 'slide');
+
     // Pattern
     if (settings.bgPattern === 'Dots') {
       document.documentElement.style.setProperty('--chat-bg-image', 'radial-gradient(var(--border-subtle) 1px, transparent 1px)');
@@ -132,6 +193,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   window.store.subscribe((state) => {
     applySettings(state.settings);
+  });
+
+  // Listen for OS theme changes when in 'system' mode
+  darkModeMedia.addEventListener('change', () => {
+    var state = window.store.getState();
+    if (state.settings.theme === 'system') {
+      applySettings(state.settings);
+    }
   });
 
   // Initialize Identity
@@ -177,15 +246,36 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Handle activeTab changes for Global Gallery layout
+  // Handle activeTab + sidebar toggle changes
   window.store.subscribe((state) => {
     const panelMiddle = document.getElementById('panel-middle');
     if (state.activeTab === 'gallery') {
       if (panelMiddle) panelMiddle.style.display = 'none';
       appLayout.style.gridTemplateColumns = `64px 1fr`;
+      if (window._sidebarToggleBtn) window._sidebarToggleBtn.style.display = 'none';
+    } else if (!state.sidebarMiddleVisible) {
+      if (panelMiddle) panelMiddle.style.display = 'flex';
+      appLayout.style.gridTemplateColumns = `64px 0px 1fr`;
+      // Show floating re-open button
+      var btn = window._sidebarToggleBtn;
+      if (!btn) {
+        btn = document.createElement('button');
+        btn.id = 'btn-reopen-sidebar';
+        btn.title = 'Show Sidebar';
+        btn.style.cssText = 'position:absolute;left:0;top:50%;transform:translateY(-50%);z-index:10;width:24px;height:48px;border:1px solid var(--border-subtle);border-left:none;background:var(--bg-surface);color:var(--text-secondary);cursor:pointer;border-radius:0 8px 8px 0;display:flex;align-items:center;justify-content:center;';
+        btn.innerHTML = '<i data-lucide="chevrons-right" style="width:16px;height:16px;"></i>';
+        btn.addEventListener('click', function() {
+          window.store.setState({ sidebarMiddleVisible: true });
+        });
+        document.getElementById('panel-right').appendChild(btn);
+        if (window.lucide) window.lucide.createIcons({ root: btn });
+        window._sidebarToggleBtn = btn;
+      }
+      btn.style.display = 'flex';
     } else {
       if (panelMiddle) panelMiddle.style.display = 'flex';
       appLayout.style.gridTemplateColumns = `64px ${currentSidebarWidth}px 1fr`;
+      if (window._sidebarToggleBtn) window._sidebarToggleBtn.style.display = 'none';
     }
   });
 
@@ -211,6 +301,7 @@ document.addEventListener('DOMContentLoaded', () => {
       
       const isImage = data.name.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) != null;
       const attId = data.fileId || (window.orbitAPI ? window.orbitAPI.getUuid() : Date.now().toString());
+      const fileSize = data.size || 0;
       
       window.store.handleIncomingPacket({
         type: window.Protocol.Types.MESSAGE,
@@ -221,7 +312,7 @@ document.addEventListener('DOMContentLoaded', () => {
             id: attId,
             type: isImage ? 'image' : 'file',
             name: data.name,
-            size: 0,
+            size: fileSize,
             path: data.path,
             url: `orbit-db://attachment/${attId}`
           }]

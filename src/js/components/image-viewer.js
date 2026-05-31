@@ -81,6 +81,14 @@ window.ImageViewer = {
         return;
       }
       
+      // Extract attachment ID from URL or generate new one
+      var attId = self.currentImg.id || null;
+      if (!attId) {
+        var urlMatch = self.currentImg.url.match(/orbit-db:\/\/attachment\/(.+)/);
+        attId = urlMatch ? urlMatch[1] : String(Date.now());
+      }
+      var attPath = self.currentImg.path || null;
+
       const newMsg = {
         id: Date.now(),
         sender: state.currentUser.userId,
@@ -88,10 +96,12 @@ window.ImageViewer = {
         timestamp: new Date().toISOString(),
         attachments: [
           {
+            id: attId,
             type: 'image',
             name: self.currentImg.name,
             url: self.currentImg.url,
-            size: self.currentImg.size
+            size: self.currentImg.size,
+            path: attPath
           }
         ]
       };

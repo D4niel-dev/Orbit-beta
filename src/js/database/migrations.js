@@ -55,6 +55,46 @@ const migrations = [
       ALTER TABLE attachments ADD COLUMN hash TEXT;
       ALTER TABLE attachments ADD COLUMN thumbnail BLOB;
     `);
+  },
+  // v3 - Groups & group members
+  (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS groups (
+        groupId TEXT PRIMARY KEY,
+        groupName TEXT,
+        ownerId TEXT,
+        createdAt TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS group_members (
+        groupId TEXT NOT NULL,
+        userId TEXT NOT NULL,
+        username TEXT,
+        usertag TEXT,
+        status TEXT,
+        avatar TEXT,
+        ip TEXT,
+        joinedAt TEXT,
+        PRIMARY KEY (groupId, userId),
+        FOREIGN KEY (groupId) REFERENCES groups(groupId) ON DELETE CASCADE
+      );
+    `);
+  },
+  // v4 - Add localPath column for privacy mode temp file references
+  (db) => {
+    db.exec(`
+      ALTER TABLE attachments ADD COLUMN localPath TEXT;
+    `);
+  },
+  // v5 - Group enhancements (avatar, description, settings, invite code)
+  (db) => {
+    db.exec(`
+      ALTER TABLE groups ADD COLUMN avatarPath TEXT;
+      ALTER TABLE groups ADD COLUMN description TEXT DEFAULT '';
+      ALTER TABLE groups ADD COLUMN pinned INTEGER DEFAULT 0;
+      ALTER TABLE groups ADD COLUMN notificationMuted INTEGER DEFAULT 0;
+      ALTER TABLE groups ADD COLUMN inviteCode TEXT;
+    `);
   }
 ];
 

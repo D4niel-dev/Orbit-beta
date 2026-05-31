@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v002-beta-current-version">v0.0.2-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v003-beta-current-version">v0.0.3-beta</a>
 </p>
 
 <p align="center">
@@ -27,7 +27,7 @@
 ## Preview
 
 <p align="center">
-  <img src="src/icons/screenshots/previw-darkmode.png" alt="Orbit dark mode" width="720"><br>
+  <img src="src/icons/screenshots/preview-darkmode.png" alt="Orbit dark mode" width="720"><br>
   <em>Dark mode</em>
 </p>
 
@@ -46,6 +46,12 @@
   <img src="src/icons/screenshots/preview-gallery-dark.png" alt="Orbit gallery (dark)" width="360">
   <img src="src/icons/screenshots/preview-gallery-light.png" alt="Orbit gallery (light)" width="360"><br>
   <em>Gallery &amp; file sharing</em>
+</p>
+
+<p align="center">
+  <img src="src/icons/screenshots/preview-group-dark.png" alt="Orbit group chat (dark)" width="360">
+  <img src="src/icons/screenshots/preview-group-light.png" alt="Orbit group chat (light)" width="360"><br>
+  <em>Group chat</em>
 </p>
 
 ## Why Orbit?
@@ -69,9 +75,15 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **P2P messaging** — Direct socket-based chat on your local network
 - **File & image sharing** — Send attachments peer-to-peer (up to **250 MB** in v0.0.2+)
 - **Auto-discovery** — Find other Orbit clients on the LAN without manual IP entry
-- **Profiles & themes** — Custom display name, avatar, and light/dark UI
+- **Profiles & themes** — Custom display name, avatar, light/dark/system UI
+- **Group chat** *(v0.0.3+)* — Multi-peer group messaging with member management, avatars, and invite codes
+- **Message reactions** *(v0.0.3+)* — Emoji reactions on messages
+- **Markdown formatting** *(v0.0.3+)* — Rich message formatting with headings, lists, code blocks, and more
+- **Drag-and-drop uploads** *(v0.0.3+)* — Drop files and images directly into the chat panel
+- **Notification sounds** *(v0.0.3+)* — Web Audio notification chime with per-user mute settings
+- **Profile sidebar** *(v0.0.3+)* — Click any avatar to view a detailed profile panel
 - **Persistent storage** *(v0.0.2+)* — Messages and media archived in SQLite (`better-sqlite3`)
-- **Privacy mode** *(v0.0.2+)* — Optional session-only attachment storage *(known issues — see [Known Limitations](#known-limitations))*
+- **Privacy mode** *(v0.0.2+)* — Optional session-only attachment storage
 - **Integrity checks** *(v0.0.2+)* — SHA-256 validation on file transfers
 - **Gallery** — Browse shared images with WebP thumbnails for fast scrolling
 - **System tray** — Minimize to tray instead of quitting
@@ -188,7 +200,6 @@ Transparency matters in beta. Current constraints include:
 | **Unstable Wi-Fi** | Large transfers and discovery can degrade on flaky wireless links. |
 | **No E2EE** | End-to-end encryption is not implemented. |
 | **Privacy mode bugs** | Privacy mode is intended to store sent/received attachments in a `temp/` folder and purge them on exit, but images and files may fail to load reliably in this mode today. |
-| **Group chat UI only** | Group creation exists in the sidebar, but multi-peer group messaging is not functional until **v0.0.3-beta**. |
 | **Mobile experimental** | The Capacitor Android shell is early-stage and not a supported release target yet. |
 | **Unsigned builds** | Installers are not code-signed; Windows SmartScreen warnings are expected. |
 
@@ -196,12 +207,7 @@ Transparency matters in beta. Current constraints include:
 
 ### Planned
 
-- **v0.0.3-beta — Group chat** — Functional multi-peer group messaging
-- **Privacy mode fix** — Reliable temp storage and attachment loading in privacy mode
-- **Message reactions**
-- **Drag-and-drop uploads**
 - **Resumable file transfers**
-- **Markdown message formatting**
 - **Media compression improvements**
 - **Voice messages**
 - **macOS / Linux build validation**

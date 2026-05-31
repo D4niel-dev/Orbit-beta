@@ -38,6 +38,16 @@ window.ChatPanel = {
         return;
       }
       
+      // React
+      var reactBtn = e.target.closest('.msg-react-btn');
+      if (reactBtn) {
+        e.stopPropagation();
+        var msgId = reactBtn.getAttribute('data-msg-id');
+        var rect = reactBtn.getBoundingClientRect();
+        self.showReactionPicker(rect.left, rect.bottom, msgId);
+        return;
+      }
+
       // Reply
       var replyBtn = e.target.closest('.msg-reply-btn');
       if (replyBtn) {
@@ -76,6 +86,23 @@ window.ChatPanel = {
         return;
       }
       
+      function broadcastToChat(chatId, type, payload) {
+        var s = window.store.getState();
+        var g = s.groups.find(function(g) { return g.groupId === chatId; });
+        if (g) {
+          (g.members || []).forEach(function(m) {
+            if (m.userId !== s.currentUser.userId && m.ip) {
+              window.orbitAPI.networkSend(m.userId, m.ip, type, payload);
+            }
+          });
+        } else {
+          var friend = s.friends.find(function(f) { return f.userId === chatId; });
+          if (friend) {
+            window.orbitAPI.networkSend(chatId, friend.ip, type, payload);
+          }
+        }
+      }
+      
       // Delete
       var deleteBtn = e.target.closest('.msg-delete-btn');
       if (deleteBtn) {
@@ -92,10 +119,7 @@ window.ChatPanel = {
               var activeChatId = state.activeChatId;
               
               if (isMine && window.orbitAPI && activeChatId !== 'local-echo') {
-                var friend = state.friends.find(function(f) { return f.userId === activeChatId; });
-                if (friend) {
-                  window.orbitAPI.networkSend(activeChatId, friend.ip, window.Protocol.Types.MESSAGE_DELETE, { msgId: msgId });
-                }
+                broadcastToChat(activeChatId, window.Protocol.Types.MESSAGE_DELETE, { msgId: msgId });
               }
               window.store.deleteMessage(activeChatId, msgId);
             }
@@ -169,7 +193,10 @@ window.ChatPanel = {
     }
 
     const activeFriend = state.friends.find(f => f.userId === state.activeChatId);
-    if (!activeFriend) return;
+    const activeGroup = state.groups.find(g => g.groupId === state.activeChatId);
+    const isGroup = !!activeGroup;
+    const activeName = isGroup ? activeGroup.groupName : (activeFriend ? activeFriend.username : 'Chat');
+    if (!activeFriend && !isGroup) return;
 
     const messages = state.messages[state.activeChatId] || [];
     const myId = state.currentUser.userId;
@@ -185,6 +212,26 @@ window.ChatPanel = {
       const sanitizedText = window.Sanitize.markdown(msg.text);
       const editedBadge = msg.edited ? '<span style="font-size:11px;color:rgba(255,255,255,0.5);margin-left:6px;">(edited)</span>' : '';
       const editedBadgeOther = msg.edited ? '<span style="font-size:11px;color:var(--text-muted);margin-left:6px;">(edited)</span>' : '';
+
+      // Reactions display
+      let reactionsHtml = '';
+      if (msg.reactions && msg.reactions.length > 0) {
+        const grouped = {};
+        msg.reactions.forEach(r => {
+          if (!grouped[r.emoji]) grouped[r.emoji] = [];
+          grouped[r.emoji].push(r.userId);
+        });
+        const entries = Object.entries(grouped);
+        reactionsHtml = '<div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap;">';
+        entries.forEach(([emoji, users]) => {
+          const userMention = users.length <= 2 ? users.map(u => u === myId ? 'You' : u.substring(0, 6)).join(', ') : users.length + ' people';
+          reactionsHtml += '<div style="display:flex;align-items:center;gap:4px;padding:2px 8px;border-radius:12px;background:var(--bg-hover);border:1px solid var(--border-subtle);font-size:12px;cursor:pointer;" title="' + window.Sanitize.escapeHtml(userMention) + '">' +
+            '<span>' + emoji + '</span>' +
+            '<span style="color:var(--text-secondary);font-size:11px;">' + users.length + '</span>' +
+          '</div>';
+        });
+        reactionsHtml += '</div>';
+      }
 
       // Reply quote
       let replyHtml = '';
@@ -224,6 +271,7 @@ window.ChatPanel = {
       // Hover action bar
       const actionBtns =
         '<button class="msg-action-btn msg-reply-btn" data-msg-id="' + msg.id + '" title="Reply" style="background:none;border:none;cursor:pointer;padding:4px;color:var(--text-secondary);"><i data-lucide="reply" style="width:14px;height:14px;"></i></button>' +
+        '<button class="msg-action-btn msg-react-btn" data-msg-id="' + msg.id + '" data-msg-text="' + window.Sanitize.escapeHtml(msg.text || '').replace(/"/g, '&quot;') + '" title="React" style="background:none;border:none;cursor:pointer;padding:4px;color:var(--text-secondary);"><i data-lucide="smile-plus" style="width:14px;height:14px;"></i></button>' +
         (isMine ? '<button class="msg-action-btn msg-edit-btn" data-msg-id="' + msg.id + '" title="Edit" style="background:none;border:none;cursor:pointer;padding:4px;color:var(--text-secondary);"><i data-lucide="pencil" style="width:14px;height:14px;"></i></button>' : '') +
         '<button class="msg-action-btn msg-delete-btn" data-msg-id="' + msg.id + '" data-is-mine="' + (isMine ? '1' : '0') + '" title="Delete" style="background:none;border:none;cursor:pointer;padding:4px;color:var(--accent-danger);"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button>';
 
@@ -237,40 +285,76 @@ window.ChatPanel = {
         const myAvatarImg = state.currentUser.avatar
           ? '<img src="' + window.Sanitize.escapeHtml(state.currentUser.avatar) + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">'
           : '<i data-lucide="user" style="width:14px;"></i>';
+        const senderName = '';
         messagesHtml += '<div class="message-row" data-msg-id="' + msg.id + '" style="display:flex; margin-bottom: var(--spacing-md); flex-direction: row-reverse; align-items: flex-end;">' +
-          '<div class="avatar avatar-sm" style="margin-left: var(--spacing-sm); margin-bottom: 4px; flex-shrink: 0;">' + myAvatarImg + '</div>' +
+          '<div style="padding-bottom: 10px; display:flex;">' +
+            '<div class="avatar avatar-sm msg-avatar" data-user-id="' + state.currentUser.userId + '" style="margin-left: var(--spacing-sm); flex-shrink: 0; cursor:pointer;">' + myAvatarImg + '</div>' +
+          '</div>' +
           '<div style="max-width: 65%; display:flex; flex-direction:column; align-items:flex-end;">' +
-            '<div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px; margin-right: 4px;">' + timeStr + '</div>' +
+            senderName +
             '<div class="message-bubble" data-msg-id="' + msg.id + '" style="position:relative;' + bubbleBgMine + ' ' + bubblePadding + ' border-radius: 16px 16px 0 16px; line-height: 1.4; font-size: 14px; cursor:context-menu; max-width: 100%;" onmouseenter="var el=this.querySelector(\'.msg-actions-bar\');if(el)el.style.display=\'flex\'" onmouseleave="var el=this.querySelector(\'.msg-actions-bar\');if(el)el.style.display=\'none\'">' +
               actionsBar + replyHtml + attachmentsHtml + sanitizedText + editedBadge +
             '</div>' +
+            '<div style="font-size: 12px; color: var(--text-muted); margin-top: 4px; align-self: flex-start; margin-left: 4px;">' + timeStr + '</div>' + reactionsHtml +
           '</div>' +
         '</div>';
       } else {
-        const username = window.Sanitize.escapeHtml(activeFriend.username);
-        const avatarImg = activeFriend.avatar
-          ? '<img src="' + window.Sanitize.escapeHtml(activeFriend.avatar) + '" style="width:100%;height:100%;border-radius:50%;">'
+        const sender = msg.sender === state.currentUser.userId ? state.currentUser : (isGroup ? null : activeFriend);
+        let senderName = isGroup ? 'Unknown' : window.Sanitize.escapeHtml(activeFriend.username);
+        let senderAvatar = isGroup ? null : (activeFriend.avatar || null);
+
+        if (isGroup) {
+          // Look up sender in group members
+          const member = activeGroup.members.find(function(m) { return m.userId === msg.sender; });
+          if (member) {
+            senderName = window.Sanitize.escapeHtml(member.username);
+            senderAvatar = member.avatar || null;
+          } else {
+            // Look up in friends list as fallback
+            const friend = state.friends.find(function(f) { return f.userId === msg.sender; });
+            if (friend) {
+              senderName = window.Sanitize.escapeHtml(friend.username);
+              senderAvatar = friend.avatar || null;
+            }
+          }
+        }
+
+        var avatarImg = senderAvatar
+          ? '<img src="' + window.Sanitize.escapeHtml(senderAvatar) + '" style="width:100%;height:100%;border-radius:50%;">'
           : '<i data-lucide="user" style="width:14px;"></i>';
         messagesHtml += '<div class="message-row" data-msg-id="' + msg.id + '" style="display:flex; margin-bottom: var(--spacing-md);">' +
-          '<div class="avatar avatar-sm" style="margin-right: var(--spacing-sm); margin-top: 4px; flex-shrink: 0;">' + avatarImg + '</div>' +
-          '<div style="max-width: 65%;">' +
-            '<div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px; margin-left: 4px;">' + username + ' • ' + timeStr + '</div>' +
+          '<div class="avatar avatar-sm msg-avatar" data-user-id="' + msg.sender + '" style="margin-right: var(--spacing-sm); margin-top: 4px; flex-shrink: 0; cursor:pointer;">' + avatarImg + '</div>' +
+          '<div style="max-width: 65%; display:flex; flex-direction:column; align-items:flex-start;">' +
+            '<div style="font-size: 11px; color: var(--text-secondary); font-weight: 500; margin-bottom: 2px; margin-left: 4px;">' + senderName + '</div>' +
             '<div class="message-bubble" data-msg-id="' + msg.id + '" style="position:relative;' + bubbleBgOther + ' ' + bubblePadding + ' border-radius: 0 16px 16px 16px; line-height: 1.4; font-size: 14px; cursor:context-menu; max-width: 100%;" onmouseenter="var el=this.querySelector(\'.msg-actions-bar\');if(el)el.style.display=\'flex\'" onmouseleave="var el=this.querySelector(\'.msg-actions-bar\');if(el)el.style.display=\'none\'">' +
               actionsBar + replyHtml + attachmentsHtml + sanitizedText + editedBadgeOther +
             '</div>' +
+            '<div style="font-size: 12px; color: var(--text-muted); margin-top: 4px; align-self: flex-end; margin-right: 4px;">' + timeStr + '</div>' + reactionsHtml +
           '</div>' +
         '</div>';
       }
     });
 
-    // Header avatar
-    var headerAvatar = activeFriend.avatar
-      ? '<img src="' + window.Sanitize.escapeHtml(activeFriend.avatar) + '" style="width:100%;height:100%;border-radius:50%;">'
-      : '<i data-lucide="user"></i>';
-
-    this.container.innerHTML =
-      '<!-- Chat Header -->' +
-      '<div class="chat-header" style="height: 64px; border-bottom: 1px solid var(--border-subtle); display:flex; align-items:center; padding: 0 var(--spacing-lg);">' +
+    // Header
+    var headerHtml = '';
+    if (isGroup) {
+      var memberCount = (activeGroup.members || []).length;
+      headerHtml =
+        '<div class="avatar avatar-md" style="margin-right: var(--spacing-md); display:flex; align-items:center; justify-content:center;">' +
+          (activeGroup.avatarPath
+            ? '<img src="orbit-avatar://' + window.Sanitize.escapeHtml(activeGroup.groupId) + '" style="width:40px;height:40px;border-radius:12px;object-fit:cover;">'
+            : '<div style="display:flex;align-items:center;justify-content:center;background:var(--accent-primary);border-radius:12px;width:40px;height:40px;font-weight:700;color:white;font-size:16px;">' + window.Sanitize.escapeHtml(activeGroup.groupName.charAt(0).toUpperCase()) + '</div>'
+          ) +
+        '</div>' +
+        '<div style="flex:1;">' +
+          '<div style="font-weight: 600; font-family: var(--font-display); font-size: 16px;">' + window.Sanitize.escapeHtml(activeGroup.groupName) + '</div>' +
+          '<div id="group-member-count" style="font-size: 12px; color: var(--text-muted); cursor:pointer;">' + memberCount + ' member' + (memberCount !== 1 ? 's' : '') + '</div>' +
+        '</div>';
+    } else {
+      var headerAvatar = activeFriend.avatar
+        ? '<img src="' + window.Sanitize.escapeHtml(activeFriend.avatar) + '" style="width:100%;height:100%;border-radius:50%;">'
+        : '<i data-lucide="user"></i>';
+      headerHtml =
         '<div class="avatar avatar-md chat-header-avatar" style="margin-right: var(--spacing-md); position:relative; cursor:pointer;">' +
           headerAvatar +
           '<div class="status-indicator ' + window.Sanitize.escapeHtml(activeFriend.status) + '"></div>' +
@@ -280,9 +364,16 @@ window.ChatPanel = {
           '<div style="font-size: 12px; color: var(--accent-success); display:flex; align-items:center; gap:4px;">' +
             '<div style="width:6px;height:6px;background:var(--accent-success);border-radius:50%;"></div> ' + window.Sanitize.escapeHtml(activeFriend.status) +
           '</div>' +
-        '</div>' +
+        '</div>';
+    }
+
+    this.container.innerHTML =
+      '<!-- Chat Header -->' +
+      '<div class="chat-header" style="height: 64px; border-bottom: 1px solid var(--border-subtle); display:flex; align-items:center; padding: 0 var(--spacing-lg);">' +
+        headerHtml +
         '<div style="display:flex; gap:16px; color: var(--text-secondary);">' +
           '<button id="btn-gallery" title="Image Gallery" style="background:transparent; border:none; cursor:pointer; color:inherit;"><i data-lucide="image"></i></button>' +
+          (isGroup ? '<button id="btn-group-info" title="Group Info" style="background:transparent; border:none; cursor:pointer; color:inherit;"><i data-lucide="info"></i></button>' : '') +
           '<button id="btn-chat-more" title="More" style="background:transparent; border:none; cursor:pointer; color:inherit;"><i data-lucide="more-vertical"></i></button>' +
         '</div>' +
       '</div>' +
@@ -335,7 +426,7 @@ window.ChatPanel = {
         replyEditBar +
         '<div class="chat-input-wrapper">' +
           '<button id="btn-plus"><i data-lucide="plus-circle"></i></button>' +
-          '<input type="text" id="chat-input" class="chat-input-field" placeholder="Message ' + window.Sanitize.escapeHtml(activeFriend.username) + '..."' + (this.editingMsg ? ' value="' + window.Sanitize.escapeHtml(this.editingMsg.text) + '"' : '') + '>' +
+          '<input type="text" id="chat-input" class="chat-input-field" placeholder="Message ' + window.Sanitize.escapeHtml(activeName) + '..."' + (this.editingMsg ? ' value="' + window.Sanitize.escapeHtml(this.editingMsg.text) + '"' : '') + '>' +
           '<button id="btn-emoji"><i data-lucide="smile"></i></button>' +
           '<button id="btn-send"><i data-lucide="send"></i></button>' +
           '<input type="file" id="file-input" style="display:none;" multiple>' +
@@ -356,11 +447,11 @@ window.ChatPanel = {
     var self = this;
     var input = document.getElementById('chat-input');
     if (input) {
-      input.addEventListener('keydown', function(e) {
+      input.addEventListener('keydown', async function(e) {
         if (e.key === 'Enter') {
           var text = input.value.trim();
           if (text !== '' || self.stagedFiles.length > 0) {
-            self.sendMessage(text);
+            await self.sendMessage(text);
             input.value = '';
           }
         }
@@ -376,10 +467,10 @@ window.ChatPanel = {
 
     var btnSend = document.getElementById('btn-send');
     if (btnSend) {
-      btnSend.addEventListener('click', function() {
+      btnSend.addEventListener('click', async function() {
         var text = input.value.trim();
         if (text !== '' || self.stagedFiles.length > 0) {
-          self.sendMessage(text);
+          await self.sendMessage(text);
           input.value = '';
         }
       });
@@ -477,9 +568,32 @@ window.ChatPanel = {
         e.stopPropagation();
         var state = window.store.getState();
         var activeFriend = state.friends.find(function(f) { return f.userId === state.activeChatId; });
-        if (activeFriend && window.ProfileCard) window.ProfileCard.open(activeFriend);
+        if (activeFriend && window.ProfileSidebar) window.ProfileSidebar.open(activeFriend);
       });
     }
+
+    // Per-message avatar clicks → open ProfileSidebar
+    this.container.addEventListener('click', function(e) {
+      var avatarEl = e.target.closest('.msg-avatar');
+      if (avatarEl) {
+        var userId = avatarEl.getAttribute('data-user-id');
+        if (!userId) return;
+        var state = window.store.getState();
+        // Look up user in friends, group members, or currentUser
+        var user = state.friends.find(function(f) { return f.userId === userId; });
+        if (!user) {
+          // Check group members
+          var group = state.groups.find(function(g) { return g.groupId === state.activeChatId; });
+          if (group) {
+            user = group.members.find(function(m) { return m.userId === userId; });
+          }
+        }
+        if (userId === state.currentUser.userId) {
+          user = state.currentUser;
+        }
+        if (user && window.ProfileSidebar) window.ProfileSidebar.open(user);
+      }
+    });
 
     var btnChatMore = document.getElementById('btn-chat-more');
     if (btnChatMore) {
@@ -501,6 +615,69 @@ window.ChatPanel = {
         window.GallerySidebar.toggle();
       });
     }
+
+    var btnGroupInfo = document.getElementById('btn-group-info');
+    if (btnGroupInfo) {
+      btnGroupInfo.addEventListener('click', function() {
+        var s = window.store.getState();
+        if (s.activeChatId && window.SidebarMiddle && window.SidebarMiddle.showGroupInfo) {
+          window.SidebarMiddle.showGroupInfo(s.activeChatId);
+        }
+      });
+    }
+
+    var groupMemberCount = document.getElementById('group-member-count');
+    if (groupMemberCount) {
+      groupMemberCount.addEventListener('click', function() {
+        var s = window.store.getState();
+        if (s.activeChatId && window.SidebarMiddle && window.SidebarMiddle.showGroupInfo) {
+          window.SidebarMiddle.showGroupInfo(s.activeChatId);
+        }
+      });
+    }
+
+    // Drag and drop file uploads
+    this.container.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      self.container.classList.add('drag-active');
+    });
+
+    this.container.addEventListener('dragleave', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      self.container.classList.remove('drag-active');
+    });
+
+    this.container.addEventListener('drop', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      self.container.classList.remove('drag-active');
+
+      if (!e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
+
+      var state = window.store.getState();
+      if (!state.activeChatId) {
+        window.Toast.show('No Chat', 'Select a chat first');
+        return;
+      }
+
+      for (var i = 0; i < e.dataTransfer.files.length; i++) {
+        var file = e.dataTransfer.files[i];
+        var isImage = file.type.startsWith('image/');
+        self.stagedFiles.push({
+          file: file,
+          path: file.path || file.name,
+          name: file.name,
+          size: file.size,
+          type: isImage ? 'image' : 'file',
+          url: isImage ? URL.createObjectURL(file) : null
+        });
+      }
+
+      self.renderPreviewArea();
+      window.Toast.show('Files Added', e.dataTransfer.files.length + ' file(s) staged for upload');
+    });
   },
 
   renderPreviewArea() {
@@ -543,7 +720,47 @@ window.ChatPanel = {
     });
   },
 
-  sendMessage(text) {
+  showReactionPicker(x, y, msgId) {
+    var existing = document.querySelector('.reaction-picker');
+    if (existing) { document.body.removeChild(existing); return; }
+
+    var emojis = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '🎉'];
+    var self = this;
+    var picker = document.createElement('div');
+    picker.className = 'reaction-picker';
+    picker.style.cssText = 'position:fixed;left:' + x + 'px;top:' + (y + 8) + 'px;z-index:9999;background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:24px;padding:6px 8px;box-shadow:var(--shadow-xl);display:flex;gap:2px;';
+
+    emojis.forEach(function(emoji) {
+      var btn = document.createElement('button');
+      btn.textContent = emoji;
+      btn.style.cssText = 'background:none;border:none;font-size:22px;cursor:pointer;padding:4px 6px;border-radius:50%;transition:background 0.15s,transform 0.1s;line-height:1;';
+      btn.onmouseover = function() { this.style.background = 'var(--bg-hover)'; this.style.transform = 'scale(1.2)'; };
+      btn.onmouseout = function() { this.style.background = 'transparent'; this.style.transform = 'scale(1)'; };
+      btn.onclick = function() {
+        var state = window.store.getState();
+        var chatId = state.activeChatId;
+        if (chatId && window.store.sendReaction) {
+          window.store.sendReaction(chatId, msgId, emoji, 'add');
+        }
+        if (picker.parentNode) picker.parentNode.removeChild(picker);
+      };
+      picker.appendChild(btn);
+    });
+
+    document.body.appendChild(picker);
+
+    // Close on click outside
+    setTimeout(function() {
+      document.addEventListener('click', function closePicker(e) {
+        if (!picker.contains(e.target)) {
+          if (picker.parentNode) picker.parentNode.removeChild(picker);
+          document.removeEventListener('click', closePicker);
+        }
+      });
+    }, 10);
+  },
+
+  async sendMessage(text) {
     var state = window.store.getState();
     var activeChatId = state.activeChatId;
     if (!activeChatId) return;
@@ -551,26 +768,80 @@ window.ChatPanel = {
     if (!text && this.stagedFiles.length === 0) return;
 
     const friend = state.friends.find(function(f) { return f.userId === activeChatId; });
-    const toIp = friend ? friend.ip : null;
+    const activeGroup = state.groups.find(function(g) { return g.groupId === activeChatId; });
+    const isGroup = !!activeGroup;
     const myId = state.currentUser.userId;
+
+    // Get all recipients for this message
+    var recipients = [];
+    if (isGroup) {
+      var members = activeGroup.members || [];
+      members.forEach(function(m) {
+        if (m.userId !== myId && m.ip) {
+          recipients.push({ userId: m.userId, ip: m.ip });
+        }
+      });
+    } else if (friend) {
+      recipients.push({ userId: friend.userId, ip: friend.ip });
+    }
+
+    // Helper: send to all recipients
+    function sendToAll(type, payload) {
+      if (window.orbitAPI && activeChatId !== 'local-echo') {
+        recipients.forEach(function(r) {
+          window.orbitAPI.networkSend(r.userId, r.ip, type, payload);
+        });
+      } else if (activeChatId === 'local-echo') {
+        var echoPayload = payload.text ? { text: 'Echo: ' + payload.text, msgId: Date.now() + 1, replyTo: payload.replyTo } : null;
+        if (echoPayload) {
+          setTimeout(function() {
+            window.store.addMessage('local-echo', {
+              id: Date.now() + 1,
+              sender: 'local-echo',
+              text: echoPayload.text,
+              replyTo: echoPayload.replyTo,
+              timestamp: new Date().toISOString()
+            });
+          }, 500);
+        }
+      }
+    }
 
     // 1. Send files first (if any)
     if (this.stagedFiles.length > 0) {
-      const attachments = this.stagedFiles.map(s => ({
+      var attId = Date.now();
+
+      // Read file data in renderer for persistence (needed when path is unavailable)
+      const fileBuffers = await Promise.all(this.stagedFiles.map(async (s) => {
+        if (s.file) {
+          try {
+            const ab = await s.file.arrayBuffer();
+            if (ab && ab.byteLength > 0) return ab;
+          } catch(e) { /* ignore */ }
+        }
+        return null;
+      }));
+
+      const attachments = this.stagedFiles.map((s, idx) => ({
+        id: String(attId++),
         type: s.type,
         name: s.name,
         size: s.size,
         path: s.path,
-        url: s.path ? 'orbit-file://' + encodeURIComponent(s.path) : s.url
+        data: fileBuffers[idx],
+        url: s.path
+          ? `orbit-db://attachment/${String(attId - 1)}`
+          : (s.url || '')
       }));
 
-      // Trigger actual network transfer
       if (window.orbitAPI && activeChatId !== 'local-echo') {
         this.stagedFiles.forEach(async (s) => {
           try {
-             await window.orbitAPI.networkSendFile(activeChatId, toIp, s.path);
+            recipients.forEach(function(r) {
+              window.orbitAPI.networkSendFile(r.userId, r.ip, s.path);
+            });
           } catch(err) {
-             console.error("File send error:", err);
+            console.error("File send error:", err);
           }
         });
       }
@@ -592,32 +863,18 @@ window.ChatPanel = {
       if (this.editingMsg) {
         // Edit flow
         const msgId = this.editingMsg.id;
-        if (window.orbitAPI && activeChatId !== 'local-echo') {
-          window.orbitAPI.networkSend(activeChatId, toIp, window.Protocol.Types.MESSAGE_EDIT, { msgId, newText: text });
-        }
+        sendToAll(window.Protocol.Types.MESSAGE_EDIT, { msgId, newText: text });
         window.store.editMessage(activeChatId, msgId, text);
         this.editingMsg = null;
       } else {
         // Send new text
         const msgId = Date.now() + 2;
-        var payload = { text: text, msgId: msgId };
+        var payload = { text: text, msgId: msgId, chatId: activeChatId };
         if (this.replyingTo) {
           payload.replyTo = this.replyingTo.id;
         }
         
-        if (window.orbitAPI && activeChatId !== 'local-echo') {
-          window.orbitAPI.networkSend(activeChatId, toIp, window.Protocol.Types.MESSAGE, payload);
-        } else if (activeChatId === 'local-echo') {
-          setTimeout(() => {
-            window.store.addMessage('local-echo', {
-              id: Date.now() + 1,
-              sender: 'local-echo',
-              text: 'Echo: ' + text,
-              replyTo: payload.replyTo,
-              timestamp: new Date().toISOString()
-            });
-          }, 500);
-        }
+        sendToAll(window.Protocol.Types.MESSAGE, payload);
         
         window.store.addMessage(activeChatId, {
           id: msgId,

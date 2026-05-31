@@ -21,6 +21,8 @@ window.SettingsModal = {
             '<button class="settings-tab" data-tab="appearance" style="text-align:left;padding:10px 16px;border-radius:8px;color:var(--text-secondary);background:transparent;border:none;cursor:pointer;">Appearance</button>' +
             '<button class="settings-tab" data-tab="network" style="text-align:left;padding:10px 16px;border-radius:8px;color:var(--text-secondary);background:transparent;border:none;cursor:pointer;">Network</button>' +
             '<button class="settings-tab" data-tab="privacy" style="text-align:left;padding:10px 16px;border-radius:8px;color:var(--text-secondary);background:transparent;border:none;cursor:pointer;">Privacy & Storage</button>' +
+            '<button class="settings-tab" data-tab="notifications" style="text-align:left;padding:10px 16px;border-radius:8px;color:var(--text-secondary);background:transparent;border:none;cursor:pointer;">Notifications</button>' +
+            '<button class="settings-tab" data-tab="about" style="text-align:left;padding:10px 16px;border-radius:8px;color:var(--text-secondary);background:transparent;border:none;cursor:pointer;">About</button>' +
           '</div>' +
           '<div style="flex:1;"></div>' +
           '<button id="btn-close-settings" style="padding:10px;border:1px solid var(--border-subtle);border-radius:8px;color:var(--text-secondary);background:transparent;cursor:pointer;">Close</button>' +
@@ -111,9 +113,10 @@ window.SettingsModal = {
         '<h3 style="font-family:var(--font-display);font-size:24px;margin-bottom:24px;">Appearance</h3>' +
         '<div style="display:flex;flex-direction:column;gap:24px;">' +
           '<div><label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;margin-bottom:12px;">Theme</label>' +
-          '<div style="display:flex;gap:16px;">' +
-          '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="radio" name="theme" value="dark" ' + (s.theme === 'dark' ? 'checked' : '') + '> Dark Mode</label>' +
-          '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="radio" name="theme" value="light" ' + (s.theme === 'light' ? 'checked' : '') + '> Light Mode</label>' +
+          '<div style="display:flex;gap:16px;flex-wrap:wrap;">' +
+          '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 12px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-base);"><input type="radio" name="theme" value="dark" ' + (s.theme === 'dark' ? 'checked' : '') + '> <i data-lucide="moon" style="width:16px;height:16px;"></i> Dark</label>' +
+          '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 12px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-base);"><input type="radio" name="theme" value="light" ' + (s.theme === 'light' ? 'checked' : '') + '> <i data-lucide="sun" style="width:16px;height:16px;"></i> Light</label>' +
+          '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 12px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-base);"><input type="radio" name="theme" value="system" ' + (s.theme === 'system' ? 'checked' : '') + '> <i data-lucide="monitor" style="width:16px;height:16px;"></i> System</label>' +
           '</div></div>' +
           '<div><label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;margin-bottom:8px;">Font Size</label>' +
           '<select id="set-font" style="width:100%;padding:12px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);outline:none;">' +
@@ -126,13 +129,39 @@ window.SettingsModal = {
           '<div><label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;margin-bottom:8px;">App Zoom ('+s.appZoom+'%)</label>' +
           '<input id="set-zoom" type="range" min="80" max="150" value="'+s.appZoom+'" style="width:100%;">' +
           '</div>' +
-          '<div><label style="display:flex;align-items:center;gap:12px;font-size:14px;color:var(--text-primary);cursor:pointer;"><input id="set-anim" type="checkbox" '+(s.animations?'checked':'')+'> Enable UI Animations</label></div>' +
+          '<div><label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;margin-bottom:8px;">Animation</label>' +
+          '<div style="display:flex;flex-direction:column;gap:12px;padding:16px;background:var(--bg-hover);border-radius:8px;border:1px solid var(--border-subtle);">' +
+            '<div style="display:flex;align-items:center;gap:12px;">' +
+              '<label style="font-size:13px;color:var(--text-primary);min-width:90px;">Speed</label>' +
+              '<select id="set-anim-speed" style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);outline:none;font-size:13px;">' +
+                '<option value="slow"'+(s.animSpeed==='slow'?' selected':'')+'>Slow</option>' +
+                '<option value="normal"'+(s.animSpeed==='normal'?' selected':'')+'>Normal</option>' +
+                '<option value="fast"'+(s.animSpeed==='fast'?' selected':'')+'>Fast</option>' +
+              '</select>' +
+            '</div>' +
+            '<div style="display:flex;align-items:center;gap:12px;">' +
+              '<label style="font-size:13px;color:var(--text-primary);min-width:90px;">Messages</label>' +
+              '<select id="set-msg-anim" style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);outline:none;font-size:13px;">' +
+                '<option value="slide"'+(s.messageAnim==='slide'?' selected':'')+'>Slide</option>' +
+                '<option value="fade"'+(s.messageAnim==='fade'?' selected':'')+'>Fade</option>' +
+                '<option value="instant"'+(s.messageAnim==='instant'?' selected':'')+'>Instant</option>' +
+              '</select>' +
+            '</div>' +
+            '<label style="display:flex;align-items:center;gap:12px;font-size:14px;color:var(--text-primary);cursor:pointer;">' +
+              '<input id="set-anim" type="checkbox" '+(s.animations===false?'':'checked')+'> Enable UI Animations' +
+            '</label>' +
+            '<label style="display:flex;align-items:center;gap:12px;font-size:14px;color:var(--text-primary);cursor:pointer;">' +
+              '<input id="set-reduce-motion" type="checkbox" '+(s.reduceMotion?'checked':'')+'> Reduce Motion (disable pulse, bounce, spin)' +
+            '</label>' +
+          '</div></div>' +
           '<div><label style="display:flex;align-items:center;gap:12px;font-size:14px;color:var(--text-primary);cursor:pointer;"><input id="set-24h" type="checkbox" '+(s.timeFormat24?'checked':'')+'> Use 24-hour time format</label></div>' +
           '<div><label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;margin-bottom:8px;">Chat Background Pattern</label>' +
           '<select id="set-pattern" style="width:100%;padding:12px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);outline:none;">' +
             '<option '+(s.bgPattern==='None'?'selected':'')+'>None</option><option '+(s.bgPattern==='Dots'?'selected':'')+'>Dots</option><option '+(s.bgPattern==='Grid'?'selected':'')+'>Grid</option>' +
           '</select></div>' +
         '</div>';
+        
+      if (window.lucide) window.lucide.createIcons({ root: content });
         
       var updateSettings = function(key, val) {
         var newSettings = { ...window.store.getState().settings };
@@ -150,7 +179,10 @@ window.SettingsModal = {
         updateSettings('appZoom', parseInt(e.target.value));
         e.target.previousElementSibling.textContent = 'App Zoom (' + e.target.value + '%)';
       });
+      content.querySelector('#set-anim-speed').addEventListener('change', function(e) { updateSettings('animSpeed', e.target.value); });
       content.querySelector('#set-anim').addEventListener('change', function(e) { updateSettings('animations', e.target.checked); });
+      content.querySelector('#set-reduce-motion').addEventListener('change', function(e) { updateSettings('reduceMotion', e.target.checked); });
+      content.querySelector('#set-msg-anim').addEventListener('change', function(e) { updateSettings('messageAnim', e.target.value); });
       content.querySelector('#set-24h').addEventListener('change', function(e) { updateSettings('timeFormat24', e.target.checked); });
       content.querySelector('#set-pattern').addEventListener('change', function(e) { updateSettings('bgPattern', e.target.value); });
       
@@ -318,6 +350,65 @@ window.SettingsModal = {
           });
         }
       });
+    } else if (tabName === 'notifications') {
+      var s = state.settings;
+      content.innerHTML =
+        '<h3 style="font-family:var(--font-display);font-size:24px;margin-bottom:24px;">Notifications</h3>' +
+        '<div style="display:flex;flex-direction:column;gap:16px;">' +
+          '<div style="padding:16px;background:var(--bg-hover);border-radius:8px;border:1px solid var(--border-subtle);">' +
+            '<label style="display:flex;align-items:center;gap:12px;font-size:14px;color:var(--text-primary);cursor:pointer;font-weight:500;">' +
+              '<input id="notify-sound" type="checkbox" '+(s.notifySound?'checked':'')+'> Play notification sound' +
+              '<button id="btn-test-sound" title="Test Sound" style="margin-left:auto;padding:4px 10px;border-radius:6px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-secondary);cursor:pointer;font-size:11px;">Test</button>' +
+            '</label>' +
+          '</div>' +
+          '<div style="padding:16px;background:var(--bg-hover);border-radius:8px;border:1px solid var(--border-subtle);">' +
+            '<label style="display:flex;align-items:center;gap:12px;font-size:14px;color:var(--text-primary);cursor:pointer;font-weight:500;">' +
+              '<input id="notify-preview" type="checkbox" '+(s.notifyPreview?'checked':'')+'> Show message preview in notifications' +
+            '</label>' +
+          '</div>' +
+          '<div style="padding:16px;background:var(--bg-hover);border-radius:8px;border:1px solid var(--border-subtle);">' +
+            '<label style="display:flex;align-items:center;gap:12px;font-size:14px;color:var(--text-primary);cursor:pointer;font-weight:500;">' +
+              '<input id="notify-mentions" type="checkbox" '+(s.notifyGroupMentions?'checked':'')+'> Only notify on @mentions in groups' +
+            '</label>' +
+          '</div>' +
+          '<div style="padding:16px;background:var(--bg-hover);border-radius:8px;border:1px solid var(--border-subtle);">' +
+            '<label style="display:flex;align-items:center;gap:12px;font-size:14px;color:var(--text-primary);cursor:pointer;font-weight:500;">' +
+              '<input id="notify-dnd" type="checkbox" '+(s.notifyDnd?'checked':'')+'> Do Not Disturb (mute all notifications)' +
+            '</label>' +
+          '</div>' +
+        '</div>';
+
+      var updateSettings = function(key, val) {
+        var newSettings = { ...window.store.getState().settings };
+        newSettings[key] = val;
+        window.store.setState({ settings: newSettings });
+        window.Storage.set('settings', newSettings);
+      };
+
+      content.querySelector('#notify-sound').addEventListener('change', function(e) { updateSettings('notifySound', e.target.checked); });
+      content.querySelector('#btn-test-sound').addEventListener('click', function(e) { e.stopPropagation(); if (window.NotificationSound) window.NotificationSound.play(); });
+      content.querySelector('#notify-preview').addEventListener('change', function(e) { updateSettings('notifyPreview', e.target.checked); });
+      content.querySelector('#notify-mentions').addEventListener('change', function(e) { updateSettings('notifyGroupMentions', e.target.checked); });
+      content.querySelector('#notify-dnd').addEventListener('change', function(e) { updateSettings('notifyDnd', e.target.checked); });
+      
+    } else if (tabName === 'about') {
+      var version = window.orbitAPI ? (window.orbitAPI.version || '0.0.3-beta') : '0.0.3-beta';
+      content.innerHTML =
+        '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;gap:16px;">' +
+          '<img src="icons/app/orbit_256.png" style="width:96px;height:96px;border-radius:16px;">' +
+          '<h2 style="font-family:var(--font-display);font-size:28px;font-weight:700;margin:0;color:var(--text-primary);">Orbit Beta</h2>' +
+          '<div style="font-size:14px;color:var(--text-muted);font-family:var(--font-mono);">v' + version + '</div>' +
+          '<p style="font-size:14px;color:var(--text-secondary);max-width:400px;line-height:1.6;">A peer-to-peer messaging app for local networks. Connect, chat, and share files without the cloud.</p>' +
+          '<div style="display:flex;gap:24px;margin-top:16px;">' +
+            '<div style="text-align:center;"><div style="font-size:24px;font-weight:700;color:var(--accent-primary);">' + (state.friends ? state.friends.length : 0) + '</div><div style="font-size:11px;color:var(--text-muted);">Friends</div></div>' +
+            '<div style="text-align:center;"><div style="font-size:24px;font-weight:700;color:var(--accent-primary);">' + (state.groups ? state.groups.length : 0) + '</div><div style="font-size:11px;color:var(--text-muted);">Groups</div></div>' +
+            '<div style="text-align:center;"><div style="font-size:24px;font-weight:700;color:var(--accent-primary);">' + (Object.keys(state.messages || {}).length) + '</div><div style="font-size:11px;color:var(--text-muted);">Chats</div></div>' +
+          '</div>' +
+          '<div style="margin-top:24px;font-size:12px;color:var(--text-muted);">Built with Electron, Node.js, and better-sqlite3</div>' +
+        '</div>';
+      
+      if (window.lucide) window.lucide.createIcons({ root: content });
+      
     } else {
       content.innerHTML = '<h3 style="font-family:var(--font-display);font-size:24px;margin-bottom:24px;">' + tabName + '</h3><p style="color:var(--text-muted);">Coming soon...</p>';
     }

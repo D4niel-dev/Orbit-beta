@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, Tray, Menu, Notification, nativeImage, protocol, net } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const os = require('os');
 const crypto = require('crypto');
 const uuidv4 = () => crypto.randomUUID();
@@ -18,16 +19,18 @@ let transferInstance = null;
 let currentIdentity = null;
 let mainWindow = null;
 let tray = null;
+let tempDirPath = null;
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'orbit-file', privileges: { secure: true, standard: true, supportFetchAPI: true } },
-  { scheme: 'orbit-db', privileges: { secure: true, standard: true, supportFetchAPI: true } }
+  { scheme: 'orbit-db', privileges: { secure: true, standard: true, supportFetchAPI: true } },
+  { scheme: 'orbit-avatar', privileges: { secure: true, standard: true, supportFetchAPI: true } }
 ]);
 
 app.whenReady().then(() => {
   protocol.handle('orbit-file', (request) => {
     const urlPath = request.url.replace('orbit-file://', '');
-    const decodedPath = decodeURIComponent(urlPath);
+    const decodedPath = decodeURIComponent(urlPath).replace(/\\/g, '/');
     return net.fetch('file:///' + decodedPath);
   });
   protocol.handle('orbit-db', (request) => {
@@ -38,15 +41,23 @@ app.whenReady().then(() => {
         return new Promise((resolve) => {
           if (globalDb) {
             const att = globalDb.getAttachmentThumbnail(id);
-            if (att && att.thumbnail) {
+            if (att && att.thumbnail && att.thumbnail.length > 0) {
               resolve(new Response(att.thumbnail, {
                 headers: { 'Content-Type': 'image/webp' }
               }));
               return;
-            } else if (att && att.data) {
+            } else if (att && att.data && att.data.length > 0) {
               // Fallback to original image if no thumbnail yet
               resolve(new Response(att.data, {
                 headers: { 'Content-Type': att.type || 'application/octet-stream' }
+              }));
+              return;
+            } else if (att && att.localPath && fs.existsSync(att.localPath)) {
+              // Fallback for privacy mode: serve from filesystem
+              resolve(net.fetch('file:///' + att.localPath.replace(/\\/g, '/')).then(r => {
+                return new Response(r.body, {
+                  headers: { 'Content-Type': att.type || 'application/octet-stream' }
+                });
               }));
               return;
             }
@@ -60,9 +71,18 @@ app.whenReady().then(() => {
         return new Promise((resolve) => {
           if (globalDb) {
             const att = globalDb.getAttachment(id);
-            if (att && att.data) {
+            if (att && att.data && att.data.length > 0) {
               resolve(new Response(att.data, {
                 headers: { 'Content-Type': att.type || 'application/octet-stream' }
+              }));
+              return;
+            }
+            // Fallback: serve from localPath (privacy mode temp files)
+            if (att && att.localPath && fs.existsSync(att.localPath)) {
+              resolve(net.fetch('file:///' + att.localPath.replace(/\\/g, '/')).then(r => {
+                return new Response(r.body, {
+                  headers: { 'Content-Type': att.type || 'application/octet-stream' }
+                });
               }));
               return;
             }
@@ -75,17 +95,67 @@ app.whenReady().then(() => {
     }
     return new Response(null, { status: 404 });
   });
+  protocol.handle('orbit-avatar', (request) => {
+    try {
+      const groupId = request.url.replace('orbit-avatar://', '').split('/')[0];
+      return new Promise((resolve) => {
+        if (globalDb) {
+          const group = globalDb.getGroup(groupId);
+          if (group && group.avatarPath && fs.existsSync(group.avatarPath)) {
+            resolve(net.fetch('file:///' + group.avatarPath.replace(/\\/g, '/')).then(r => {
+              return new Response(r.body, { headers: { 'Content-Type': 'image/webp' } });
+            }));
+            return;
+          }
+        }
+        resolve(new Response(null, { status: 404 }));
+      });
+    } catch (e) {
+      return new Response(null, { status: 404 });
+    }
+  });
 
   // Init DB
   globalDb = new OrbitDatabase(app.getPath('userData'));
+  tempDirPath = path.join(app.getPath('userData'), 'temp');
+
+  // Ensure avatars directory exists
+  const avatarDirPath = path.join(app.getPath('userData'), 'avatars');
+  if (!fs.existsSync(avatarDirPath)) {
+    fs.mkdirSync(avatarDirPath, { recursive: true });
+  }
+  if (!fs.existsSync(tempDirPath)) {
+    fs.mkdirSync(tempDirPath, { recursive: true });
+  }
+
+  // Periodic temp dir cleanup for orphaned files (every hour)
+  setInterval(() => {
+    if (globalDb && tempDirPath && fs.existsSync(tempDirPath)) {
+      const settings = globalDb.getSetting('settings', {});
+      if (settings.privacyMode === true) {
+        // In privacy mode, clean temp files that aren't referenced by active sessions
+        try {
+          const files = fs.readdirSync(tempDirPath);
+          const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+          const now = Date.now();
+          files.forEach(f => {
+            const filePath = path.join(tempDirPath, f);
+            const stat = fs.statSync(filePath);
+            if (now - stat.mtimeMs > maxAge) {
+              fs.unlinkSync(filePath);
+            }
+          });
+        } catch(e) { /* ignore cleanup errors */ }
+      }
+    }
+  }, 3600000);
 
   // Start background attachment cleanup
   setInterval(() => {
     if (globalDb) {
       const settings = globalDb.getSetting('settings', {});
-      // Default to >365d (525600 minutes) if not set. If 0, it means never.
-      let cleanupMinutes = 525600; 
-      if (settings.deleteAttachmentsAfter !== undefined) {
+      let cleanupMinutes = 0; // Default to Never
+      if (settings.deleteAttachmentsAfter !== undefined && settings.deleteAttachmentsAfter !== null) {
         cleanupMinutes = settings.deleteAttachmentsAfter;
       }
       if (cleanupMinutes > 0) {
@@ -243,6 +313,50 @@ app.whenReady().then(() => {
     event.returnValue = true;
   });
 
+  // Group IPC
+  ipcMain.on('db-get-groups', (event) => {
+    event.returnValue = globalDb.getGroups();
+  });
+  ipcMain.on('db-get-group', (event, groupId) => {
+    event.returnValue = globalDb.getGroup(groupId);
+  });
+  ipcMain.on('db-save-group', (event, group) => {
+    globalDb.saveGroup(group);
+    event.returnValue = true;
+  });
+  ipcMain.on('db-add-group-member', (event, groupId, user) => {
+    globalDb.addGroupMember(groupId, user);
+    event.returnValue = true;
+  });
+  ipcMain.on('db-remove-group-member', (event, groupId, userId) => {
+    globalDb.removeGroupMember(groupId, userId);
+    event.returnValue = true;
+  });
+  ipcMain.on('db-get-group-members', (event, groupId) => {
+    event.returnValue = globalDb.getGroupMembers(groupId);
+  });
+  ipcMain.on('db-delete-group', (event, groupId) => {
+    globalDb.deleteGroup(groupId);
+    event.returnValue = true;
+  });
+  ipcMain.on('db-update-group-field', (event, groupId, field, value) => {
+    globalDb.updateGroupField(groupId, field, value);
+    event.returnValue = true;
+  });
+  ipcMain.on('db-get-group-by-invite', (event, code) => {
+    event.returnValue = globalDb.getGroupByInviteCode(code);
+  });
+  ipcMain.handle('save-avatar', async (event, groupId, base64Data) => {
+    try {
+      const avatarDirPath = path.join(app.getPath('userData'), 'avatars');
+      const filePath = path.join(avatarDirPath, groupId + '.webp');
+      const buf = Buffer.from(base64Data, 'base64');
+      fs.writeFileSync(filePath, buf);
+      return filePath;
+    } catch (e) {
+      return null;
+    }
+  });
 
   // Networking IPC
   ipcMain.on('network-start', (event, identity) => {
@@ -264,8 +378,8 @@ app.whenReady().then(() => {
         } else if (packet.type === Protocol.Types.FILE_CHUNK) {
           transferInstance.handleChunk(packet);
         } else if (packet.type === Protocol.Types.FILE_TRANSFER_END) {
-          transferInstance.handleEnd(packet, (savedPath, fileName, fileId) => {
-             mainWindow.webContents.send('file-received', { path: savedPath, name: fileName, sender: packet.from, fileId: fileId });
+          transferInstance.handleEnd(packet, (savedPath, fileName, fileId, fileSize) => {
+             mainWindow.webContents.send('file-received', { path: savedPath, name: fileName, sender: packet.from, fileId: fileId, size: fileSize });
           }, (errorMsg) => {
              console.error('File Transfer Error:', errorMsg);
           });
@@ -311,6 +425,14 @@ app.whenReady().then(() => {
 app.on('before-quit', () => {
   if (discoveryInstance) discoveryInstance.stop();
   if (socketInstance) socketInstance.stop();
+  // Clean up privacy mode temp directory
+  if (tempDirPath && fs.existsSync(tempDirPath)) {
+    try {
+      fs.rmSync(tempDirPath, { recursive: true, force: true });
+    } catch(e) {
+      console.error('Failed to clean up temp directory:', e.message);
+    }
+  }
 });
 
 app.on('window-all-closed', () => {

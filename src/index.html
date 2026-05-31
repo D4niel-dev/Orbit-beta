@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- Content Security Policy to allow external fonts and scripts safely -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: orbit-db: orbit-file: https://media.giphy.com; media-src 'self' blob: orbit-db: orbit-file:; connect-src 'self' https://cdn.jsdelivr.net;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;     img-src 'self' data: blob: orbit-db: orbit-file: orbit-avatar: https://media.giphy.com; media-src 'self' blob: orbit-db: orbit-file: orbit-avatar:; connect-src 'self' https://cdn.jsdelivr.net;">
   
   <title>Orbit</title>
   
@@ -72,6 +72,11 @@
         </div>
         <div id="gallery-content" style="flex:1; overflow-y:auto; padding:var(--spacing-md); display:grid; grid-template-columns:1fr 1fr; gap:8px; align-content:start;"></div>
       </aside>
+
+      <!-- Panel 5: Profile Sidebar (Overlay) -->
+      <aside id="panel-profile" style="display:none; position:absolute; top:0; right:0; bottom:0; width:320px; background:var(--bg-surface); border-left:1px solid var(--border-subtle); box-shadow:var(--shadow-xl); z-index:100; flex-direction:column;">
+        <div id="profile-sidebar-content" style="flex:1; overflow-y:auto;"></div>
+      </aside>
     </main>
 
   </div>
@@ -98,6 +103,7 @@
   <script src="js/views/sidebar-middle.js"></script>
   <script src="js/views/chat-panel.js"></script>
   <script src="js/views/gallery-sidebar.js"></script>
+  <script src="js/views/profile-sidebar.js"></script>
   <script src="js/views/global-gallery.js"></script>
   <script src="js/components/profile-card.js"></script>
   <script src="js/views/settings-modal.js"></script>

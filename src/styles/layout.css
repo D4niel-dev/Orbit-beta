@@ -57,6 +57,11 @@
   height: 100vh;
   overflow: hidden;
   padding-top: 32px; /* Avoid titlebar overlap */
+  transition: grid-template-columns 0.25s ease;
+}
+
+#panel-middle {
+  overflow: hidden;
 }
 
 #panel-left {

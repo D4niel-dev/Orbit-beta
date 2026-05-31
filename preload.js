@@ -39,5 +39,17 @@ contextBridge.exposeInMainWorld('orbitAPI', {
   dbDeleteAttachment: (attachmentId) => ipcRenderer.sendSync('db-delete-attachment', attachmentId),
   dbClearAttachments: () => ipcRenderer.sendSync('db-clear-attachments'),
   dbGetSetting: (key, def) => ipcRenderer.sendSync('db-get-setting', key, def),
-  dbSetSetting: (key, val) => ipcRenderer.sendSync('db-set-setting', key, val)
+  dbSetSetting: (key, val) => ipcRenderer.sendSync('db-set-setting', key, val),
+
+  // Groups
+  dbGetGroups: () => ipcRenderer.sendSync('db-get-groups'),
+  dbGetGroup: (groupId) => ipcRenderer.sendSync('db-get-group', groupId),
+  dbSaveGroup: (group) => ipcRenderer.sendSync('db-save-group', group),
+  dbAddGroupMember: (groupId, user) => ipcRenderer.sendSync('db-add-group-member', groupId, user),
+  dbRemoveGroupMember: (groupId, userId) => ipcRenderer.sendSync('db-remove-group-member', groupId, userId),
+  dbGetGroupMembers: (groupId) => ipcRenderer.sendSync('db-get-group-members', groupId),
+  dbDeleteGroup: (groupId) => ipcRenderer.sendSync('db-delete-group', groupId),
+  dbUpdateGroupField: (groupId, field, value) => ipcRenderer.sendSync('db-update-group-field', groupId, field, value),
+  dbGetGroupByInvite: (code) => ipcRenderer.sendSync('db-get-group-by-invite', code),
+  saveAvatar: (groupId, base64Data) => ipcRenderer.invoke('save-avatar', groupId, base64Data)
 });

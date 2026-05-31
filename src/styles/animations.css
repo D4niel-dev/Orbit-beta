@@ -80,3 +80,24 @@
   border: 4px dashed var(--accent-primary);
   /* The dashed border animation would be applied via SVG or complex background, using simple border for now */
 }
+
+/* Reduce Motion — disables decorative animations */
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+/* Drag active state on chat panel */
+.drag-active .message-feed,
+.drag-active .chat-input-area {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.drag-active .chat-header {
+  opacity: 0.4;
+  pointer-events: none;
+}
