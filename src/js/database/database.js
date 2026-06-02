@@ -58,7 +58,7 @@ class OrbitDatabase {
       // Groups
       getGroups: this.db.prepare('SELECT g.*, COUNT(gm.userId) as memberCount FROM groups g LEFT JOIN group_members gm ON g.groupId = gm.groupId GROUP BY g.groupId ORDER BY g.pinned DESC, g.createdAt DESC'),
       getGroup: this.db.prepare('SELECT * FROM groups WHERE groupId = ?'),
-      saveGroup: this.db.prepare('INSERT OR REPLACE INTO groups (groupId, groupName, ownerId, createdAt, avatarPath, description, pinned, notificationMuted, inviteCode) VALUES (@groupId, @groupName, @ownerId, @createdAt, @avatarPath, @description, @pinned, @notificationMuted, @inviteCode)'),
+      saveGroup: this.db.prepare('INSERT OR REPLACE INTO groups (groupId, groupName, ownerId, createdAt, avatarPath, description, pinned, notificationMuted, inviteCode, avatarUpdatedAt) VALUES (@groupId, @groupName, @ownerId, @createdAt, @avatarPath, @description, @pinned, @notificationMuted, @inviteCode, @avatarUpdatedAt)'),
       deleteGroup: this.db.prepare('DELETE FROM groups WHERE groupId = ?'),
       // no updateGroupField prepared statement — uses dynamic sql via method
       getGroupByInviteCode: this.db.prepare('SELECT * FROM groups WHERE inviteCode = ?'),
@@ -150,7 +150,8 @@ class OrbitDatabase {
       description: group.description || '',
       pinned: group.pinned ? 1 : 0,
       notificationMuted: group.notificationMuted ? 1 : 0,
-      inviteCode: group.inviteCode || null
+      inviteCode: group.inviteCode || null,
+      avatarUpdatedAt: group.avatarUpdatedAt || 0
     });
     if (group.members && Array.isArray(group.members)) {
       group.members.forEach(m => this.addGroupMember(group.groupId, m));

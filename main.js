@@ -352,6 +352,7 @@ app.whenReady().then(() => {
       const filePath = path.join(avatarDirPath, groupId + '.webp');
       const buf = Buffer.from(base64Data, 'base64');
       fs.writeFileSync(filePath, buf);
+      if (globalDb) globalDb.updateGroupField(groupId, 'avatarUpdatedAt', Date.now());
       return filePath;
     } catch (e) {
       return null;
@@ -400,6 +401,12 @@ app.whenReady().then(() => {
     event.returnValue = true;
   });
 
+  ipcMain.on('network-connect', (event, ip) => {
+    if (socketInstance) {
+      socketInstance.connectToPeer('manual', ip, 46000);
+    }
+  });
+
   ipcMain.on('network-send', (event, toPeerId, toIp, type, payload) => {
     if (socketInstance) {
       const success = socketInstance.sendMessage(toPeerId, toIp, type, payload);
@@ -409,11 +416,11 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.handle('network-send-file', async (event, toPeerId, toIp, filePath) => {
+  ipcMain.handle('network-send-file', async (event, toPeerId, toIp, filePath, fileName) => {
     if (transferInstance) {
       try {
-        const fileId = await transferInstance.sendFile(toPeerId, toIp, filePath);
-        return fileId;
+        const fid = await transferInstance.sendFile(toPeerId, toIp, filePath, fileName);
+        return fid;
       } catch (e) {
         throw e;
       }

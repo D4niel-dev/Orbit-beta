@@ -24,26 +24,34 @@ window.GlobalGallery = {
 
     this.container.style.display = 'flex';
 
-    // Collect all images
+    // Collect all images and files
     let allImages = [];
     const messages = state.messages || {};
     const friends = state.friends || [];
+    const groups = state.groups || [];
+
+    function chatNameFor(chatId) {
+      var f = friends.find(function(f) { return f.userId === chatId; });
+      if (f) return f.username;
+      var g = groups.find(function(g) { return g.groupId === chatId; });
+      if (g) return g.groupName;
+      if (chatId === 'local-echo') return 'Orbit Echo';
+      return chatId;
+    }
 
     Object.keys(messages).forEach(chatId => {
       const chatMsgs = messages[chatId];
-      const friend = friends.find(f => f.userId === chatId) || { username: 'Unknown Group/User' };
-      
+      const chatName = chatNameFor(chatId);
+
       chatMsgs.forEach(msg => {
         if (msg.attachments) {
           msg.attachments.forEach(att => {
-            if (att.type === 'image') {
-              allImages.push({
-                ...att,
-                chatId: chatId,
-                chatName: friend.username,
-                timestamp: msg.timestamp
-              });
-            }
+            allImages.push({
+              ...att,
+              chatId: chatId,
+              chatName: chatName,
+              timestamp: msg.timestamp
+            });
           });
         }
       });
@@ -73,12 +81,12 @@ window.GlobalGallery = {
     const chatsWithImages = [...new Set(allImages.map(img => img.chatId))];
     if (this.currentFilter === 'all') {
       chatsWithImages.forEach(chatId => {
-        const friend = friends.find(f => f.userId === chatId) || { username: 'Unknown' };
-        filterHtml += `<button class="gallery-filter-btn" data-id="${window.Sanitize.escapeHtml(chatId)}" style="padding:6px 12px; border-radius:16px; border:1px solid var(--border-subtle); background:transparent; color:var(--text-secondary); cursor:pointer; white-space:nowrap;">${window.Sanitize.escapeHtml(friend.username)}</button>`;
+        var filterName = chatNameFor(chatId);
+        filterHtml += `<button class="gallery-filter-btn" data-id="${window.Sanitize.escapeHtml(chatId)}" style="padding:6px 12px; border-radius:16px; border:1px solid var(--border-subtle); background:transparent; color:var(--text-secondary); cursor:pointer; white-space:nowrap;">${window.Sanitize.escapeHtml(filterName)}</button>`;
       });
     } else {
-        const friend = friends.find(f => f.userId === this.currentFilter) || { username: 'Unknown' };
-        filterHtml += `<button class="gallery-filter-btn active" data-id="${window.Sanitize.escapeHtml(this.currentFilter)}" style="padding:6px 12px; border-radius:16px; border:1px solid var(--border-subtle); background:var(--accent-primary); color:white; cursor:pointer; white-space:nowrap;">${window.Sanitize.escapeHtml(friend.username)}</button>`;
+        var filterName = chatNameFor(this.currentFilter);
+        filterHtml += `<button class="gallery-filter-btn active" data-id="${window.Sanitize.escapeHtml(this.currentFilter)}" style="padding:6px 12px; border-radius:16px; border:1px solid var(--border-subtle); background:var(--accent-primary); color:white; cursor:pointer; white-space:nowrap;">${window.Sanitize.escapeHtml(filterName)}</button>`;
     }
     filterHtml += '</div>';
 

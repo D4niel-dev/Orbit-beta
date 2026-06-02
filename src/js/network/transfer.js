@@ -11,7 +11,7 @@ class TransferManager {
     this.onProgress = null; // callback(fileId, { received, total, isSending })
   }
 
-  async sendFile(toPeerId, toIp, filePath) {
+  async sendFile(toPeerId, toIp, filePath, fileName) {
     if (!fs.existsSync(filePath)) return false;
 
     const stats = fs.statSync(filePath);
@@ -29,12 +29,13 @@ class TransferManager {
     });
     const fileHash = hash.digest('hex');
 
-    const fileName = path.basename(filePath);
+    const basename = path.basename(filePath);
+    const displayName = fileName || basename;
     const fileId = require('crypto').randomUUID();
     const totalChunks = Math.ceil(stats.size / this.CHUNK_SIZE);
 
     this.socketManager.sendMessage(toPeerId, toIp, Protocol.Types.FILE_TRANSFER_START, {
-      fileId, fileName, fileSize: stats.size, totalChunks, hash: fileHash
+      fileId, fileName: basename, fileSize: stats.size, totalChunks, hash: fileHash
     });
 
     const readStream = fs.createReadStream(filePath, { highWaterMark: this.CHUNK_SIZE });
@@ -45,7 +46,7 @@ class TransferManager {
       this.socketManager.sendMessage(toPeerId, toIp, Protocol.Types.FILE_CHUNK, payload);
       
       if (this.onProgress) {
-        this.onProgress(fileId, { received: chunkIndex + 1, total: totalChunks, isSending: true });
+        this.onProgress(fileId, { received: chunkIndex + 1, total: totalChunks, isSending: true, name: displayName });
       }
       
       // Progress event for frontend (optional, emit via socketManager if needed)

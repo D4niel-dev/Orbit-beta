@@ -28,6 +28,7 @@ window.SidebarLeft = {
         <button class="icon-btn active" id="btn-nav-dms" title="Direct Messages">
           <i data-lucide="message-circle"></i>
         </button>
+        <div class="sidebar-separator" style="width:24px;height:1px;background:var(--border-subtle);margin-top:8px;margin-bottom:8px;margin-left:auto;margin-right:12px;"></div>
         <button class="icon-btn" id="btn-nav-gallery" title="Gallery">
           <i data-lucide="images"></i>
         </button>

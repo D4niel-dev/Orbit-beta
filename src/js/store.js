@@ -45,6 +45,12 @@ class Store {
         notifyPreview: true,
         notifyGroupMentions: false,
         notifyDnd: false,
+        devMode: false,
+        debugDisplay: false,
+        showMessageIds: false,
+        logNetworkPackets: false,
+        showConnectionStats: false,
+        enableExperimental: false,
         ...savedSettings
       },
       networkSettings: {
@@ -64,6 +70,7 @@ class Store {
       sidebarMiddleVisible: true,
       messages: dbMessages,
       transferProgress: {}, // { fileId: { received, total, isSending } }
+      pinnedMessages: {}, // { chatId: [{ msgId, text, sender, timestamp }] }
       ...initialState
     };
     this.listeners = [];
@@ -74,7 +81,11 @@ class Store {
     const existingIndex = friends.findIndex(f => f.userId === peer.userId);
     
     if (existingIndex >= 0) {
-      friends[existingIndex] = { ...friends[existingIndex], ...peer };
+      // Preserve lastSeen from incoming beacon data
+      var existing = friends[existingIndex];
+      var updated = { ...existing, ...peer };
+      if (peer.lastSeen) updated.lastSeen = peer.lastSeen;
+      friends[existingIndex] = updated;
     } else {
       friends.push(peer);
     }
@@ -84,16 +95,26 @@ class Store {
   }
 
   handleTransferProgress(data) {
-    const { fileId, received, total, isSending } = data;
+    const { fileId, received, total, isSending, name } = data;
     const currentProgress = { ...this.state.transferProgress };
-    
     if (received >= total) {
       delete currentProgress[fileId];
     } else {
-      currentProgress[fileId] = { received, total, isSending };
+      // Preserve name if previously set, or use name from event, or use existing
+      const existing = currentProgress[fileId];
+      currentProgress[fileId] = { received, total, isSending, name: name || (existing ? existing.name : undefined) };
     }
-    
     this.setState({ transferProgress: currentProgress });
+  }
+
+  addTransferProgress(name, fileId) {
+    const currentProgress = { ...this.state.transferProgress };
+    if (!fileId) {
+      fileId = 'file_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+    }
+    currentProgress[fileId] = { received: 0, total: 1, isSending: true, name: name };
+    this.setState({ transferProgress: currentProgress });
+    return fileId;
   }
 
   addGroup(group) {
@@ -186,6 +207,9 @@ class Store {
         };
         this.addGroup(group);
         if (window.Toast) window.Toast.show('New Group', 'You were added to ' + groupName);
+        if (document.hidden && window.orbitAPI && window.orbitAPI.showNotification) {
+          window.orbitAPI.showNotification('New Group', 'You were added to ' + groupName);
+        }
       }
       return;
     }
@@ -193,6 +217,56 @@ class Store {
     if (packet.type === 'GROUP_INVITE') {
       const { groupId, groupName, inviter } = packet.payload;
       if (window.Toast) window.Toast.show('Group Invite', inviter + ' invited you to ' + groupName);
+      if (document.hidden && window.orbitAPI && window.orbitAPI.showNotification) {
+        window.orbitAPI.showNotification('Group Invite', inviter + ' invited you to ' + groupName);
+      }
+      return;
+    }
+
+    if (packet.type === 'GROUP_JOIN_REQUEST') {
+      const { inviteCode, userId, username } = packet.payload;
+      var myGroup = this.state.groups.find(function(g) { return g.inviteCode === inviteCode && g.ownerId === this.state.currentUser.userId; }.bind(this));
+      if (myGroup) {
+        var members = myGroup.members || [];
+        var alreadyMember = members.some(function(m) { return m.userId === userId; });
+        if (!alreadyMember) {
+          var newMember = { userId: userId, username: username, status: 'online', ip: null };
+          this.addMemberToGroup(myGroup.groupId, newMember);
+          var requester = this.state.friends.find(function(f) { return f.userId === userId; });
+          if (window.orbitAPI && requester && requester.ip) {
+            window.orbitAPI.networkSend(userId, requester.ip, window.Protocol.Types.GROUP_JOIN_RESPONSE, {
+              groupId: myGroup.groupId,
+              groupName: myGroup.groupName,
+              accepted: true,
+              members: [...members, newMember]
+            });
+          }
+        }
+      }
+      return;
+    }
+
+    if (packet.type === 'GROUP_JOIN_RESPONSE') {
+      const { groupId, groupName, accepted, members } = packet.payload;
+      if (accepted && groupId) {
+        var existing = this.state.groups.find(function(g) { return g.groupId === groupId; });
+        if (!existing) {
+          var group = {
+            groupId: groupId,
+            groupName: groupName || 'Group',
+            ownerId: packet.from,
+            members: members || [],
+            createdAt: new Date().toISOString()
+          };
+          this.addGroup(group);
+          var msgs = this.state.messages;
+          msgs[groupId] = msgs[groupId] || [];
+          this.setState({ messages: msgs, activeChatId: groupId });
+          if (window.Toast) window.Toast.show('Joined Group', 'You are now a member of ' + (groupName || 'Group'));
+        }
+      } else {
+        if (window.Toast) window.Toast.show('Join Denied', 'Your request to join was denied.');
+      }
       return;
     }
 
@@ -219,6 +293,11 @@ class Store {
       return;
     }
 
+    // Typing indicator — handled via direct listener in app.js
+    if (packet.type === 'TYPING') {
+      return;
+    }
+
     // Basic message handling logic
     if (packet.type === 'MESSAGE' || !packet.type) {
       const fromId = packet.payload.chatId || packet.from;
@@ -232,6 +311,11 @@ class Store {
         replyTo: packet.payload.replyTo,
         attachments: packet.payload.attachments
       });
+
+      // Clear typing indicator for sender
+      if (window.TypingState) {
+        window.TypingState.removeUser(fromId, packet.from);
+      }
 
       // Play notification sound
       var settings = this.state.settings || {};
@@ -274,6 +358,14 @@ class Store {
       if (payload && payload.action === 'delete' && payload.msgId) {
         this.deleteMessage(packet.from, payload.msgId);
       }
+    } else if (packet.type === 'PIN_MESSAGE') {
+      const { msgId } = packet.payload;
+      this.pinMessage(packet.from, msgId);
+      return;
+    } else if (packet.type === 'UNPIN_MESSAGE') {
+      const { msgId } = packet.payload;
+      this.unpinMessage(packet.from, msgId);
+      return;
     } else if (packet.type === 'MESSAGE_EDIT') {
       const { msgId, newText } = packet.payload;
       this.editMessage(packet.from, msgId, newText);
@@ -287,7 +379,7 @@ class Store {
     const msgs = { ...this.state.messages };
     if (!msgs[chatId]) msgs[chatId] = [];
     msgs[chatId].push(messageObj);
-    
+
     if (window.orbitAPI) window.orbitAPI.dbAddMessage(chatId, messageObj);
     this.setState({ messages: msgs });
   }
@@ -351,6 +443,91 @@ class Store {
       });
       this.setState({ messages: msgs });
     }
+  }
+
+  pinMessage(chatId, msgId) {
+    var msgs = this.state.messages[chatId];
+    if (!msgs) return;
+    var msg = msgs.find(function(m) { return String(m.id) === String(msgId); });
+    if (!msg) return;
+
+    var pinned = { ...this.state.pinnedMessages };
+    if (!pinned[chatId]) pinned[chatId] = [];
+    
+    // Don't allow duplicates
+    if (pinned[chatId].some(function(p) { return String(p.msgId) === String(msgId); })) return;
+    
+    pinned[chatId] = pinned[chatId].concat([{
+      msgId: msg.id,
+      text: msg.text || '(attachment)',
+      sender: msg.sender,
+      timestamp: msg.timestamp || new Date().toISOString(),
+      pinnedBy: this.state.currentUser.userId,
+      pinnedAt: new Date().toISOString()
+    }]);
+
+    this.setState({ pinnedMessages: pinned });
+  }
+
+  unpinMessage(chatId, msgId) {
+    var pinned = { ...this.state.pinnedMessages };
+    if (!pinned[chatId]) return;
+    pinned[chatId] = pinned[chatId].filter(function(p) { return String(p.msgId) !== String(msgId); });
+    if (pinned[chatId].length === 0) delete pinned[chatId];
+    this.setState({ pinnedMessages: pinned });
+  }
+
+  getPinnedMessages(chatId) {
+    var pinned = this.state.pinnedMessages[chatId];
+    return pinned || [];
+  }
+
+  sendPinMessage(chatId, msgId) {
+    var state = this.state;
+    var members = this.getGroupMembers(chatId);
+    var recipients = [];
+    if (members.length > 0) {
+      members.forEach(function(m) {
+        if (m.userId !== state.currentUser.userId && m.ip) {
+          recipients.push({ userId: m.userId, ip: m.ip });
+        }
+      });
+    } else {
+      var friend = state.friends.find(function(f) { return f.userId === chatId; });
+      if (friend && friend.ip) {
+        recipients.push({ userId: friend.userId, ip: friend.ip });
+      }
+    }
+    recipients.forEach(function(r) {
+      if (window.orbitAPI) {
+        window.orbitAPI.networkSend(r.userId, r.ip, window.Protocol.Types.PIN_MESSAGE, { msgId: msgId });
+      }
+    });
+    this.pinMessage(chatId, msgId);
+  }
+
+  sendUnpinMessage(chatId, msgId) {
+    var state = this.state;
+    var members = this.getGroupMembers(chatId);
+    var recipients = [];
+    if (members.length > 0) {
+      members.forEach(function(m) {
+        if (m.userId !== state.currentUser.userId && m.ip) {
+          recipients.push({ userId: m.userId, ip: m.ip });
+        }
+      });
+    } else {
+      var friend = state.friends.find(function(f) { return f.userId === chatId; });
+      if (friend && friend.ip) {
+        recipients.push({ userId: friend.userId, ip: friend.ip });
+      }
+    }
+    recipients.forEach(function(r) {
+      if (window.orbitAPI) {
+        window.orbitAPI.networkSend(r.userId, r.ip, window.Protocol.Types.UNPIN_MESSAGE, { msgId: msgId });
+      }
+    });
+    this.unpinMessage(chatId, msgId);
   }
 
   getState() {

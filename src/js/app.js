@@ -77,6 +77,38 @@ window.handleMediaError = function(el, url) {
   if (window.lucide) window.lucide.createIcons({ root: container });
 };
 
+// Lightweight typing indicator state (not in store to avoid full re-renders)
+window.TypingState = {
+  _data: {}, // { chatId: [{ userId, username, timeout }] }
+  _listeners: [],
+  onChange(fn) { this._listeners.push(fn); },
+  _notify() { this._listeners.forEach(function(fn) { fn(); }); },
+  getUsers(chatId) { return this._data[chatId] || []; },
+  addUser(chatId, userId, username) {
+    if (!this._data[chatId]) this._data[chatId] = [];
+    var existing = this._data[chatId].find(function(u) { return u.userId === userId; });
+    if (existing) {
+      clearTimeout(existing.timeout);
+      existing.timeout = setTimeout(function() { window.TypingState.removeUser(chatId, userId); }, 4000);
+    } else {
+      var entry = { userId: userId, username: username };
+      entry.timeout = setTimeout(function() { window.TypingState.removeUser(chatId, userId); }, 4000);
+      this._data[chatId].push(entry);
+    }
+    this._notify();
+  },
+  removeUser(chatId, userId) {
+    if (!this._data[chatId]) return;
+    var idx = this._data[chatId].findIndex(function(u) { return u.userId === userId; });
+    if (idx >= 0) {
+      clearTimeout(this._data[chatId][idx].timeout);
+      this._data[chatId].splice(idx, 1);
+      if (this._data[chatId].length === 0) delete this._data[chatId];
+      this._notify();
+    }
+  }
+};
+
 // Notification sound via Web Audio API (no audio files needed)
 window.NotificationSound = {
   _ctx: null,
@@ -187,6 +219,21 @@ document.addEventListener('DOMContentLoaded', () => {
     if (settings.fontSize === 'Small') document.body.style.fontSize = '14px';
     else if (settings.fontSize === 'Large') document.body.style.fontSize = '18px';
     else document.body.style.fontSize = '16px';
+
+    // Developer Mode
+    document.documentElement.classList.toggle('dev-mode', !!settings.devMode);
+
+    // Debug Display
+    document.documentElement.classList.toggle('debug-display', !!settings.debugDisplay);
+
+    // Show Message IDs
+    document.documentElement.classList.toggle('show-message-ids', !!settings.showMessageIds);
+
+    // Show Connection Stats
+    document.documentElement.classList.toggle('show-conn-stats', !!settings.showConnectionStats);
+
+    // Experimental
+    document.documentElement.classList.toggle('experimental', !!settings.enableExperimental);
   };
   
   applySettings(window.store.getState().settings);
@@ -251,18 +298,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const panelMiddle = document.getElementById('panel-middle');
     if (state.activeTab === 'gallery') {
       if (panelMiddle) panelMiddle.style.display = 'none';
-      appLayout.style.gridTemplateColumns = `64px 1fr`;
+      appLayout.classList.remove('sidebar-collapsed');
+      appLayout.style.gridTemplateColumns = '64px 1fr';
       if (window._sidebarToggleBtn) window._sidebarToggleBtn.style.display = 'none';
-    } else if (!state.sidebarMiddleVisible) {
+      return;
+    }
+    // DM mode — clear inline grid style so CSS class / default takes over
+    appLayout.style.gridTemplateColumns = '';
+    if (!state.sidebarMiddleVisible) {
       if (panelMiddle) panelMiddle.style.display = 'flex';
-      appLayout.style.gridTemplateColumns = `64px 0px 1fr`;
+      appLayout.classList.add('sidebar-collapsed');
       // Show floating re-open button
       var btn = window._sidebarToggleBtn;
       if (!btn) {
         btn = document.createElement('button');
         btn.id = 'btn-reopen-sidebar';
         btn.title = 'Show Sidebar';
-        btn.style.cssText = 'position:absolute;left:0;top:50%;transform:translateY(-50%);z-index:10;width:24px;height:48px;border:1px solid var(--border-subtle);border-left:none;background:var(--bg-surface);color:var(--text-secondary);cursor:pointer;border-radius:0 8px 8px 0;display:flex;align-items:center;justify-content:center;';
+        btn.style.cssText = 'position:absolute;left:0;top:50%;transform:translateY(-50%);z-index:10;width:24px;height:48px;border:1px solid var(--border-subtle);border-left:none;background:var(--bg-surface);color:var(--text-secondary);cursor:pointer;border-radius:0 8px 8px 0;display:flex;align-items:center;justify-content:center;transition:opacity 0.2s;';
         btn.innerHTML = '<i data-lucide="chevrons-right" style="width:16px;height:16px;"></i>';
         btn.addEventListener('click', function() {
           window.store.setState({ sidebarMiddleVisible: true });
@@ -274,7 +326,7 @@ document.addEventListener('DOMContentLoaded', () => {
       btn.style.display = 'flex';
     } else {
       if (panelMiddle) panelMiddle.style.display = 'flex';
-      appLayout.style.gridTemplateColumns = `64px ${currentSidebarWidth}px 1fr`;
+      appLayout.classList.remove('sidebar-collapsed');
       if (window._sidebarToggleBtn) window._sidebarToggleBtn.style.display = 'none';
     }
   });
@@ -291,13 +343,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Listen for incoming messages
     window.orbitAPI.on('network-message', (packet) => {
-      console.log('Received packet:', packet);
+      // Handle typing indicators directly (lightweight, skip store)
+      if (packet.type === window.Protocol.Types.TYPING) {
+        var chatId = packet.to || packet.from;
+        var isTyping = packet.payload && packet.payload.isTyping;
+        var username = packet.payload ? packet.payload.username : 'Someone';
+        if (isTyping) {
+          window.TypingState.addUser(chatId, packet.from, username);
+        } else {
+          window.TypingState.removeUser(chatId, packet.from);
+        }
+        return;
+      }
       window.store.handleIncomingPacket(packet);
     });
 
     // Listen for incoming files
     window.orbitAPI.on('file-received', (data) => {
       console.log('File received:', data);
+
+      // Fire notification for incoming file
+      var settings = window.store.getState().settings || {};
+      if (settings.notifySound && !settings.notifyDnd && window.NotificationSound) {
+        window.NotificationSound.play();
+      }
+      if ((document.hidden || window.store.getState().activeChatId !== data.sender) && window.orbitAPI && window.orbitAPI.showNotification) {
+        var senderName = 'Someone';
+        var friend = window.store.getState().friends.find(function(f) { return f.userId === data.sender; });
+        if (friend) senderName = friend.username;
+        window.orbitAPI.showNotification('File from ' + senderName, data.name);
+      }
       
       const isImage = data.name.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) != null;
       const attId = data.fileId || (window.orbitAPI ? window.orbitAPI.getUuid() : Date.now().toString());

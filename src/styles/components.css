@@ -30,6 +30,8 @@
 .status-indicator.online { background-color: var(--accent-success); }
 .status-indicator.dnd { background-color: var(--accent-danger); }
 .status-indicator.away { background-color: var(--accent-warning); }
+.status-indicator.busy { background-color: var(--accent-danger); }
+.status-indicator.invisible { background-color: var(--text-muted); }
 .status-indicator.offline { background-color: var(--text-muted); }
 
 /* Badges */
@@ -233,4 +235,233 @@
 }
 .chat-input-field::placeholder {
   color: var(--text-muted);
+}
+
+/* Hover feedback */
+button:hover,
+.btn:hover,
+.list-row:hover,
+.search-result-row:hover,
+.chat-header-avatar:hover,
+.status-select-item:hover {
+  filter: brightness(1.1);
+}
+button:active,
+.btn:active {
+  transform: scale(0.97);
+}
+
+/* Message bubble hover */
+.message-bubble:hover {
+  box-shadow: var(--shadow-md);
+}
+
+/* Scrollbar subtle */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Debug Display Overlay */
+.debug-display .debug-overlay {
+  display: block !important;
+}
+
+.debug-display [data-debug] {
+  position: relative;
+}
+
+.debug-display [data-debug]::after {
+  content: attr(data-debug);
+  position: absolute;
+  bottom: calc(100% + 4px);
+  right: 0;
+  font-size: 10px;
+  line-height: 1.4;
+  font-family: 'SF Mono', 'Consolas', 'Liberation Mono', monospace;
+  color: var(--accent-primary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  padding: 3px 8px;
+  border-radius: 6px;
+  pointer-events: none;
+  z-index: 1000;
+  white-space: pre;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  letter-spacing: 0.01em;
+}
+
+/* Show on hover or when parent is hovered */
+.debug-display [data-debug]:hover::after,
+.debug-display .message-row:hover [data-debug]::after {
+  opacity: 1;
+}
+
+/* Search modal input - no purple focus ring */
+.search-modal-input:focus,
+.search-modal-input:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.search-modal-header {
+  position: relative;
+  transition: background 0.15s ease;
+}
+
+.search-modal-header:focus-within {
+  background: transparent;
+}
+
+.search-modal-header:focus-within::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent-primary);
+  opacity: 0.6;
+}
+.debug-display .search-input-wrapper::after {
+  content: attr(data-debug);
+  position: absolute;
+  bottom: -22px;
+  left: 12px;
+  font-size: 10px;
+  font-family: 'SF Mono', 'Consolas', 'Liberation Mono', monospace;
+  color: var(--accent-warning, #f59e0b);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  padding: 3px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.debug-display .search-container:hover .search-input-wrapper::after {
+  opacity: 1;
+}
+
+/* List rows - subtle corner badge for friends/groups */
+.debug-display .list-row::before {
+  content: attr(data-debug);
+  font-size: 9px;
+  font-family: 'SF Mono', 'Consolas', 'Liberation Mono', monospace;
+  color: var(--text-muted);
+  padding: 2px 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0 0 0 8px;
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  left: auto;
+  z-index: 999;
+  line-height: 1.3;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  max-width: 360px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.debug-display .list-row:hover::before {
+  opacity: 1;
+}
+
+.debug-display .list-row {
+  position: relative;
+}
+
+/* Reactions debug overlay */
+.debug-display .reaction-pill::after {
+  font-size: 9px;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+/* Message bubbles debug badge - subtle chip */
+.debug-display .message-bubble::after {
+  font-size: 9px;
+  padding: 2px 7px;
+  bottom: auto;
+  top: -1px;
+  right: -1px;
+  border-radius: 0 8px 0 6px;
+  background: var(--bg-base);
+  border-color: var(--border-subtle);
+  color: var(--text-muted);
+  transition: opacity 0.15s ease;
+  opacity: 0;
+}
+
+.debug-display .message-bubble:hover::after {
+  opacity: 1;
+}
+
+/* Search result rows debug */
+.debug-display .search-result-row::after {
+  bottom: auto;
+  top: 2px;
+  right: 2px;
+  font-size: 9px;
+  padding: 2px 7px;
+  opacity: 0;
+  background: var(--bg-base);
+  color: var(--text-muted);
+  border-radius: 6px;
+}
+
+.debug-display .search-result-row:hover::after {
+  opacity: 1;
+}
+
+/* Reply quote debug */
+.debug-display [data-debug^="ReplyTo"]::after {
+  font-size: 9px;
+  padding: 2px 7px;
+  bottom: auto;
+  top: 2px;
+  right: 2px;
+  background: var(--bg-base);
+  color: var(--text-muted);
+  opacity: 0;
+}
+
+.debug-display [data-debug^="ReplyTo"]:hover::after {
+  opacity: 1;
+}
+
+/* Dev Mode indicator */
+.dev-mode #btn-nav-settings {
+  color: var(--accent-warning, #f59e0b) !important;
+}
+
+/* Show Message IDs */
+.show-message-ids .message-id {
+  display: block !important;
+}
+
+/* Connection Stats */
+.show-conn-stats #connection-stats-overlay {
+  display: flex !important;
 }

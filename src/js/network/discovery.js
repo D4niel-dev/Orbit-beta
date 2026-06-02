@@ -57,12 +57,15 @@ class Discovery {
     const identity = this.identityProvider();
     if (!identity || !identity.userId) return;
 
+    // If invisible, broadcast as offline to hide presence
+    var broadcastStatus = identity.status === 'invisible' ? 'offline' : (identity.status || 'online');
+
     const beaconData = {
       userId: identity.userId,
       username: identity.username,
       usertag: identity.usertag,
       avatarHash: identity.avatar ? 'has_avatar' : null,
-      status: identity.status,
+      status: broadcastStatus,
       bio: identity.bio,
       tcpPort: 46000 // default port
     };

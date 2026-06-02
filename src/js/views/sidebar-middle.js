@@ -28,11 +28,18 @@ window.SidebarMiddle = {
   render() {
     this.container.innerHTML = 
       '<div class="search-container" style="padding: 16px; padding-bottom: 8px;">' +
-        '<div class="search-input-wrapper" style="position: relative; display: flex; align-items: center;">' +
+        '<div class="search-input-wrapper" data-debug="Search: query=\\"\\" results=0" style="position: relative; display: flex; align-items: center;">' +
           '<i data-lucide="search" style="position: absolute; left: 12px; width: 16px; color: var(--text-muted);"></i>' +
           '<input type="text" class="search-input" placeholder="Search messages, people..." style="width: 100%; padding: 8px 12px 8px 36px; border-radius: 8px; border: 1px solid var(--border-subtle); background: var(--bg-surface); color: var(--text-primary); outline: none;">' +
           '<button id="btn-toggle-sidebar" title="Toggle Sidebar" style="background:transparent; border:none; cursor:pointer; color:var(--text-muted); padding:4px; margin-left:4px; flex-shrink:0;"><i data-lucide="chevrons-left" style="width:18px;height:18px;"></i></button>' +
         '</div>' +
+      '</div>' +
+      '<div id="connection-stats-overlay" style="display:none;position:fixed;bottom:16px;right:16px;background:rgba(0,0,0,0.85);border:1px solid var(--border-subtle);border-radius:12px;padding:16px;z-index:9998;font-family:monospace;font-size:11px;color:#22c55e;flex-direction:column;gap:6px;min-width:200px;pointer-events:none;">' +
+        '<div style="display:flex;justify-content:space-between;"><span>Status:</span><span id="conn-status">Disconnected</span></div>' +
+        '<div style="display:flex;justify-content:space-between;"><span>Peers:</span><span id="conn-peers">0</span></div>' +
+        '<div style="display:flex;justify-content:space-between;"><span>Uptime:</span><span id="conn-uptime">--</span></div>' +
+        '<div style="display:flex;justify-content:space-between;"><span>Bytes Sent:</span><span id="conn-sent">0</span></div>' +
+        '<div style="display:flex;justify-content:space-between;"><span>Bytes Recv:</span><span id="conn-recv">0</span></div>' +
       '</div>' +
       '<div class="tabs-container" style="display:flex; padding: 0 var(--spacing-md); margin-bottom: var(--spacing-md); gap: 16px;">' +
         '<button class="tab active" style="flex:1; text-align:center; padding: 12px 4px; border-bottom: 3px solid var(--accent-primary); border-top: none; border-left: none; border-right: none; font-weight: 600; color: var(--text-primary); background: transparent; transition: var(--transition); cursor:pointer;">Friends</button>' +
@@ -53,9 +60,18 @@ window.SidebarMiddle = {
     var activeChatId = state.activeChatId;
     var messages = state.messages;
 
-    var html = '<div style="padding: var(--spacing-md);">' +
-      '<button id="btn-create-group" style="width:100%;padding:10px 20px;background:var(--accent-primary);color:white;border-radius:24px;border:none;cursor:pointer;font-weight:600;">+ Create Group</button>' +
+    var hasGroups = groups.length > 0;
+    var html = '';
+    if (hasGroups) {
+      html += '<div style="padding: 0 var(--spacing-md) var(--spacing-sm) var(--spacing-md); display:flex; justify-content:space-between; align-items:center;">' +
+        '<span style="font-size: 12px; font-weight:bold; color:var(--text-muted); text-transform:uppercase;">Groups (' + groups.length + ')</span>' +
+        '<button id="btn-create-group" style="color:var(--text-secondary); cursor:pointer;"><i data-lucide="plus" style="width:16px;height:16px;"></i></button>' +
       '</div>';
+    } else {
+      html += '<div style="padding: var(--spacing-md); display:flex; justify-content:stretch; align-items:center;">' +
+        '<button id="btn-create-group" style="width:100%;padding:10px 20px;background:var(--accent-primary);color:white;border-radius:24px;border:none;cursor:pointer;font-weight:600;">+ Create Group</button>' +
+      '</div>';
+    }
 
     if (groups.length === 0) {
       html += '<div style="padding: var(--spacing-lg); text-align: center; color: var(--text-muted); font-size: 13px;">' +
@@ -77,7 +93,7 @@ window.SidebarMiddle = {
         // Group avatar or overlapping member circles
         var avatarHtml = '';
         if (group.avatarPath) {
-          avatarHtml = '<img src="orbit-avatar://' + window.Sanitize.escapeHtml(group.groupId) + '" style="width:40px;height:40px;border-radius:12px;object-fit:cover;">';
+          avatarHtml = '<img src="orbit-avatar://' + window.Sanitize.escapeHtml(group.groupId) + '?t=' + (group.avatarUpdatedAt || 0) + '" style="width:40px;height:40px;border-radius:12px;object-fit:cover;">';
         } else {
           var displayMembers = members.slice(0, 3);
           displayMembers.forEach(function(m, idx) {
@@ -92,7 +108,7 @@ window.SidebarMiddle = {
 
         var pinIcon = group.pinned ? '<i data-lucide="pin" style="width:12px;height:12px;color:var(--accent-primary);margin-left:4px;"></i>' : '';
 
-        html += '<div class="list-row ' + (isActive ? 'active' : '') + '" data-id="' + window.Sanitize.escapeHtml(group.groupId) + '" data-type="group"' +
+        html += '<div class="list-row ' + (isActive ? 'active' : '') + '" data-id="' + window.Sanitize.escapeHtml(group.groupId) + '" data-type="group" data-debug="Group: ' + window.Sanitize.escapeHtml(group.groupName) + ' ID: ' + window.Sanitize.escapeHtml(group.groupId) + '"' +
           ' oncontextmenu="event.preventDefault();' +
             'if(window.ContextMenu) window.ContextMenu.show(event.clientX, event.clientY, [' +
               '{label:\'' + (group.pinned ? 'Unpin' : 'Pin') + ' Group\',icon:\'pin\',action:\'pin-group\',onClick:function(){' +
@@ -153,115 +169,183 @@ window.SidebarMiddle = {
     var overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:9999;display:flex;align-items:center;justify-content:center;';
 
-    var friendOptions = '';
-    friends.forEach(function(f) {
-      var initial = f.username ? f.username.charAt(0).toUpperCase() : '?';
-      friendOptions += '<label style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background=\'var(--bg-hover)\'" onmouseout="this.style.background=\'transparent\'">' +
-        '<input type="checkbox" class="group-member-cb" value="' + window.Sanitize.escapeHtml(f.userId) + '" style="width:18px;height:18px;accent-color:var(--accent-primary);cursor:pointer;">' +
-        '<div style="width:32px;height:32px;border-radius:50%;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:14px;color:white;font-weight:600;flex-shrink:0;">' + initial + '</div>' +
-        '<div><div style="font-weight:500;color:var(--text-primary);">' + window.Sanitize.escapeHtml(f.username) + '</div>' +
-        '<div style="font-size:12px;color:var(--text-muted);">' + window.Sanitize.escapeHtml(f.status || 'online') + '</div></div>' +
-      '</label>';
-    });
+    var activeTab = 'create';
 
-    overlay.innerHTML =
-      '<div style="width:420px;max-height:560px;background:var(--bg-surface);border-radius:16px;display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--shadow-xl);border:1px solid var(--border-subtle);">' +
-        '<div style="padding:20px 24px 12px;border-bottom:1px solid var(--border-subtle);">' +
-          '<h3 style="margin:0 0 12px;font-family:var(--font-display);font-size:18px;color:var(--text-primary);font-weight:700;">Create Group</h3>' +
-          '<input id="group-name-input" type="text" placeholder="Group name..." style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);font-size:14px;outline:none;box-sizing:border-box;">' +
-        '</div>' +
-        '<div style="flex:1;overflow-y:auto;padding:8px 24px;">' +
-          '<div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;padding:8px 0;letter-spacing:0.5px;">Select Members</div>' +
-          friendOptions +
-          (friends.length === 0 ? '<div style="padding:16px 0;text-align:center;color:var(--text-muted);font-size:13px;">No friends available. Wait for peers to appear on your network.</div>' : '') +
-        '</div>' +
-        '<div style="padding:12px 24px 20px;border-top:1px solid var(--border-subtle);display:flex;gap:12px;justify-content:flex-end;">' +
-          '<button id="btn-cancel-group" style="padding:10px 20px;border-radius:10px;border:1px solid var(--border-subtle);background:transparent;color:var(--text-secondary);cursor:pointer;font-weight:500;">Cancel</button>' +
-          '<button id="btn-confirm-group" style="padding:10px 24px;border-radius:10px;background:var(--accent-primary);color:white;border:none;cursor:pointer;font-weight:600;">Create</button>' +
-        '</div>' +
-      '</div>';
-
-    document.body.appendChild(overlay);
-    lucide.createIcons({ root: overlay });
-
-    var self = this;
-
-    overlay.querySelector('#btn-cancel-group').addEventListener('click', function() { document.body.removeChild(overlay); });
-    overlay.querySelector('#btn-close-settings') && overlay.querySelector('#btn-close-settings').addEventListener('click', function() { document.body.removeChild(overlay); });
-    overlay.addEventListener('click', function(e) { if (e.target === overlay) document.body.removeChild(overlay); });
-
-    overlay.querySelector('#btn-confirm-group').addEventListener('click', function() {
-      var groupName = overlay.querySelector('#group-name-input').value.trim();
-      if (!groupName) { window.Toast.show('Error', 'Please enter a group name'); return; }
-
-      var checkboxes = overlay.querySelectorAll('.group-member-cb:checked');
-      var state = window.store.getState();
-      var groupId = 'group_' + Date.now();
-
-      var selectedMembers = [];
-      checkboxes.forEach(function(cb) {
-        var friend = state.friends.find(function(f) { return f.userId === cb.value; });
-        if (friend) {
-          selectedMembers.push({
-            userId: friend.userId,
-            username: friend.username,
-            usertag: friend.usertag || '',
-            status: friend.status || 'online',
-            avatar: friend.avatar || null,
-            ip: friend.ip || null
-          });
-        }
+    function renderModal() {
+      var friendOptions = '';
+      friends.forEach(function(f) {
+        var initial = f.username ? f.username.charAt(0).toUpperCase() : '?';
+        friendOptions += '<label style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background=\'var(--bg-hover)\'" onmouseout="this.style.background=\'transparent\'">' +
+          '<input type="checkbox" class="group-member-cb" value="' + window.Sanitize.escapeHtml(f.userId) + '" style="width:18px;height:18px;accent-color:var(--accent-primary);cursor:pointer;">' +
+          '<div style="width:32px;height:32px;border-radius:50%;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:14px;color:white;font-weight:600;flex-shrink:0;">' + initial + '</div>' +
+          '<div><div style="font-weight:500;color:var(--text-primary);">' + window.Sanitize.escapeHtml(f.username) + '</div>' +
+          '<div style="font-size:12px;color:var(--text-muted);">' + window.Sanitize.escapeHtml(f.status || 'online') + '</div></div>' +
+        '</label>';
       });
 
-      // Add self as member
-      var allMembers = [
-        {
-          userId: state.currentUser.userId,
-          username: state.currentUser.username || 'You',
-          usertag: state.currentUser.usertag || '',
-          status: 'online',
-          avatar: state.currentUser.avatar || null,
-          ip: null
-        },
-        ...selectedMembers
-      ];
+      var createContent = activeTab === 'create' ? 'style="display:block;"' : 'style="display:none;"';
+      var joinContent = activeTab === 'join' ? 'style="display:block;"' : 'style="display:none;"';
 
-      var group = {
-        groupId: groupId,
-        groupName: groupName,
-        ownerId: state.currentUser.userId,
-        members: allMembers,
-        createdAt: new Date().toISOString()
-      };
+      overlay.innerHTML =
+        '<div style="width:420px;max-height:620px;background:var(--bg-surface);border-radius:16px;display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--shadow-xl);border:1px solid var(--border-subtle);">' +
+          '<div style="padding:16px 24px 12px;display:flex;flex-direction:column;gap:12px;border-bottom:1px solid var(--border-subtle);">' +
+            '<div style="display:flex;background:var(--bg-base);border-radius:10px;padding:3px;">' +
+              '<button class="gcm-tab" data-tab="create" style="flex:1;padding:7px 12px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:' + (activeTab === 'create' ? '600' : '500') + ';background:' + (activeTab === 'create' ? 'var(--accent-primary)' : 'transparent') + ';color:' + (activeTab === 'create' ? 'white' : 'var(--text-secondary)') + ';transition:all 0.15s;">Create</button>' +
+              '<button class="gcm-tab" data-tab="join" style="flex:1;padding:7px 12px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:' + (activeTab === 'join' ? '600' : '500') + ';background:' + (activeTab === 'join' ? 'var(--accent-primary)' : 'transparent') + ';color:' + (activeTab === 'join' ? 'white' : 'var(--text-secondary)') + ';transition:all 0.15s;">Join</button>' +
+            '</div>' +
+          '</div>' +
+          '<div ' + createContent + ' style="flex:1;display:flex;flex-direction:column;overflow:hidden;">' +
+            '<div style="padding:32px 40px 20px;display:flex;flex-direction:column;gap:18px;">' +
+              '<div style="display:flex;align-items:flex-start;gap:16px;">' +
+                '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>' +
+                '<div><div style="font-weight:600;color:var(--text-primary);font-size:16px;">Create a New Group</div>' +
+                '<div style="font-size:13px;color:var(--text-secondary);margin-top:6px;line-height:1.5;">Give your group a name and invite friends to start chatting together.</div></div>' +
+              '</div>' +
+              '<input id="group-name-input" type="text" placeholder="Group name..." style="width:100%;padding:14px 16px;border-radius:10px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);font-size:14px;outline:none;box-sizing:border-box;">' +
+            '</div>' +
+            '<div style="flex:1;overflow-y:auto;padding:0 40px 16px;">' +
+              '<div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;padding:8px 0 12px;letter-spacing:0.5px;">Select Members</div>' +
+              friendOptions +
+              (friends.length === 0 ? '<div style="padding:16px 0;text-align:center;color:var(--text-muted);font-size:13px;">No friends available.</div>' : '') +
+            '</div>' +
+            '<div style="padding:20px 40px 28px;border-top:1px solid var(--border-subtle);display:flex;gap:12px;justify-content:flex-end;background:var(--bg-surface);">' +
+              '<button id="btn-cancel-group" style="padding:11px 24px;border-radius:10px;border:1px solid var(--border-subtle);background:transparent;color:var(--text-secondary);cursor:pointer;font-weight:500;flex-shrink:0;">Cancel</button>' +
+              '<button id="btn-confirm-group" style="padding:11px 28px;border-radius:10px;background:var(--accent-primary);color:white;border:none;cursor:pointer;font-weight:600;flex-shrink:0;">Create</button>' +
+            '</div>' +
+          '</div>' +
+          '<div ' + joinContent + ' style="flex:1;display:flex;flex-direction:column;overflow:hidden;">' +
+            '<div style="flex:1;padding:56px 40px 32px;display:flex;flex-direction:column;gap:28px;">' +
+              '<div style="display:flex;align-items:flex-start;gap:16px;">' +
+                '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>' +
+                '<div><div style="font-weight:600;color:var(--text-primary);font-size:16px;">Join with Invite Code</div>' +
+                '<div style="font-size:13px;color:var(--text-secondary);margin-top:6px;line-height:1.5;">Paste an invite code or link shared in a chat to join a group.</div></div>' +
+              '</div>' +
+              '<input id="join-code-input" type="text" placeholder="Paste invite code..." style="width:100%;padding:14px 16px;border-radius:10px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);font-size:14px;outline:none;box-sizing:border-box;">' +
+            '</div>' +
+            '<div style="padding:20px 40px 28px;border-top:1px solid var(--border-subtle);display:flex;gap:12px;justify-content:flex-end;background:var(--bg-surface);">' +
+              '<button id="btn-cancel-join" style="padding:11px 24px;border-radius:10px;border:1px solid var(--border-subtle);background:transparent;color:var(--text-secondary);cursor:pointer;font-weight:500;flex-shrink:0;">Cancel</button>' +
+              '<button id="btn-confirm-join" style="padding:11px 28px;border-radius:10px;background:var(--accent-primary);color:white;border:none;cursor:pointer;font-weight:600;flex-shrink:0;">Join</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
 
-      // Save locally
-      window.store.addGroup(group);
+      if (!overlay.parentNode) document.body.appendChild(overlay);
+      lucide.createIcons({ root: overlay });
 
-      // Initialize message array for the group
-      var msgs = state.messages;
-      msgs[groupId] = [];
-      window.store.setState({ messages: msgs, activeChatId: groupId });
+      attachEvents();
+    }
 
-      // Broadcast GROUP_CREATE to all selected members
-      if (window.orbitAPI) {
-        allMembers.forEach(function(m) {
-          if (m.userId !== state.currentUser.userId && m.ip) {
-            window.orbitAPI.networkSend(m.userId, m.ip, window.Protocol.Types.GROUP_CREATE, {
-              groupId: groupId,
-              groupName: groupName,
-              ownerId: state.currentUser.userId,
-              members: allMembers
+    function attachEvents() {
+      overlay.querySelectorAll('.gcm-tab').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          activeTab = btn.getAttribute('data-tab');
+          renderModal();
+        });
+      });
+
+      overlay.querySelector('#btn-cancel-group').addEventListener('click', function() { document.body.removeChild(overlay); });
+      overlay.querySelector('#btn-cancel-join').addEventListener('click', function() { document.body.removeChild(overlay); });
+      overlay.addEventListener('click', function(e) { if (e.target === overlay) document.body.removeChild(overlay); });
+
+      overlay.querySelector('#btn-confirm-group').addEventListener('click', function() {
+        var groupName = overlay.querySelector('#group-name-input').value.trim();
+        if (!groupName) { window.Toast.show('Error', 'Please enter a group name'); return; }
+
+        var checkboxes = overlay.querySelectorAll('.group-member-cb:checked');
+        var state = window.store.getState();
+        var groupId = 'group_' + Date.now();
+
+        var selectedMembers = [];
+        checkboxes.forEach(function(cb) {
+          var friend = state.friends.find(function(f) { return f.userId === cb.value; });
+          if (friend) {
+            selectedMembers.push({
+              userId: friend.userId,
+              username: friend.username,
+              usertag: friend.usertag || '',
+              status: friend.status || 'online',
+              avatar: friend.avatar || null,
+              ip: friend.ip || null
             });
           }
         });
-      }
 
-      window.Toast.show('Group Created', 'Welcome to ' + groupName + '!');
-      document.body.removeChild(overlay);
-    });
+        var allMembers = [
+          {
+            userId: state.currentUser.userId,
+            username: state.currentUser.username || 'You',
+            usertag: state.currentUser.usertag || '',
+            status: 'online',
+            avatar: state.currentUser.avatar || null,
+            ip: null
+          },
+          ...selectedMembers
+        ];
+
+        var group = {
+          groupId: groupId,
+          groupName: groupName,
+          ownerId: state.currentUser.userId,
+          members: allMembers,
+          createdAt: new Date().toISOString()
+        };
+
+        window.store.addGroup(group);
+
+        var msgs = state.messages;
+        msgs[groupId] = [];
+        window.store.setState({ messages: msgs, activeChatId: groupId });
+
+        if (window.orbitAPI) {
+          allMembers.forEach(function(m) {
+            if (m.userId !== state.currentUser.userId && m.ip) {
+              window.orbitAPI.networkSend(m.userId, m.ip, window.Protocol.Types.GROUP_CREATE, {
+                groupId: groupId,
+                groupName: groupName,
+                ownerId: state.currentUser.userId,
+                members: allMembers
+              });
+            }
+          });
+        }
+
+        window.Toast.show('Group Created', 'Welcome to ' + groupName + '!');
+        document.body.removeChild(overlay);
+      });
+
+      overlay.querySelector('#btn-confirm-join').addEventListener('click', function() {
+        var code = overlay.querySelector('#join-code-input').value.trim();
+        if (!code) { window.Toast.show('Error', 'Please enter an invite code'); return; }
+
+        var state = window.store.getState();
+        var matchedGroup = state.groups.find(function(g) { return g.inviteCode === code; });
+        if (matchedGroup) {
+          window.Toast.show('Already Member', 'You are already in this group.');
+          return;
+        }
+
+        if (window.orbitAPI) {
+          state.friends.forEach(function(f) {
+            if (f.ip) {
+              window.orbitAPI.networkSend(f.userId, f.ip, window.Protocol.Types.GROUP_JOIN_REQUEST, {
+                inviteCode: code,
+                userId: state.currentUser.userId,
+                username: state.currentUser.username
+              });
+            }
+          });
+        }
+
+        window.Toast.show('Join Request Sent', 'Invite sent to group members for approval.');
+        document.body.removeChild(overlay);
+      });
+    }
+
+    renderModal();
   },
 
   renderList(friends, activeChatId, messages) {
+    var self = this;
     var listContainer = document.getElementById('friends-list-container');
     if (!listContainer) return;
 
@@ -294,7 +378,7 @@ window.SidebarMiddle = {
         ? '<img src="' + window.Sanitize.escapeHtml(friend.avatar) + '" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">'
         : '<i data-lucide="user"></i>';
 
-      html += '<div class="list-row ' + (isActive ? 'active' : '') + '" data-id="' + window.Sanitize.escapeHtml(friend.userId) + '">' +
+      html += '<div class="list-row ' + (isActive ? 'active' : '') + '" data-id="' + window.Sanitize.escapeHtml(friend.userId) + '" data-debug="User: ' + window.Sanitize.escapeHtml(friend.username) + ' ID: ' + window.Sanitize.escapeHtml(friend.userId) + ' Status: ' + window.Sanitize.escapeHtml(friend.status || 'offline') + '">' +
         '<div class="avatar avatar-md list-row-avatar" style="position:relative;">' +
           avatarImg +
           '<div class="status-indicator ' + window.Sanitize.escapeHtml(friend.status || 'offline') + '"></div>' +
@@ -324,6 +408,48 @@ window.SidebarMiddle = {
         }
       });
     });
+
+    var btnAddFriend = listContainer.querySelector('#btn-add-friend');
+    if (btnAddFriend) {
+      btnAddFriend.addEventListener('click', function(e) {
+        self.showAddFriendModal();
+      });
+    }
+  },
+
+  showAddFriendModal() {
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    overlay.innerHTML =
+      '<div style="width:400px;background:var(--bg-surface);border-radius:16px;overflow:hidden;box-shadow:var(--shadow-xl);border:1px solid var(--border-subtle);display:flex;flex-direction:column;">' +
+        '<div style="flex:1;padding:48px 40px 32px;display:flex;flex-direction:column;gap:28px;">' +
+          '<div style="display:flex;align-items:flex-start;gap:16px;">' +
+            '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>' +
+            '<div><div style="font-weight:600;color:var(--text-primary);font-size:16px;">Add a Friend</div>' +
+            '<div style="font-size:13px;color:var(--text-secondary);margin-top:6px;line-height:1.5;">Enter the IP address of a peer on your local network to connect with them.</div></div>' +
+          '</div>' +
+          '<input id="connect-ip-input" type="text" placeholder="192.168.1.x" style="width:100%;padding:14px 16px;border-radius:10px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);font-size:14px;outline:none;box-sizing:border-box;">' +
+        '</div>' +
+        '<div style="padding:20px 40px 28px;border-top:1px solid var(--border-subtle);display:flex;gap:12px;justify-content:flex-end;background:var(--bg-surface);">' +
+          '<button id="btn-cancel-connect" style="padding:11px 24px;border-radius:10px;border:1px solid var(--border-subtle);background:transparent;color:var(--text-secondary);cursor:pointer;font-weight:500;flex-shrink:0;">Cancel</button>' +
+          '<button id="btn-confirm-connect" style="padding:11px 28px;border-radius:10px;background:var(--accent-primary);color:white;border:none;cursor:pointer;font-weight:600;flex-shrink:0;">Connect</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+
+    document.getElementById('btn-cancel-connect').addEventListener('click', function() { document.body.removeChild(overlay); });
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) document.body.removeChild(overlay); });
+    document.getElementById('btn-confirm-connect').addEventListener('click', function() {
+      var ip = document.getElementById('connect-ip-input').value.trim();
+      if (!ip) { window.Toast.show('Error', 'Please enter an IP address'); return; }
+      if (window.orbitAPI) {
+        if (window.orbitAPI.connect) window.orbitAPI.connect(ip);
+        window.Toast.show('Connecting', 'Attempting to connect to ' + window.Sanitize.escapeHtml(ip));
+      }
+      document.body.removeChild(overlay);
+    });
+    var inp = document.getElementById('connect-ip-input');
+    if (inp) { inp.focus(); inp.addEventListener('keydown', function(e) { if (e.key === 'Enter') document.getElementById('btn-confirm-connect').click(); }); }
   },
 
   attachEvents() {
@@ -342,6 +468,17 @@ window.SidebarMiddle = {
           }
         });
       });
+
+      searchInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          var query = e.target.value.trim();
+          if (!query) return;
+          if (window.ChatPanel && window.ChatPanel.showSearchModal) {
+            window.ChatPanel.showSearchModal(query);
+          }
+        }
+      });
     }
 
     var toggleBtn = this.container.querySelector('#btn-toggle-sidebar');
@@ -350,19 +487,6 @@ window.SidebarMiddle = {
         e.stopPropagation();
         var state = window.store.getState();
         window.store.setState({ sidebarMiddleVisible: !state.sidebarMiddleVisible });
-      });
-    }
-
-    var btnAddFriend = this.container.querySelector('#btn-add-friend');
-    if (btnAddFriend) {
-      btnAddFriend.addEventListener('click', function(e) {
-        var ip = prompt("Enter peer IP address to connect:");
-        if (ip && ip.trim() !== '') {
-          if (window.orbitAPI && window.orbitAPI.connect) {
-            window.orbitAPI.connect(ip.trim());
-          }
-          if (window.Toast) window.Toast.show("Connecting", "Attempting to connect to " + window.Sanitize.escapeHtml(ip));
-        }
       });
     }
 
@@ -414,7 +538,7 @@ window.SidebarMiddle = {
     });
 
     var avatarSection = group.avatarPath
-      ? '<img src="orbit-avatar://' + window.Sanitize.escapeHtml(groupId) + '" id="group-info-avatar-img" style="width:80px;height:80px;border-radius:16px;object-fit:cover;cursor:pointer;">'
+      ? '<img src="orbit-avatar://' + window.Sanitize.escapeHtml(groupId) + '?t=' + (group.avatarUpdatedAt || 0) + '" id="group-info-avatar-img" style="width:80px;height:80px;border-radius:16px;object-fit:cover;cursor:pointer;">'
       : '<div id="group-info-avatar-img" style="width:80px;height:80px;border-radius:16px;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:28px;color:white;font-weight:600;cursor:pointer;">' + (group.groupName || 'G').charAt(0).toUpperCase() + '</div>';
 
     var overlay = document.createElement('div');
@@ -542,11 +666,13 @@ window.SidebarMiddle = {
       reader.onload = function(ev) {
         // Save to avatars directory via IPC
         if (window.orbitAPI && window.orbitAPI.saveAvatar) {
+          var ts = Date.now();
           window.orbitAPI.saveAvatar(groupId, ev.target.result.split(',')[1]).then(function(path) {
             window.store.updateGroupField(groupId, 'avatarPath', path);
+            window.store.updateGroupField(groupId, 'avatarUpdatedAt', ts);
             // Update image in panel
             var img = document.getElementById('group-info-avatar-img');
-            if (img) img.src = 'orbit-avatar://' + groupId + '?t=' + Date.now();
+            if (img) img.src = 'orbit-avatar://' + groupId + '?t=' + ts;
           });
         }
       };

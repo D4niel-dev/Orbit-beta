@@ -95,6 +95,12 @@ const migrations = [
       ALTER TABLE groups ADD COLUMN notificationMuted INTEGER DEFAULT 0;
       ALTER TABLE groups ADD COLUMN inviteCode TEXT;
     `);
+  },
+  // v6 - Avatar cache buster timestamp
+  (db) => {
+    db.exec(`
+      ALTER TABLE groups ADD COLUMN avatarUpdatedAt INTEGER DEFAULT 0;
+    `);
   }
 ];
 

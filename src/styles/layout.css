@@ -57,7 +57,11 @@
   height: 100vh;
   overflow: hidden;
   padding-top: 32px; /* Avoid titlebar overlap */
-  transition: grid-template-columns 0.25s ease;
+  transition: grid-template-columns 0.3s ease;
+}
+
+#app-layout.sidebar-collapsed {
+  grid-template-columns: 64px 0px 1fr;
 }
 
 #panel-middle {

@@ -18,7 +18,8 @@ contextBridge.exposeInMainWorld('orbitAPI', {
   // Networking
   networkStart: (identity) => ipcRenderer.sendSync('network-start', identity),
   networkSend: (toPeerId, toIp, type, payload) => ipcRenderer.sendSync('network-send', toPeerId, toIp, type, payload),
-  networkSendFile: (toPeerId, toIp, filePath) => ipcRenderer.invoke('network-send-file', toPeerId, toIp, filePath),
+  networkSendFile: (toPeerId, toIp, filePath, fileName) => ipcRenderer.invoke('network-send-file', toPeerId, toIp, filePath, fileName),
+  connect: (ip) => ipcRenderer.send('network-connect', ip),
 
   // OS Integration
   showNotification: (title, body) => ipcRenderer.send('show-notification', title, body),

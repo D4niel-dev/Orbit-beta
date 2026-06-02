@@ -22,6 +22,7 @@ window.SettingsModal = {
             '<button class="settings-tab" data-tab="network" style="text-align:left;padding:10px 16px;border-radius:8px;color:var(--text-secondary);background:transparent;border:none;cursor:pointer;">Network</button>' +
             '<button class="settings-tab" data-tab="privacy" style="text-align:left;padding:10px 16px;border-radius:8px;color:var(--text-secondary);background:transparent;border:none;cursor:pointer;">Privacy & Storage</button>' +
             '<button class="settings-tab" data-tab="notifications" style="text-align:left;padding:10px 16px;border-radius:8px;color:var(--text-secondary);background:transparent;border:none;cursor:pointer;">Notifications</button>' +
+            '<button class="settings-tab" data-tab="advanced" style="text-align:left;padding:10px 16px;border-radius:8px;color:var(--text-secondary);background:transparent;border:none;cursor:pointer;">Advanced</button>' +
             '<button class="settings-tab" data-tab="about" style="text-align:left;padding:10px 16px;border-radius:8px;color:var(--text-secondary);background:transparent;border:none;cursor:pointer;">About</button>' +
           '</div>' +
           '<div style="flex:1;"></div>' +
@@ -391,6 +392,42 @@ window.SettingsModal = {
       content.querySelector('#notify-mentions').addEventListener('change', function(e) { updateSettings('notifyGroupMentions', e.target.checked); });
       content.querySelector('#notify-dnd').addEventListener('change', function(e) { updateSettings('notifyDnd', e.target.checked); });
       
+    } else if (tabName === 'advanced') {
+      var s = state.settings || {};
+      var toggleRow = function(id, label, desc, checked) {
+        return '<div style="padding:16px;background:var(--bg-hover);border-radius:8px;border:1px solid var(--border-subtle);">' +
+          '<label style="display:flex;align-items:center;gap:12px;font-size:14px;color:var(--text-primary);cursor:pointer;font-weight:500;">' +
+            '<input id="' + id + '" type="checkbox" ' + (checked ? 'checked' : '') + ' style="width:18px;height:18px;accent-color:var(--accent-primary);cursor:pointer;">' +
+            '<div><div>' + label + '</div>' +
+            (desc ? '<div style="font-size:12px;color:var(--text-muted);font-weight:400;margin-top:2px;">' + desc + '</div>' : '') +
+          '</div></label>' +
+        '</div>';
+      };
+      content.innerHTML =
+        '<h3 style="font-family:var(--font-display);font-size:24px;margin-bottom:24px;">Advanced</h3>' +
+        '<div style="display:flex;flex-direction:column;gap:12px;">' +
+          toggleRow('adv-dev-mode', 'Developer Mode', 'Enable developer tools and instrumentation.', s.devMode) +
+          toggleRow('adv-debug-display', 'Debug Display', 'Show debug overlays on messages, search results, reactions, replies, and all UI components.', s.debugDisplay) +
+          toggleRow('adv-show-msg-ids', 'Show Message IDs', 'Display internal message IDs below each message.', s.showMessageIds) +
+          toggleRow('adv-log-packets', 'Log Network Packets', 'Log all incoming and outgoing network packets to the console.', s.logNetworkPackets) +
+          toggleRow('adv-conn-stats', 'Show Connection Stats', 'Display live connection statistics overlay.', s.showConnectionStats) +
+          toggleRow('adv-experimental', 'Experimental Features', 'Enable experimental features that may be unstable.', s.enableExperimental) +
+        '</div>';
+
+      var updateSettings = function(key, val) {
+        var newSettings = { ...window.store.getState().settings };
+        newSettings[key] = val;
+        window.store.setState({ settings: newSettings });
+        window.Storage.set('settings', newSettings);
+      };
+
+      content.querySelector('#adv-dev-mode').addEventListener('change', function(e) { updateSettings('devMode', e.target.checked); });
+      content.querySelector('#adv-debug-display').addEventListener('change', function(e) { updateSettings('debugDisplay', e.target.checked); });
+      content.querySelector('#adv-show-msg-ids').addEventListener('change', function(e) { updateSettings('showMessageIds', e.target.checked); });
+      content.querySelector('#adv-log-packets').addEventListener('change', function(e) { updateSettings('logNetworkPackets', e.target.checked); });
+      content.querySelector('#adv-conn-stats').addEventListener('change', function(e) { updateSettings('showConnectionStats', e.target.checked); });
+      content.querySelector('#adv-experimental').addEventListener('change', function(e) { updateSettings('enableExperimental', e.target.checked); });
+
     } else if (tabName === 'about') {
       var version = window.orbitAPI ? (window.orbitAPI.version || '0.0.3-beta') : '0.0.3-beta';
       content.innerHTML =

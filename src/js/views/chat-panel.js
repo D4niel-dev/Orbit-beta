@@ -86,6 +86,31 @@ window.ChatPanel = {
         return;
       }
       
+      // Pinned messages bar
+      var btnUnpinAll = e.target.closest('#btn-unpin-all');
+      if (btnUnpinAll) {
+        var chatId = window.store.getState().activeChatId;
+        var pinnedMsgs = window.store.getPinnedMessages(chatId);
+        pinnedMsgs.forEach(function(p) {
+          window.store.sendUnpinMessage(chatId, p.msgId);
+        });
+        return;
+      }
+      // Click pinned message text to jump to it
+      var pinnedText = e.target.closest('#pinned-messages-text');
+      if (pinnedText) {
+        var chatId = window.store.getState().activeChatId;
+        var pinnedMsgs = window.store.getPinnedMessages(chatId);
+        if (pinnedMsgs.length > 0) {
+          var msgId = pinnedMsgs[0].msgId;
+          setTimeout(function() {
+            var el = document.querySelector('[data-msg-id="' + msgId + '"]');
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 100);
+        }
+        return;
+      }
+
       function broadcastToChat(chatId, type, payload) {
         var s = window.store.getState();
         var g = s.groups.find(function(g) { return g.groupId === chatId; });
@@ -222,12 +247,13 @@ window.ChatPanel = {
           grouped[r.emoji].push(r.userId);
         });
         const entries = Object.entries(grouped);
-        reactionsHtml = '<div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap;">';
+        reactionsHtml = '<div class="reactions-row" style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap;">';
         entries.forEach(([emoji, users]) => {
           const userMention = users.length <= 2 ? users.map(u => u === myId ? 'You' : u.substring(0, 6)).join(', ') : users.length + ' people';
-          reactionsHtml += '<div style="display:flex;align-items:center;gap:4px;padding:2px 8px;border-radius:12px;background:var(--bg-hover);border:1px solid var(--border-subtle);font-size:12px;cursor:pointer;" title="' + window.Sanitize.escapeHtml(userMention) + '">' +
+          const hasReacted = users.includes(myId);
+          reactionsHtml += '<div class="reaction-pill" data-msg-id="' + msg.id + '" data-emoji="' + window.Sanitize.escapeHtml(emoji) + '" data-debug="Reaction: ' + window.Sanitize.escapeHtml(emoji) + ' (' + users.length + ')" style="display:flex;align-items:center;gap:4px;padding:2px 8px;border-radius:12px;background:' + (hasReacted ? 'var(--accent-primary)' : 'var(--bg-hover)') + ';border:1px solid ' + (hasReacted ? 'var(--accent-primary)' : 'var(--border-subtle)') + ';font-size:12px;cursor:pointer;" title="' + window.Sanitize.escapeHtml(userMention) + '">' +
             '<span>' + emoji + '</span>' +
-            '<span style="color:var(--text-secondary);font-size:11px;">' + users.length + '</span>' +
+            '<span style="color:' + (hasReacted ? 'white' : 'var(--text-secondary)') + ';font-size:11px;">' + users.length + '</span>' +
           '</div>';
         });
         reactionsHtml += '</div>';
@@ -240,7 +266,7 @@ window.ChatPanel = {
         if (origMsg) {
           const replyPreview = (origMsg.text || '').substring(0, 60) + (origMsg.text && origMsg.text.length > 60 ? '...' : '');
           const replyUser = origMsg.sender === myId ? 'You' : window.Sanitize.escapeHtml(activeFriend.username);
-          replyHtml = '<div style="font-size:12px;padding:6px 10px;margin-bottom:6px;border-left:3px solid rgba(255,255,255,0.3);border-radius:4px;background:rgba(0,0,0,0.1);color:rgba(255,255,255,0.7);cursor:pointer;" onclick="document.querySelector(\'[data-msg-id=\\x27' + origMsg.id + '\\x27].message-row\')?.scrollIntoView({behavior:\\x27smooth\\x27,block:\\x27center\\x27})">' +
+          replyHtml = '<div style="font-size:12px;padding:6px 10px;margin-bottom:6px;border-left:3px solid rgba(255,255,255,0.3);border-radius:4px;background:rgba(0,0,0,0.1);color:rgba(255,255,255,0.7);cursor:pointer;" data-debug="ReplyTo: ' + msg.replyTo + '" onclick="document.querySelector(\'[data-msg-id=\\x27' + origMsg.id + '\\x27].message-row\')?.scrollIntoView({behavior:\\x27smooth\\x27,block:\\x27center\\x27})">' +
             '<span style="font-weight:600;">' + replyUser + '</span> ' + window.Sanitize.escapeHtml(replyPreview) +
           '</div>';
         }
@@ -248,6 +274,26 @@ window.ChatPanel = {
 
       let attachmentsHtml = '';
       if (msg.attachments && msg.attachments.length > 0) {
+        // Determine uniform aspect ratio for image attachments
+        var imageAtts = msg.attachments.filter(function(a) { return a.type === 'image'; });
+        var imageAspectRatio = null;
+        if (imageAtts.length > 0) {
+          var allHaveDim = imageAtts.every(function(a) { return a.width && a.height; });
+          if (!allHaveDim) {
+            imageAspectRatio = 1;
+          } else if (imageAtts.length === 1) {
+            var a = imageAtts[0];
+            imageAspectRatio = a.width / a.height;
+          } else {
+            var ratios = imageAtts.map(function(a) { return a.width / a.height; });
+            var first = ratios[0];
+            var allSame = ratios.every(function(r) { return Math.abs(r - first) < 0.01; });
+            imageAspectRatio = allSame ? first : 1;
+          }
+        }
+
+        var arStyle = imageAspectRatio ? 'aspect-ratio:' + imageAspectRatio + ';' : 'height:120px;';
+
         let gridHtml = '';
         msg.attachments.forEach(att => {
           const safeAttId = window.Sanitize.escapeHtml(String(att.id || ''));
@@ -256,7 +302,7 @@ window.ChatPanel = {
             const safeUrl = window.Sanitize.escapeHtml(att.url);
             const safeName = window.Sanitize.escapeHtml(String(att.name || 'Image'));
             const safeSize = window.Sanitize.escapeHtml(String(att.size || 0));
-            gridHtml += '<div style="position:relative;border-radius: 8px; overflow: hidden; height: 120px; border: 1px solid var(--border-subtle); cursor:pointer;" onmouseenter="var el=this.querySelector(\'.att-delete-btn\');if(el)el.style.display=\'flex\'" onmouseleave="var el=this.querySelector(\'.att-delete-btn\');if(el)el.style.display=\'none\'" onclick="if(window.ImageViewer) window.ImageViewer.openFromMessage(\'' + msg.id + '\', \'' + safeAttId + '\')">' + deleteBtn + '<img src="' + safeUrl + '" style="width: 100%; height: 100%; object-fit: cover;" onerror="if(window.handleMediaError) window.handleMediaError(this, \'' + safeUrl + '\')"></div>';
+            gridHtml += '<div style="position:relative;border-radius: 8px; overflow: hidden; ' + arStyle + ' border: 1px solid var(--border-subtle); cursor:pointer;" onmouseenter="var el=this.querySelector(\'.att-delete-btn\');if(el)el.style.display=\'flex\'" onmouseleave="var el=this.querySelector(\'.att-delete-btn\');if(el)el.style.display=\'none\'" onclick="if(window.ImageViewer) window.ImageViewer.openFromMessage(\'' + msg.id + '\', \'' + safeAttId + '\')">' + deleteBtn + '<img src="' + safeUrl + '" style="width: 100%; height: 100%; object-fit: cover;" onerror="if(window.handleMediaError) window.handleMediaError(this, \'' + safeUrl + '\')"></div>';
           } else {
             gridHtml += '<div style="position:relative;border-radius: 8px; height: 120px; border: 1px solid var(--border-subtle); display:flex; flex-direction:column; align-items:center; justify-content:center; background: rgba(0,0,0,0.1); padding: 8px; text-align:center;" onmouseenter="var el=this.querySelector(\'.att-delete-btn\');if(el)el.style.display=\'flex\'" onmouseleave="var el=this.querySelector(\'.att-delete-btn\');if(el)el.style.display=\'none\'">' +
               deleteBtn +
@@ -265,7 +311,7 @@ window.ChatPanel = {
             '</div>';
           }
         });
-        attachmentsHtml = '<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-bottom: ' + (sanitizedText ? '8px' : '0') + '; width: 100%; min-width: 250px;">' + gridHtml + '</div>';
+        attachmentsHtml = '<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-bottom: ' + (sanitizedText ? '8px' : '0') + '; width: 100%; min-width: 250px; max-width: 280px;">' + gridHtml + '</div>';
       }
 
       // Hover action bar
@@ -286,13 +332,14 @@ window.ChatPanel = {
           ? '<img src="' + window.Sanitize.escapeHtml(state.currentUser.avatar) + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">'
           : '<i data-lucide="user" style="width:14px;"></i>';
         const senderName = '';
-        messagesHtml += '<div class="message-row" data-msg-id="' + msg.id + '" style="display:flex; margin-bottom: var(--spacing-md); flex-direction: row-reverse; align-items: flex-end;">' +
+        messagesHtml += '<div class="message-row" data-msg-id="' + msg.id + '" data-debug="MsgID: ' + msg.id + ' Sender: ' + window.Sanitize.escapeHtml(msg.sender) + ' TS: ' + msg.timestamp + '" style="display:flex; margin-bottom: var(--spacing-md); flex-direction: row-reverse; align-items: flex-end;">' +
           '<div style="padding-bottom: 10px; display:flex;">' +
             '<div class="avatar avatar-sm msg-avatar" data-user-id="' + state.currentUser.userId + '" style="margin-left: var(--spacing-sm); flex-shrink: 0; cursor:pointer;">' + myAvatarImg + '</div>' +
           '</div>' +
           '<div style="max-width: 65%; display:flex; flex-direction:column; align-items:flex-end;">' +
             senderName +
-            '<div class="message-bubble" data-msg-id="' + msg.id + '" style="position:relative;' + bubbleBgMine + ' ' + bubblePadding + ' border-radius: 16px 16px 0 16px; line-height: 1.4; font-size: 14px; cursor:context-menu; max-width: 100%;" onmouseenter="var el=this.querySelector(\'.msg-actions-bar\');if(el)el.style.display=\'flex\'" onmouseleave="var el=this.querySelector(\'.msg-actions-bar\');if(el)el.style.display=\'none\'">' +
+            '<div class="message-bubble" data-msg-id="' + msg.id + '" data-debug="Bubble: ' + msg.id + '" style="position:relative;' + bubbleBgMine + ' ' + bubblePadding + ' border-radius: 16px 16px 0 16px; line-height: 1.4; font-size: 14px; cursor:context-menu; max-width: 100%;" onmouseenter="var el=this.querySelector(\'.msg-actions-bar\');if(el)el.style.display=\'flex\'" onmouseleave="var el=this.querySelector(\'.msg-actions-bar\');if(el)el.style.display=\'none\'">' +
+              '<div class="message-id" style="display:none;font-size:9px;font-family:monospace;color:rgba(255,255,255,0.4);margin-bottom:2px;">#' + msg.id.substring(0, 8) + '</div>' +
               actionsBar + replyHtml + attachmentsHtml + sanitizedText + editedBadge +
             '</div>' +
             '<div style="font-size: 12px; color: var(--text-muted); margin-top: 4px; align-self: flex-start; margin-left: 4px;">' + timeStr + '</div>' + reactionsHtml +
@@ -322,11 +369,12 @@ window.ChatPanel = {
         var avatarImg = senderAvatar
           ? '<img src="' + window.Sanitize.escapeHtml(senderAvatar) + '" style="width:100%;height:100%;border-radius:50%;">'
           : '<i data-lucide="user" style="width:14px;"></i>';
-        messagesHtml += '<div class="message-row" data-msg-id="' + msg.id + '" style="display:flex; margin-bottom: var(--spacing-md);">' +
+        messagesHtml += '<div class="message-row" data-msg-id="' + msg.id + '" data-debug="MsgID: ' + msg.id + ' Sender: ' + window.Sanitize.escapeHtml(msg.sender) + ' TS: ' + msg.timestamp + '" style="display:flex; margin-bottom: var(--spacing-md);">' +
           '<div class="avatar avatar-sm msg-avatar" data-user-id="' + msg.sender + '" style="margin-right: var(--spacing-sm); margin-top: 4px; flex-shrink: 0; cursor:pointer;">' + avatarImg + '</div>' +
           '<div style="max-width: 65%; display:flex; flex-direction:column; align-items:flex-start;">' +
             '<div style="font-size: 11px; color: var(--text-secondary); font-weight: 500; margin-bottom: 2px; margin-left: 4px;">' + senderName + '</div>' +
-            '<div class="message-bubble" data-msg-id="' + msg.id + '" style="position:relative;' + bubbleBgOther + ' ' + bubblePadding + ' border-radius: 0 16px 16px 16px; line-height: 1.4; font-size: 14px; cursor:context-menu; max-width: 100%;" onmouseenter="var el=this.querySelector(\'.msg-actions-bar\');if(el)el.style.display=\'flex\'" onmouseleave="var el=this.querySelector(\'.msg-actions-bar\');if(el)el.style.display=\'none\'">' +
+            '<div class="message-bubble" data-msg-id="' + msg.id + '" data-debug="Bubble: ' + msg.id + '" style="position:relative;' + bubbleBgOther + ' ' + bubblePadding + ' border-radius: 0 16px 16px 16px; line-height: 1.4; font-size: 14px; cursor:context-menu; max-width: 100%;" onmouseenter="var el=this.querySelector(\'.msg-actions-bar\');if(el)el.style.display=\'flex\'" onmouseleave="var el=this.querySelector(\'.msg-actions-bar\');if(el)el.style.display=\'none\'">' +
+              '<div class="message-id" style="display:none;font-size:9px;font-family:monospace;color:var(--text-muted);margin-bottom:2px;">#' + msg.id.substring(0, 8) + '</div>' +
               actionsBar + replyHtml + attachmentsHtml + sanitizedText + editedBadgeOther +
             '</div>' +
             '<div style="font-size: 12px; color: var(--text-muted); margin-top: 4px; align-self: flex-end; margin-right: 4px;">' + timeStr + '</div>' + reactionsHtml +
@@ -335,6 +383,24 @@ window.ChatPanel = {
       }
     });
 
+    // Empty state for chats with no messages
+    if (!messagesHtml) {
+      var isFirstMessageWithFriend = activeFriend && !isGroup && (!state.messages[state.activeChatId] || state.messages[state.activeChatId].length === 0);
+      if (isFirstMessageWithFriend) {
+        messagesHtml = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-muted);text-align:center;gap:8px;padding:40px;">' +
+          '<i data-lucide="message-circle" style="width:40px;height:40px;opacity:0.3;"></i>' +
+          '<div style="font-size:15px;font-weight:500;color:var(--text-secondary);">No messages yet</div>' +
+          '<div style="font-size:13px;">Send a message to start the conversation</div>' +
+        '</div>';
+      } else if (isGroup) {
+        messagesHtml = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-muted);text-align:center;gap:8px;padding:40px;">' +
+          '<i data-lucide="users" style="width:40px;height:40px;opacity:0.3;"></i>' +
+          '<div style="font-size:15px;font-weight:500;color:var(--text-secondary);">Welcome to ' + window.Sanitize.escapeHtml(activeGroup.groupName) + '</div>' +
+          '<div style="font-size:13px;">Send the first message to the group</div>' +
+        '</div>';
+      }
+    }
+
     // Header
     var headerHtml = '';
     if (isGroup) {
@@ -342,7 +408,7 @@ window.ChatPanel = {
       headerHtml =
         '<div class="avatar avatar-md" style="margin-right: var(--spacing-md); display:flex; align-items:center; justify-content:center;">' +
           (activeGroup.avatarPath
-            ? '<img src="orbit-avatar://' + window.Sanitize.escapeHtml(activeGroup.groupId) + '" style="width:40px;height:40px;border-radius:12px;object-fit:cover;">'
+            ? '<img src="orbit-avatar://' + window.Sanitize.escapeHtml(activeGroup.groupId) + '?t=' + (activeGroup.avatarUpdatedAt || 0) + '" style="width:40px;height:40px;border-radius:12px;object-fit:cover;">'
             : '<div style="display:flex;align-items:center;justify-content:center;background:var(--accent-primary);border-radius:12px;width:40px;height:40px;font-weight:700;color:white;font-size:16px;">' + window.Sanitize.escapeHtml(activeGroup.groupName.charAt(0).toUpperCase()) + '</div>'
           ) +
         '</div>' +
@@ -351,20 +417,55 @@ window.ChatPanel = {
           '<div id="group-member-count" style="font-size: 12px; color: var(--text-muted); cursor:pointer;">' + memberCount + ' member' + (memberCount !== 1 ? 's' : '') + '</div>' +
         '</div>';
     } else {
+      var statusColors = { online: 'var(--accent-success)', away: 'var(--accent-warning)', busy: 'var(--accent-danger)', dnd: 'var(--accent-danger)', offline: 'var(--text-muted)', invisible: 'var(--text-muted)' };
+      var statusLabels = { online: 'Online', away: 'Away', busy: 'Busy', dnd: 'Do Not Disturb', invisible: 'Invisible', offline: 'Offline' };
+      var friendStatus = activeFriend.status || 'offline';
+      var statusColor = statusColors[friendStatus] || 'var(--text-muted)';
+      var statusLabel = statusLabels[friendStatus] || 'Offline';
+      var lastSeenText = '';
+      if (friendStatus === 'offline' && activeFriend.lastSeen) {
+        var lastSeenStr = window.Format.relativeTime ? window.Format.relativeTime(new Date(activeFriend.lastSeen).toISOString()) : '';
+        lastSeenText = lastSeenStr ? ' · Last seen ' + lastSeenStr : '';
+      }
       var headerAvatar = activeFriend.avatar
         ? '<img src="' + window.Sanitize.escapeHtml(activeFriend.avatar) + '" style="width:100%;height:100%;border-radius:50%;">'
         : '<i data-lucide="user"></i>';
       headerHtml =
         '<div class="avatar avatar-md chat-header-avatar" style="margin-right: var(--spacing-md); position:relative; cursor:pointer;">' +
           headerAvatar +
-          '<div class="status-indicator ' + window.Sanitize.escapeHtml(activeFriend.status) + '"></div>' +
+          '<div class="status-indicator ' + window.Sanitize.escapeHtml(friendStatus) + '"></div>' +
         '</div>' +
         '<div style="flex:1;">' +
           '<div style="font-weight: 600; font-family: var(--font-display); font-size: 16px;">' + window.Sanitize.escapeHtml(activeFriend.username) + '</div>' +
-          '<div style="font-size: 12px; color: var(--accent-success); display:flex; align-items:center; gap:4px;">' +
-            '<div style="width:6px;height:6px;background:var(--accent-success);border-radius:50%;"></div> ' + window.Sanitize.escapeHtml(activeFriend.status) +
+          '<div style="font-size: 12px; color: ' + statusColor + '; display:flex; align-items:center; gap:4px;">' +
+            '<div style="width:6px;height:6px;background:' + statusColor + ';border-radius:50%;"></div> ' + window.Sanitize.escapeHtml(statusLabel) + window.Sanitize.escapeHtml(lastSeenText) +
           '</div>' +
         '</div>';
+    }
+
+    // Inline progress — rendered inside the message feed
+    var progressHtml = '';
+    if (state.transferProgress && Object.keys(state.transferProgress).length > 0) {
+      progressHtml = '<div class="transfer-progress-inline" style="display:flex;flex-direction:column;gap:8px;padding:4px 0;">';
+      Object.keys(state.transferProgress).forEach(function(fileId) {
+        const prog = state.transferProgress[fileId];
+        const pct = Math.max(0, Math.min(100, Math.floor((prog.received / prog.total) * 100)));
+        const fileName = prog.name || (prog.isSending ? 'Sending file...' : 'Receiving file...');
+        const icon = prog.isSending ? 'upload-cloud' : 'download-cloud';
+        progressHtml += '<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:12px;background:var(--bg-surface);border:1px solid var(--border-subtle);box-shadow:var(--shadow-sm);">' +
+          '<i data-lucide="' + icon + '" style="width:20px;height:20px;color:var(--accent-primary);flex-shrink:0;"></i>' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-secondary);margin-bottom:4px;">' +
+              '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window.Sanitize.escapeHtml(fileName) + '</span>' +
+              '<span style="flex-shrink:0;margin-left:8px;">' + pct + '%</span>' +
+            '</div>' +
+            '<div style="width:100%;height:6px;background:var(--bg-hover);border-radius:3px;overflow:hidden;">' +
+              '<div style="height:100%;width:' + pct + '%;background:var(--accent-primary);transition:width 0.2s linear;border-radius:3px;"></div>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      });
+      progressHtml += '</div>';
     }
 
     this.container.innerHTML =
@@ -377,30 +478,16 @@ window.ChatPanel = {
           '<button id="btn-chat-more" title="More" style="background:transparent; border:none; cursor:pointer; color:inherit;"><i data-lucide="more-vertical"></i></button>' +
         '</div>' +
       '</div>' +
-
+      '<!-- Pinned Messages Bar -->' +
+      '<div id="pinned-messages-bar" style="display:none;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--border-subtle);background:var(--bg-hover);font-size:13px;color:var(--text-secondary);">' +
+        '<i data-lucide="pin" style="width:14px;height:14px;flex-shrink:0;transform:rotate(45deg);"></i>' +
+        '<span id="pinned-messages-text" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>' +
+        '<button id="btn-unpin-all" style="background:none;border:none;cursor:pointer;color:var(--text-muted);padding:2px;font-size:18px;line-height:1;" title="Unpin all">×</button>' +
+      '</div>' +
       '<!-- Message Feed -->' +
       '<div class="message-feed" id="chat-message-feed" style="flex:1; overflow-y:auto; padding: var(--spacing-lg);">' +
-        messagesHtml +
+        messagesHtml + progressHtml +
       '</div>';
-      
-    // Progress UI
-    let progressHtml = '';
-    if (state.transferProgress && Object.keys(state.transferProgress).length > 0) {
-      progressHtml = '<div style="margin: 0 var(--spacing-lg) 16px var(--spacing-lg); display: flex; flex-direction: column; gap: 8px;">';
-      Object.keys(state.transferProgress).forEach(fileId => {
-        const prog = state.transferProgress[fileId];
-        const pct = Math.max(0, Math.min(100, Math.floor((prog.received / prog.total) * 100)));
-        const label = prog.isSending ? 'Sending File...' : 'Receiving File...';
-        progressHtml += '<div style="background: var(--bg-surface); padding: 12px; border-radius: 8px; border: 1px solid var(--border-subtle); box-shadow: var(--shadow-sm); display:flex; flex-direction:column; gap:4px;">' +
-           '<div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text-secondary);"><span>' + label + '</span><span>' + pct + '%</span></div>' +
-           '<div style="width:100%; height:6px; background:var(--bg-hover); border-radius:3px; overflow:hidden;">' +
-             '<div style="height:100%; width:' + pct + '%; background:var(--accent-primary); transition:width 0.2s linear;"></div>' +
-           '</div>' +
-        '</div>';
-      });
-      progressHtml += '</div>';
-    }
-
     // Reply/Edit preview bar
     let replyEditBar = '';
     if (this.replyingTo) {
@@ -418,12 +505,20 @@ window.ChatPanel = {
       '</div>';
     }
 
+    // Typing indicator placeholder (filled by listener)
+    var typingHtml = '<div id="typing-indicator" style="display:none;align-items:center;gap:8px;padding:4px 12px;font-size:12px;color:var(--text-muted);">' +
+        '<div class="typing-dots" style="display:flex;align-items:center;gap:2px;">' +
+          '<span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>' +
+        '</div>' +
+        '<span id="typing-text"></span>' +
+      '</div>';
+
     this.container.innerHTML +=
-      progressHtml +
       '<!-- Chat Input -->' +
       '<div class="chat-input-area" style="padding: var(--spacing-md) var(--spacing-lg) 48px var(--spacing-lg); display: flex; flex-direction: column;">' +
         '<div id="file-preview-area" style="display:none; gap: 8px; padding: 12px; margin-bottom: 8px; overflow-x: auto; white-space: nowrap; border-radius: 16px; background: var(--bg-hover); border: 1px solid var(--border-subtle);"></div>' +
         replyEditBar +
+        typingHtml +
         '<div class="chat-input-wrapper">' +
           '<button id="btn-plus"><i data-lucide="plus-circle"></i></button>' +
           '<input type="text" id="chat-input" class="chat-input-field" placeholder="Message ' + window.Sanitize.escapeHtml(activeName) + '..."' + (this.editingMsg ? ' value="' + window.Sanitize.escapeHtml(this.editingMsg.text) + '"' : '') + '>' +
@@ -434,6 +529,47 @@ window.ChatPanel = {
       '</div>';
 
     lucide.createIcons({ root: this.container });
+
+    // Pinned messages bar
+    var pinnedBar = document.getElementById('pinned-messages-bar');
+    if (pinnedBar) {
+      var pinnedMsgs = window.store.getPinnedMessages(state.activeChatId);
+      if (pinnedMsgs.length > 0) {
+        pinnedBar.style.display = 'flex';
+        var textEl = document.getElementById('pinned-messages-text');
+        if (textEl) {
+          var labels = pinnedMsgs.map(function(p) {
+            var preview = (p.text || '').substring(0, 50);
+            return window.Sanitize.escapeHtml(preview);
+          });
+          if (labels.length === 1) {
+            textEl.innerHTML = 'Pinned: "' + labels[0] + '"';
+          } else if (labels.length === 2) {
+            textEl.innerHTML = 'Pinned: "' + labels[0] + '" and "' + labels[1] + '"';
+          } else {
+            textEl.innerHTML = 'Pinned: "' + labels[0] + '", "' + labels[1] + '", and ' + (labels.length - 2) + ' more';
+          }
+        }
+      } else {
+        pinnedBar.style.display = 'none';
+      }
+    }
+
+    // Reaction pill toggle
+    var pills = this.container.querySelectorAll('.reaction-pill');
+    pills.forEach(function(pill) {
+      pill.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var msgId = pill.getAttribute('data-msg-id');
+        var emoji = pill.getAttribute('data-emoji');
+        var state = window.store.getState();
+        var chatId = state.activeChatId;
+        var msg = (state.messages[chatId] || []).find(function(m) { return String(m.id) === msgId; });
+        if (!msg) return;
+        var hasReacted = msg.reactions && msg.reactions.some(function(r) { return r.emoji === emoji && r.userId === state.currentUser.userId; });
+        window.store.sendReaction(chatId, msgId, emoji, hasReacted ? 'remove' : 'add');
+      });
+    });
     
     // Auto scroll to bottom
     var feed = document.getElementById('chat-message-feed');
@@ -446,9 +582,73 @@ window.ChatPanel = {
   attachEvents() {
     var self = this;
     var input = document.getElementById('chat-input');
+
+    // Typing indicator listener (register once)
+    if (!this._typingListenerRegistered) {
+      this._typingListenerRegistered = true;
+      if (window.TypingState) {
+        window.TypingState.onChange(function() {
+          var el = document.getElementById('typing-indicator');
+          var textEl = document.getElementById('typing-text');
+          if (!el || !textEl) return;
+          var chatId = window.store.getState().activeChatId;
+          if (!chatId) { el.style.display = 'none'; return; }
+          var users = window.TypingState.getUsers(chatId);
+          if (users.length === 0) {
+            el.style.display = 'none';
+          } else {
+            var names = users.map(function(u) { return window.Sanitize.escapeHtml(u.username); });
+            textEl.textContent = names.length === 1 ? names[0] + ' is typing...' : names.join(', ') + ' are typing...';
+            el.style.display = 'flex';
+          }
+        });
+      }
+    }
+
     if (input) {
+      // Typing indicator — send typing packets
+      var typingTimeout = null;
+      var lastTypingSent = 0;
+      var sendTyping = function(isTyping) {
+        var state = window.store.getState();
+        var chatId = state.activeChatId;
+        if (!chatId || chatId === 'local-echo') return;
+        var members = state.groups.find(function(g) { return g.groupId === chatId; });
+        var recipients = members ? members.members : [state.friends.find(function(f) { return f.userId === chatId; })].filter(Boolean);
+        recipients.forEach(function(r) {
+          if (r.userId !== state.currentUser.userId && r.ip) {
+            window.orbitAPI.networkSend(r.userId, r.ip, window.Protocol.Types.TYPING, { isTyping: isTyping, username: state.currentUser.username });
+          }
+        });
+      };
+      input.addEventListener('input', function() {
+        var now = Date.now();
+        if (now - lastTypingSent > 2000) {
+          lastTypingSent = now;
+          sendTyping(true);
+        }
+        if (typingTimeout) clearTimeout(typingTimeout);
+        typingTimeout = setTimeout(function() {
+          sendTyping(false);
+          typingTimeout = null;
+        }, 3000);
+      });
+      input.addEventListener('blur', function() {
+        if (typingTimeout) {
+          clearTimeout(typingTimeout);
+          typingTimeout = null;
+        }
+        sendTyping(false);
+      });
+
       input.addEventListener('keydown', async function(e) {
         if (e.key === 'Enter') {
+          // Clear typing indicator when sending
+          if (typingTimeout) {
+            clearTimeout(typingTimeout);
+            typingTimeout = null;
+          }
+          sendTyping(false);
           var text = input.value.trim();
           if (text !== '' || self.stagedFiles.length > 0) {
             await self.sendMessage(text);
@@ -508,14 +708,29 @@ window.ChatPanel = {
         for (let i = 0; i < e.target.files.length; i++) {
           const file = e.target.files[i];
           const isImage = file.type.startsWith('image/');
-          self.stagedFiles.push({
+          var entry = {
             file: file,
             path: file.path,
             name: file.name,
             size: file.size,
             type: isImage ? 'image' : 'file',
-            url: isImage ? URL.createObjectURL(file) : null
-          });
+            url: isImage ? URL.createObjectURL(file) : null,
+            width: 0,
+            height: 0
+          };
+          self.stagedFiles.push(entry);
+
+          if (isImage && entry.url) {
+            (function(entry) {
+              var img = new Image();
+              img.onload = function() {
+                entry.width = img.naturalWidth;
+                entry.height = img.naturalHeight;
+                URL.revokeObjectURL(img.src);
+              };
+              img.src = entry.url;
+            })(entry);
+          }
         }
         
         self.renderPreviewArea();
@@ -549,6 +764,19 @@ window.ChatPanel = {
           } },
           { label: 'Copy Text', action: 'copy', icon: 'copy', onClick: function() { navigator.clipboard.writeText(msg.text); } },
         ];
+        
+        // Check if message is already pinned
+        var pinnedMsgs = window.store.getPinnedMessages(state.activeChatId);
+        var isPinned = pinnedMsgs.some(function(p) { return String(p.msgId) === String(msg.id); });
+        if (isPinned) {
+          items.push({ label: 'Unpin Message', action: 'unpin', icon: 'pin-off', onClick: function() {
+            window.store.sendUnpinMessage(state.activeChatId, msg.id);
+          } });
+        } else {
+          items.push({ label: 'Pin Message', action: 'pin', icon: 'pin', onClick: function() {
+            window.store.sendPinMessage(state.activeChatId, msg.id);
+          } });
+        }
         
         if (isMine) {
           items.push('separator');
@@ -604,7 +832,7 @@ window.ChatPanel = {
         window.ContextMenu.show(rect.left - 150, rect.bottom + 8, [
           { label: 'Voice Call', action: 'voice-call', icon: 'phone', onClick: function() { console.log('Voice Call'); } },
           { label: 'Video Call', action: 'video-call', icon: 'video', onClick: function() { console.log('Video Call'); } },
-          { label: 'Search', action: 'search', icon: 'search', onClick: function() { console.log('Search'); } }
+          { label: 'Search', action: 'search', icon: 'search', onClick: function() { self.showSearchModal(); } }
         ]);
       });
     }
@@ -724,11 +952,11 @@ window.ChatPanel = {
     var existing = document.querySelector('.reaction-picker');
     if (existing) { document.body.removeChild(existing); return; }
 
-    var emojis = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '🎉'];
+    var emojis = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '🎉', '🥺', '👀', '💀', '✨', '⭐', '🤨', '😭', '😤', '😈', '💯', '👋', '🤝', '💪', '🫡', '👏', '🎊', '🚀'];
     var self = this;
     var picker = document.createElement('div');
     picker.className = 'reaction-picker';
-    picker.style.cssText = 'position:fixed;left:' + x + 'px;top:' + (y + 8) + 'px;z-index:9999;background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:24px;padding:6px 8px;box-shadow:var(--shadow-xl);display:flex;gap:2px;';
+    picker.style.cssText = 'position:fixed;left:' + Math.min(x, window.innerWidth - 360) + 'px;top:' + (y + 8) + 'px;z-index:9999;background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:24px;padding:8px 10px;box-shadow:var(--shadow-xl);display:flex;flex-wrap:wrap;gap:2px;max-width:360px;';
 
     emojis.forEach(function(emoji) {
       var btn = document.createElement('button');
@@ -739,8 +967,10 @@ window.ChatPanel = {
       btn.onclick = function() {
         var state = window.store.getState();
         var chatId = state.activeChatId;
+        var msg = (state.messages[chatId] || []).find(function(m) { return String(m.id) === msgId; });
+        var hasReacted = msg && msg.reactions && msg.reactions.some(function(r) { return r.emoji === emoji && r.userId === state.currentUser.userId; });
         if (chatId && window.store.sendReaction) {
-          window.store.sendReaction(chatId, msgId, emoji, 'add');
+          window.store.sendReaction(chatId, msgId, emoji, hasReacted ? 'remove' : 'add');
         }
         if (picker.parentNode) picker.parentNode.removeChild(picker);
       };
@@ -758,6 +988,177 @@ window.ChatPanel = {
         }
       });
     }, 10);
+  },
+
+  showSearchModal(initialQuery) {
+    var existing = document.querySelector('.search-modal-overlay');
+    if (existing) { existing.remove(); }
+
+    var self = this;
+    var overlay = document.createElement('div');
+    overlay.className = 'search-modal-overlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding-top:80px;';
+
+    var panel = document.createElement('div');
+    panel.style.cssText = 'width:560px;max-height:70vh;background:var(--bg-surface);border-radius:16px;border:1px solid var(--border-subtle);box-shadow:var(--shadow-xl);display:flex;flex-direction:column;overflow:hidden;';
+
+    panel.innerHTML =
+      '<div class="search-modal-header" style="padding:16px 20px;border-bottom:1px solid var(--border-subtle);">' +
+        '<div style="display:flex;align-items:center;gap:12px;">' +
+          '<i data-lucide="search" style="width:18px;height:18px;color:var(--text-muted);flex-shrink:0;"></i>' +
+          '<input id="search-modal-input" class="search-modal-input" type="text" placeholder="Search messages, people, files..." autofocus style="flex:1;border:none;background:transparent;color:var(--text-primary);font-size:15px;outline:none;">' +
+          '<button id="search-modal-close" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:18px;height:18px;"></i></button>' +
+        '</div>' +
+      '</div>' +
+      '<div id="search-modal-results" style="flex:1;overflow-y:auto;padding:8px 0;"></div>';
+
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+    if (window.lucide) window.lucide.createIcons({ root: overlay });
+
+    var input = document.getElementById('search-modal-input');
+    var results = document.getElementById('search-modal-results');
+
+    if (input) {
+      input.focus();
+      if (initialQuery) {
+        input.value = initialQuery;
+      }
+    }
+
+    var performSearch = function() {
+      try {
+        var query = input ? input.value.trim().toLowerCase() : '';
+        if (!query) { results.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px;">Type to search messages, people, and files</div>'; return; }
+
+        var state = window.store.getState();
+        var hits = [];
+        var myId = state.currentUser.userId;
+
+        // Search all chats
+        Object.keys(state.messages).forEach(function(chatId) {
+          var msgs = state.messages[chatId] || [];
+          var chatName = chatId;
+          var friend = state.friends.find(function(f) { return f.userId === chatId; });
+          var group = state.groups.find(function(g) { return g.groupId === chatId; });
+          if (friend) chatName = friend.username;
+          else if (group) chatName = group.groupName;
+          else if (chatId === 'local-echo') chatName = 'Orbit Echo';
+
+          msgs.forEach(function(msg) {
+            var match = false;
+            var matchType = 'text';
+            if (msg.text && msg.text.toLowerCase().includes(query)) { match = true; matchType = 'text'; }
+            if (msg.attachments) {
+              msg.attachments.forEach(function(att) {
+                if (att.name && att.name.toLowerCase().includes(query)) { match = true; matchType = 'file'; }
+              });
+            }
+            if (match) {
+              hits.push({ chatId: chatId, chatName: chatName, msg: msg, matchType: matchType });
+            }
+          });
+        });
+
+        // Search friends/usernames
+        state.friends.forEach(function(f) {
+          if (f.username && f.username.toLowerCase().includes(query) && f.userId !== myId) {
+            if (!hits.some(function(h) { return h.chatId === f.userId; })) {
+              hits.push({ chatId: f.userId, chatName: f.username, msg: null, matchType: 'user' });
+            }
+          }
+        });
+
+        if (hits.length === 0) {
+          results.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px;">No results found for "<b>' + window.Sanitize.escapeHtml(query) + '</b>"</div>';
+          return;
+        }
+
+        function highlightText(text, q) {
+          if (!q || !text) return window.Sanitize.escapeHtml(text || '');
+          var escaped = window.Sanitize.escapeHtml(text);
+          var re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+          return escaped.replace(re, '<strong style="color:var(--accent-primary);font-weight:600;">$1</strong>');
+        }
+
+        var html = '';
+        hits.slice(0, 50).forEach(function(hit) {
+          var rawQuery = input ? input.value.trim() : '';
+          var preview = '';
+          var icon = 'message-circle';
+          if (hit.matchType === 'file') {
+            icon = 'file';
+            var fileName = hit.msg.attachments[0] ? hit.msg.attachments[0].name : 'attachment';
+            preview = 'File: ' + highlightText(fileName, rawQuery);
+          } else if (hit.matchType === 'user') { icon = 'user'; preview = 'Click to open chat'; }
+          else {
+            var raw = hit.msg.text || '(attachment)';
+            if (raw.length > 80) raw = raw.substring(0, 80) + '...';
+            preview = highlightText(raw, rawQuery);
+          }
+          var time = hit.msg ? window.Format.relativeTime(hit.msg.timestamp) : '';
+
+          html += '<div class="search-result-row" data-chat-id="' + window.Sanitize.escapeHtml(hit.chatId) + '" data-msg-id="' + (hit.msg ? hit.msg.id : '') + '" data-debug="Chat: ' + window.Sanitize.escapeHtml(hit.chatName) + ' Score: ' + (hit.msg ? Math.floor(Math.random() * 100) : 0) + '" style="display:flex;align-items:center;gap:12px;padding:10px 20px;cursor:pointer;transition:background 0.1s;" onmouseover="this.style.background=\'var(--bg-hover)\'" onmouseout="this.style.background=\'transparent\'">' +
+            '<i data-lucide="' + icon + '" style="width:18px;height:18px;color:var(--text-muted);flex-shrink:0;"></i>' +
+            '<div style="flex:1;min-width:0;">' +
+              '<div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-primary);font-weight:500;"><span>' + window.Sanitize.escapeHtml(hit.chatName) + '</span><span style="font-size:11px;color:var(--text-muted);font-weight:400;">' + time + '</span></div>' +
+              '<div style="font-size:12px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + preview + '</div>' +
+            '</div>' +
+          '</div>';
+        });
+        results.innerHTML = html;
+        if (window.lucide) window.lucide.createIcons({ root: results });
+
+        // Click handler for results
+        results.querySelectorAll('.search-result-row').forEach(function(row) {
+          row.addEventListener('click', function() {
+            var chatId = row.getAttribute('data-chat-id');
+            var msgId = row.getAttribute('data-msg-id');
+            var state = window.store.getState();
+
+            if (state.activeChatId !== chatId) {
+              window.store.setState({ activeChatId: chatId });
+            }
+
+            overlay.remove();
+
+            if (msgId) {
+              setTimeout(function() {
+                var el = document.querySelector('[data-msg-id="' + msgId + '"]');
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }, 100);
+            }
+          });
+        });
+      } catch(err) {
+        console.error('[Search] performSearch error:', err);
+        if (results) {
+          results.innerHTML = '<div style="padding:24px;text-align:left;color:var(--accent-danger);font-size:12px;font-family:var(--font-mono);white-space:pre-wrap;word-break:break-word;">' +
+            '<b>Search Error</b><br><br>' + window.Sanitize.escapeHtml(String(err && err.message ? err.message : err)) +
+            (err && err.stack ? '<br><br><span style="color:var(--text-muted);font-size:11px;">' + window.Sanitize.escapeHtml(err.stack) + '</span>' : '') +
+          '</div>';
+        }
+      }
+    };
+
+    if (input) {
+      input.addEventListener('input', function() {
+        if (self._searchTimeout) clearTimeout(self._searchTimeout);
+        self._searchTimeout = setTimeout(performSearch, 200);
+      });
+      input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') performSearch();
+        if (e.key === 'Escape') overlay.remove();
+      });
+    }
+
+    document.getElementById('search-modal-close').addEventListener('click', function() { overlay.remove(); });
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+
+    if (input && initialQuery) {
+      var ev = new Event('input', { bubbles: true });
+      input.dispatchEvent(ev);
+    }
   },
 
   async sendMessage(text) {
@@ -781,7 +1182,7 @@ window.ChatPanel = {
           recipients.push({ userId: m.userId, ip: m.ip });
         }
       });
-    } else if (friend) {
+    } else if (friend && friend.ip) {
       recipients.push({ userId: friend.userId, ip: friend.ip });
     }
 
@@ -831,19 +1232,33 @@ window.ChatPanel = {
         data: fileBuffers[idx],
         url: s.path
           ? `orbit-db://attachment/${String(attId - 1)}`
-          : (s.url || '')
+          : (s.url || ''),
+        width: s.width || 0,
+        height: s.height || 0
       }));
 
+      // Send files and create progress entries from returned fileIds
       if (window.orbitAPI && activeChatId !== 'local-echo') {
-        this.stagedFiles.forEach(async (s) => {
+        for (var i = 0; i < this.stagedFiles.length; i++) {
+          var s = this.stagedFiles[i];
+          if (recipients.length === 0) continue;
           try {
-            recipients.forEach(function(r) {
-              window.orbitAPI.networkSendFile(r.userId, r.ip, s.path);
-            });
+            for (var j = 0; j < recipients.length; j++) {
+              var r = recipients[j];
+              var fid = await window.orbitAPI.networkSendFile(r.userId, r.ip, s.path, s.name);
+              if (fid) {
+                var cp = window.store.getState().transferProgress;
+                if (cp && cp[fid]) {
+                  var updated = { ...cp };
+                  updated[fid] = { ...updated[fid], name: s.name };
+                  window.store.setState({ transferProgress: updated });
+                }
+              }
+            }
           } catch(err) {
             console.error("File send error:", err);
           }
-        });
+        }
       }
 
       window.store.addMessage(activeChatId, {

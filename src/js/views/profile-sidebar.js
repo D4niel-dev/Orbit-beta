@@ -45,6 +45,16 @@ window.ProfileSidebar = {
       : '<span style="color:var(--text-muted);font-style:italic;">No bio yet...</span>';
 
     var isOnline = user.status === 'online';
+    var statusColors = { online: '#22c55e', away: '#eab308', busy: '#ef4444', dnd: '#ef4444', offline: '#6b7280', invisible: '#6b7280' };
+    var statusLabels = { online: 'Online', away: 'Away', busy: 'Busy', dnd: 'Do Not Disturb', invisible: 'Invisible', offline: 'Offline' };
+    var statusColor = statusColors[user.status] || '#6b7280';
+    var statusLabel = statusLabels[user.status] || 'Offline';
+
+    var lastSeenHtml = '';
+    if (!isOnline && user.status !== 'invisible' && user.lastSeen) {
+      var lastSeenStr = window.Format.relativeTime ? window.Format.relativeTime(new Date(user.lastSeen).toISOString()) : window.Format.absoluteTime(new Date(user.lastSeen).toISOString());
+      lastSeenHtml = '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Last seen ' + lastSeenStr + '</div>';
+    }
 
     this.contentArea.innerHTML =
       '<div style="display:flex;flex-direction:column;height:100%;">' +
@@ -73,8 +83,9 @@ window.ProfileSidebar = {
           '<h2 style="font-size:20px;font-weight:700;color:var(--text-primary);margin:0 0 4px;">' + window.Sanitize.escapeHtml(user.username) + '</h2>' +
           '<div style="font-size:13px;color:var(--text-muted);font-family:var(--font-mono);margin-bottom:12px;">#' + window.Sanitize.escapeHtml(user.usertag || '') + '</div>' +
           '<div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:16px;">' +
-            '<span style="width:8px;height:8px;border-radius:50%;background:' + (isOnline ? '#22c55e' : '#6b7280') + ';display:inline-block;"></span>' +
-            '<span style="font-size:12px;color:var(--text-muted);">' + window.Sanitize.escapeHtml(user.status || 'offline') + '</span>' +
+            '<span style="width:8px;height:8px;border-radius:50%;background:' + statusColor + ';display:inline-block;"></span>' +
+            '<span style="font-size:12px;color:var(--text-muted);">' + window.Sanitize.escapeHtml(statusLabel) + '</span>' +
+            lastSeenHtml +
           '</div>' +
 
           // Bio
