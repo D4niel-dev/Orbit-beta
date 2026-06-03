@@ -2,7 +2,7 @@
   "name": "orbit-beta",
   "version": "0.0.5-beta",
   "description": "Orbit P2P Chat Application",
-  "author": "Orbit Team",
+  "author": "Orbit Team <hello@orbit.chat>",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
