@@ -231,10 +231,51 @@ window.ChatPanel = {
     this.container.style.height = '100%';
 
     let messagesHtml = '';
-    messages.forEach(msg => {
+
+    // Find last read message index for unread divider
+    const lastReadId = state.lastReadIds && state.lastReadIds[state.activeChatId];
+    let lastReadIdx = -1;
+    if (lastReadId) {
+      lastReadIdx = messages.findIndex(function(m) { return String(m.id) === String(lastReadId); });
+    }
+    let hasUnreadInFeed = false;
+
+    for (var mi = 0; mi < messages.length; mi++) {
+      var msg = messages[mi];
+
+      // Insert unread divider before the first unread message
+      if (lastReadIdx >= 0 && mi === lastReadIdx + 1) {
+        hasUnreadInFeed = true;
+        messagesHtml += '<div class="unread-divider" style="display:flex;align-items:center;gap:12px;margin:16px 0;position:relative;">' +
+          '<div style="flex:1;height:1px;background:var(--accent-primary);opacity:0.3;"></div>' +
+          '<span style="font-size:11px;font-weight:700;color:var(--accent-primary);text-transform:uppercase;letter-spacing:0.5px;">Unread Messages</span>' +
+          '<div style="flex:1;height:1px;background:var(--accent-primary);opacity:0.3;"></div>' +
+        '</div>';
+      }
+      // If no lastReadId but there are messages with unread counts, show divider at start
+      if (lastReadIdx < 0 && mi === 0 && state.unreadCounts[state.activeChatId] && messages.length > 0) {
+        hasUnreadInFeed = true;
+        messagesHtml += '<div class="unread-divider" style="display:flex;align-items:center;gap:12px;margin:16px 0;position:relative;">' +
+          '<div style="flex:1;height:1px;background:var(--accent-primary);opacity:0.3;"></div>' +
+          '<span style="font-size:11px;font-weight:700;color:var(--accent-primary);text-transform:uppercase;letter-spacing:0.5px;">Unread Messages</span>' +
+          '<div style="flex:1;height:1px;background:var(--accent-primary);opacity:0.3;"></div>' +
+        '</div>';
+      }
+
       const isMine = msg.sender === myId;
       const timeStr = window.Format.absoluteTime(msg.timestamp).split(' · ')[0];
-      const sanitizedText = window.Sanitize.markdown(msg.text);
+      var sanitizedText = window.Sanitize.markdown(msg.text);
+      // Make known invite codes clickable
+      if (sanitizedText && state.groups) {
+        state.groups.forEach(function(g) {
+          if (g.inviteCode && sanitizedText.indexOf(g.inviteCode) !== -1) {
+            var groupName = window.Sanitize.escapeHtml(g.groupName || 'Group');
+            sanitizedText = sanitizedText.split(g.inviteCode).join(
+              '<span style="display:inline-flex;align-items:center;gap:6px;background:var(--bg-hover);border-radius:6px;padding:2px 8px;font-family:var(--font-mono);font-size:12px;cursor:pointer;border:1px solid var(--border-subtle);color:var(--accent-primary);" onclick="event.stopPropagation();window.SidebarMiddle.showCreateGroupModal(\'' + g.inviteCode + '\')" title="Click to join ' + groupName + '">' + g.inviteCode + ' <span style="font-size:10px;background:var(--accent-primary);color:white;border-radius:4px;padding:1px 5px;font-family:var(--font-ui);">Join</span></span>'
+            );
+          }
+        });
+      }
       const editedBadge = msg.edited ? '<span style="font-size:11px;color:rgba(255,255,255,0.5);margin-left:6px;">(edited)</span>' : '';
       const editedBadgeOther = msg.edited ? '<span style="font-size:11px;color:var(--text-muted);margin-left:6px;">(edited)</span>' : '';
 
@@ -332,6 +373,15 @@ window.ChatPanel = {
           ? '<img src="' + window.Sanitize.escapeHtml(state.currentUser.avatar) + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">'
           : '<i data-lucide="user" style="width:14px;"></i>';
         const senderName = '';
+        // Check if message has been read
+        var readReceipts = state.readReceipts || {};
+        var chatReadReceipts = readReceipts[state.activeChatId] || {};
+        var isRead = false;
+        if (!isGroup) {
+          isRead = Object.values(chatReadReceipts).some(function(lastId) { return String(msg.id) <= String(lastId); });
+        }
+        var readHtml = isRead ? '<span style="font-size:10px;color:var(--accent-primary);margin-left:4px;">✓✓</span>' : '';
+
         messagesHtml += '<div class="message-row" data-msg-id="' + msg.id + '" data-debug="MsgID: ' + msg.id + ' Sender: ' + window.Sanitize.escapeHtml(msg.sender) + ' TS: ' + msg.timestamp + '" style="display:flex; margin-bottom: var(--spacing-md); flex-direction: row-reverse; align-items: flex-end;">' +
           '<div style="padding-bottom: 10px; display:flex;">' +
             '<div class="avatar avatar-sm msg-avatar" data-user-id="' + state.currentUser.userId + '" style="margin-left: var(--spacing-sm); flex-shrink: 0; cursor:pointer;">' + myAvatarImg + '</div>' +
@@ -342,7 +392,7 @@ window.ChatPanel = {
               '<div class="message-id" style="display:none;font-size:9px;font-family:monospace;color:rgba(255,255,255,0.4);margin-bottom:2px;">#' + msg.id.substring(0, 8) + '</div>' +
               actionsBar + replyHtml + attachmentsHtml + sanitizedText + editedBadge +
             '</div>' +
-            '<div style="font-size: 12px; color: var(--text-muted); margin-top: 4px; align-self: flex-start; margin-left: 4px;">' + timeStr + '</div>' + reactionsHtml +
+            '<div style="font-size: 12px; color: var(--text-muted); margin-top: 4px; align-self: flex-start; margin-left: 4px;">' + timeStr + readHtml + '</div>' + reactionsHtml +
           '</div>' +
         '</div>';
       } else {
@@ -381,7 +431,12 @@ window.ChatPanel = {
           '</div>' +
         '</div>';
       }
-    });
+    }
+
+    // Show Jump to Unread button if there are unread messages
+    if (hasUnreadInFeed || state.unreadCounts[state.activeChatId]) {
+      hasUnreadInFeed = true;
+    }
 
     // Empty state for chats with no messages
     if (!messagesHtml) {
@@ -463,9 +518,32 @@ window.ChatPanel = {
               '<div style="height:100%;width:' + pct + '%;background:var(--accent-primary);transition:width 0.2s linear;border-radius:3px;"></div>' +
             '</div>' +
           '</div>' +
+          '<button class="btn-cancel-transfer" data-file-id="' + fileId + '" style="background:none;border:none;cursor:pointer;color:var(--text-muted);padding:4px;border-radius:6px;flex-shrink:0;" title="Cancel transfer">' +
+            '<i data-lucide="x" style="width:16px;height:16px;"></i>' +
+          '</button>' +
         '</div>';
       });
       progressHtml += '</div>';
+    }
+
+    // Transfer errors
+    var errorsHtml = '';
+    if (state.transferErrors && Object.keys(state.transferErrors).length > 0) {
+      errorsHtml = '<div class="transfer-errors" style="display:flex;flex-direction:column;gap:8px;padding:4px 0;">';
+      Object.keys(state.transferErrors).forEach(function(fileId) {
+        const err = state.transferErrors[fileId];
+        errorsHtml += '<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:12px;background:var(--bg-surface);border:1px solid var(--accent-danger);box-shadow:var(--shadow-sm);">' +
+          '<i data-lucide="alert-circle" style="width:20px;height:20px;color:var(--accent-danger);flex-shrink:0;"></i>' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div style="font-size:12px;color:var(--accent-danger);font-weight:600;">Failed: ' + window.Sanitize.escapeHtml(err.name || 'file') + '</div>' +
+            '<div style="font-size:11px;color:var(--text-muted);">' + window.Sanitize.escapeHtml(err.error) + '</div>' +
+          '</div>' +
+          '<button class="btn-dismiss-error" data-file-id="' + fileId + '" style="background:none;border:none;cursor:pointer;color:var(--text-muted);padding:4px;border-radius:6px;flex-shrink:0;" title="Dismiss">' +
+            '<i data-lucide="x" style="width:16px;height:16px;"></i>' +
+          '</button>' +
+        '</div>';
+      });
+      errorsHtml += '</div>';
     }
 
     this.container.innerHTML =
@@ -486,7 +564,12 @@ window.ChatPanel = {
       '</div>' +
       '<!-- Message Feed -->' +
       '<div class="message-feed" id="chat-message-feed" style="flex:1; overflow-y:auto; padding: var(--spacing-lg);">' +
-        messagesHtml + progressHtml +
+        messagesHtml + progressHtml + errorsHtml +
+        '<div id="jump-to-unread" class="jump-to-unread" style="' + (hasUnreadInFeed ? '' : 'display:none;') + 'position:sticky;bottom:8px;left:50%;transform:translateX(-50%);z-index:10;" title="Jump to first unread">' +
+          '<button style="background:var(--accent-primary);color:#fff;border:none;border-radius:20px;padding:6px 16px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(0,0,0,0.3);" onclick="window.ChatPanel.jumpToFirstUnread()">' +
+            '<i data-lucide="arrow-down" style="width:14px;height:14px;"></i> Jump to first unread' +
+          '</button>' +
+        '</div>' +
       '</div>';
     // Reply/Edit preview bar
     let replyEditBar = '';
@@ -575,8 +658,43 @@ window.ChatPanel = {
     var feed = document.getElementById('chat-message-feed');
     if (feed) feed.scrollTop = feed.scrollHeight;
 
+    // Jump-to-unread scroll listener
+    if (feed) {
+      var jumpBtn = document.getElementById('jump-to-unread');
+      if (jumpBtn) {
+        feed.removeEventListener('scroll', this._jumpScrollHandler);
+        this._jumpScrollHandler = function() {
+          var divider = feed.querySelector('.unread-divider');
+          if (!divider) { jumpBtn.style.display = 'none'; return; }
+          var feedRect = feed.getBoundingClientRect();
+          var dividerRect = divider.getBoundingClientRect();
+          // Hide button if divider is already visible or above the feed
+          if (dividerRect.top < feedRect.bottom - 60) {
+            jumpBtn.style.display = 'none';
+          } else {
+            jumpBtn.style.display = '';
+          }
+        };
+        feed.addEventListener('scroll', this._jumpScrollHandler);
+        // Initial check
+        setTimeout(this._jumpScrollHandler, 100);
+      }
+    }
+
     // Attach local input events
     this.attachEvents();
+  },
+
+  jumpToFirstUnread() {
+    var feed = document.getElementById('chat-message-feed');
+    if (!feed) return;
+    var divider = feed.querySelector('.unread-divider');
+    if (divider) {
+      divider.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else {
+      // Fallback: scroll to bottom
+      feed.scrollTop = feed.scrollHeight;
+    }
   },
 
   attachEvents() {
@@ -684,7 +802,7 @@ window.ChatPanel = {
         if (!window.ContextMenu) return;
         var rect = btnPlus.getBoundingClientRect();
         window.ContextMenu.show(rect.left, rect.top - 120, [
-          { label: 'Upload Images', action: 'upload-image', icon: 'image', onClick: function() { 
+          { label: 'Upload Images', action: 'upload-image', icon: 'images', onClick: function() { 
             fileInput.accept = 'image/*'; 
             fileInput.removeAttribute('webkitdirectory'); 
             fileInput.click(); 
@@ -864,6 +982,29 @@ window.ChatPanel = {
       });
     }
 
+    // Cancel transfer buttons
+    self.container.querySelectorAll('.btn-cancel-transfer').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var fid = btn.getAttribute('data-file-id');
+        if (window.orbitAPI && window.orbitAPI.cancelTransfer) {
+          window.orbitAPI.cancelTransfer(fid);
+        }
+        var cp = { ...window.store.getState().transferProgress };
+        delete cp[fid];
+        window.store.setState({ transferProgress: cp });
+      });
+    });
+
+    // Dismiss error buttons
+    self.container.querySelectorAll('.btn-dismiss-error').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var fid = btn.getAttribute('data-file-id');
+        var errs = { ...window.store.getState().transferErrors };
+        delete errs[fid];
+        window.store.setState({ transferErrors: errs });
+      });
+    });
+
     // Drag and drop file uploads
     this.container.addEventListener('dragover', function(e) {
       e.preventDefault();
@@ -1000,7 +1141,7 @@ window.ChatPanel = {
     overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding-top:80px;';
 
     var panel = document.createElement('div');
-    panel.style.cssText = 'width:560px;max-height:70vh;background:var(--bg-surface);border-radius:16px;border:1px solid var(--border-subtle);box-shadow:var(--shadow-xl);display:flex;flex-direction:column;overflow:hidden;';
+    panel.style.cssText = 'width:560px;max-height:75vh;background:var(--bg-surface);border-radius:16px;border:1px solid var(--border-subtle);box-shadow:var(--shadow-xl);display:flex;flex-direction:column;overflow:hidden;';
 
     panel.innerHTML =
       '<div class="search-modal-header" style="padding:16px 20px;border-bottom:1px solid var(--border-subtle);">' +
@@ -1008,6 +1149,12 @@ window.ChatPanel = {
           '<i data-lucide="search" style="width:18px;height:18px;color:var(--text-muted);flex-shrink:0;"></i>' +
           '<input id="search-modal-input" class="search-modal-input" type="text" placeholder="Search messages, people, files..." autofocus style="flex:1;border:none;background:transparent;color:var(--text-primary);font-size:15px;outline:none;">' +
           '<button id="search-modal-close" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:18px;height:18px;"></i></button>' +
+        '</div>' +
+        '<div id="search-modal-filters" style="display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap;">' +
+          '<input id="search-filter-from" type="text" placeholder="From: username" style="flex:1;min-width:120px;padding:6px 10px;border-radius:6px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);font-size:12px;outline:none;">' +
+          '<input id="search-filter-date-from" type="date" style="padding:5px 8px;border-radius:6px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);font-size:11px;outline:none;">' +
+          '<span style="font-size:11px;color:var(--text-muted);">to</span>' +
+          '<input id="search-filter-date-to" type="date" style="padding:5px 8px;border-radius:6px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);font-size:11px;outline:none;">' +
         '</div>' +
       '</div>' +
       '<div id="search-modal-results" style="flex:1;overflow-y:auto;padding:8px 0;"></div>';
@@ -1029,13 +1176,19 @@ window.ChatPanel = {
     var performSearch = function() {
       try {
         var query = input ? input.value.trim().toLowerCase() : '';
-        if (!query) { results.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px;">Type to search messages, people, and files</div>'; return; }
+        var filterFrom = document.getElementById('search-filter-from') ? document.getElementById('search-filter-from').value.trim().toLowerCase() : '';
+        var dateFrom = document.getElementById('search-filter-date-from') ? document.getElementById('search-filter-date-from').value : '';
+        var dateTo = document.getElementById('search-filter-date-to') ? document.getElementById('search-filter-date-to').value : '';
+
+        if (!query) {
+          results.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px;">Type to search messages, people, and files</div>';
+          return;
+        }
 
         var state = window.store.getState();
         var hits = [];
         var myId = state.currentUser.userId;
 
-        // Search all chats
         Object.keys(state.messages).forEach(function(chatId) {
           var msgs = state.messages[chatId] || [];
           var chatName = chatId;
@@ -1048,14 +1201,47 @@ window.ChatPanel = {
           msgs.forEach(function(msg) {
             var match = false;
             var matchType = 'text';
-            if (msg.text && msg.text.toLowerCase().includes(query)) { match = true; matchType = 'text'; }
+            var score = 0;
+
+            // Sender filter
+            if (filterFrom) {
+              var senderMatch = false;
+              if (friend && friend.username.toLowerCase().includes(filterFrom)) senderMatch = true;
+              if (group) {
+                var sender = group.members.find(function(m) { return m.userId === msg.sender; });
+                if (sender && sender.username.toLowerCase().includes(filterFrom)) senderMatch = true;
+              }
+              if (msg.sender === myId && 'you'.includes(filterFrom)) senderMatch = true;
+              if (!senderMatch) return;
+            }
+
+            // Date filter
+            if (dateFrom && msg.timestamp && msg.timestamp < dateFrom) return;
+            if (dateTo && msg.timestamp) {
+              var endDate = new Date(dateTo);
+              endDate.setDate(endDate.getDate() + 1);
+              if (msg.timestamp >= endDate.toISOString().split('T')[0]) return;
+            }
+
+            if (msg.text) {
+              var lower = msg.text.toLowerCase();
+              var q = query;
+              if (lower === q) { match = true; score = 100; }
+              else if (lower.startsWith(q)) { match = true; score = 80; }
+              else if (lower.includes(' ' + q) || lower.includes(q + ' ')) { match = true; score = 60; }
+              else if (lower.includes(q)) { match = true; score = 40; }
+            }
             if (msg.attachments) {
               msg.attachments.forEach(function(att) {
-                if (att.name && att.name.toLowerCase().includes(query)) { match = true; matchType = 'file'; }
+                if (att.name && att.name.toLowerCase().includes(query)) {
+                  match = true;
+                  matchType = 'file';
+                  score = Math.max(score, 50);
+                }
               });
             }
             if (match) {
-              hits.push({ chatId: chatId, chatName: chatName, msg: msg, matchType: matchType });
+              hits.push({ chatId: chatId, chatName: chatName, msg: msg, matchType: matchType, score: score, timestamp: msg.timestamp || '' });
             }
           });
         });
@@ -1064,13 +1250,19 @@ window.ChatPanel = {
         state.friends.forEach(function(f) {
           if (f.username && f.username.toLowerCase().includes(query) && f.userId !== myId) {
             if (!hits.some(function(h) { return h.chatId === f.userId; })) {
-              hits.push({ chatId: f.userId, chatName: f.username, msg: null, matchType: 'user' });
+              hits.push({ chatId: f.userId, chatName: f.username, msg: null, matchType: 'user', score: 30, timestamp: '' });
             }
           }
         });
 
+        // Sort: by score desc, then by timestamp desc
+        hits.sort(function(a, b) {
+          if (b.score !== a.score) return b.score - a.score;
+          return (b.timestamp || '').localeCompare(a.timestamp || '');
+        });
+
         if (hits.length === 0) {
-          results.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px;">No results found for "<b>' + window.Sanitize.escapeHtml(query) + '</b>"</div>';
+          results.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px;">No results found for "<b>' + window.Sanitize.escapeHtml(query) + '"</b></div>';
           return;
         }
 
@@ -1081,7 +1273,7 @@ window.ChatPanel = {
           return escaped.replace(re, '<strong style="color:var(--accent-primary);font-weight:600;">$1</strong>');
         }
 
-        var html = '';
+        var html = '<div style="font-size:11px;padding:6px 20px;color:var(--text-muted);">' + hits.length + ' result' + (hits.length !== 1 ? 's' : '') + '</div>';
         hits.slice(0, 50).forEach(function(hit) {
           var rawQuery = input ? input.value.trim() : '';
           var preview = '';
@@ -1098,7 +1290,7 @@ window.ChatPanel = {
           }
           var time = hit.msg ? window.Format.relativeTime(hit.msg.timestamp) : '';
 
-          html += '<div class="search-result-row" data-chat-id="' + window.Sanitize.escapeHtml(hit.chatId) + '" data-msg-id="' + (hit.msg ? hit.msg.id : '') + '" data-debug="Chat: ' + window.Sanitize.escapeHtml(hit.chatName) + ' Score: ' + (hit.msg ? Math.floor(Math.random() * 100) : 0) + '" style="display:flex;align-items:center;gap:12px;padding:10px 20px;cursor:pointer;transition:background 0.1s;" onmouseover="this.style.background=\'var(--bg-hover)\'" onmouseout="this.style.background=\'transparent\'">' +
+          html += '<div class="search-result-row" data-chat-id="' + window.Sanitize.escapeHtml(hit.chatId) + '" data-msg-id="' + (hit.msg ? hit.msg.id : '') + '" style="display:flex;align-items:center;gap:12px;padding:10px 20px;cursor:pointer;transition:background 0.1s;" onmouseover="this.style.background=\'var(--bg-hover)\'" onmouseout="this.style.background=\'transparent\'">' +
             '<i data-lucide="' + icon + '" style="width:18px;height:18px;color:var(--text-muted);flex-shrink:0;"></i>' +
             '<div style="flex:1;min-width:0;">' +
               '<div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-primary);font-weight:500;"><span>' + window.Sanitize.escapeHtml(hit.chatName) + '</span><span style="font-size:11px;color:var(--text-muted);font-weight:400;">' + time + '</span></div>' +
@@ -1109,7 +1301,6 @@ window.ChatPanel = {
         results.innerHTML = html;
         if (window.lucide) window.lucide.createIcons({ root: results });
 
-        // Click handler for results
         results.querySelectorAll('.search-result-row').forEach(function(row) {
           row.addEventListener('click', function() {
             var chatId = row.getAttribute('data-chat-id');
@@ -1141,11 +1332,23 @@ window.ChatPanel = {
       }
     };
 
+    // Filter inputs trigger search
+    var filterInputs = ['search-modal-input', 'search-filter-from', 'search-filter-date-from', 'search-filter-date-to'];
+    filterInputs.forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) {
+        el.addEventListener('input', function() {
+          if (self._searchTimeout) clearTimeout(self._searchTimeout);
+          self._searchTimeout = setTimeout(performSearch, 200);
+        });
+        el.addEventListener('change', function() {
+          if (self._searchTimeout) clearTimeout(self._searchTimeout);
+          self._searchTimeout = setTimeout(performSearch, 100);
+        });
+      }
+    });
+
     if (input) {
-      input.addEventListener('input', function() {
-        if (self._searchTimeout) clearTimeout(self._searchTimeout);
-        self._searchTimeout = setTimeout(performSearch, 200);
-      });
       input.addEventListener('keydown', function(e) {
         if (e.key === 'Enter') performSearch();
         if (e.key === 'Escape') overlay.remove();
@@ -1239,9 +1442,14 @@ window.ChatPanel = {
 
       // Send files and create progress entries from returned fileIds
       if (window.orbitAPI && activeChatId !== 'local-echo') {
+        var maxMB = state.settings.maxFileSize || 500;
         for (var i = 0; i < this.stagedFiles.length; i++) {
           var s = this.stagedFiles[i];
           if (recipients.length === 0) continue;
+          if (s.size > maxMB * 1024 * 1024) {
+            if (window.Toast) window.Toast.show('File Too Large', s.name + ' exceeds ' + maxMB + 'MB limit');
+            continue;
+          }
           try {
             for (var j = 0; j < recipients.length; j++) {
               var r = recipients[j];
@@ -1257,6 +1465,7 @@ window.ChatPanel = {
             }
           } catch(err) {
             console.error("File send error:", err);
+            if (window.Toast) window.Toast.show('Send Failed', s.name + ': ' + err.message);
           }
         }
       }
@@ -1288,7 +1497,20 @@ window.ChatPanel = {
         if (this.replyingTo) {
           payload.replyTo = this.replyingTo.id;
         }
-        
+
+        // E2EE: encrypt text for each recipient
+        var settings = window.store.getState().settings;
+        if (settings.e2eeEnabled && !isGroup && recipients.length === 1) {
+          var pubKey = window.store.getPeerPublicKey(recipients[0].userId);
+          if (pubKey && window.orbitAPI && window.orbitAPI.e2eeEncrypt) {
+            var encrypted = window.orbitAPI.e2eeEncrypt(text, pubKey);
+            if (encrypted) {
+              payload.text = encrypted;
+              payload.e2ee = true;
+            }
+          }
+        }
+
         sendToAll(window.Protocol.Types.MESSAGE, payload);
         
         window.store.addMessage(activeChatId, {

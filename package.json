@@ -1,12 +1,15 @@
 {
   "name": "orbit-beta",
-  "version": "0.0.4-beta",
+  "version": "0.0.5-beta",
   "description": "Orbit P2P Chat Application",
   "author": "Orbit Team",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux",
+    "build:all": "electron-builder --win --mac --linux",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

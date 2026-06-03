@@ -1,6 +1,7 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
+const zlib = require('zlib');
 const migrations = require('./migrations');
 const Store = require('electron-store'); 
 
@@ -62,13 +63,24 @@ class OrbitDatabase {
       deleteGroup: this.db.prepare('DELETE FROM groups WHERE groupId = ?'),
       // no updateGroupField prepared statement — uses dynamic sql via method
       getGroupByInviteCode: this.db.prepare('SELECT * FROM groups WHERE inviteCode = ?'),
-      addGroupMember: this.db.prepare('INSERT OR REPLACE INTO group_members (groupId, userId, username, usertag, status, avatar, ip, joinedAt) VALUES (@groupId, @userId, @username, @usertag, @status, @avatar, @ip, @joinedAt)'),
+      addGroupMember: this.db.prepare('INSERT OR REPLACE INTO group_members (groupId, userId, username, usertag, status, avatar, ip, joinedAt, role) VALUES (@groupId, @userId, @username, @usertag, @status, @avatar, @ip, @joinedAt, @role)'),
       removeGroupMember: this.db.prepare('DELETE FROM group_members WHERE groupId = ? AND userId = ?'),
       getGroupMembers: this.db.prepare('SELECT * FROM group_members WHERE groupId = ?'),
+      setMemberRole: this.db.prepare('UPDATE group_members SET role = ? WHERE groupId = ? AND userId = ?'),
       
       // Settings
       getSetting: this.db.prepare('SELECT value FROM settings WHERE key = ?'),
-      setSetting: this.db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (@key, @value)')
+      setSetting: this.db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (@key, @value)'),
+
+      // Read state
+      getReadState: this.db.prepare('SELECT * FROM read_state WHERE chatId = ?'),
+      setReadState: this.db.prepare('INSERT OR REPLACE INTO read_state (chatId, lastReadMsgId, lastReadTimestamp) VALUES (@chatId, @lastReadMsgId, @lastReadTimestamp)'),
+
+      // Mentions
+      addMention: this.db.prepare('INSERT INTO mentions (chatId, msgId, senderId, timestamp) VALUES (@chatId, @msgId, @senderId, @timestamp)'),
+      getMentions: this.db.prepare('SELECT * FROM mentions WHERE chatId = ? ORDER BY id'),
+      clearMentions: this.db.prepare('DELETE FROM mentions WHERE chatId = ?'),
+      clearAllMentions: this.db.prepare('DELETE FROM mentions')
     };
   }
 
@@ -179,7 +191,8 @@ class OrbitDatabase {
       status: user.status || 'online',
       avatar: user.avatar || null,
       ip: user.ip || null,
-      joinedAt: user.joinedAt || new Date().toISOString()
+      joinedAt: user.joinedAt || new Date().toISOString(),
+      role: user.role || 'member'
     });
   }
 
@@ -189,6 +202,44 @@ class OrbitDatabase {
 
   getGroupMembers(groupId) {
     return this.stmts.getGroupMembers.all(groupId);
+  }
+
+  setMemberRole(groupId, userId, role) {
+    this.stmts.setMemberRole.run(role, groupId, userId);
+  }
+
+  // --- Read State ---
+  getReadState(chatId) {
+    return this.stmts.getReadState.get(chatId) || null;
+  }
+
+  setReadState(chatId, lastReadMsgId) {
+    this.stmts.setReadState.run({
+      chatId: chatId,
+      lastReadMsgId: lastReadMsgId,
+      lastReadTimestamp: new Date().toISOString()
+    });
+  }
+
+  addMention(chatId, msgId, senderId) {
+    this.stmts.addMention.run({
+      chatId: chatId,
+      msgId: msgId,
+      senderId: senderId,
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  getMentions(chatId) {
+    return this.stmts.getMentions.all(chatId);
+  }
+
+  clearMentions(chatId) {
+    this.stmts.clearMentions.run(chatId);
+  }
+
+  clearAllMentions() {
+    this.stmts.clearAllMentions.run();
   }
   
   // --- Messages ---
@@ -520,6 +571,316 @@ class OrbitDatabase {
       this.setSetting('migrated_from_electron_store', true);
     })();
     console.log('Migration from electron-store complete.');
+  }
+
+  // --- Database Health Check ---
+  healthCheck() {
+    const result = { ok: true, errors: [], warnings: [] };
+    try {
+      // Integrity check
+      const integrity = this.db.pragma('integrity_check');
+      if (integrity[0] && integrity[0].integrity_check !== 'ok') {
+        result.ok = false;
+        result.errors.push('Database integrity check failed: ' + integrity[0].integrity_check);
+      }
+
+      // Verify required tables exist
+      const requiredTables = ['users', 'friends', 'messages', 'attachments', 'settings', 'groups', 'group_members'];
+      const existing = this.db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(r => r.name);
+      requiredTables.forEach(tbl => {
+        if (!existing.includes(tbl)) {
+          result.warnings.push('Missing table: ' + tbl);
+        }
+      });
+
+      // Foreign key check
+      const fkStatus = this.db.pragma('foreign_key_check');
+      if (fkStatus && fkStatus.length > 0) {
+        result.warnings.push(fkStatus.length + ' foreign key violation(s) found');
+      }
+
+      // WAL mode check
+      const journalMode = this.db.pragma('journal_mode');
+      if (journalMode[0] && journalMode[0].journal_mode !== 'wal') {
+        result.warnings.push('Database not in WAL mode (current: ' + journalMode[0].journal_mode + ')');
+      }
+    } catch (e) {
+      result.ok = false;
+      result.errors.push('Health check crashed: ' + e.message);
+    }
+    return result;
+  }
+
+  repairDatabase() {
+    const result = { ok: true, repaired: [], warnings: [] };
+    try {
+      // 1. Check integrity
+      const integrity = this.db.pragma('integrity_check');
+      if (integrity[0] && integrity[0].integrity_check !== 'ok') {
+        this.db.exec('VACUUM;');
+        result.repaired.push('Ran VACUUM to repair integrity');
+      }
+
+      // 2. Rebuild indexes
+      this.db.exec('REINDEX;');
+      result.repaired.push('Rebuilt database indexes');
+
+      // 3. Check and fix journal mode
+      const journalMode = this.db.pragma('journal_mode');
+      if (journalMode[0] && journalMode[0].journal_mode !== 'wal') {
+        this.db.pragma('journal_mode = WAL');
+        result.repaired.push('Switched journal mode to WAL');
+      }
+
+      // 4. Remove orphaned group_members (no matching group)
+      const orphanedMembers = this.db.prepare(`
+        SELECT gm.rowid FROM group_members gm
+        LEFT JOIN groups g ON gm.groupId = g.groupId
+        WHERE g.groupId IS NULL
+      `).all();
+      if (orphanedMembers.length > 0) {
+        this.db.prepare(`
+          DELETE FROM group_members WHERE rowid IN (${orphanedMembers.map(() => '?').join(',')})
+        `).run(...orphanedMembers.map(r => r.rowid));
+        result.repaired.push('Removed ' + orphanedMembers.length + ' orphaned group member(s)');
+      }
+
+      // 5. Remove orphaned messages (no matching friend or group)
+      const orphanedMessages = this.db.prepare(`
+        SELECT COUNT(*) as count FROM messages m
+        LEFT JOIN friends f ON m.chatId = f.userId
+        LEFT JOIN groups g ON m.chatId = g.groupId
+        WHERE f.userId IS NULL AND g.groupId IS NULL AND m.chatId != 'local-echo'
+      `).get();
+      if (orphanedMessages.count > 0) {
+        this.db.prepare(`
+          DELETE FROM messages WHERE chatId IN (
+            SELECT m.chatId FROM messages m
+            LEFT JOIN friends f ON m.chatId = f.userId
+            LEFT JOIN groups g ON m.chatId = g.groupId
+            WHERE f.userId IS NULL AND g.groupId IS NULL AND m.chatId != 'local-echo'
+          )
+        `).run();
+        result.repaired.push('Removed ' + orphanedMessages.count + ' orphaned message(s)');
+      }
+
+      // 6. Remove orphaned attachments (no matching message)
+      const orphanedAttachments = this.db.prepare(`
+        SELECT COUNT(*) as count FROM attachments a
+        LEFT JOIN messages m ON a.messageId = m.id
+        WHERE m.id IS NULL
+      `).get();
+      if (orphanedAttachments.count > 0) {
+        this.db.prepare(`
+          DELETE FROM attachments WHERE messageId IN (
+            SELECT a.messageId FROM attachments a
+            LEFT JOIN messages m ON a.messageId = m.id
+            WHERE m.id IS NULL
+          )
+        `).run();
+        result.repaired.push('Removed ' + orphanedAttachments.count + ' orphaned attachment(s)');
+      }
+
+      // Verify integrity after repairs
+      const postIntegrity = this.db.pragma('integrity_check');
+      if (postIntegrity[0] && postIntegrity[0].integrity_check !== 'ok') {
+        result.warnings.push('Integrity still failing after repair: ' + postIntegrity[0].integrity_check);
+      } else {
+        result.ok = true;
+      }
+    } catch (e) {
+      result.ok = false;
+      result.warnings.push('Repair failed: ' + e.message);
+    }
+    return result;
+  }
+
+  // --- Backup & Restore ---
+  buildBackupPackage() {
+    const backup = {
+      version: 1,
+      createdAt: new Date().toISOString(),
+      userDataPath: this.userDataPath,
+      data: {
+        users: this.db.prepare('SELECT * FROM users').all(),
+        friends: this.db.prepare('SELECT * FROM friends').all(),
+        messages: this.db.prepare('SELECT * FROM messages ORDER BY chatId, timestamp').all(),
+        attachments: this.db.prepare('SELECT id, messageId, type, name, size, hash, localPath FROM attachments').all(),
+        groups: this.db.prepare('SELECT * FROM groups').all(),
+        groupMembers: this.db.prepare('SELECT * FROM group_members').all(),
+        settings: this.db.prepare('SELECT * FROM settings').all()
+      }
+    };
+    return backup;
+  }
+
+  exportBackupAsOrzip(destPath) {
+    const backup = this.buildBackupPackage();
+    const json = JSON.stringify(backup);
+    const compressed = zlib.gzipSync(json);
+    fs.writeFileSync(destPath, compressed);
+    return { path: destPath, size: compressed.length };
+  }
+
+  exportBackupAsZip(destPath) {
+    const archiver = require('archiver');
+    const backup = this.buildBackupPackage();
+    const json = JSON.stringify(backup, null, 2);
+
+    return new Promise((resolve, reject) => {
+      const output = fs.createWriteStream(destPath);
+      const archive = archiver('zip', { zlib: { level: 9 } });
+      output.on('close', () => resolve({ path: destPath, size: archive.pointer() }));
+      archive.on('error', reject);
+      archive.pipe(output);
+      archive.append(json, { name: 'backup.json' });
+      // Include avatar files if they exist
+      const avatarDir = path.join(this.userDataPath, 'avatars');
+      if (fs.existsSync(avatarDir)) {
+        archive.directory(avatarDir, 'avatars');
+      }
+      archive.finalize();
+    });
+  }
+
+  validateBackupOrzip(filePath) {
+    try {
+      const compressed = fs.readFileSync(filePath);
+      const json = zlib.gunzipSync(compressed);
+      const backup = JSON.parse(json.toString());
+      if (!backup.version || !backup.data) return { valid: false, error: 'Invalid backup structure' };
+      return { valid: true, backup };
+    } catch (e) {
+      return { valid: false, error: e.message };
+    }
+  }
+
+  validateBackupZip(filePath) {
+    try {
+      const fs2 = require('fs');
+      const buffer = fs2.readFileSync(filePath);
+      const { inflateRawSync } = require('zlib');
+      // Parse zip central directory to find and extract backup.json
+      const { execSync } = require('child_process');
+      const tmpDir = path.join(this.userDataPath, 'temp', '.backup_tmp_' + Date.now());
+      if (!fs2.existsSync(tmpDir)) fs2.mkdirSync(tmpDir, { recursive: true });
+      try {
+        // Try unzip command
+        const result = execSync('"'+__dirname+'/../../node_modules/.bin/unzip" -o "' + filePath + '" -d "' + tmpDir + '" 2>nul || tar -xf "' + filePath + '" -C "' + tmpDir + '"', { stdio: 'pipe', timeout: 30000 });
+        const jsonPath = path.join(tmpDir, 'backup.json');
+        if (!fs2.existsSync(jsonPath)) {
+          // Remove tmp dir
+          this._rmdir(tmpDir);
+          return { valid: false, error: 'backup.json not found in archive' };
+        }
+        const json = fs2.readFileSync(jsonPath, 'utf-8');
+        const backup = JSON.parse(json);
+        if (!backup.version || !backup.data) {
+          this._rmdir(tmpDir);
+          return { valid: false, error: 'Invalid backup structure' };
+        }
+        this._rmdir(tmpDir);
+        return { valid: true, backup };
+      } catch (e2) {
+        this._rmdir(tmpDir);
+        return { valid: false, error: 'Failed to extract zip: ' + e2.message };
+      }
+    } catch (e) {
+      return { valid: false, error: e.message };
+    }
+  }
+
+  validateBackup(filePath) {
+    try {
+      const fd = require('fs').openSync(filePath, 'r');
+      const buf = Buffer.alloc(2);
+      require('fs').readSync(fd, buf, 0, 2, 0);
+      require('fs').closeSync(fd);
+
+      if (buf[0] === 0x1F && buf[1] === 0x8B) {
+        return this.validateBackupOrzip(filePath);
+      } else if (buf[0] === 0x50 && buf[1] === 0x4B) {
+        return this.validateBackupZip(filePath);
+      }
+      return { valid: false, error: 'Unknown file format (expected .orzip or .zip)' };
+    } catch (e) {
+      return { valid: false, error: e.message };
+    }
+  }
+
+  restoreBackup(filePath) {
+    const validation = this.validateBackup(filePath);
+    if (!validation.valid) return { ok: false, error: validation.error };
+
+    const backup = validation.backup;
+    const data = backup.data;
+
+    try {
+      this.db.transaction(() => {
+        // Clear existing data
+        this.db.exec('DELETE FROM group_members');
+        this.db.exec('DELETE FROM groups');
+        this.db.exec('DELETE FROM attachments');
+        this.db.exec('DELETE FROM messages');
+        this.db.exec('DELETE FROM friends');
+        this.db.exec('DELETE FROM users');
+        this.db.exec('DELETE FROM settings');
+
+        // Restore users
+        if (data.users) {
+          const stmt = this.db.prepare('INSERT OR REPLACE INTO users (userId, username, usertag, status, avatar, banner, bio) VALUES (@userId, @username, @usertag, @status, @avatar, @banner, @bio)');
+          data.users.forEach(u => stmt.run(u));
+        }
+
+        // Restore friends
+        if (data.friends) {
+          const stmt = this.db.prepare('INSERT OR REPLACE INTO friends (userId, username, usertag, status, avatar, bio) VALUES (@userId, @username, @usertag, @status, @avatar, @bio)');
+          data.friends.forEach(f => stmt.run(f));
+        }
+
+        // Restore messages
+        if (data.messages) {
+          const stmt = this.db.prepare('INSERT OR REPLACE INTO messages (id, chatId, sender, text, timestamp) VALUES (@id, @chatId, @sender, @text, @timestamp)');
+          data.messages.forEach(m => stmt.run(m));
+        }
+
+        // Restore attachments
+        if (data.attachments) {
+          const stmt = this.db.prepare('INSERT OR REPLACE INTO attachments (id, messageId, type, name, size, hash, localPath) VALUES (@id, @messageId, @type, @name, @size, @hash, @localPath)');
+          data.attachments.forEach(a => stmt.run(a));
+        }
+
+        // Restore groups
+        if (data.groups) {
+          const stmt = this.db.prepare('INSERT OR REPLACE INTO groups (groupId, groupName, ownerId, createdAt, avatarPath, description, pinned, notificationMuted, inviteCode, avatarUpdatedAt) VALUES (@groupId, @groupName, @ownerId, @createdAt, @avatarPath, @description, @pinned, @notificationMuted, @inviteCode, @avatarUpdatedAt)');
+          data.groups.forEach(g => stmt.run(g));
+        }
+
+        // Restore group members
+        if (data.groupMembers) {
+          const stmt = this.db.prepare('INSERT OR REPLACE INTO group_members (groupId, userId, username, usertag, status, avatar, ip, joinedAt) VALUES (@groupId, @userId, @username, @usertag, @status, @avatar, @ip, @joinedAt)');
+          data.groupMembers.forEach(gm => stmt.run(gm));
+        }
+
+        // Restore settings
+        if (data.settings) {
+          const stmt = this.db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (@key, @value)');
+          data.settings.forEach(s => stmt.run(s));
+        }
+      })();
+
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: 'Restore failed: ' + e.message };
+    }
+  }
+
+  _rmdir(dirPath) {
+    try {
+      if (fs.existsSync(dirPath)) {
+        fs.rmSync(dirPath, { recursive: true, force: true });
+      }
+    } catch(e) {}
   }
 }
 

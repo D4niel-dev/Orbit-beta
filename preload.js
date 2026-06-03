@@ -20,9 +20,18 @@ contextBridge.exposeInMainWorld('orbitAPI', {
   networkSend: (toPeerId, toIp, type, payload) => ipcRenderer.sendSync('network-send', toPeerId, toIp, type, payload),
   networkSendFile: (toPeerId, toIp, filePath, fileName) => ipcRenderer.invoke('network-send-file', toPeerId, toIp, filePath, fileName),
   connect: (ip) => ipcRenderer.send('network-connect', ip),
+  cancelTransfer: (fileId) => ipcRenderer.send('cancel-transfer', fileId),
+  checkDiskSpace: () => ipcRenderer.invoke('check-disk-space'),
 
   // OS Integration
   showNotification: (title, body) => ipcRenderer.send('show-notification', title, body),
+  toggleDevtools: () => ipcRenderer.send('toggle-devtools'),
+  writeClipboard: (text) => ipcRenderer.sendSync('write-clipboard', text),
+
+  // E2EE
+  e2eeGetPublicKey: () => ipcRenderer.sendSync('e2ee-get-public-key'),
+  e2eeEncrypt: (plaintext, peerPublicKey) => ipcRenderer.sendSync('e2ee-encrypt', plaintext, peerPublicKey),
+  e2eeDecrypt: (ciphertext, peerPublicKey) => ipcRenderer.sendSync('e2ee-decrypt', ciphertext, peerPublicKey),
 
   // Database
   dbGetLocalUser: () => ipcRenderer.sendSync('db-get-local-user'),
@@ -41,6 +50,11 @@ contextBridge.exposeInMainWorld('orbitAPI', {
   dbClearAttachments: () => ipcRenderer.sendSync('db-clear-attachments'),
   dbGetSetting: (key, def) => ipcRenderer.sendSync('db-get-setting', key, def),
   dbSetSetting: (key, val) => ipcRenderer.sendSync('db-set-setting', key, val),
+  dbHealthCheck: () => ipcRenderer.sendSync('db-health-check'),
+  dbRepair: () => ipcRenderer.sendSync('db-repair'),
+  backupCreate: (format) => ipcRenderer.invoke('backup-create', format),
+  backupRestore: () => ipcRenderer.invoke('backup-restore'),
+  backupValidate: (filePath) => ipcRenderer.invoke('backup-validate', filePath),
 
   // Groups
   dbGetGroups: () => ipcRenderer.sendSync('db-get-groups'),
@@ -49,8 +63,16 @@ contextBridge.exposeInMainWorld('orbitAPI', {
   dbAddGroupMember: (groupId, user) => ipcRenderer.sendSync('db-add-group-member', groupId, user),
   dbRemoveGroupMember: (groupId, userId) => ipcRenderer.sendSync('db-remove-group-member', groupId, userId),
   dbGetGroupMembers: (groupId) => ipcRenderer.sendSync('db-get-group-members', groupId),
+  dbSetMemberRole: (groupId, userId, role) => ipcRenderer.sendSync('db-set-member-role', groupId, userId, role),
   dbDeleteGroup: (groupId) => ipcRenderer.sendSync('db-delete-group', groupId),
   dbUpdateGroupField: (groupId, field, value) => ipcRenderer.sendSync('db-update-group-field', groupId, field, value),
   dbGetGroupByInvite: (code) => ipcRenderer.sendSync('db-get-group-by-invite', code),
-  saveAvatar: (groupId, base64Data) => ipcRenderer.invoke('save-avatar', groupId, base64Data)
+  saveAvatar: (groupId, base64Data) => ipcRenderer.invoke('save-avatar', groupId, base64Data),
+
+  // Read State
+  dbGetReadState: (chatId) => ipcRenderer.sendSync('db-get-read-state', chatId),
+  dbSetReadState: (chatId, lastReadMsgId) => ipcRenderer.sendSync('db-set-read-state', chatId, lastReadMsgId),
+  dbAddMention: (chatId, msgId, senderId) => ipcRenderer.sendSync('db-add-mention', chatId, msgId, senderId),
+  dbGetMentions: (chatId) => ipcRenderer.sendSync('db-get-mentions', chatId),
+  dbClearMentions: (chatId) => ipcRenderer.sendSync('db-clear-mentions', chatId)
 });

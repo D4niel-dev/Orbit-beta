@@ -9,7 +9,7 @@ window.SidebarMiddle = {
       if (state.activeView === 'groups') {
         this.renderGroups();
       } else {
-        this.renderList(state.friends, state.activeChatId, state.messages);
+        this.renderList(state);
       }
     });
 
@@ -21,7 +21,7 @@ window.SidebarMiddle = {
     if (state.activeView === 'groups') {
       this.renderGroups();
     } else {
-      this.renderList(state.friends, state.activeChatId, state.messages);
+      this.renderList(state);
     }
   },
 
@@ -81,21 +81,30 @@ window.SidebarMiddle = {
       groups.forEach(function(group) {
         var isActive = activeChatId === group.groupId;
         var members = group.members || [];
-        var onlineMembers = members.filter(function(m) { return m.status === 'online' || m.status === 'online'; });
-        var subtitle = members.length + ' member' + (members.length !== 1 ? 's' : '');
+        var onlineCount = members.filter(function(m) { return m.status === 'online'; }).length;
+        var subtitle = onlineCount > 0 ? onlineCount + ' online, ' + members.length + ' member' + (members.length !== 1 ? 's' : '') : members.length + ' member' + (members.length !== 1 ? 's' : '');
         var groupMsgs = messages[group.groupId] || [];
         if (groupMsgs.length > 0) {
           var lastMsg = groupMsgs[groupMsgs.length - 1];
-          subtitle = lastMsg.text;
-          if (subtitle.length > 25) subtitle = subtitle.substring(0, 25) + '...';
+          var senderName = '';
+          var isMe = lastMsg.sender === state.currentUser.userId;
+          if (isMe) {
+            senderName = 'You: ';
+          } else {
+            var sender = members.find(function(m) { return m.userId === lastMsg.sender; });
+            if (sender) senderName = sender.username + ': ';
+          }
+          subtitle = senderName + (lastMsg.text || '(attachment)');
+          if (subtitle.length > 30) subtitle = subtitle.substring(0, 30) + '...';
         }
 
         // Group avatar or overlapping member circles
         var avatarHtml = '';
+        var displayMembers = [];
         if (group.avatarPath) {
           avatarHtml = '<img src="orbit-avatar://' + window.Sanitize.escapeHtml(group.groupId) + '?t=' + (group.avatarUpdatedAt || 0) + '" style="width:40px;height:40px;border-radius:12px;object-fit:cover;">';
         } else {
-          var displayMembers = members.slice(0, 3);
+          displayMembers = members.slice(0, 3);
           displayMembers.forEach(function(m, idx) {
             var offset = idx * 14;
             var memberAvatar = m.avatar
@@ -108,31 +117,21 @@ window.SidebarMiddle = {
 
         var pinIcon = group.pinned ? '<i data-lucide="pin" style="width:12px;height:12px;color:var(--accent-primary);margin-left:4px;"></i>' : '';
 
-        html += '<div class="list-row ' + (isActive ? 'active' : '') + '" data-id="' + window.Sanitize.escapeHtml(group.groupId) + '" data-type="group" data-debug="Group: ' + window.Sanitize.escapeHtml(group.groupName) + ' ID: ' + window.Sanitize.escapeHtml(group.groupId) + '"' +
-          ' oncontextmenu="event.preventDefault();' +
-            'if(window.ContextMenu) window.ContextMenu.show(event.clientX, event.clientY, [' +
-              '{label:\'' + (group.pinned ? 'Unpin' : 'Pin') + ' Group\',icon:\'pin\',action:\'pin-group\',onClick:function(){' +
-                'window.store.updateGroupField(\'' + group.groupId + '\',\'pinned\',' + (group.pinned ? '0' : '1') + ');' +
-              '}},' +
-              '{label:\'Group Info\',icon:\'info\',action:\'group-info\',onClick:function(){' +
-                'window.SidebarMiddle.showGroupInfo(\'' + group.groupId + '\');' +
-              '}},' +
-              '{label:\'Copy Invite Code\',icon:\'link\',action:\'copy-invite\',onClick:function(){' +
-                'navigator.clipboard.writeText(\'' + (group.inviteCode || '') + '\');' +
-                'if(window.Toast) window.Toast.show(\'Copied\',\'Invite code copied to clipboard\');' +
-              '}},' +
-              '\'separator\',' +
-              '{label:\'Leave Group\',icon:\'log-out\',action:\'leave-group\',onClick:function(){' +
-                'if(window.ConfirmModal) window.ConfirmModal.show({title:\'Leave Group\',message:\'Are you sure you want to leave this group?\',confirmText:\'Leave\',danger:true,onConfirm:function(){' +
-                  'window.store.removeGroupMember(\'' + group.groupId + '\',window.store.getState().currentUser.userId);' +
-                '}});' +
-              '}},' +
-              '{label:\'Delete Group\',icon:\'trash-2\',action:\'delete-group\',color:\'var(--accent-danger)\',onClick:function(){' +
-                'if(window.ConfirmModal) window.ConfirmModal.show({title:\'Delete Group\',message:\'Are you sure you want to permanently delete this group and all messages?\',confirmText:\'Delete\',danger:true,onConfirm:function(){' +
-                  'window.store.removeGroup(\'' + group.groupId + '\');' +
-                '}});' +
-              '}}' +
-            ']);">' +
+        var isGroupOwner = group.ownerId === state.currentUser.userId;
+
+        var unreadCount = state.unreadCounts[group.groupId] || 0;
+        var mentionCount = state.mentionCounts[group.groupId] || 0;
+        var badgeHtml = '';
+        if (mentionCount > 0) {
+          badgeHtml = '<div class="unread-badge mention-badge">@' + mentionCount + '</div>';
+        } else if (unreadCount > 0) {
+          badgeHtml = '<div class="unread-badge">' + (unreadCount > 99 ? '99+' : unreadCount) + '</div>';
+        }
+
+        var isMuted = state.mutedChats && state.mutedChats[group.groupId];
+        var mutedHtml = isMuted ? '<i data-lucide="bell-off" style="width:14px;height:14px;color:var(--text-muted);flex-shrink:0;"></i>' : '';
+
+        html += '<div class="list-row ' + (isActive ? 'active' : '') + '" data-id="' + window.Sanitize.escapeHtml(group.groupId) + '" data-type="group" data-debug="Group: ' + window.Sanitize.escapeHtml(group.groupName) + ' ID: ' + window.Sanitize.escapeHtml(group.groupId) + '">' +
           '<div class="avatar avatar-md list-row-avatar" style="position:relative;width:' + avatarWidth + 'px;min-width:' + avatarWidth + 'px;height:40px;display:flex;align-items:center;justify-content:center;">' +
             avatarHtml +
           '</div>' +
@@ -140,6 +139,7 @@ window.SidebarMiddle = {
             '<div class="list-row-title">' + window.Sanitize.escapeHtml(group.groupName || 'Unnamed Group') + pinIcon + '</div>' +
             '<div class="list-row-subtitle">' + window.Sanitize.escapeHtml(subtitle) + '</div>' +
           '</div>' +
+          (badgeHtml || mutedHtml ? '<div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">' + mutedHtml + badgeHtml + '</div>' : '') +
         '</div>';
       });
     }
@@ -160,16 +160,115 @@ window.SidebarMiddle = {
     listContainer.querySelector('#btn-create-group').addEventListener('click', function() {
       self.showCreateGroupModal();
     });
+
+    // Right-click context menu for groups
+    listContainer.addEventListener('contextmenu', function(e) {
+      var row = e.target.closest('.list-row');
+      if (!row || !window.ContextMenu) return;
+      e.preventDefault();
+      var id = row.getAttribute('data-id');
+      var type = row.getAttribute('data-type');
+      var state = window.store.getState();
+      var isMuted = state.mutedChats && state.mutedChats[id];
+
+      if (type === 'group') {
+        var group = state.groups.find(function(g) { return g.groupId === id; });
+        if (!group) return;
+        var isOwner = group.ownerId === state.currentUser.userId;
+        var items = [
+          { label: (group.pinned ? 'Unpin' : 'Pin') + ' Group', icon: 'pin', onClick: function() {
+            window.store.updateGroupField(id, 'pinned', group.pinned ? 0 : 1);
+          }},
+          { label: (isMuted ? 'Unmute' : 'Mute') + ' Notifications', icon: isMuted ? 'bell' : 'bell-off', onClick: function() {
+            window.store.toggleMute(id);
+          }},
+          { label: 'Group Info', icon: 'info', onClick: function() {
+            window.SidebarMiddle.showGroupInfo(id);
+          }},
+          { label: 'Copy Invite Code', icon: 'link', onClick: function() {
+            var code = group.inviteCode || require('crypto').randomBytes(4).toString('hex');
+            if (window.orbitAPI && window.orbitAPI.writeClipboard) {
+              window.orbitAPI.writeClipboard(code);
+            } else {
+              navigator.clipboard.writeText(code).catch(function() {});
+            }
+            if (window.Toast) window.Toast.show('Copied', 'Invite code copied to clipboard');
+          }},
+          'separator',
+          { label: 'Leave Group', icon: 'log-out', onClick: function() {
+            if (window.ConfirmModal) {
+              window.ConfirmModal.show({
+                title: 'Leave Group',
+                message: 'Are you sure you want to leave this group?',
+                confirmText: 'Leave',
+                danger: true,
+                onConfirm: function() {
+                  // Notify remaining members
+                  if (window.orbitAPI) {
+                    group.members.forEach(function(m) {
+                      if (m.userId !== state.currentUser.userId && m.ip) {
+                        window.orbitAPI.networkSend(m.userId, m.ip, window.Protocol.Types.GROUP_LEAVE, { groupId: id, userId: state.currentUser.userId });
+                      }
+                    });
+                  }
+                  window.store.removeGroupMember(id, state.currentUser.userId);
+                }
+              });
+            }
+          }}
+        ];
+        if (isOwner) {
+          items.push('separator');
+          items.push({ label: 'Delete Group', icon: 'trash-2', color: 'var(--accent-danger)', onClick: function() {
+            if (window.ConfirmModal) {
+              window.ConfirmModal.show({
+                title: 'Delete Group',
+                message: 'Are you sure you want to permanently delete this group and all messages?',
+                confirmText: 'Delete',
+                danger: true,
+                onConfirm: function() {
+                  // Notify all members
+                  if (window.orbitAPI) {
+                    group.members.forEach(function(m) {
+                      if (m.userId !== state.currentUser.userId && m.ip) {
+                        window.orbitAPI.networkSend(m.userId, m.ip, window.Protocol.Types.GROUP_LEAVE, { groupId: id, userId: state.currentUser.userId });
+                      }
+                    });
+                  }
+                  window.store.removeGroup(id);
+                }
+              });
+            }
+          }});
+        }
+        window.ContextMenu.show(e.clientX, e.clientY, items);
+      } else {
+        // DM context menu
+        var friend = state.friends.find(function(f) { return f.userId === id; });
+        if (!friend) return;
+        var items = [
+          { label: (isMuted ? 'Unmute' : 'Mute') + ' Notifications', icon: isMuted ? 'bell' : 'bell-off', onClick: function() {
+            window.store.toggleMute(id);
+          }},
+          'separator',
+          { label: 'Copy ID', icon: 'copy', onClick: function() {
+            navigator.clipboard.writeText(id);
+            if (window.Toast) window.Toast.show('Copied', 'User ID copied to clipboard');
+          }}
+        ];
+        window.ContextMenu.show(e.clientX, e.clientY, items);
+      }
+    });
   },
 
-  showCreateGroupModal() {
+  showCreateGroupModal(prefilledCode) {
     var state = window.store.getState();
     var friends = state.friends.filter(function(f) { return f.userId !== state.currentUser.userId && f.userId !== 'local-echo'; });
 
     var overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:9999;display:flex;align-items:center;justify-content:center;';
 
-    var activeTab = 'create';
+    var activeTab = prefilledCode ? 'join' : 'create';
 
     function renderModal() {
       var friendOptions = '';
@@ -265,7 +364,8 @@ window.SidebarMiddle = {
               usertag: friend.usertag || '',
               status: friend.status || 'online',
               avatar: friend.avatar || null,
-              ip: friend.ip || null
+              ip: friend.ip || null,
+              role: 'member'
             });
           }
         });
@@ -277,7 +377,8 @@ window.SidebarMiddle = {
             usertag: state.currentUser.usertag || '',
             status: 'online',
             avatar: state.currentUser.avatar || null,
-            ip: null
+            ip: null,
+            role: 'owner'
           },
           ...selectedMembers
         ];
@@ -342,9 +443,23 @@ window.SidebarMiddle = {
     }
 
     renderModal();
+
+    // Pre-fill invite code if provided
+    if (prefilledCode) {
+      var joinInput = document.getElementById('join-code-input');
+      if (joinInput) {
+        joinInput.value = prefilledCode;
+        joinInput.focus();
+      }
+    }
   },
 
-  renderList(friends, activeChatId, messages) {
+  renderList(state) {
+    var friends = state.friends;
+    var activeChatId = state.activeChatId;
+    var messages = state.messages;
+    var unreadCounts = state.unreadCounts || {};
+    var mentionCounts = state.mentionCounts || {};
     var self = this;
     var listContainer = document.getElementById('friends-list-container');
     if (!listContainer) return;
@@ -378,6 +493,19 @@ window.SidebarMiddle = {
         ? '<img src="' + window.Sanitize.escapeHtml(friend.avatar) + '" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">'
         : '<i data-lucide="user"></i>';
 
+      var unreadCount = unreadCounts[friend.userId] || 0;
+      var mentionCount = mentionCounts[friend.userId] || 0;
+      var badgeHtml = '';
+      if (mentionCount > 0) {
+        badgeHtml = '<div class="unread-badge mention-badge">@' + mentionCount + '</div>';
+      } else if (unreadCount > 0) {
+        badgeHtml = '<div class="unread-badge">' + (unreadCount > 99 ? '99+' : unreadCount) + '</div>';
+      }
+
+      var mutedChats = state.mutedChats || {};
+      var isMuted = mutedChats[friend.userId];
+      var mutedHtml = isMuted ? '<i data-lucide="bell-off" style="width:14px;height:14px;color:var(--text-muted);flex-shrink:0;"></i>' : '';
+
       html += '<div class="list-row ' + (isActive ? 'active' : '') + '" data-id="' + window.Sanitize.escapeHtml(friend.userId) + '" data-debug="User: ' + window.Sanitize.escapeHtml(friend.username) + ' ID: ' + window.Sanitize.escapeHtml(friend.userId) + ' Status: ' + window.Sanitize.escapeHtml(friend.status || 'offline') + '">' +
         '<div class="avatar avatar-md list-row-avatar" style="position:relative;">' +
           avatarImg +
@@ -387,6 +515,7 @@ window.SidebarMiddle = {
           '<div class="list-row-title">' + window.Sanitize.escapeHtml(friend.username) + '</div>' +
           '<div class="list-row-subtitle">' + window.Sanitize.escapeHtml(subtitle) + '</div>' +
         '</div>' +
+        (badgeHtml || mutedHtml ? '<div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">' + mutedHtml + badgeHtml + '</div>' : '') +
       '</div>';
     });
 
@@ -516,6 +645,7 @@ window.SidebarMiddle = {
     if (!group) return;
 
     var isOwner = group.ownerId === state.currentUser.userId;
+    var myId = state.currentUser.userId;
 
     // Build member list HTML
     var membersHtml = '';
@@ -527,13 +657,31 @@ window.SidebarMiddle = {
       var mAvatar = m.avatar
         ? '<img src="' + window.Sanitize.escapeHtml(m.avatar) + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover;">'
         : '<div style="width:32px;height:32px;border-radius:50%;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:12px;color:white;font-weight:600;">' + m.username.charAt(0).toUpperCase() + '</div>';
+      var role = m.role || 'member';
+      var roleBadge = '';
+      if (role === 'owner') {
+        roleBadge = '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:var(--accent-primary);color:white;margin-left:6px;font-weight:600;">Owner</span>';
+      } else if (role === 'admin') {
+        roleBadge = '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:var(--accent-warning);color:#000;margin-left:6px;font-weight:600;">Admin</span>';
+      }
+      var canManage = isOwner || (state.currentUser.userId !== m.userId && group.members.find(function(mm) { return mm.userId === state.currentUser.userId && (mm.role === 'owner' || mm.role === 'admin'); }));
+      var removeBtn = (canManage && m.userId !== state.currentUser.userId && m.role !== 'owner')
+        ? '<button class="group-info-remove-member" data-user-id="' + m.userId + '" style="background:none;border:none;color:var(--accent-danger);cursor:pointer;font-size:13px;padding:2px 6px;border-radius:4px;" title="Remove member">✕</button>'
+        : '';
+      var promoteBtn = (isOwner && m.role === 'member')
+        ? '<button class="group-info-promote" data-user-id="' + m.userId + '" style="background:none;border:none;color:var(--accent-primary);cursor:pointer;font-size:11px;padding:2px 6px;border-radius:4px;margin-left:4px;" title="Promote to Admin">▲</button>'
+        : '';
+      var demoteBtn = (isOwner && m.role === 'admin')
+        ? '<button class="group-info-demote" data-user-id="' + m.userId + '" style="background:none;border:none;color:var(--accent-warning);cursor:pointer;font-size:11px;padding:2px 6px;border-radius:4px;margin-left:4px;" title="Demote to Member">▼</button>'
+        : '';
       membersHtml += '<div style="display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:8px;cursor:default;">' +
         mAvatar +
         '<div style="flex:1;">' +
-          '<div style="font-size:13px;font-weight:500;color:var(--text-primary);">' + window.Sanitize.escapeHtml(m.username) + '</div>' +
+          '<div style="font-size:13px;font-weight:500;color:var(--text-primary);display:flex;align-items:center;">' + window.Sanitize.escapeHtml(m.username) + roleBadge + promoteBtn + demoteBtn + '</div>' +
           '<div style="font-size:11px;color:var(--text-muted);">@' + window.Sanitize.escapeHtml(m.usertag || '') + '</div>' +
         '</div>' +
         onlineDot +
+        removeBtn +
       '</div>';
     });
 
@@ -569,7 +717,10 @@ window.SidebarMiddle = {
           '<div style="font-size:12px;font-weight:500;color:var(--text-muted);">Invite Code</div>' +
           '<div style="font-size:13px;color:var(--accent-primary);font-family:monospace;">' + window.Sanitize.escapeHtml(group.inviteCode || '') + '</div>' +
         '</div>' +
-        '<button class="btn-ghost" id="group-info-copy-invite" style="padding:6px 12px;border-radius:8px;border:1px solid var(--border-color);background:transparent;color:var(--text-secondary);cursor:pointer;font-size:12px;">Copy</button>' +
+        '<div style="display:flex;gap:6px;">' +
+          '<button class="btn-ghost" id="group-info-copy-invite" style="padding:6px 12px;border-radius:8px;border:1px solid var(--border-color);background:transparent;color:var(--text-secondary);cursor:pointer;font-size:12px;">Copy</button>' +
+          '<button class="btn-ghost" id="group-info-share-invite" style="padding:6px 12px;border-radius:8px;border:1px solid var(--border-color);background:transparent;color:var(--accent-primary);cursor:pointer;font-size:12px;">Share</button>' +
+        '</div>' +
       '</div>' +
       '<div style="margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid var(--border-color);">' +
         '<span style="font-size:13px;color:var(--text-primary);">Pin Group</span>' +
@@ -603,11 +754,47 @@ window.SidebarMiddle = {
 
     // Copy invite code
     document.getElementById('group-info-copy-invite').addEventListener('click', function() {
-      if (group.inviteCode) {
-        navigator.clipboard.writeText(group.inviteCode);
-        if (window.Toast) window.Toast.show('Copied', 'Invite code copied');
+      group.inviteCode = group.inviteCode || require('crypto').randomBytes(4).toString('hex');
+      if (window.orbitAPI && window.orbitAPI.writeClipboard) {
+        window.orbitAPI.writeClipboard(group.inviteCode);
+      } else {
+        navigator.clipboard.writeText(group.inviteCode).catch(function() {});
       }
+      if (window.Toast) window.Toast.show('Copied', 'Invite code copied');
     });
+
+    // Share invite in current chat
+    var shareInviteBtn = document.getElementById('group-info-share-invite');
+    if (shareInviteBtn) {
+      shareInviteBtn.addEventListener('click', function() {
+        group.inviteCode = group.inviteCode || require('crypto').randomBytes(4).toString('hex');
+        var state = window.store.getState();
+        var chatId = state.activeChatId;
+        if (chatId && chatId !== 'local-echo') {
+          var text = 'Join my group "' + group.groupName + '" on Orbit! Use invite code: ' + group.inviteCode;
+          var msg = { id: Date.now() + 2, sender: state.currentUser.userId, text: text, timestamp: new Date().toISOString() };
+          window.store.addMessage(chatId, msg);
+          // Send to peers
+          var friend = state.friends.find(function(f) { return f.userId === chatId; });
+          if (friend && friend.ip && window.orbitAPI) {
+            window.orbitAPI.networkSend(friend.userId, friend.ip, window.Protocol.Types.MESSAGE, { text: text, msgId: msg.id, chatId: chatId });
+          }
+          // Send to group members
+          var activeGroup = state.groups.find(function(g) { return g.groupId === chatId; });
+          if (activeGroup && activeGroup.members && window.orbitAPI) {
+            activeGroup.members.forEach(function(m) {
+              if (m.userId !== state.currentUser.userId && m.ip) {
+                window.orbitAPI.networkSend(m.userId, m.ip, window.Protocol.Types.MESSAGE, { text: text, msgId: msg.id, chatId: chatId });
+              }
+            });
+          }
+          if (window.Toast) window.Toast.show('Sent', 'Invite code shared in chat');
+          overlay.remove();
+        } else {
+          if (window.Toast) window.Toast.show('Info', 'Open a chat first to share the invite');
+        }
+      });
+    }
 
     // Upload avatar
     var uploadBtn = document.getElementById('group-info-upload-avatar');
@@ -653,6 +840,53 @@ window.SidebarMiddle = {
         span.nextElementSibling.style.left = muteCheck.checked ? '20px' : '2px';
       });
     }
+
+    // Remove member buttons
+    overlay.querySelectorAll('.group-info-remove-member').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var targetUserId = btn.getAttribute('data-user-id');
+        var targetMember = group.members.find(function(m) { return m.userId === targetUserId; });
+        if (window.ConfirmModal) {
+          window.ConfirmModal.show({
+            title: 'Remove Member',
+            message: 'Remove ' + (targetMember ? targetMember.username : 'this member') + ' from the group?',
+            confirmText: 'Remove',
+            danger: true,
+            onConfirm: function() {
+              if (window.orbitAPI) {
+                group.members.forEach(function(m) {
+                  if (m.userId !== myId && m.userId !== targetUserId && m.ip) {
+                    window.orbitAPI.networkSend(m.userId, m.ip, window.Protocol.Types.GROUP_LEAVE, { groupId: groupId, userId: targetUserId });
+                  }
+                });
+              }
+              window.store.removeGroupMember(groupId, targetUserId);
+              overlay.remove();
+            }
+          });
+        }
+      });
+    });
+
+    // Promote to Admin buttons
+    overlay.querySelectorAll('.group-info-promote').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var targetUserId = btn.getAttribute('data-user-id');
+        window.store.setMemberRole(groupId, targetUserId, 'admin');
+        overlay.remove();
+        window.SidebarMiddle.showGroupInfo(groupId);
+      });
+    });
+
+    // Demote to Member buttons
+    overlay.querySelectorAll('.group-info-demote').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var targetUserId = btn.getAttribute('data-user-id');
+        window.store.setMemberRole(groupId, targetUserId, 'member');
+        overlay.remove();
+        window.SidebarMiddle.showGroupInfo(groupId);
+      });
+    });
   },
 
   handleGroupAvatarUpload(groupId) {

@@ -2,18 +2,71 @@ appId: com.orbit.desktop
 productName: Orbit
 directories:
   output: dist/
+
+files:
+  - "**/*"
+  - "!.agent/**"
+  - "!.github/**"
+  - "!android/**"
+  - "!.gemini/**"
+
+# --- Windows ---
 win:
-  target: nsis
+  target:
+    - target: nsis
+      arch:
+        - x64
   icon: src/icons/app/orbit_256.png
   requestedExecutionLevel: asInvoker
-mac:
-  target: dmg
-  # icon: assets/icons/icon.icns
-linux:
-  target: AppImage
-  # icon: assets/icons/icon.png
+
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
+
+# --- macOS ---
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  icon: src/icons/app/orbit_256.png
+  category: public.app-category.social-networking
+  darkModeSupport: true
+
+dmg:
+  title: "Orbit ${version}"
+  artifactName: "Orbit-${version}-${arch}.dmg"
+
+# --- Linux ---
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+  icon: src/icons/app/orbit_256.png
+  category: Network;InstantMessaging;Chat
+  synopsis: "P2P chat without the cloud"
+  description: "Modern peer-to-peer messaging for your local network. No server required."
+  desktop:
+    Name: Orbit
+    Comment: "P2P LAN Chat"
+    Terminal: false
+
+appImage:
+  artifactName: "Orbit-${version}-${arch}.AppImage"
+
+deb:
+  artifactName: "Orbit-${version}-${arch}.deb"
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils

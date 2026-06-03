@@ -303,11 +303,11 @@ document.addEventListener('DOMContentLoaded', () => {
       if (window._sidebarToggleBtn) window._sidebarToggleBtn.style.display = 'none';
       return;
     }
-    // DM mode — clear inline grid style so CSS class / default takes over
-    appLayout.style.gridTemplateColumns = '';
+    // DM mode
+    if (panelMiddle) panelMiddle.style.display = 'flex';
     if (!state.sidebarMiddleVisible) {
-      if (panelMiddle) panelMiddle.style.display = 'flex';
       appLayout.classList.add('sidebar-collapsed');
+      appLayout.style.gridTemplateColumns = '';
       // Show floating re-open button
       var btn = window._sidebarToggleBtn;
       if (!btn) {
@@ -325,8 +325,8 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       btn.style.display = 'flex';
     } else {
-      if (panelMiddle) panelMiddle.style.display = 'flex';
       appLayout.classList.remove('sidebar-collapsed');
+      appLayout.style.gridTemplateColumns = '64px ' + currentSidebarWidth + 'px 1fr';
       if (window._sidebarToggleBtn) window._sidebarToggleBtn.style.display = 'none';
     }
   });
@@ -355,6 +355,60 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return;
       }
+
+      // Handle group join requests with accept/deny modal for owner
+      if (packet.type === window.Protocol.Types.GROUP_JOIN_REQUEST) {
+        var joinPayload = packet.payload;
+        var currentState = window.store.getState();
+        var myGroup = currentState.groups.find(function(g) { return g.inviteCode === joinPayload.inviteCode && g.ownerId === currentState.currentUser.userId; });
+        if (myGroup && window.ConfirmModal) {
+          var requester = currentState.friends.find(function(f) { return f.userId === joinPayload.userId; });
+          var requesterName = requester ? requester.username : joinPayload.username || 'Someone';
+          window.ConfirmModal.show({
+            title: 'Join Request',
+            message: requesterName + ' wants to join "' + myGroup.groupName + '". Allow them in?',
+            confirmText: 'Accept',
+            cancelText: 'Deny',
+            danger: false,
+            onConfirm: function() {
+              var newMember = { userId: joinPayload.userId, username: joinPayload.username, status: 'online', ip: null, role: 'member' };
+              window.store.addMemberToGroup(myGroup.groupId, newMember);
+              if (window.orbitAPI && requester && requester.ip) {
+                window.orbitAPI.networkSend(joinPayload.userId, requester.ip, window.Protocol.Types.GROUP_JOIN_RESPONSE, {
+                  groupId: myGroup.groupId,
+                  groupName: myGroup.groupName,
+                  accepted: true,
+                  members: [...(myGroup.members || []), newMember]
+                });
+              }
+            },
+            onCancel: function() {
+              if (window.orbitAPI && requester && requester.ip) {
+                window.orbitAPI.networkSend(joinPayload.userId, requester.ip, window.Protocol.Types.GROUP_JOIN_RESPONSE, {
+                  groupId: myGroup.groupId,
+                  groupName: myGroup.groupName,
+                  accepted: false
+                });
+              }
+            }
+          });
+        } else if (myGroup) {
+          // Fallback: auto-accept if ConfirmModal not available
+          var newMember = { userId: joinPayload.userId, username: joinPayload.username, status: 'online', ip: null, role: 'member' };
+          window.store.addMemberToGroup(myGroup.groupId, newMember);
+          var requester = currentState.friends.find(function(f) { return f.userId === joinPayload.userId; });
+          if (window.orbitAPI && requester && requester.ip) {
+            window.orbitAPI.networkSend(joinPayload.userId, requester.ip, window.Protocol.Types.GROUP_JOIN_RESPONSE, {
+              groupId: myGroup.groupId,
+              groupName: myGroup.groupName,
+              accepted: true,
+              members: [...(myGroup.members || []), newMember]
+            });
+          }
+        }
+        return;
+      }
+
       window.store.handleIncomingPacket(packet);
     });
 
@@ -398,6 +452,14 @@ document.addEventListener('DOMContentLoaded', () => {
     window.orbitAPI.on('transfer-progress', (data) => {
       window.store.handleTransferProgress(data);
     });
+
+    window.orbitAPI.on('transfer-error', (data) => {
+      window.store.handleTransferError(data);
+    });
+
+    window.orbitAPI.on('state-invalidate', () => {
+      window.location.reload();
+    });
   }
 
   // Load views
@@ -409,6 +471,42 @@ document.addEventListener('DOMContentLoaded', () => {
   if (window.EmojiPicker) window.EmojiPicker.init();
   if (window.Toast) window.Toast.init();
   if (window.ContextMenu) window.ContextMenu.init();
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', function(e) {
+    var ctrl = e.ctrlKey || e.metaKey;
+    var key = e.key.toLowerCase();
+
+    // Ctrl+K: Open search
+    if (ctrl && key === 'k') {
+      e.preventDefault();
+      if (window.ChatPanel) window.ChatPanel.showSearchModal();
+      return;
+    }
+
+    // Ctrl+Shift+M: Mute/unmute active chat
+    if (ctrl && e.shiftKey && key === 'm') {
+      e.preventDefault();
+      var state = window.store.getState();
+      var chatId = state.activeChatId;
+      if (chatId && chatId !== 'local-echo') {
+        window.store.toggleMute(chatId);
+        var isMuted = state.mutedChats && state.mutedChats[chatId];
+        if (window.Toast) window.Toast.show(isMuted ? 'Unmuted' : 'Muted', isMuted ? 'Notifications enabled' : 'Notifications muted');
+      }
+      return;
+    }
+
+    // / to focus chat input
+    if (key === '/' && !ctrl && !e.shiftKey && !e.altKey) {
+      var active = document.activeElement;
+      if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return;
+      e.preventDefault();
+      var input = document.getElementById('chat-input');
+      if (input) input.focus();
+      return;
+    }
+  });
 
   console.log('Orbit Shell Ready.');
 });

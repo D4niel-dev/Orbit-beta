@@ -30,10 +30,6 @@ window.ProfileSidebar = {
       return;
     }
 
-    var avatarImg = user.avatar
-      ? '<img src="' + window.Sanitize.escapeHtml(user.avatar) + '" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid var(--bg-surface);">'
-      : '<div style="width:80px;height:80px;border-radius:50%;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:32px;color:white;font-weight:600;">' + user.username.charAt(0).toUpperCase() + '</div>';
-
     var bannerHtml = user.banner
       ? (user.banner.startsWith('#') || user.banner.startsWith('linear-gradient')
         ? 'style="background:' + window.Sanitize.escapeHtml(user.banner) + ';"'
@@ -65,15 +61,11 @@ window.ProfileSidebar = {
         '</div>' +
 
         // Banner area
-        '<div ' + bannerHtml + ' style="height:120px;position:relative;flex-shrink:0;">' +
-          '<div style="position:absolute;bottom:-40px;left:50%;transform:translateX(-50%);">' +
-            avatarImg +
-          '</div>' +
-        '</div>' +
+        '<div ' + bannerHtml + ' style="height:80px;flex-shrink:0;"></div>' +
 
         // Content area
-        '<div style="flex:1;padding:48px 20px 20px;text-align:center;">' +
-          // Avatar on top of name
+        '<div style="flex:1;padding:20px;text-align:center;">' +
+          // Avatar
           '<div style="margin-bottom:8px;">' +
             (user.avatar
               ? '<img src="' + window.Sanitize.escapeHtml(user.avatar) + '" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:3px solid var(--bg-surface);">'
@@ -93,6 +85,17 @@ window.ProfileSidebar = {
             bioHtml +
           '</div>' +
 
+          // Mute toggle
+          '<div id="profile-mute-row" style="margin-top:16px;display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--bg-base);border-radius:8px;border:1px solid var(--border-subtle);cursor:pointer;">' +
+            '<div style="display:flex;align-items:center;gap:10px;">' +
+              '<i data-lucide="bell" id="profile-mute-icon" style="width:18px;height:18px;color:var(--text-secondary);"></i>' +
+              '<span id="profile-mute-label" style="font-size:13px;font-weight:500;color:var(--text-primary);">Mute Notifications</span>' +
+            '</div>' +
+            '<div id="profile-mute-toggle" style="width:36px;height:20px;border-radius:10px;background:var(--border-subtle);position:relative;transition:background 0.2s;flex-shrink:0;">' +
+              '<div style="width:16px;height:16px;border-radius:50%;background:#fff;position:absolute;top:2px;left:2px;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>' +
+            '</div>' +
+          '</div>' +
+
           // User ID
           '<div style="margin-top:16px;text-align:left;">' +
             '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;font-weight:600;margin-bottom:4px;">User ID</div>' +
@@ -107,6 +110,43 @@ window.ProfileSidebar = {
     if (closeBtn) {
       closeBtn.addEventListener('click', function(e) { e.stopPropagation(); self.close(); });
     }
+
+    // Mute toggle
+    var muteRow = this.contentArea.querySelector('#profile-mute-row');
+    if (muteRow) {
+      var state = window.store.getState();
+      var isMuted = state.mutedChats && state.mutedChats[user.userId];
+      self._updateMuteUI(isMuted);
+
+      muteRow.addEventListener('click', function(e) {
+        e.stopPropagation();
+        window.store.toggleMute(user.userId);
+        var newState = window.store.getState();
+        var nowMuted = newState.mutedChats && newState.mutedChats[user.userId];
+        self._updateMuteUI(nowMuted);
+      });
+    }
+  },
+
+  _updateMuteUI(isMuted) {
+    var icon = this.contentArea.querySelector('#profile-mute-icon');
+    var label = this.contentArea.querySelector('#profile-mute-label');
+    var toggle = this.contentArea.querySelector('#profile-mute-toggle');
+    if (!icon || !label || !toggle) return;
+    if (isMuted) {
+      icon.setAttribute('data-lucide', 'bell-off');
+      icon.style.color = 'var(--accent-danger)';
+      label.textContent = 'Unmute Notifications';
+      toggle.style.background = 'var(--accent-danger)';
+      toggle.querySelector('div').style.transform = 'translateX(16px)';
+    } else {
+      icon.setAttribute('data-lucide', 'bell');
+      icon.style.color = 'var(--text-secondary)';
+      label.textContent = 'Mute Notifications';
+      toggle.style.background = 'var(--border-subtle)';
+      toggle.querySelector('div').style.transform = 'translateX(0)';
+    }
+    if (window.lucide) window.lucide.createIcons({ root: this.contentArea });
   },
 
   open(user) {

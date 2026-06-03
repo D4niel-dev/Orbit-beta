@@ -21,6 +21,7 @@ class Store {
     const dbMessages = window.orbitAPI ? window.orbitAPI.dbAllMessagesRaw() : (window.Storage ? (window.Storage.get('appData', {}).messages || {}) : {});
     const dbGroups = window.orbitAPI ? window.orbitAPI.dbGetGroups() : (window.Storage ? (window.Storage.get('appData', {}).groups || []) : []);
     const uiState = window.orbitAPI ? window.orbitAPI.dbGetSetting('uiState', { activeTab: 'dms', activeChatId: 'local-echo' }) : { activeTab: 'dms', activeChatId: 'local-echo' };
+    const savedMutedChats = window.orbitAPI ? (window.orbitAPI.dbGetSetting('mutedChats', {}) || {}) : {};
 
     this.state = {
       currentUser: {
@@ -51,6 +52,8 @@ class Store {
         logNetworkPackets: false,
         showConnectionStats: false,
         enableExperimental: false,
+        e2eeEnabled: false,
+        sidebarButtons: { activity: true, gallery: true, storage: true },
         ...savedSettings
       },
       networkSettings: {
@@ -70,10 +73,35 @@ class Store {
       sidebarMiddleVisible: true,
       messages: dbMessages,
       transferProgress: {}, // { fileId: { received, total, isSending } }
+      transferErrors: {}, // { fileId: { error, name } }
       pinnedMessages: {}, // { chatId: [{ msgId, text, sender, timestamp }] }
+      unreadCounts: {}, // { chatId: number }
+      mentionCounts: {}, // { chatId: number }
+      lastReadIds: {}, // { chatId: lastReadMsgId }
+      mutedChats: savedMutedChats, // { chatId: true }
+      readReceipts: {}, // { chatId: { userId: lastReadMsgId } }
+      peerPublicKeys: {}, // { peerId: hexPublicKey }
       ...initialState
     };
     this.listeners = [];
+    this._prevActiveChatId = this.state.activeChatId;
+
+    // Load persisted read state for all chats
+    if (window.orbitAPI) {
+      try {
+        const chatIds = Object.keys(this.state.messages);
+        const lastReadIds = {};
+        chatIds.forEach(function(id) {
+          const rs = window.orbitAPI.dbGetReadState(id);
+          if (rs && rs.lastReadMsgId) {
+            lastReadIds[id] = rs.lastReadMsgId;
+          }
+        });
+        this.state.lastReadIds = lastReadIds;
+      } catch (e) {
+        // ignore
+      }
+    }
   }
 
   addOrUpdatePeer(peer) {
@@ -81,13 +109,17 @@ class Store {
     const existingIndex = friends.findIndex(f => f.userId === peer.userId);
     
     if (existingIndex >= 0) {
-      // Preserve lastSeen from incoming beacon data
       var existing = friends[existingIndex];
       var updated = { ...existing, ...peer };
       if (peer.lastSeen) updated.lastSeen = peer.lastSeen;
       friends[existingIndex] = updated;
     } else {
       friends.push(peer);
+    }
+
+    // Store peer's public key for E2EE
+    if (peer.publicKey) {
+      this.setPeerPublicKey(peer.userId, peer.publicKey);
     }
     
     if (window.orbitAPI) window.orbitAPI.dbSaveFriend(peer);
@@ -115,6 +147,28 @@ class Store {
     currentProgress[fileId] = { received: 0, total: 1, isSending: true, name: name };
     this.setState({ transferProgress: currentProgress });
     return fileId;
+  }
+
+  handleTransferError(data) {
+    const { fileId, error } = data;
+    const currentProgress = { ...this.state.transferProgress };
+    const prog = currentProgress[fileId];
+    const name = prog ? prog.name : 'Unknown file';
+    delete currentProgress[fileId];
+    this.setState({ transferProgress: currentProgress });
+    const currentErrors = { ...this.state.transferErrors };
+    currentErrors[fileId] = { error, name };
+    this.setState({ transferErrors: currentErrors });
+    if (window.Toast) {
+      window.Toast.show('Transfer Failed', name + ': ' + error);
+    }
+    // Auto-dismiss errors after 10s
+    setTimeout(function() {
+      var st = window.store.getState();
+      var errs = { ...st.transferErrors };
+      delete errs[fileId];
+      window.store.setState({ transferErrors: errs });
+    }, 10000);
   }
 
   addGroup(group) {
@@ -152,16 +206,27 @@ class Store {
     this.setState({ groups });
   }
 
-  addMemberToGroup(groupId, user) {
+  setMemberRole(groupId, userId, role) {
     const groups = this.state.groups.map(g => {
       if (g.groupId === groupId) {
-        if (!g.members.find(m => m.userId === user.userId)) {
-          return { ...g, members: [...g.members, user] };
-        }
+        return { ...g, members: g.members.map(m => m.userId === userId ? { ...m, role: role } : m) };
       }
       return g;
     });
-    if (window.orbitAPI) window.orbitAPI.dbAddGroupMember(groupId, user);
+    if (window.orbitAPI) window.orbitAPI.dbSetMemberRole(groupId, userId, role);
+    this.setState({ groups });
+  }
+
+  addMemberToGroup(groupId, user) {
+    const groups = this.state.groups.map(g => {
+      if (g.groupId !== groupId) return g;
+      const members = g.members || [];
+      if (!members.find(m => m.userId === user.userId)) {
+        if (window.orbitAPI) window.orbitAPI.dbAddGroupMember(groupId, user);
+        return { ...g, members: [...members, { ...user, joinedAt: user.joinedAt || new Date().toISOString() }] };
+      }
+      return g;
+    });
     this.setState({ groups });
   }
 
@@ -224,25 +289,6 @@ class Store {
     }
 
     if (packet.type === 'GROUP_JOIN_REQUEST') {
-      const { inviteCode, userId, username } = packet.payload;
-      var myGroup = this.state.groups.find(function(g) { return g.inviteCode === inviteCode && g.ownerId === this.state.currentUser.userId; }.bind(this));
-      if (myGroup) {
-        var members = myGroup.members || [];
-        var alreadyMember = members.some(function(m) { return m.userId === userId; });
-        if (!alreadyMember) {
-          var newMember = { userId: userId, username: username, status: 'online', ip: null };
-          this.addMemberToGroup(myGroup.groupId, newMember);
-          var requester = this.state.friends.find(function(f) { return f.userId === userId; });
-          if (window.orbitAPI && requester && requester.ip) {
-            window.orbitAPI.networkSend(userId, requester.ip, window.Protocol.Types.GROUP_JOIN_RESPONSE, {
-              groupId: myGroup.groupId,
-              groupName: myGroup.groupName,
-              accepted: true,
-              members: [...members, newMember]
-            });
-          }
-        }
-      }
       return;
     }
 
@@ -266,6 +312,19 @@ class Store {
         }
       } else {
         if (window.Toast) window.Toast.show('Join Denied', 'Your request to join was denied.');
+      }
+      return;
+    }
+
+    if (packet.type === 'GROUP_LEAVE') {
+      const { groupId, userId } = packet.payload;
+      var leaverGroup = this.state.groups.find(function(g) { return g.groupId === groupId; });
+      if (leaverGroup) {
+        var leaver = leaverGroup.members ? leaverGroup.members.find(function(m) { return m.userId === userId; }) : null;
+        this.removeGroupMember(groupId, userId);
+        if (window.Toast) {
+          window.Toast.show('Member Left', (leaver ? leaver.username : 'Someone') + ' left ' + leaverGroup.groupName);
+        }
       }
       return;
     }
@@ -301,8 +360,14 @@ class Store {
     // Basic message handling logic
     if (packet.type === 'MESSAGE' || !packet.type) {
       const fromId = packet.payload.chatId || packet.from;
-      const text = packet.payload.text || (typeof packet.payload === 'string' ? packet.payload : '');
-      
+      var text = packet.payload.text || (typeof packet.payload === 'string' ? packet.payload : '');
+
+      // Decrypt E2EE messages
+      if (packet.payload.e2ee && this.state.settings.e2eeEnabled) {
+        var decrypted = this.e2eeDecryptMessage(text, packet.from);
+        if (decrypted) text = decrypted;
+      }
+
       this.addMessage(fromId, {
         id: packet.payload.msgId || packet.packetId || Date.now(),
         sender: fromId,
@@ -319,7 +384,8 @@ class Store {
 
       // Play notification sound
       var settings = this.state.settings || {};
-      if (settings.notifySound && !settings.notifyDnd && window.NotificationSound) {
+      var isMuted = this.state.mutedChats && this.state.mutedChats[fromId];
+      if (settings.notifySound && !settings.notifyDnd && !isMuted && window.NotificationSound) {
         window.NotificationSound.play();
       }
 
@@ -327,6 +393,7 @@ class Store {
       if (this.state.activeChatId !== fromId || document.hidden) {
         const isGroup = this.state.groups.find(g => g.groupId === fromId);
         if (isGroup && isGroup.notificationMuted) return;
+        if (this.state.mutedChats && this.state.mutedChats[fromId]) return;
         let senderName = 'Unknown';
         let senderAvatar = null;
         if (isGroup) {
@@ -372,7 +439,51 @@ class Store {
     } else if (packet.type === 'MESSAGE_DELETE') {
       const { msgId } = packet.payload;
       this.deleteMessage(packet.from, msgId);
+    } else if (packet.type === 'READ') {
+      const { chatId, lastReadMsgId } = packet.payload;
+      if (chatId && lastReadMsgId) {
+        const readReceipts = { ...this.state.readReceipts };
+        if (!readReceipts[chatId]) readReceipts[chatId] = {};
+        readReceipts[chatId][packet.from] = lastReadMsgId;
+        this.setState({ readReceipts });
+      }
     }
+  }
+
+  // --- E2EE Helpers ---
+
+  getPeerPublicKey(peerId) {
+    var state = this.state;
+    var friend = state.friends.find(function(f) { return f.userId === peerId; });
+    if (friend && friend.publicKey) return friend.publicKey;
+    var group = state.groups.find(function(g) { return g.groupId === peerId; });
+    if (group && group.publicKey) return group.publicKey;
+    return state.peerPublicKeys[peerId] || null;
+  }
+
+  setPeerPublicKey(peerId, publicKey) {
+    var peerPublicKeys = { ...this.state.peerPublicKeys };
+    peerPublicKeys[peerId] = publicKey;
+    // Also store on friend if applicable
+    var friends = this.state.friends.map(function(f) {
+      if (f.userId === peerId) return { ...f, publicKey: publicKey };
+      return f;
+    });
+    this.setState({ peerPublicKeys: peerPublicKeys, friends: friends });
+  }
+
+  e2eeEncryptMessage(plaintext, peerId) {
+    if (!this.state.settings.e2eeEnabled) return plaintext;
+    var pubKey = this.getPeerPublicKey(peerId);
+    if (!pubKey || !window.orbitAPI) return plaintext;
+    return window.orbitAPI.e2eeEncrypt(plaintext, pubKey) || plaintext;
+  }
+
+  e2eeDecryptMessage(ciphertext, fromId) {
+    if (!ciphertext || !this.state.settings.e2eeEnabled) return ciphertext;
+    var pubKey = this.getPeerPublicKey(fromId);
+    if (!pubKey || !window.orbitAPI) return ciphertext;
+    return window.orbitAPI.e2eeDecrypt(ciphertext, pubKey) || ciphertext;
   }
 
   addMessage(chatId, messageObj) {
@@ -381,7 +492,61 @@ class Store {
     msgs[chatId].push(messageObj);
 
     if (window.orbitAPI) window.orbitAPI.dbAddMessage(chatId, messageObj);
-    this.setState({ messages: msgs });
+
+    // Track unread if not the active chat
+    const isActive = this.state.activeChatId === chatId && !document.hidden;
+    const unreadCounts = { ...this.state.unreadCounts };
+    const mentionCounts = { ...this.state.mentionCounts };
+
+    if (!isActive) {
+      // Don't increment unread for own messages
+      if (messageObj.sender !== this.state.currentUser.userId) {
+        unreadCounts[chatId] = (unreadCounts[chatId] || 0) + 1;
+      }
+    }
+
+    // Detect @mentions referencing current user (always, even when active)
+    const currentUser = this.state.currentUser;
+    if (messageObj.sender !== currentUser.userId && messageObj.text) {
+      const text = messageObj.text;
+      if (text.includes('@' + currentUser.username) || text.includes('@' + currentUser.usertag) || text.includes('@everyone') || text.includes('@here')) {
+        mentionCounts[chatId] = (mentionCounts[chatId] || 0) + 1;
+        if (window.orbitAPI) {
+          window.orbitAPI.dbAddMention(chatId, messageObj.id, messageObj.sender);
+        }
+      }
+    }
+
+    this.setState({ messages: msgs, unreadCounts, mentionCounts });
+  }
+
+  markAsRead(chatId) {
+    const unreadCounts = { ...this.state.unreadCounts };
+    const mentionCounts = { ...this.state.mentionCounts };
+    const lastReadIds = { ...this.state.lastReadIds };
+    delete unreadCounts[chatId];
+    delete mentionCounts[chatId];
+    if (window.orbitAPI) {
+      const msgs = this.state.messages[chatId];
+      if (msgs && msgs.length > 0) {
+        const lastId = msgs[msgs.length - 1].id;
+        window.orbitAPI.dbSetReadState(chatId, lastId);
+        lastReadIds[chatId] = lastId;
+      }
+      window.orbitAPI.dbClearMentions(chatId);
+    }
+    this.setState({ unreadCounts, mentionCounts, lastReadIds });
+  }
+
+  toggleMute(chatId) {
+    const mutedChats = { ...this.state.mutedChats };
+    if (mutedChats[chatId]) {
+      delete mutedChats[chatId];
+    } else {
+      mutedChats[chatId] = true;
+    }
+    if (window.orbitAPI) window.orbitAPI.dbSetSetting('mutedChats', mutedChats);
+    this.setState({ mutedChats });
   }
 
   editMessage(chatId, msgId, newText) {
@@ -393,6 +558,22 @@ class Store {
         msg.edited = true;
         if (window.orbitAPI) window.orbitAPI.dbEditMessage(chatId, msgId, newText);
         this.setState({ messages: msgs });
+
+        // Broadcast edit to peers
+        const state = this.state;
+        const members = this.getGroupMembers(chatId);
+        if (members.length > 0) {
+          members.forEach(m => {
+            if (m.userId !== state.currentUser.userId && m.ip) {
+              window.orbitAPI.networkSend(m.userId, m.ip, window.Protocol.Types.MESSAGE_EDIT, { msgId, newText });
+            }
+          });
+        } else {
+          const friend = state.friends.find(f => f.userId === chatId);
+          if (friend && friend.ip) {
+            window.orbitAPI.networkSend(chatId, friend.ip, window.Protocol.Types.MESSAGE_EDIT, { msgId, newText });
+          }
+        }
       }
     }
   }
@@ -559,8 +740,60 @@ class Store {
          activeChatId: this.state.activeChatId
        });
     }
-    
+
+    // Auto-mark as read when switching to a chat
+    if (newState.activeChatId && newState.activeChatId !== (this._prevActiveChatId || this.state.activeChatId)) {
+      const chatId = this.state.activeChatId;
+      if (chatId && this.state.unreadCounts[chatId]) {
+        this._markAsReadInternal(chatId);
+      }
+      // Send read receipt to peers
+      this._sendReadReceipt(chatId);
+    }
+    this._prevActiveChatId = this.state.activeChatId;
+
     this.notify();
+  }
+
+  _markAsReadInternal(chatId) {
+    const unreadCounts = { ...this.state.unreadCounts };
+    const mentionCounts = { ...this.state.mentionCounts };
+    const lastReadIds = { ...this.state.lastReadIds };
+    delete unreadCounts[chatId];
+    delete mentionCounts[chatId];
+    if (window.orbitAPI) {
+      const msgs = this.state.messages[chatId];
+      if (msgs && msgs.length > 0) {
+        const lastId = msgs[msgs.length - 1].id;
+        window.orbitAPI.dbSetReadState(chatId, lastId);
+        lastReadIds[chatId] = lastId;
+      }
+      window.orbitAPI.dbClearMentions(chatId);
+    }
+    this.state.unreadCounts = unreadCounts;
+    this.state.mentionCounts = mentionCounts;
+    this.state.lastReadIds = lastReadIds;
+  }
+
+  _sendReadReceipt(chatId) {
+    if (!window.orbitAPI || chatId === 'local-echo') return;
+    const msgs = this.state.messages[chatId];
+    if (!msgs || msgs.length === 0) return;
+    const lastId = msgs[msgs.length - 1].id;
+    const state = this.state;
+    const members = this.getGroupMembers(chatId);
+    if (members.length > 0) {
+      members.forEach(m => {
+        if (m.userId !== state.currentUser.userId && m.ip) {
+          window.orbitAPI.networkSend(m.userId, m.ip, window.Protocol.Types.READ, { chatId, lastReadMsgId: lastId });
+        }
+      });
+    } else {
+      const friend = state.friends.find(f => f.userId === chatId);
+      if (friend && friend.ip) {
+        window.orbitAPI.networkSend(chatId, friend.ip, window.Protocol.Types.READ, { chatId, lastReadMsgId: lastId });
+      }
+    }
   }
 
   subscribe(listener) {

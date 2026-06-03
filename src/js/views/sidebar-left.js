@@ -22,6 +22,11 @@ window.SidebarLeft = {
   },
 
   render() {
+    var s = (window.store.getState().settings || {}).sidebarButtons || {};
+    var showActivity = s.activity !== false;
+    var showGallery = s.gallery !== false;
+    var showStorage = s.storage !== false;
+
     this.container.innerHTML = `
       <div class="sidebar-top">
         <!-- Logo -->
@@ -29,9 +34,9 @@ window.SidebarLeft = {
           <i data-lucide="message-circle"></i>
         </button>
         <div class="sidebar-separator" style="width:24px;height:1px;background:var(--border-subtle);margin-top:8px;margin-bottom:8px;margin-left:auto;margin-right:12px;"></div>
-        <button class="icon-btn" id="btn-nav-gallery" title="Gallery">
-          <i data-lucide="images"></i>
-        </button>
+        ${showActivity ? '<button class="icon-btn" id="btn-nav-activity" title="Activity Center"><i data-lucide="bell"></i></button>' : ''}
+        ${showGallery ? '<button class="icon-btn" id="btn-nav-gallery" title="Gallery"><i data-lucide="archive"></i></button>' : ''}
+        ${showStorage ? '<button class="icon-btn" id="btn-nav-storage" title="Storage"><i data-lucide="hard-drive"></i></button>' : ''}
       </div>
       
       <div class="sidebar-spacer" style="flex: 1;"></div>
@@ -57,6 +62,14 @@ window.SidebarLeft = {
     const btns = this.container.querySelectorAll('.icon-btn');
     btns.forEach(btn => {
       btn.addEventListener('click', (e) => {
+        if (btn.id === 'btn-nav-activity') {
+          if (window.ActivityCenter) window.ActivityCenter.show();
+          return;
+        }
+        if (btn.id === 'btn-nav-storage') {
+          if (window.SettingsModal) window.SettingsModal.open('data');
+          return;
+        }
         if(btn.id !== 'btn-profile' && btn.id !== 'btn-nav-settings') {
           btns.forEach(b => b.classList.remove('active'));
           btn.classList.add('active');

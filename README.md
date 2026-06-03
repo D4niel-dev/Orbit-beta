@@ -14,11 +14,11 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v003-beta-current-version">v0.0.3-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v005-beta-current-version">v0.0.5-beta</a>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/platform-Windows-0078D6?style=flat-square&logo=windows&logoColor=white" alt="Platform: Windows">
+  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-0078D6?style=flat-square&logo=electron&logoColor=white" alt="Platform: Windows | macOS | Linux">
   <img src="https://img.shields.io/badge/Electron-32-47848F?style=flat-square&logo=electron&logoColor=white" alt="Electron 32">
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License: MIT">
   <img src="https://img.shields.io/badge/status-beta-orange?style=flat-square" alt="Status: Beta">
@@ -73,10 +73,10 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 ## Features
 
 - **P2P messaging** — Direct socket-based chat on your local network
-- **File & image sharing** — Send attachments peer-to-peer (up to **250 MB** in v0.0.2+)
+- **File & image sharing** — Send attachments peer-to-peer (configurable limit, default **500 MB**)
 - **Auto-discovery** — Find other Orbit clients on the LAN without manual IP entry
 - **Profiles & themes** — Custom display name, avatar, light/dark/system UI
-- **Group chat** *(v0.0.3+)* — Multi-peer group messaging with member management, avatars, and invite codes
+- **Group chat** *(v0.0.3+)* — Multi-peer group messaging with member management, roles (Owner/Admin/Member), avatars, and invite codes
 - **Message reactions** *(v0.0.3+)* — Emoji reactions on messages
 - **Markdown formatting** *(v0.0.3+)* — Rich message formatting with headings, lists, code blocks, and more
 - **Drag-and-drop uploads** *(v0.0.3+)* — Drop files and images directly into the chat panel
@@ -85,6 +85,11 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Persistent storage** *(v0.0.2+)* — Messages and media archived in SQLite (`better-sqlite3`)
 - **Privacy mode** *(v0.0.2+)* — Optional session-only attachment storage
 - **Integrity checks** *(v0.0.2+)* — SHA-256 validation on file transfers
+- **End-to-end encryption** *(v0.0.5+)* — ECDH key exchange + AES-256-GCM message encryption for DMs. Toggle in Settings → Data Manager.
+- **Backup & Restore** *(v0.0.5+)* — Export/import full database as .orzip or .zip archives
+- **Unread Badges & Read Receipts** *(v0.0.5+)* — Per-chat unread counts, @mention badges, and read indicators
+- **Activity Center** *(v0.0.5+)* — Unified view of recent messages across all chats
+- **Customizable Sidebar** *(v0.0.5+)* — Show/hide Activity Center, Gallery, and Storage buttons in the left sidebar
 - **Gallery** — Browse shared images with WebP thumbnails for fast scrolling
 - **System tray** — Minimize to tray instead of quitting
 
@@ -96,17 +101,18 @@ See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
 Pre-built Windows installers are published on [GitHub Releases](https://github.com/D4niel-dev/Orbit-beta/releases).
 
-| Release | Notes |
-|---------|--------|
-| [Latest](https://github.com/D4niel-dev/Orbit-beta/releases/latest) | Most recent build |
-| [v0.0.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.2-beta) | SQLite storage, privacy mode, large file transfers |
-| [v0.0.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.1-beta) | Original release |
+| Release | Platform | Notes |
+|---------|----------|--------|
+| [Latest](https://github.com/D4niel-dev/Orbit-beta/releases/latest) | Win / Mac / Linux | Most recent build |
+| [v0.0.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.2-beta) | Windows | SQLite storage, privacy mode, large file transfers |
+| [v0.0.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.1-beta) | Windows | Original release |
 
 > Windows may show SmartScreen for unsigned builds. Choose **More info → Run anyway** if you trust the source.
+> macOS users may need to right-click → **Open** on first launch for unsigned apps.
 
 ### Run from source
 
-**Requirements:** [Node.js](https://nodejs.org/) 18+ (LTS recommended), npm, Windows for production builds (macOS/Linux packaging planned).
+**Requirements:** [Node.js](https://nodejs.org/) 18+ (LTS recommended), npm.
 
 ```bash
 git clone https://github.com/D4niel-dev/Orbit-beta.git
@@ -127,7 +133,7 @@ Peers on the same LAN are discovered automatically. Open Orbit on another machin
 | Storage | [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) |
 | Networking | Raw TCP P2P sockets, LAN multicast discovery |
 | Media | [sharp](https://sharp.pixelplumbing.com/) (WebP thumbnails) |
-| Packaging | [electron-builder](https://www.electron.build/) (Windows NSIS) |
+| Packaging | [electron-builder](https://www.electron.build/) (Windows NSIS, macOS DMG, Linux AppImage/deb) |
 | Mobile *(experimental)* | [Capacitor](https://capacitorjs.com/) Android shell |
 
 ## How it works
@@ -178,14 +184,14 @@ Notable settings (in-app **Settings**):
 | **Attachment storage** | Persistent (default) or privacy mode (temp files cleared on exit) |
 | **Clear saved attachments** | Remove attachment BLOBs from the database |
 | **Theme / profile** | Display name, avatar, light or dark theme |
+| **Sidebar buttons** | Choose which buttons appear in the left sidebar (Appearance → Text & Layout) |
 
 ## Security
 
 Orbit is designed for **trusted private networks** — home LANs, lab environments, or small teams on the same subnet.
 
 - **Not for public internet exposure** — There is no hardened perimeter model for routing Orbit across the open internet yet. Do not port-forward or expose Orbit directly to untrusted networks.
-- **No end-to-end encryption** — Messages and files traverse the LAN in plaintext at the application layer today. Treat the network as part of your trust boundary.
-- **Evolving hardening** — Context isolation, protocol handlers, and transfer checksums are in place; broader security work (E2EE, authentication, threat modeling) is ongoing.
+- **Evolving hardening** — Context isolation, protocol handlers, transfer checksums, and E2EE (ECDH + AES-256-GCM) are in place; broader security work is ongoing.
 
 Use Orbit where you would trust other devices on the same network.
 
@@ -195,29 +201,51 @@ Transparency matters in beta. Current constraints include:
 
 | Limitation | Details |
 |------------|---------|
-| **Windows-first** | Production builds target Windows today. macOS and Linux builds are planned but not yet validated. |
 | **LAN-focused** | Peers must be reachable on the local network. NAT traversal is not implemented. |
 | **Unstable Wi-Fi** | Large transfers and discovery can degrade on flaky wireless links. |
-| **No E2EE** | End-to-end encryption is not implemented. |
+| **Group E2EE** | End-to-end encryption currently works for direct messages only. Group E2EE is planned. |
 | **Privacy mode bugs** | Privacy mode is intended to store sent/received attachments in a `temp/` folder and purge them on exit, but images and files may fail to load reliably in this mode today. |
 | **Mobile experimental** | The Capacitor Android shell is early-stage and not a supported release target yet. |
 | **Unsigned builds** | Installers are not code-signed; Windows SmartScreen warnings are expected. |
 
 ## Roadmap
 
+### Recently Shipped
+
+- **End-to-end encryption (E2EE)** — ECDH + AES-256-GCM for direct messages
+- **Backup & Restore** — Full database export/import (.orzip / .zip)
+- **Database Health & Repair** — Integrity checks, VACUUM, REINDEX
+- **Group Admin Roles** — Promote/demote members, admin-level controls
+- **Unread Badges & Mentions** — Per-chat unread counts, @mention badges
+- **Read Receipts** — See when your messages have been read
+- **Per-chat Mute** — Mute/unmute notifications per DM or group
+- **Edit Message Sync** — Message edits broadcast to all peers
+- **Message Search v2** — Relevance ranking, sender/date filters
+- **Network Dashboard** — Live peer stats in Settings
+- **Keyboard Shortcuts** — Ctrl+K search, Ctrl+Shift+M mute, / focus input
+- **Transfer Resilience** — Retry with backoff, cancellation, disk checks
+- **Data Manager** — Privacy mode, auto-delete, clear attachments
+- **Activity Center** — Unified recent messages modal with sender avatars and attachment icons
+- **Customizable Sidebar** — Show/hide sidebar buttons in Appearance settings
+- **Persistent Sidebar Width** — Saved sidebar width restored on startup
+- **macOS / Linux builds** — Cross-platform packaging via GitHub Actions CI/CD
+
 ### Planned
 
-- **Resumable file transfers**
-- **Media compression improvements**
-- **Voice messages**
-- **macOS / Linux build validation**
+- **Group E2EE** — Extend encryption to group chats
+- **Resumable file transfers** — Pause and resume across sessions
+- **Media compression & thumbnailing** — Smarter image/video handling
+- **Voice messages** — Record and send voice clips
+- **Message threads** — Reply chains and threaded conversations
+- **Custom notification sounds** — Per-chat and per-contact sound profiles
+- **Message effects & rich embeds** — Link previews, inline media, text formatting toolbar
 
 ### Experimental
 
-- **WebRTC fallback** — Partial connectivity path for difficult network conditions; not production-ready
-- **End-to-end encryption (E2EE)**
-- **Capacitor Android client**
-- **WebRTC-based NAT traversal**
+- **WebRTC fallback** — Partial connectivity path for difficult network conditions
+- **Capacitor Android client** — Mobile companion app
+- **WebRTC-based NAT traversal** — Connect across subnets
+- **Plugin system** — Community extensions API**
 
 > Roadmap items are intentions, not commitments. See [GitHub Issues](https://github.com/D4niel-dev/Orbit-beta/issues) for tracking and discussion.
 
@@ -226,18 +254,25 @@ Transparency matters in beta. Current constraints include:
 | Command | Description |
 |---------|-------------|
 | `npm start` | Launch Electron in development |
-| `npm run build:win` | Build Windows installer (output in `dist/`) |
+| `npm run build:win` | Build Windows installer (`.exe`) |
+| `npm run build:mac` | Build macOS disk image (`.dmg`) |
+| `npm run build:linux` | Build Linux packages (`.AppImage`, `.deb`) |
+| `npm run build:all` | Build for all platforms (requires macOS host for `.dmg`) |
 
 Build configuration lives in [electron-builder.yml](electron-builder.yml). Built artifacts (`dist/`, `release/`) are gitignored — attach them to [GitHub Releases](https://github.com/D4niel-dev/Orbit-beta/releases) instead of committing binaries.
 
-### Building for Windows
+### Building
 
 ```bash
 npm install
-npm run build:win
+
+# Platform-specific
+npm run build:win     # → dist/*.exe
+npm run build:mac     # → dist/*.dmg  (requires macOS host)
+npm run build:linux   # → dist/*.AppImage, dist/*.deb
 ```
 
-The NSIS installer and `.exe` are written to `dist/`.
+> **Note:** macOS `.dmg` can only be built on a macOS machine (or via CI). Windows and Linux can be cross-compiled from any OS. The GitHub Actions workflow handles all three automatically on tag push.
 
 ## Contributing
 

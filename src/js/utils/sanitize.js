@@ -22,6 +22,9 @@ window.Sanitize = {
       return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: var(--accent-primary); text-decoration: underline;">${url}</a>`;
     });
 
+    // @mentions
+    html = html.replace(/@(\w+)/g, '<span class="chat-mention" style="color:var(--accent-primary);font-weight:600;background:var(--accent-soft);padding:1px 4px;border-radius:4px;">@$1</span>');
+
     // Fenced code blocks (```lang\n code \n```)
     html = html.replace(/```(\w*)\n([\s\S]*?)```/g, function(match, lang, code) {
       return '<pre style="background:var(--bg-base);padding:12px;border-radius:8px;overflow-x:auto;margin:8px 0;border:1px solid var(--border-subtle);"><code style="font-family:var(--font-mono);font-size:0.85em;color:var(--text-primary);">' + code.trim() + '</code></pre>';

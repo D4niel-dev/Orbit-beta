@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, Notification, nativeImage, protocol, net } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, Notification, nativeImage, protocol, net, dialog, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -20,6 +20,53 @@ let currentIdentity = null;
 let mainWindow = null;
 let tray = null;
 let tempDirPath = null;
+let e2eeKeyPair = null; // { publicKey, privateKey } hex strings
+
+// E2EE helpers using Node crypto
+function e2eeGetOrCreateKeyPair() {
+  if (e2eeKeyPair) return e2eeKeyPair;
+  var saved = persistentStore.get('e2ee-keypair');
+  if (saved && saved.publicKey && saved.privateKey) {
+    e2eeKeyPair = saved;
+    return saved;
+  }
+  var ecdh = crypto.createECDH('prime256v1');
+  ecdh.generateKeys();
+  e2eeKeyPair = {
+    publicKey: ecdh.getPublicKey('hex'),
+    privateKey: ecdh.getPrivateKey('hex')
+  };
+  persistentStore.set('e2ee-keypair', e2eeKeyPair);
+  return e2eeKeyPair;
+}
+
+function e2eeDeriveAESKey(peerPublicKeyHex) {
+  var kp = e2eeGetOrCreateKeyPair();
+  var ecdh = crypto.createECDH('prime256v1');
+  ecdh.setPrivateKey(kp.privateKey, 'hex');
+  var shared = ecdh.computeSecret(peerPublicKeyHex, 'hex');
+  return crypto.createHash('sha256').update(shared).digest();
+}
+
+function e2eeEncrypt(plaintext, peerPublicKeyHex) {
+  var key = e2eeDeriveAESKey(peerPublicKeyHex);
+  var iv = crypto.randomBytes(12);
+  var cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  var enc = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  var tag = cipher.getAuthTag();
+  return Buffer.concat([iv, enc, tag]).toString('base64');
+}
+
+function e2eeDecrypt(ciphertextB64, peerPublicKeyHex) {
+  var key = e2eeDeriveAESKey(peerPublicKeyHex);
+  var buf = Buffer.from(ciphertextB64, 'base64');
+  var iv = buf.subarray(0, 12);
+  var tag = buf.subarray(buf.length - 16);
+  var enc = buf.subarray(12, buf.length - 16);
+  var decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+  decipher.setAuthTag(tag);
+  return decipher.update(enc) + decipher.final('utf8');
+}
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'orbit-file', privileges: { secure: true, standard: true, supportFetchAPI: true } },
@@ -250,6 +297,30 @@ app.whenReady().then(() => {
   ipcMain.on('get-uuid', (event) => {
     event.returnValue = uuidv4();
   });
+  ipcMain.on('write-clipboard', (event, text) => {
+    clipboard.writeText(text || '');
+    event.returnValue = true;
+  });
+
+  // E2EE IPC
+  ipcMain.on('e2ee-get-public-key', (event) => {
+    var kp = e2eeGetOrCreateKeyPair();
+    event.returnValue = kp.publicKey;
+  });
+  ipcMain.on('e2ee-encrypt', (event, plaintext, peerPublicKeyHex) => {
+    try {
+      event.returnValue = e2eeEncrypt(plaintext, peerPublicKeyHex);
+    } catch (e) {
+      event.returnValue = null;
+    }
+  });
+  ipcMain.on('e2ee-decrypt', (event, ciphertextB64, peerPublicKeyHex) => {
+    try {
+      event.returnValue = e2eeDecrypt(ciphertextB64, peerPublicKeyHex);
+    } catch (e) {
+      event.returnValue = null;
+    }
+  });
 
   // Database IPC
   ipcMain.on('db-get-local-user', (event) => {
@@ -335,6 +406,10 @@ app.whenReady().then(() => {
   ipcMain.on('db-get-group-members', (event, groupId) => {
     event.returnValue = globalDb.getGroupMembers(groupId);
   });
+  ipcMain.on('db-set-member-role', (event, groupId, userId, role) => {
+    globalDb.setMemberRole(groupId, userId, role);
+    event.returnValue = true;
+  });
   ipcMain.on('db-delete-group', (event, groupId) => {
     globalDb.deleteGroup(groupId);
     event.returnValue = true;
@@ -359,7 +434,99 @@ app.whenReady().then(() => {
     }
   });
 
+  // Read State
+  ipcMain.on('db-get-read-state', (event, chatId) => {
+    if (!globalDb) { event.returnValue = null; return; }
+    event.returnValue = globalDb.getReadState(chatId);
+  });
+  ipcMain.on('db-set-read-state', (event, chatId, lastReadMsgId) => {
+    if (!globalDb) { event.returnValue = false; return; }
+    globalDb.setReadState(chatId, lastReadMsgId);
+    event.returnValue = true;
+  });
+  ipcMain.on('db-add-mention', (event, chatId, msgId, senderId) => {
+    if (!globalDb) { event.returnValue = false; return; }
+    globalDb.addMention(chatId, msgId, senderId);
+    event.returnValue = true;
+  });
+  ipcMain.on('db-get-mentions', (event, chatId) => {
+    if (!globalDb) { event.returnValue = []; return; }
+    event.returnValue = globalDb.getMentions(chatId);
+  });
+  ipcMain.on('db-clear-mentions', (event, chatId) => {
+    if (!globalDb) { event.returnValue = false; return; }
+    globalDb.clearMentions(chatId);
+    event.returnValue = true;
+  });
+
+  // Database Health Check
+  ipcMain.on('db-health-check', (event) => {
+    if (!globalDb) { event.returnValue = { ok: false, errors: ['Database not initialized'], warnings: [] }; return; }
+    event.returnValue = globalDb.healthCheck();
+  });
+
+  // Database Repair
+  ipcMain.on('db-repair', (event) => {
+    if (!globalDb) { event.returnValue = { ok: false, repaired: [], warnings: ['Database not initialized'] }; return; }
+    event.returnValue = globalDb.repairDatabase();
+  });
+
+  // Backup dialog
+  ipcMain.handle('backup-create', async (event, format) => {
+    try {
+      const result = await dialog.showSaveDialog(mainWindow, {
+        defaultPath: 'Orbit-Backup-' + new Date().toISOString().split('T')[0] + (format === 'orzip' ? '.orzip' : '.zip'),
+        filters: [
+          { name: 'Orbit Backup', extensions: ['orzip'] },
+          { name: 'ZIP Archive', extensions: ['zip'] }
+        ]
+      });
+      if (result.canceled) return { canceled: true };
+      if (format === 'orzip') {
+        return { ...globalDb.exportBackupAsOrzip(result.filePath), canceled: false };
+      } else {
+        return { ...await globalDb.exportBackupAsZip(result.filePath), canceled: false };
+      }
+    } catch (e) {
+      return { canceled: false, error: e.message };
+    }
+  });
+
+  // Restore dialog
+  ipcMain.handle('backup-restore', async (event) => {
+    try {
+      const result = await dialog.showOpenDialog(mainWindow, {
+        filters: [{ name: 'Orbit Backup', extensions: ['orzip', 'zip'] }],
+        properties: ['openFile']
+      });
+      if (result.canceled || result.filePaths.length === 0) return { canceled: true };
+      const filePath = result.filePaths[0];
+      const validation = globalDb.validateBackup(filePath);
+      if (!validation.valid) return { ok: false, error: validation.error };
+      const restoreResult = globalDb.restoreBackup(filePath);
+      if (restoreResult.ok && mainWindow) mainWindow.webContents.send('state-invalidate');
+      return restoreResult;
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  });
+
+  // Backup validation (dry-run)
+  ipcMain.handle('backup-validate', async (event, filePath) => {
+    return globalDb.validateBackup(filePath);
+  });
+
   // Networking IPC
+  ipcMain.on('toggle-devtools', () => {
+    if (mainWindow) {
+      if (mainWindow.webContents.isDevToolsOpened()) {
+        mainWindow.webContents.closeDevTools();
+      } else {
+        mainWindow.webContents.openDevTools({ mode: 'bottom' });
+      }
+    }
+  });
+
   ipcMain.on('network-start', (event, identity) => {
     currentIdentity = identity;
     
@@ -372,6 +539,12 @@ app.whenReady().then(() => {
           mainWindow.webContents.send('transfer-progress', { fileId, ...progressData });
         }
       };
+
+      transferInstance.onError = (fileId, errorMsg) => {
+        if (mainWindow) {
+          mainWindow.webContents.send('transfer-error', { fileId, error: errorMsg });
+        }
+      };
       
       socketInstance.on('message', (packet) => {
         if (packet.type === Protocol.Types.FILE_TRANSFER_START) {
@@ -381,9 +554,22 @@ app.whenReady().then(() => {
         } else if (packet.type === Protocol.Types.FILE_TRANSFER_END) {
           transferInstance.handleEnd(packet, (savedPath, fileName, fileId, fileSize) => {
              mainWindow.webContents.send('file-received', { path: savedPath, name: fileName, sender: packet.from, fileId: fileId, size: fileSize });
-          }, (errorMsg) => {
+          }, (errorMsg, fileId) => {
              console.error('File Transfer Error:', errorMsg);
+             if (mainWindow) {
+               mainWindow.webContents.send('transfer-error', { fileId, error: errorMsg });
+             }
           });
+        } else if (packet.type === Protocol.Types.FILE_TRANSFER_CANCEL) {
+          transferInstance.handleCancel(packet);
+          if (mainWindow) {
+            mainWindow.webContents.send('transfer-error', { fileId: packet.payload.fileId, error: 'Sender cancelled the transfer' });
+          }
+        } else if (packet.type === Protocol.Types.FILE_TRANSFER_REJECT) {
+          if (mainWindow) {
+            var reason = packet.payload.reason === 'disk_space' ? 'Recipient has insufficient disk space' : 'Transfer rejected by recipient';
+            mainWindow.webContents.send('transfer-error', { fileId: packet.payload.fileId, error: reason });
+          }
         } else {
           mainWindow.webContents.send('network-message', packet);
         }
@@ -427,9 +613,26 @@ app.whenReady().then(() => {
     }
     throw new Error('Network not started');
   });
+
+  ipcMain.on('cancel-transfer', (event, fileId) => {
+    if (transferInstance) {
+      transferInstance.cancelSend(fileId);
+    }
+  });
+
+  ipcMain.handle('check-disk-space', () => {
+    try {
+      const statfs = require('fs').statfsSync(require('os').tmpdir());
+      const available = statfs.bavail * statfs.bsize;
+      return { ok: true, available };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  });
 });
 
 app.on('before-quit', () => {
+  if (transferInstance) transferInstance.destroy();
   if (discoveryInstance) discoveryInstance.stop();
   if (socketInstance) socketInstance.stop();
   // Clean up privacy mode temp directory

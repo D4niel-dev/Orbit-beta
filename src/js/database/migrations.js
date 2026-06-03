@@ -101,6 +101,30 @@ const migrations = [
     db.exec(`
       ALTER TABLE groups ADD COLUMN avatarUpdatedAt INTEGER DEFAULT 0;
     `);
+  },
+  // v7 - Group member roles
+  (db) => {
+    db.exec(`
+      ALTER TABLE group_members ADD COLUMN role TEXT DEFAULT 'member';
+      UPDATE group_members SET role = 'owner' WHERE userId IN (SELECT ownerId FROM groups WHERE groups.groupId = group_members.groupId);
+    `);
+  },
+  // v8 - Read state and mentions tracking
+  (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS read_state (
+        chatId TEXT PRIMARY KEY,
+        lastReadMsgId TEXT,
+        lastReadTimestamp TEXT
+      );
+      CREATE TABLE IF NOT EXISTS mentions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        chatId TEXT,
+        msgId TEXT,
+        senderId TEXT,
+        timestamp TEXT
+      );
+    `);
   }
 ];
 

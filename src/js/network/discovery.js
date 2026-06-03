@@ -67,6 +67,7 @@ class Discovery {
       avatarHash: identity.avatar ? 'has_avatar' : null,
       status: broadcastStatus,
       bio: identity.bio,
+      publicKey: identity.publicKey || null,
       tcpPort: 46000 // default port
     };
 

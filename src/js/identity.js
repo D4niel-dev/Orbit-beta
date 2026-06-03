@@ -8,6 +8,12 @@ window.Identity = {
       console.log('No identity found, generating new one...');
       identity = this.generateNew();
       this.save(identity);
+    } else {
+      // Ensure existing identity has E2EE public key
+      if (!identity.publicKey && window.orbitAPI && window.orbitAPI.e2eeGetPublicKey) {
+        identity.publicKey = window.orbitAPI.e2eeGetPublicKey();
+        this.save(identity);
+      }
     }
     
     // Update store with loaded identity
@@ -28,6 +34,9 @@ window.Identity = {
       hostname = "OrbitUser";
     }
 
+    // Get E2EE public key
+    var pubKey = window.orbitAPI && window.orbitAPI.e2eeGetPublicKey ? window.orbitAPI.e2eeGetPublicKey() : null;
+
     return {
       userId: uuid,
       username: hostname,
@@ -37,7 +46,8 @@ window.Identity = {
       avatar: null,
       banner: null,
       status: "online",
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      publicKey: pubKey
     };
   },
 
