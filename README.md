@@ -101,7 +101,7 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 <details>
 <summary>v0.0.4-beta</summary>
 
-- See [CHANGELOG.md](CHANGELOG.md), section 4
+- See [CHANGELOG.md](CHANGELOG.md#v004-beta), section 4
 </details>
 <details>
 <summary>v0.0.5-beta (Stable)</summary>
