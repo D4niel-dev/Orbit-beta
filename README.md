@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v005-beta-current-version">v0.0.5-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v006-beta-current-version">v0.0.6-beta</a>
 </p>
 
 <p align="center">
@@ -90,6 +90,14 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Unread Badges & Read Receipts** *(v0.0.5+)* — Per-chat unread counts, @mention badges, and read indicators
 - **Activity Center** *(v0.0.5+)* — Unified view of recent messages across all chats
 - **Customizable Sidebar** *(v0.0.5+)* — Show/hide Activity Center, Gallery, and Storage buttons in the left sidebar
+- **Custom Themes** *(v0.0.6+)* — True Dark, Dark Purple, Midnight, Sunset, Nord, Seasonal auto-rotating themes
+- **Custom Colors** *(v0.0.6+)* — Live preview color editor for all UI categories
+- **Profile Frames** *(v0.0.6+, experimental)* — 12 decorative frame overlays on avatars
+- **Animated Avatars** *(v0.0.6+, experimental)* — Subtle pulse animation on avatars
+- **Message Translate** *(v0.0.6+, experimental)* — Translate messages via MyMemory API
+- **Compact Spacing** *(v0.0.6+, experimental)* — Tighter message layout option
+- **App Zoom** *(v0.0.6+)* — Zoom slider with preview and restart notification
+- **Chat Settings** *(v0.0.6+)* — Enter to Send, Show Avatars, Image Preview toggles
 - **Gallery** — Browse shared images with WebP thumbnails for fast scrolling
 - **System tray** — Minimize to tray instead of quitting
 
@@ -229,6 +237,15 @@ Transparency matters in beta. Current constraints include:
 - **Customizable Sidebar** — Show/hide sidebar buttons in Appearance settings
 - **Persistent Sidebar Width** — Saved sidebar width restored on startup
 - **macOS / Linux builds** — Cross-platform packaging via GitHub Actions CI/CD
+- **Custom Themes** — True Dark, Dark Purple, Midnight, Sunset, Nord, Seasonal auto-rotate
+- **Custom Colors** — Live preview color editor for all UI categories
+- **Profile Frames** — 12 decorative frame overlays on avatars (experimental)
+- **Animated Avatars** — Subtle pulse animation (experimental)
+- **Message Translate** — Translate messages via MyMemory API (experimental)
+- **Compact Spacing** — Tighter message layout option (experimental)
+- **App Zoom** — Slider with preview UI and restart notification
+- **Chat Settings** — Enter to Send, Show Avatars, Image Preview toggles
+- **Orbit Echo Bot** — Persistent echo bot account for testing messages
 
 ### Planned
 

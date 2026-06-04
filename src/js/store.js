@@ -6,16 +6,20 @@ class Store {
     
     let dbFriends = window.orbitAPI ? window.orbitAPI.dbGetFriends() : (window.Storage ? (window.Storage.get('appData', {}).friends || []) : []);
     if (!dbFriends || dbFriends.length === 0) {
-      dbFriends = [
-        {
-          userId: 'local-echo',
-          username: 'Orbit Echo',
-          usertag: 'BOT',
-          status: 'online',
-          avatar: 'icons/orbit/orbit_default.png',
-          bio: 'A local echo channel for testing messages.'
-        }
-      ];
+      dbFriends = [];
+    }
+    // Ensure Orbit Echo is always in the friends list
+    var echoFriend = {
+      userId: 'local-echo',
+      username: 'Orbit Echo',
+      usertag: 'BOT',
+      status: 'online',
+      avatar: 'icons/orbit/orbit_default.png',
+      bio: 'A local echo channel for testing messages.'
+    };
+    if (!dbFriends.some(function(f) { return f.userId === 'local-echo'; })) {
+      dbFriends.unshift(echoFriend);
+      if (window.orbitAPI) window.orbitAPI.dbSaveFriend(echoFriend);
     }
     
     const dbMessages = window.orbitAPI ? window.orbitAPI.dbAllMessagesRaw() : (window.Storage ? (window.Storage.get('appData', {}).messages || {}) : {});
@@ -42,6 +46,9 @@ class Store {
         messageAnim: 'slide',
         timeFormat24: false,
         bgPattern: 'None',
+        enterToSend: true,
+        showChatAvatars: true,
+        showImagePreviews: true,
         notifySound: true,
         notifyPreview: true,
         notifyGroupMentions: false,
@@ -52,6 +59,13 @@ class Store {
         logNetworkPackets: false,
         showConnectionStats: false,
         enableExperimental: false,
+        experimentalProfileFrames: false,
+        experimentalMessageTranslate: false,
+        experimentalCompactSpacing: false,
+        profileFrame: 0,
+        enableCustomColors: false,
+        experimentalAnimatedAvatars: false,
+        experimentalMessageFx: false,
         e2eeEnabled: false,
         sidebarButtons: { activity: true, gallery: true, storage: true },
         ...savedSettings
@@ -192,7 +206,37 @@ class Store {
   removeGroup(groupId) {
     const groups = this.state.groups.filter(g => g.groupId !== groupId);
     if (window.orbitAPI) window.orbitAPI.dbDeleteGroup(groupId);
-    this.setState({ groups });
+    const messages = { ...this.state.messages };
+    delete messages[groupId];
+    const pinnedMessages = { ...this.state.pinnedMessages };
+    delete pinnedMessages[groupId];
+    const unreadCounts = { ...this.state.unreadCounts };
+    delete unreadCounts[groupId];
+    const mentionCounts = { ...this.state.mentionCounts };
+    delete mentionCounts[groupId];
+    const lastReadIds = { ...this.state.lastReadIds };
+    delete lastReadIds[groupId];
+    const mutedChats = { ...this.state.mutedChats };
+    delete mutedChats[groupId];
+    this.setState({ groups, messages, pinnedMessages, unreadCounts, mentionCounts, lastReadIds, mutedChats });
+  }
+
+  removeFriend(userId) {
+    const friends = this.state.friends.filter(function(f) { return f.userId !== userId; });
+    if (window.orbitAPI) window.orbitAPI.dbDeleteFriend(userId);
+    const messages = { ...this.state.messages };
+    delete messages[userId];
+    const pinnedMessages = { ...this.state.pinnedMessages };
+    delete pinnedMessages[userId];
+    const unreadCounts = { ...this.state.unreadCounts };
+    delete unreadCounts[userId];
+    const mentionCounts = { ...this.state.mentionCounts };
+    delete mentionCounts[userId];
+    const lastReadIds = { ...this.state.lastReadIds };
+    delete lastReadIds[userId];
+    const mutedChats = { ...this.state.mutedChats };
+    delete mutedChats[userId];
+    this.setState({ friends, messages, pinnedMessages, unreadCounts, mentionCounts, lastReadIds, mutedChats });
   }
 
   removeGroupMember(groupId, userId) {
@@ -239,26 +283,13 @@ class Store {
     if (window.orbitAPI) window.orbitAPI.dbUpdateGroupField(groupId, field, value);
   }
 
-  addMemberToGroup(groupId, user) {
-    const groups = this.state.groups.map(g => {
-      if (g.groupId !== groupId) return g;
-      const members = g.members || [];
-      if (!members.find(m => m.userId === user.userId)) {
-        if (window.orbitAPI) window.orbitAPI.dbAddGroupMember(groupId, user);
-        return { ...g, members: [...members, { ...user, joinedAt: new Date().toISOString() }] };
-      }
-      return g;
-    });
-    this.setState({ groups });
-  }
-
   getGroupMembers(groupId) {
     const group = this.state.groups.find(g => g.groupId === groupId);
     return group ? (group.members || []) : [];
   }
 
   handleIncomingPacket(packet) {
-    // Group packets
+    if (!packet || !packet.payload) return;
     if (packet.type === 'GROUP_CREATE') {
       const { groupId, groupName, ownerId, members } = packet.payload;
       const existingGroup = this.state.groups.find(g => g.groupId === groupId);
@@ -305,8 +336,8 @@ class Store {
             createdAt: new Date().toISOString()
           };
           this.addGroup(group);
-          var msgs = this.state.messages;
-          msgs[groupId] = msgs[groupId] || [];
+          var msgs = { ...this.state.messages };
+          if (!msgs[groupId]) msgs[groupId] = [];
           this.setState({ messages: msgs, activeChatId: groupId });
           if (window.Toast) window.Toast.show('Joined Group', 'You are now a member of ' + (groupName || 'Group'));
         }
@@ -358,7 +389,7 @@ class Store {
     }
 
     // Basic message handling logic
-    if (packet.type === 'MESSAGE' || !packet.type) {
+    if (packet.type === 'MESSAGE') {
       const fromId = packet.payload.chatId || packet.from;
       var text = packet.payload.text || (typeof packet.payload === 'string' ? packet.payload : '');
 
@@ -489,7 +520,7 @@ class Store {
   addMessage(chatId, messageObj) {
     const msgs = { ...this.state.messages };
     if (!msgs[chatId]) msgs[chatId] = [];
-    msgs[chatId].push(messageObj);
+    msgs[chatId] = [...msgs[chatId], messageObj];
 
     if (window.orbitAPI) window.orbitAPI.dbAddMessage(chatId, messageObj);
 
@@ -552,16 +583,19 @@ class Store {
   editMessage(chatId, msgId, newText) {
     const msgs = { ...this.state.messages };
     if (msgs[chatId]) {
-      const msg = msgs[chatId].find(m => m.id == msgId);
-      if (msg) {
-        msg.text = newText;
-        msg.edited = true;
-        if (window.orbitAPI) window.orbitAPI.dbEditMessage(chatId, msgId, newText);
-        this.setState({ messages: msgs });
+      msgs[chatId] = msgs[chatId].map(m => {
+        if (m.id == msgId) {
+          return { ...m, text: newText, edited: true };
+        }
+        return m;
+      });
+      if (window.orbitAPI) window.orbitAPI.dbEditMessage(chatId, msgId, newText);
+      this.setState({ messages: msgs });
 
-        // Broadcast edit to peers
-        const state = this.state;
-        const members = this.getGroupMembers(chatId);
+      // Broadcast edit to peers
+      const state = this.state;
+      const members = this.getGroupMembers(chatId);
+      if (window.orbitAPI) {
         if (members.length > 0) {
           members.forEach(m => {
             if (m.userId !== state.currentUser.userId && m.ip) {
@@ -591,18 +625,18 @@ class Store {
     const state = this.state;
     const members = this.getGroupMembers(chatId);
 
-    if (members.length > 0) {
-      // Group chat: send to all members
-      members.forEach(m => {
-        if (m.userId !== state.currentUser.userId && m.ip) {
-          window.orbitAPI.networkSend(m.userId, m.ip, window.Protocol.Types.REACTION, { msgId, emoji, action, userId: state.currentUser.userId });
+    if (window.orbitAPI) {
+      if (members.length > 0) {
+        members.forEach(m => {
+          if (m.userId !== state.currentUser.userId && m.ip) {
+            window.orbitAPI.networkSend(m.userId, m.ip, window.Protocol.Types.REACTION, { msgId, emoji, action, userId: state.currentUser.userId });
+          }
+        });
+      } else {
+        const friend = state.friends.find(f => f.userId === chatId);
+        if (friend && friend.ip) {
+          window.orbitAPI.networkSend(chatId, friend.ip, window.Protocol.Types.REACTION, { msgId, emoji, action, userId: state.currentUser.userId });
         }
-      });
-    } else {
-      // DM: send to the single peer
-      const friend = state.friends.find(f => f.userId === chatId);
-      if (friend && friend.ip) {
-        window.orbitAPI.networkSend(chatId, friend.ip, window.Protocol.Types.REACTION, { msgId, emoji, action, userId: state.currentUser.userId });
       }
     }
 
@@ -770,9 +804,7 @@ class Store {
       }
       window.orbitAPI.dbClearMentions(chatId);
     }
-    this.state.unreadCounts = unreadCounts;
-    this.state.mentionCounts = mentionCounts;
-    this.state.lastReadIds = lastReadIds;
+    this.setState({ unreadCounts, mentionCounts, lastReadIds });
   }
 
   _sendReadReceipt(chatId) {

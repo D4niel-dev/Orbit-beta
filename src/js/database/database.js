@@ -41,6 +41,7 @@ class OrbitDatabase {
       // Friends
       getFriends: this.db.prepare('SELECT * FROM friends'),
       saveFriend: this.db.prepare('INSERT OR REPLACE INTO friends (userId, username, usertag, status, avatar, bio) VALUES (@userId, @username, @usertag, @status, @avatar, @bio)'),
+      deleteFriend: this.db.prepare('DELETE FROM friends WHERE userId = ?'),
       
       // Messages
       getMessages: this.db.prepare('SELECT * FROM messages WHERE chatId = ? ORDER BY timestamp ASC'),
@@ -135,6 +136,14 @@ class OrbitDatabase {
       avatar: (friend.avatar instanceof Buffer || typeof friend.avatar === 'string') ? friend.avatar : null,
       bio: friend.bio || ''
     });
+  }
+
+  deleteFriend(userId) {
+    this.stmts.deleteFriend.run(userId);
+  }
+
+  deleteGroup(groupId) {
+    this.stmts.deleteGroup.run(groupId);
   }
 
   // --- Groups ---

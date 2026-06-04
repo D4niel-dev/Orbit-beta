@@ -130,6 +130,7 @@ class TransferManager {
   }
 
   handleStart(packet) {
+    if (!packet || !packet.payload) return;
     const payload = packet.payload;
     if (this.activeReceives.has(payload.fileId)) return;
 
@@ -160,6 +161,7 @@ class TransferManager {
   }
 
   handleChunk(packet) {
+    if (!packet || !packet.payload) return;
     const payload = packet.payload;
     const transfer = this.activeReceives.get(payload.fileId);
     if (!transfer) return;
@@ -182,6 +184,7 @@ class TransferManager {
   }
 
   handleEnd(packet, onComplete, onError) {
+    if (!packet || !packet.payload) return;
     const payload = packet.payload;
     const transfer = this.activeReceives.get(payload.fileId);
     if (!transfer) return;
@@ -199,6 +202,7 @@ class TransferManager {
   }
 
   handleCancel(packet) {
+    if (!packet || !packet.payload) return;
     const payload = packet.payload;
     this.cancelReceive(payload.fileId);
   }

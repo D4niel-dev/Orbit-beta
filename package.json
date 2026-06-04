@@ -1,6 +1,6 @@
 {
   "name": "orbit-beta",
-  "version": "0.0.5-beta",
+  "version": "0.0.6-beta",
   "description": "Orbit P2P Chat Application",
   "author": "Orbit Team <hello@orbit.chat>",
   "main": "main.js",

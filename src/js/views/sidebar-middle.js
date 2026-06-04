@@ -186,11 +186,11 @@ window.SidebarMiddle = {
             window.SidebarMiddle.showGroupInfo(id);
           }},
           { label: 'Copy Invite Code', icon: 'link', onClick: function() {
-            var code = group.inviteCode || require('crypto').randomBytes(4).toString('hex');
+            var code = group.inviteCode || Array.from(window.crypto.getRandomValues(new Uint8Array(4)), function(b) { return b.toString(16).padStart(2, '0'); }).join('');
             if (window.orbitAPI && window.orbitAPI.writeClipboard) {
               window.orbitAPI.writeClipboard(code);
             } else {
-              navigator.clipboard.writeText(code).catch(function() {});
+              navigator.clipboard.writeText(code).catch(function(e) { console.warn('Clipboard write failed', e); });
             }
             if (window.Toast) window.Toast.show('Copied', 'Invite code copied to clipboard');
           }},
@@ -489,9 +489,11 @@ window.SidebarMiddle = {
         if (subtitle.length > 25) subtitle = subtitle.substring(0, 25) + '...';
       }
 
+      var frame = window.Frames.getFrameForUser(friend.userId);
       var avatarImg = friend.avatar
         ? '<img src="' + window.Sanitize.escapeHtml(friend.avatar) + '" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">'
         : '<i data-lucide="user"></i>';
+      var avatarContainer = '<div style="position:relative;display:inline-block;width:100%;height:100%;">' + avatarImg + (frame ? '<img src="icons/frames/pfp_frame_' + frame + '.png" style="position:absolute;top:-24%;left:-20%;width:140%;height:140%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '') + '</div>';
 
       var unreadCount = unreadCounts[friend.userId] || 0;
       var mentionCount = mentionCounts[friend.userId] || 0;
@@ -508,7 +510,7 @@ window.SidebarMiddle = {
 
       html += '<div class="list-row ' + (isActive ? 'active' : '') + '" data-id="' + window.Sanitize.escapeHtml(friend.userId) + '" data-debug="User: ' + window.Sanitize.escapeHtml(friend.username) + ' ID: ' + window.Sanitize.escapeHtml(friend.userId) + ' Status: ' + window.Sanitize.escapeHtml(friend.status || 'offline') + '">' +
         '<div class="avatar avatar-md list-row-avatar" style="position:relative;">' +
-          avatarImg +
+          avatarContainer +
           '<div class="status-indicator ' + window.Sanitize.escapeHtml(friend.status || 'offline') + '"></div>' +
         '</div>' +
         '<div class="list-row-info">' +
@@ -569,13 +571,20 @@ window.SidebarMiddle = {
     document.getElementById('btn-cancel-connect').addEventListener('click', function() { document.body.removeChild(overlay); });
     overlay.addEventListener('click', function(e) { if (e.target === overlay) document.body.removeChild(overlay); });
     document.getElementById('btn-confirm-connect').addEventListener('click', function() {
+      var btn = this;
+      if (btn.disabled) return;
       var ip = document.getElementById('connect-ip-input').value.trim();
       if (!ip) { window.Toast.show('Error', 'Please enter an IP address'); return; }
+      btn.disabled = true;
+      btn.textContent = 'Connecting...';
       if (window.orbitAPI) {
         if (window.orbitAPI.connect) window.orbitAPI.connect(ip);
         window.Toast.show('Connecting', 'Attempting to connect to ' + window.Sanitize.escapeHtml(ip));
       }
-      document.body.removeChild(overlay);
+      setTimeout(function() {
+        document.body.removeChild(overlay);
+        btn.disabled = false;
+      }, 500);
     });
     var inp = document.getElementById('connect-ip-input');
     if (inp) { inp.focus(); inp.addEventListener('keydown', function(e) { if (e.key === 'Enter') document.getElementById('btn-confirm-connect').click(); }); }
@@ -654,9 +663,11 @@ window.SidebarMiddle = {
       var onlineDot = isOnline
         ? '<span style="width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block;margin-right:8px;"></span>'
         : '<span style="width:8px;height:8px;border-radius:50%;background:#6b7280;display:inline-block;margin-right:8px;"></span>';
+      var mFrame = window.Frames.getFrameForUser(m.userId);
       var mAvatar = m.avatar
         ? '<img src="' + window.Sanitize.escapeHtml(m.avatar) + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover;">'
         : '<div style="width:32px;height:32px;border-radius:50%;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:12px;color:white;font-weight:600;">' + m.username.charAt(0).toUpperCase() + '</div>';
+      var mAvatarContainer = '<div style="position:relative;display:inline-block;">' + mAvatar + (mFrame ? '<img src="icons/frames/pfp_frame_' + mFrame + '.png" style="position:absolute;top:-24%;left:-20%;width:140%;height:140%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '') + '</div>';
       var role = m.role || 'member';
       var roleBadge = '';
       if (role === 'owner') {
@@ -675,7 +686,7 @@ window.SidebarMiddle = {
         ? '<button class="group-info-demote" data-user-id="' + m.userId + '" style="background:none;border:none;color:var(--accent-warning);cursor:pointer;font-size:11px;padding:2px 6px;border-radius:4px;margin-left:4px;" title="Demote to Member">▼</button>'
         : '';
       membersHtml += '<div style="display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:8px;cursor:default;">' +
-        mAvatar +
+        mAvatarContainer +
         '<div style="flex:1;">' +
           '<div style="font-size:13px;font-weight:500;color:var(--text-primary);display:flex;align-items:center;">' + window.Sanitize.escapeHtml(m.username) + roleBadge + promoteBtn + demoteBtn + '</div>' +
           '<div style="font-size:11px;color:var(--text-muted);">@' + window.Sanitize.escapeHtml(m.usertag || '') + '</div>' +
@@ -754,11 +765,11 @@ window.SidebarMiddle = {
 
     // Copy invite code
     document.getElementById('group-info-copy-invite').addEventListener('click', function() {
-      group.inviteCode = group.inviteCode || require('crypto').randomBytes(4).toString('hex');
+      group.inviteCode = group.inviteCode || Array.from(window.crypto.getRandomValues(new Uint8Array(4)), function(b) { return b.toString(16).padStart(2, '0'); }).join('');
       if (window.orbitAPI && window.orbitAPI.writeClipboard) {
         window.orbitAPI.writeClipboard(group.inviteCode);
       } else {
-        navigator.clipboard.writeText(group.inviteCode).catch(function() {});
+        navigator.clipboard.writeText(group.inviteCode).catch(function(e) { console.warn('Clipboard write failed', e); });
       }
       if (window.Toast) window.Toast.show('Copied', 'Invite code copied');
     });
@@ -898,15 +909,19 @@ window.SidebarMiddle = {
       if (!file) return;
       var reader = new FileReader();
       reader.onload = function(ev) {
-        // Save to avatars directory via IPC
+        if (!ev.target || !ev.target.result) return;
         if (window.orbitAPI && window.orbitAPI.saveAvatar) {
           var ts = Date.now();
-          window.orbitAPI.saveAvatar(groupId, ev.target.result.split(',')[1]).then(function(path) {
+          var dataParts = ev.target.result.split(',');
+          if (dataParts.length < 2) { if (window.Toast) window.Toast.show('Error', 'Invalid image data'); return; }
+          window.orbitAPI.saveAvatar(groupId, dataParts[1]).then(function(path) {
             window.store.updateGroupField(groupId, 'avatarPath', path);
             window.store.updateGroupField(groupId, 'avatarUpdatedAt', ts);
-            // Update image in panel
             var img = document.getElementById('group-info-avatar-img');
             if (img) img.src = 'orbit-avatar://' + groupId + '?t=' + ts;
+          }).catch(function(err) {
+            if (window.Toast) window.Toast.show('Error', 'Failed to save avatar');
+            console.error('Avatar save failed:', err);
           });
         }
       };

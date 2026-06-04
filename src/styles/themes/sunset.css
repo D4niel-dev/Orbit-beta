@@ -1,0 +1,29 @@
+/* src/styles/themes/sunset.css */
+:root[data-theme="sunset"] {
+  --bg-base:        #1A0F0A;
+  --bg-surface:     #2A1A10;
+  --bg-sidebar:     #22140C;
+  --bg-hover:       #3A2515;
+  --bg-active:      #4A3020;
+
+  --text-primary:   #F5E6D3;
+  --text-secondary: #D4BFA8;
+  --text-muted:     #8A7560;
+  --text-inverse:   #1A0F0A;
+
+  --accent-primary: #FF8C42;
+  --accent-hover:   #E07830;
+  --accent-soft:    #4A2A15;
+  --accent-danger:  #FF6B6B;
+  --accent-success: #4ADE80;
+  --accent-warning: #FFB547;
+
+  --border-subtle:  rgba(255, 140, 66, 0.15);
+  --border-strong:  rgba(255, 140, 66, 0.25);
+
+  --shadow-sm:      0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md:      0 4px 16px rgba(0, 0, 0, 0.5);
+  --shadow-lg:      0 8px 32px rgba(0, 0, 0, 0.6);
+
+  --transition:  all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}

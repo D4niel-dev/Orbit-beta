@@ -66,12 +66,16 @@ window.ProfileSidebar = {
         // Content area
         '<div style="flex:1;padding:20px;text-align:center;">' +
           // Avatar
-          '<div style="margin-bottom:8px;">' +
-            (user.avatar
-              ? '<img src="' + window.Sanitize.escapeHtml(user.avatar) + '" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:3px solid var(--bg-surface);">'
-              : '<div style="width:64px;height:64px;border-radius:50%;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:24px;color:white;font-weight:600;margin:0 auto;">' + user.username.charAt(0).toUpperCase() + '</div>'
-            ) +
-          '</div>' +
+        '<div style="margin-bottom:8px;">' +
+          (user.avatar
+            ? (function() {
+              var frame = window.Frames.getFrameForUser(user.userId);
+              var img = '<img src="' + window.Sanitize.escapeHtml(user.avatar) + '" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:3px solid var(--bg-surface);">';
+              return frame ? '<div style="position:relative;display:inline-block;">' + img + '<img src="icons/frames/pfp_frame_' + frame + '.png" style="position:absolute;top:-24%;left:-20%;width:140%;height:140%;pointer-events:none;object-fit:contain;" draggable="false" alt=""></div>' : img;
+            })()
+            : '<div style="width:64px;height:64px;border-radius:50%;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:24px;color:white;font-weight:600;margin:0 auto;">' + user.username.charAt(0).toUpperCase() + '</div>'
+          ) +
+        '</div>' +
           '<h2 style="font-size:20px;font-weight:700;color:var(--text-primary);margin:0 0 4px;">' + window.Sanitize.escapeHtml(user.username) + '</h2>' +
           '<div style="font-size:13px;color:var(--text-muted);font-family:var(--font-mono);margin-bottom:12px;">#' + window.Sanitize.escapeHtml(user.usertag || '') + '</div>' +
           '<div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:16px;">' +

@@ -68,6 +68,7 @@ class Discovery {
       status: broadcastStatus,
       bio: identity.bio,
       publicKey: identity.publicKey || null,
+      profileFrame: identity.profileFrame || null,
       tcpPort: 46000 // default port
     };
 
@@ -78,6 +79,7 @@ class Discovery {
   }
 
   handleBeacon(packet, ip) {
+    if (!packet || !packet.payload) return;
     const peerData = packet.payload;
     const peerId = peerData.userId;
     

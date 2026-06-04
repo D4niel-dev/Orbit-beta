@@ -176,11 +176,32 @@ document.addEventListener('DOMContentLoaded', () => {
     var theme = settings.theme || 'dark';
     if (theme === 'system') {
       theme = darkModeMedia.matches ? 'dark' : 'light';
+    } else if (theme === 'seasonal') {
+      var m = new Date().getMonth();
+      if (m >= 2 && m <= 4) {
+        theme = 'seasonal-spring';
+      } else if (m >= 5 && m <= 7) {
+        theme = 'seasonal-summer';
+      } else if (m >= 8 && m <= 10) {
+        theme = 'seasonal-fall';
+      } else {
+        theme = 'seasonal-winter';
+      }
     }
     document.documentElement.setAttribute('data-theme', theme);
-    
-    // Zoom
-    document.body.style.zoom = (settings.appZoom || 100) + '%';
+
+    // Apply custom theme colors
+    if (settings.customThemeColors && theme === 'custom') {
+      Object.keys(settings.customThemeColors).forEach(function(key) {
+        document.documentElement.style.setProperty('--' + key, settings.customThemeColors[key]);
+      });
+    } else if (theme !== 'custom') {
+      // Clear any previously applied custom colors
+      var customKeys = ['bg-base','bg-surface','bg-sidebar','bg-hover','bg-active','text-primary','text-secondary','text-muted','accent-primary','accent-hover','accent-soft','border-subtle','border-strong'];
+      customKeys.forEach(function(key) {
+        document.documentElement.style.removeProperty('--' + key);
+      });
+    }
     
     // Animation Speed
     var speed = settings.animSpeed || 'normal';
@@ -234,9 +255,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Experimental
     document.documentElement.classList.toggle('experimental', !!settings.enableExperimental);
+
+    // Experimental features
+    document.documentElement.classList.toggle('experimental-animated-avatars', !!settings.experimentalAnimatedAvatars);
+    document.documentElement.classList.toggle('experimental-message-fx', !!settings.experimentalMessageFx);
+    document.documentElement.classList.toggle('experimental-message-translate', !!settings.experimentalMessageTranslate);
+    document.documentElement.classList.toggle('experimental-compact-spacing', !!settings.experimentalCompactSpacing);
   };
   
   applySettings(window.store.getState().settings);
+
+  // Apply zoom once at startup (not on every settings change)
+  document.body.style.zoom = (window.store.getState().settings.appZoom || 100) + '%';
+
+  // Sync profileFrame from settings to currentUser
+  (function() {
+    var state = window.store.getState();
+    var pf = state.settings && state.settings.profileFrame;
+    if (pf && state.currentUser) {
+      var updated = { ...state.currentUser, profileFrame: pf };
+      window.store.setState({ currentUser: updated });
+    }
+  })();
 
   window.store.subscribe((state) => {
     applySettings(state.settings);
@@ -471,6 +511,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (window.EmojiPicker) window.EmojiPicker.init();
   if (window.Toast) window.Toast.init();
   if (window.ContextMenu) window.ContextMenu.init();
+  if (window.CustomThemeModal) window.CustomThemeModal.init();
 
   // Keyboard shortcuts
   document.addEventListener('keydown', function(e) {
@@ -510,3 +551,51 @@ document.addEventListener('DOMContentLoaded', () => {
 
   console.log('Orbit Shell Ready.');
 });
+
+// Frame overlay helper
+window.Frames = {
+  getFrameSrc(frameNum) {
+    if (!frameNum || frameNum === 0) return null;
+    return 'icons/frames/pfp_frame_' + frameNum + '.png';
+  },
+  wrapAvatar(avatarHtml, frameNum) {
+    var src = this.getFrameSrc(frameNum);
+    if (!src) return avatarHtml;
+    return '<div style="position:relative;display:inline-block;">' +
+      avatarHtml +
+      '<img src="' + src + '" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' +
+    '</div>';
+  },
+  wrapAvatarContainer(container, frameNum) {
+    var src = this.getFrameSrc(frameNum);
+    if (!src) return;
+    if (!container) return;
+    var existing = container.querySelector('.frame-overlay');
+    if (existing) existing.remove();
+    var img = document.createElement('img');
+    img.className = 'frame-overlay';
+    img.src = src;
+    img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;object-fit:contain;';
+    img.draggable = false;
+    img.alt = 'frame';
+    container.style.position = 'relative';
+    container.appendChild(img);
+  },
+  getFrameForUser(userId) {
+    var state = window.store ? window.store.getState() : null;
+    if (!state) return 0;
+    // Self
+    if (state.currentUser && state.currentUser.userId === userId) {
+      return (state.settings && state.settings.profileFrame) || 0;
+    }
+    // Friend/peer
+    var friend = state.friends.find(function(f) { return f.userId === userId; });
+    if (friend && friend.profileFrame) return friend.profileFrame;
+    // Group member
+    for (var i = 0; i < state.groups.length; i++) {
+      var member = state.groups[i].members.find(function(m) { return m.userId === userId; });
+      if (member && member.profileFrame) return member.profileFrame;
+    }
+    return 0;
+  }
+};

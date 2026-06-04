@@ -487,3 +487,48 @@ button:active,
 .show-conn-stats #connection-stats-overlay {
   display: flex !important;
 }
+
+/* Experimental: Animated Avatars */
+.experimental-animated-avatars .sidebar-avatar-img,
+.experimental-animated-avatars .friend-avatar,
+.experimental-animated-avatars .chat-avatar {
+  animation: avatar-pulse 3s ease-in-out infinite;
+}
+
+@keyframes avatar-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.1); }
+  50% { box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.05); }
+}
+
+/* Experimental: Enhanced Message FX */
+.experimental-message-fx .message-own .message-bubble {
+  animation: message-sparkle 0.6s ease-out;
+}
+
+@keyframes message-sparkle {
+  0% { opacity: 0.6; transform: scale(0.97); }
+  50% { opacity: 1; transform: scale(1.02); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* Experimental: Compact Spacing */
+.experimental-compact-spacing .message-row {
+  margin-bottom: 2px !important;
+}
+.experimental-compact-spacing .message-bubble {
+  padding: 6px 10px !important;
+  font-size: 13px !important;
+}
+.experimental-compact-spacing .chat-input-area {
+  padding-top: 8px !important;
+  padding-bottom: 32px !important;
+}
+.experimental-compact-spacing .list-row {
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+}
+
+/* Chat input area shadow */
+.chat-input-area {
+  box-shadow: 0 -4px 12px rgba(0,0,0,0.06), var(--shadow-md);
+}

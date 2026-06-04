@@ -65,6 +65,7 @@ contextBridge.exposeInMainWorld('orbitAPI', {
   dbGetGroupMembers: (groupId) => ipcRenderer.sendSync('db-get-group-members', groupId),
   dbSetMemberRole: (groupId, userId, role) => ipcRenderer.sendSync('db-set-member-role', groupId, userId, role),
   dbDeleteGroup: (groupId) => ipcRenderer.sendSync('db-delete-group', groupId),
+  dbDeleteFriend: (userId) => ipcRenderer.sendSync('db-delete-friend', userId),
   dbUpdateGroupField: (groupId, field, value) => ipcRenderer.sendSync('db-update-group-field', groupId, field, value),
   dbGetGroupByInvite: (code) => ipcRenderer.sendSync('db-get-group-by-invite', code),
   saveAvatar: (groupId, base64Data) => ipcRenderer.invoke('save-avatar', groupId, base64Data),

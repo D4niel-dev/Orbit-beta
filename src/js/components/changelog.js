@@ -14,7 +14,40 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        changelogEntry('0.0.5-beta', 'Latest', [
+        changelogEntry('0.0.6-beta', 'Latest', [
+          'XSS fixes — all onclick handlers use data-attributes + addEventListener',
+          'CSS injection fix — profile banner set via style property, not string concat',
+          'Network packet null-safety — all packet.payload handlers guarded against malformed packets',
+          'Store immutability — addMessage, editMessage use immutable patterns',
+          'Fixed duplicate addMemberToGroup definition (lost joinedAt preservation)',
+          'Data cleanup on removeGroup — messages, pins, counts, mute state cleaned up',
+          'Added removeFriend() with full data cleanup',
+          'Fixed unhandled promise rejection in avatar upload',
+          'Button loading/disabled states on backup, restore, connect operations',
+          'Fixed require(crypto) in renderer — replaced with crypto.getRandomValues',
+          'Unguarded networkSend calls — all guarded with if (window.orbitAPI)',
+          'Consistent clipboard — IPC clipboard with navigator.clipboard fallback',
+          'Keyboard accessibility for settings collapsible sections',
+          'Null guards on settings/profile DOM element lookups',
+          'Dev Mode master gate — controls all Advanced settings (debug + experimental)',
+          'True Dark theme — neutral grays + blue accent; old dark renamed to Dark Purple',
+          'Custom theme dropdown — pre-made themes: Midnight, Sunset, Nord, Seasonal',
+          'Seasonal theme — auto-rotates by meteorological season (4 CSS files)',
+          'Custom Colors modal — live preview editor for all UI color categories',
+          'Experimental badges — yellow EXPERIMENTAL pill on all experimental toggles',
+          'Experimental Features section — separate collapsible in Advanced tab',
+          'Profile Frames — 12 decorative frame overlays on avatars (experimental)',
+          'Animated Avatars — subtle pulse animation (experimental)',
+          'Enhanced Message FX — sparkle effect on sent messages (experimental)',
+          'Message Translate — translate button on message hover via MyMemory API (experimental)',
+          'Compact Spacing — tighter message layout (experimental)',
+          'Chat input area shadow — theme-adaptive elevation effect',
+          'App Zoom slider — preview with restart notification (no more UI breakage)',
+          'Chat settings: Enter to Send, Show Avatars, Image Previews',
+          'Orbit Echo always persisted in database for testing',
+          'Toast notification types — info/success/warning/error icons'
+        ]) +
+        changelogEntry('0.0.5-beta', '', [
           'Backup & Restore (.orzip / .zip) with database transaction safety',
           'Database Health Check with integrity verification',
           'Database Repair — VACUUM, REINDEX, orphan removal',

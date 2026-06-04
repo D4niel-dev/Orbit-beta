@@ -1,34 +1,34 @@
 /* src/styles/themes/dark.css */
 :root[data-theme="dark"] {
   /* Backgrounds */
-  --bg-base:        #0E0F14;   /* Very dark navy/black for main chat area */
-  --bg-surface:     #1A1B26;   /* Sidebar and modals */
-  --bg-sidebar:     #16161E;   /* Leftmost nav rail */
-  --bg-hover:       #24283B;
-  --bg-active:      #292E42;
+  --bg-base:        #0C0C0E;   /* Deepest background for main chat area */
+  --bg-surface:     #1C1C1E;   /* Sidebar and modals */
+  --bg-sidebar:     #131316;   /* Leftmost nav rail */
+  --bg-hover:       #28282B;
+  --bg-active:      #323236;
 
   /* Text */
-  --text-primary:   #C0CAF5;
-  --text-secondary: #A9B1D6;
-  --text-muted:     #565F89;
-  --text-inverse:   #0E0F14;
+  --text-primary:   #F2F2F7;
+  --text-secondary: #AEAEB6;
+  --text-muted:     #636366;
+  --text-inverse:   #0C0C0E;
 
   /* Accents */
-  --accent-primary: #9B7FFF;   /* Soft lavender-purple (User approved) */
-  --accent-hover:   #8B6FEF;
-  --accent-soft:    #2E2550;
-  --accent-danger:  #FF6B6B;
-  --accent-success: #4DD9A0;
-  --accent-warning: #FFB547;
+  --accent-primary: #0A84FF;   /* Clean blue */
+  --accent-hover:   #007AFF;
+  --accent-soft:    #1A3A6C;
+  --accent-danger:  #FF453A;
+  --accent-success: #30D158;
+  --accent-warning: #FFD60A;
 
   /* Borders */
-  --border-subtle:  rgba(155, 127, 255, 0.10);
-  --border-strong:  rgba(155, 127, 255, 0.22);
+  --border-subtle:  rgba(255, 255, 255, 0.08);
+  --border-strong:  rgba(255, 255, 255, 0.15);
 
   /* Shadows */
-  --shadow-sm:      0 1px 3px rgba(0, 0, 0, 0.3);
-  --shadow-md:      0 4px 16px rgba(0, 0, 0, 0.4);
-  --shadow-lg:      0 8px 32px rgba(0, 0, 0, 0.5);
+  --shadow-sm:      0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md:      0 4px 16px rgba(0, 0, 0, 0.5);
+  --shadow-lg:      0 8px 32px rgba(0, 0, 0, 0.6);
 
   /* Transitions */
   --transition:  all 0.18s cubic-bezier(0.4, 0, 0.2, 1);

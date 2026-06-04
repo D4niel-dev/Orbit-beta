@@ -29,9 +29,9 @@ window.ContextMenu = {
         html += '<div style="height:1px;background:var(--border-subtle);margin:4px 0;"></div>';
       } else {
         var color = item.color || 'var(--text-primary)';
-        html += '<button class="context-item" data-action="' + item.action + '" style="display:flex;align-items:center;gap:12px;padding:8px 16px;width:100%;text-align:left;background:transparent;border:none;color:' + color + ';font-size:14px;cursor:pointer;">';
-        if (item.icon) html += '<i data-lucide="' + item.icon + '" style="width:16px;"></i>';
-        html += item.label + '</button>';
+        html += '<button class="context-item" data-action="' + window.Sanitize.escapeHtml(String(item.action || '')) + '" style="display:flex;align-items:center;gap:12px;padding:8px 16px;width:100%;text-align:left;background:transparent;border:none;color:' + color + ';font-size:14px;cursor:pointer;">';
+        if (item.icon) html += '<i data-lucide="' + window.Sanitize.escapeHtml(item.icon) + '" style="width:16px;"></i>';
+        html += window.Sanitize.escapeHtml(String(item.label)) + '</button>';
       }
     });
 

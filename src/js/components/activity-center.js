@@ -79,7 +79,7 @@ window.ActivityCenter = {
         '</div>';
       }).join('');
 
-      activityHtml += '<div style="margin-bottom:12px;cursor:pointer;" onclick="window.ActivityCenter.close();window.store.setState({activeChatId:\'' + chatId + '\',activeTab:\'dms\'})">' +
+      activityHtml += '<div data-activity-chat="' + chatId + '" style="margin-bottom:12px;cursor:pointer;">' +
         '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;background:var(--bg-base);border:1px solid var(--border-subtle);">' +
           chatAvatar +
           '<div style="flex:1;font-size:13px;font-weight:600;color:var(--text-primary);">' + window.Sanitize.escapeHtml(chatName) + '</div>' +
@@ -108,6 +108,14 @@ window.ActivityCenter = {
     if (window.lucide) window.lucide.createIcons({ root: modal });
 
     modal.querySelector('#activity-close').addEventListener('click', function() { window.ActivityCenter.close(); });
+    modal.addEventListener('click', function(e) {
+      var row = e.target.closest('[data-activity-chat]');
+      if (row) {
+        var chatId = row.getAttribute('data-activity-chat');
+        window.ActivityCenter.close();
+        window.store.setState({ activeChatId: chatId, activeTab: 'dms' });
+      }
+    });
     document.addEventListener('keydown', this._escHandler = function(e) {
       if (e.key === 'Escape') window.ActivityCenter.close();
     });

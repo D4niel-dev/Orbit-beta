@@ -1,0 +1,29 @@
+/* src/styles/themes/midnight.css */
+:root[data-theme="midnight"] {
+  --bg-base:        #050505;
+  --bg-surface:     #0D0D0D;
+  --bg-sidebar:     #0A0A0A;
+  --bg-hover:       #1A1A1A;
+  --bg-active:      #222222;
+
+  --text-primary:   #E8E8E8;
+  --text-secondary: #B0B0B0;
+  --text-muted:     #707070;
+  --text-inverse:   #050505;
+
+  --accent-primary: #6C8EBF;
+  --accent-hover:   #5A7DAD;
+  --accent-soft:    #1A2A3E;
+  --accent-danger:  #FF6B6B;
+  --accent-success: #4ADE80;
+  --accent-warning: #FBBF24;
+
+  --border-subtle:  rgba(255, 255, 255, 0.06);
+  --border-strong:  rgba(255, 255, 255, 0.12);
+
+  --shadow-sm:      0 1px 3px rgba(0, 0, 0, 0.5);
+  --shadow-md:      0 4px 16px rgba(0, 0, 0, 0.6);
+  --shadow-lg:      0 8px 32px rgba(0, 0, 0, 0.7);
+
+  --transition:  all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}

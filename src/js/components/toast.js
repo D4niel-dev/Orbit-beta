@@ -8,15 +8,26 @@ window.Toast = {
     document.body.appendChild(this.container);
   },
 
-  show(title, message, avatarUrl = null, duration = 5000) {
+  show(title, message, typeOrAvatar = null, duration = 5000) {
     if (!this.container) return;
+
+    var avatarUrl = null;
+    var icon = 'bell';
+    if (typeOrAvatar && typeof typeOrAvatar === 'string') {
+      if (typeOrAvatar.startsWith('http') || typeOrAvatar.startsWith('data:')) {
+        avatarUrl = typeOrAvatar;
+      } else {
+        var icons = { info: 'info', success: 'check-circle', warning: 'alert-triangle', error: 'alert-circle' };
+        icon = icons[typeOrAvatar] || 'bell';
+      }
+    }
 
     var toast = document.createElement('div');
     toast.style.cssText = 'background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:12px;box-shadow:var(--shadow-xl);padding:16px;display:flex;align-items:center;gap:16px;min-width:300px;max-width:400px;pointer-events:auto;transform:translateX(120%);transition:transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease;opacity:0;';
 
     var avatarHtml = avatarUrl
       ? '<img src="' + window.Sanitize.escapeHtml(avatarUrl) + '" style="width:40px;height:40px;border-radius:50%;object-fit:cover;">'
-      : '<div style="width:40px;height:40px;border-radius:50%;background:var(--bg-hover);display:flex;align-items:center;justify-content:center;color:var(--text-secondary);"><i data-lucide="bell" style="width:20px;"></i></div>';
+      : '<div style="width:40px;height:40px;border-radius:50%;background:var(--bg-hover);display:flex;align-items:center;justify-content:center;color:var(--text-secondary);"><i data-lucide="' + icon + '" style="width:20px;"></i></div>';
 
     var escapedTitle = window.Sanitize.escapeHtml(title);
     var escapedMessage = window.Sanitize.escapeHtml(message);

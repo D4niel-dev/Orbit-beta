@@ -19,9 +19,16 @@ window.ProfileCard = {
   render(user) {
     if (!user) return;
     
+    var frame = window.Frames.getFrameForUser(user.userId);
+
     var avatarHtml = user.avatar
       ? '<img src="' + window.Sanitize.escapeHtml(user.avatar) + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">'
       : '<i data-lucide="user" style="width:40px;height:40px;"></i>';
+
+    var avatarContainerHtml = '<div style="width:80px;height:80px;border-radius:50%;background:var(--bg-surface);border:4px solid var(--bg-surface);position:absolute;top:-40px;display:flex;align-items:center;justify-content:center;overflow:visible;">' +
+      avatarHtml +
+      (frame ? '<img src="icons/frames/pfp_frame_' + frame + '.png" style="position:absolute;top:-24%;left:-20%;width:140%;height:140%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '') +
+    '</div>';
 
     var bioHtml = user.bio
       ? window.Sanitize.markdown(user.bio)
@@ -36,10 +43,6 @@ window.ProfileCard = {
     ];
     var curStatus = statuses.find(function(s) { return s.value === user.status; }) || statuses[0];
     
-    var bannerStyle = user.banner 
-      ? (user.banner.startsWith('#') || user.banner.startsWith('rgb') ? 'background: ' + user.banner + ';' : 'background: url(' + user.banner + ') center/cover no-repeat;')
-      : 'background: var(--accent-primary);';
-
     var isMe = user.userId === window.store.getState().currentUser.userId;
 
     var editBtnHtml = isMe ? '<button id="btn-edit-profile" style="position:absolute;top:12px;right:12px;background:rgba(0,0,0,0.5);border:none;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:white;cursor:pointer;">' +
@@ -59,14 +62,12 @@ window.ProfileCard = {
 
     this.container.innerHTML =
       '<div style="border-radius:16px 16px 0 0;overflow:hidden;">' +
-        '<div style="height:100px;position:relative;' + bannerStyle + '">' +
+        '<div id="profile-banner" style="height:100px;position:relative;">' +
           editBtnHtml +
         '</div>' +
       '</div>' +
       '<div style="padding:0 20px 20px 20px;position:relative;border-radius:0 0 16px 16px;">' +
-        '<div style="width:80px;height:80px;border-radius:50%;background:var(--bg-surface);border:4px solid var(--bg-surface);position:absolute;top:-40px;display:flex;align-items:center;justify-content:center;overflow:hidden;">' +
-          avatarHtml +
-        '</div>' +
+          avatarContainerHtml +
         '<div style="margin-top:48px;">' +
           '<div style="font-family:var(--font-display);font-size:20px;font-weight:700;color:var(--text-primary);">' + window.Sanitize.escapeHtml(user.username) + '</div>' +
           '<div style="font-size:14px;color:var(--text-secondary);margin-bottom:12px;">#' + window.Sanitize.escapeHtml(user.usertag) + '</div>' +
@@ -74,6 +75,18 @@ window.ProfileCard = {
           statusBtnsHtml +
         '</div>' +
       '</div>';
+
+    // Set banner background safely via JS (prevents CSS injection)
+    var bannerEl = this.container.querySelector('#profile-banner');
+    if (bannerEl && user.banner) {
+      if (user.banner.startsWith('#') || user.banner.startsWith('rgb')) {
+        bannerEl.style.background = user.banner;
+      } else {
+        bannerEl.style.background = 'url("' + user.banner.replace(/"/g, '%22') + '") center/cover no-repeat';
+      }
+    } else if (bannerEl) {
+      bannerEl.style.background = 'var(--accent-primary)';
+    }
 
     lucide.createIcons({ root: this.container });
     

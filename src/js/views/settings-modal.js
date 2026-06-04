@@ -9,6 +9,25 @@ window.SettingsModal = {
     this.container.style.cssText = 'display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:9999;align-items:center;justify-content:center;';
     document.body.appendChild(this.container);
     this.render();
+    // Keyboard accessibility for collapsible sections
+    this.container.addEventListener('keydown', function(e) {
+      var header = e.target.closest('.collapsible-header');
+      if (!header) return;
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        header.click();
+      }
+    });
+    // Close theme dropdown on outside click
+    this.container.addEventListener('click', function(e) {
+      if (e.target.closest('#theme-custom-menu') || e.target.closest('#theme-custom-trigger')) return;
+      var menu = document.getElementById('theme-custom-menu');
+      if (menu && menu.style.display !== 'none') {
+        menu.style.display = 'none';
+        var arrow = document.getElementById('theme-custom-arrow');
+        if (arrow) arrow.style.transform = 'rotate(0deg)';
+      }
+    });
   },
 
   render() {
@@ -52,11 +71,22 @@ window.SettingsModal = {
     var content = this.container.querySelector('#settings-content');
     var state = window.store.getState();
     var user = state.currentUser;
+    var experimentalBadge = '<span style="display:inline-block;font-size:8px;font-weight:700;color:#fff;background:var(--accent-warning);border-radius:3px;padding:1px 5px;text-transform:uppercase;line-height:1.4;vertical-align:middle;margin-left:6px;">EXPERIMENTAL</span>';
 
     if (tabName === 'account') {
+      var s = state.settings || {};
+      var frameNum = s.profileFrame || 0;
+      var frameOverlayPreview = frameNum ? '<img src="icons/frames/pfp_frame_' + frameNum + '.png" style="position:absolute;top:-24%;left:-20%;width:140%;height:140%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '';
+
       var avatarPreview = user.avatar
-        ? '<img src="' + window.Sanitize.escapeHtml(user.avatar) + '" id="preview-avatar-img" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:4px solid var(--bg-surface);">'
-        : '<div id="preview-avatar-img" style="width:80px;height:80px;border-radius:50%;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:32px;color:white;font-weight:600;border:4px solid var(--bg-surface);">' + (user.username ? user.username.charAt(0).toUpperCase() : '?') + '</div>';
+        ? '<div id="preview-avatar-wrapper" style="position:relative;display:inline-block;">' +
+          '<img src="' + window.Sanitize.escapeHtml(user.avatar) + '" id="preview-avatar-img" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:4px solid var(--bg-surface);">' +
+          frameOverlayPreview +
+          '</div>'
+        : '<div id="preview-avatar-wrapper" style="position:relative;display:inline-block;">' +
+          '<div id="preview-avatar-img" style="width:80px;height:80px;border-radius:50%;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:32px;color:white;font-weight:600;border:4px solid var(--bg-surface);">' + (user.username ? user.username.charAt(0).toUpperCase() : '?') + '</div>' +
+          frameOverlayPreview +
+          '</div>';
 
       var bannerStyle = user.banner
         ? (user.banner.startsWith('#') || user.banner.startsWith('linear-gradient') || user.banner.startsWith('rgb')
@@ -87,11 +117,35 @@ window.SettingsModal = {
           '<div class="collapsible-body" style="padding:16px;display:block;">' +
             '<div style="margin-bottom:16px;"><label style="display:block;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;margin-bottom:6px;">Username</label>' +
             '<div style="display:flex;gap:8px;"><input type="text" id="input-username" value="' + window.Sanitize.escapeHtml(user.username) + '" style="flex:1;padding:10px 12px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-surface);color:var(--text-primary);font-size:14px;outline:none;">' +
-            '<div style="padding:10px 12px;border-radius:8px;background:var(--bg-surface);color:var(--text-muted);font-family:var(--font-mono);font-size:14px;border:1px solid var(--border-subtle);">#' + user.usertag + '</div></div></div>' +
+            '<div style="padding:10px 12px;border-radius:8px;background:var(--bg-surface);color:var(--text-muted);font-family:var(--font-mono);font-size:14px;border:1px solid var(--border-subtle);">#' + window.Sanitize.escapeHtml(user.usertag || '') + '</div></div></div>' +
             '<div><label style="display:block;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;margin-bottom:6px;">Bio</label>' +
             '<textarea id="input-bio" rows="3" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);font-size:14px;outline:none;resize:none;">' + window.Sanitize.escapeHtml(user.bio || '') + '</textarea></div>' +
           '</div>' +
         '</div>' +
+
+        // Collapsible: Profile Frame
+        (s.experimentalProfileFrames
+        ? '<div class="settings-collapsible" style="margin-bottom:12px;border-radius:10px;border:1px solid var(--border-subtle);overflow:hidden;">' +
+          '<div class="collapsible-header" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--bg-base);cursor:pointer;user-select:none;" onclick="var b=this.nextElementSibling;var i=this.querySelector(\'.collapse-icon\');if(b.style.display===\'none\'){b.style.display=\'block\';i.style.transform=\'rotate(0deg)\'}else{b.style.display=\'none\';i.style.transform=\'rotate(-90deg)\'}">' +
+            '<div style="display:flex;align-items:center;gap:8px;"><i data-lucide="image" style="width:16px;height:16px;color:var(--text-muted);"></i><span style="font-size:13px;font-weight:600;color:var(--text-primary);">Profile Frame</span>' + experimentalBadge + '</div>' +
+            '<i data-lucide="chevron-down" class="collapse-icon" style="width:16px;height:16px;color:var(--text-muted);transition:transform 0.2s;"></i>' +
+          '</div>' +
+          '<div class="collapsible-body" style="padding:16px;display:block;">' +
+            '<div style="display:flex;flex-wrap:wrap;gap:6px;" id="frame-picker">' +
+              '<button class="frame-option" data-frame="0" style="width:44px;height:44px;border-radius:50%;border:2px solid ' + (!s.profileFrame ? 'var(--accent-primary)' : 'var(--border-subtle)') + ';background:var(--bg-base);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-muted);">None</button>' +
+              (function() {
+                var html = '';
+                for (var i = 2; i <= 13; i++) {
+                  html += '<button class="frame-option" data-frame="' + i + '" style="width:44px;height:44px;border-radius:50%;border:2px solid ' + (s.profileFrame === i ? 'var(--accent-primary)' : 'var(--border-subtle)') + ';cursor:pointer;overflow:hidden;padding:0;background:var(--bg-base);">' +
+                    '<img src="icons/frames/pfp_frame_' + i + '.png" style="width:100%;height:100%;object-fit:contain;" draggable="false">' +
+                  '</button>';
+                }
+                return html;
+              })() +
+            '</div>' +
+          '</div>' +
+        '</div>'
+        : '') +
 
         // Collapsible: Avatar & Banner
         '<div class="settings-collapsible" style="margin-bottom:12px;border-radius:10px;border:1px solid var(--border-subtle);overflow:hidden;">' +
@@ -142,17 +196,21 @@ window.SettingsModal = {
         var name = content.querySelector('#input-username').value.trim();
         var avatar = content.querySelector('#input-avatar').value.trim();
         var banner = content.querySelector('#input-banner').value.trim();
+        var frame = window.store.getState().settings.profileFrame || 0;
 
         var nameEl = content.querySelector('#preview-username');
         if (nameEl) nameEl.textContent = name || 'User';
 
-        var avatarContainer = content.querySelector('#preview-avatar-img');
-        if (avatarContainer) {
+        var wrapper = content.querySelector('#preview-avatar-wrapper');
+        if (wrapper) {
+          var innerHtml;
           if (avatar) {
-            avatarContainer.outerHTML = '<img src="' + window.Sanitize.escapeHtml(avatar) + '" id="preview-avatar-img" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:4px solid var(--bg-surface);">';
+            innerHtml = '<img src="' + window.Sanitize.escapeHtml(avatar) + '" id="preview-avatar-img" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:4px solid var(--bg-surface);">';
           } else {
-            avatarContainer.outerHTML = '<div id="preview-avatar-img" style="width:80px;height:80px;border-radius:50%;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:32px;color:white;font-weight:600;border:4px solid var(--bg-surface);">' + (name ? name.charAt(0).toUpperCase() : '?') + '</div>';
+            innerHtml = '<div id="preview-avatar-img" style="width:80px;height:80px;border-radius:50%;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:32px;color:white;font-weight:600;border:4px solid var(--bg-surface);">' + (name ? name.charAt(0).toUpperCase() : '?') + '</div>';
           }
+          var frameHtml = frame ? '<img src="icons/frames/pfp_frame_' + frame + '.png" style="position:absolute;top:-24%;left:-20%;width:140%;height:140%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '';
+          wrapper.innerHTML = innerHtml + frameHtml;
         }
 
         var bannerEl = content.querySelector('#preview-banner');
@@ -212,33 +270,96 @@ window.SettingsModal = {
           content.querySelector('#save-msg').textContent = e.message;
         }
       });
+
+      // Settings helper for Account tab (also syncs profileFrame to identity)
+      var updateSettings = function(key, val) {
+        var newSettings = { ...window.store.getState().settings };
+        newSettings[key] = val;
+        window.store.setState({ settings: newSettings });
+        window.Storage.set('settings', newSettings);
+        if (key === 'profileFrame') {
+          var cu = window.store.getState().currentUser;
+          if (cu) {
+            var updated = { ...cu, profileFrame: val || null };
+            window.store.setState({ currentUser: updated });
+            if (window.orbitAPI) window.orbitAPI.dbSaveUser(updated);
+          }
+        }
+      };
+
+      // Frame picker in Account tab
+      content.querySelectorAll('.frame-option').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var frame = parseInt(btn.dataset.frame);
+          updateSettings('profileFrame', frame);
+          if (window.SettingsModal) window.SettingsModal.renderTab('account');
+        });
+      });
     } else if (tabName === 'appearance') {
       var s = state.settings;
 
-      var themeRadios = [
+      var defaultThemes = [
         { value: 'dark', icon: 'moon', label: 'Dark' },
         { value: 'light', icon: 'sun', label: 'Light' },
         { value: 'system', icon: 'monitor', label: 'System' }
-      ].map(function(t) {
-        return '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px 16px;flex:1;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-base);transition:border-color 0.15s;' + (s.theme === t.value ? 'border-color:var(--accent-primary);' : '') + '">' +
+      ];
+
+      var customThemes = [
+        { value: 'dark-purple', icon: 'palette', label: 'Dark Purple' },
+        { value: 'midnight', icon: 'cloud-moon', label: 'Midnight' },
+        { value: 'sunset', icon: 'sunset', label: 'Sunset' },
+        { value: 'seasonal', icon: 'calendar', label: 'Seasonal' },
+        { value: 'nord', icon: 'snowflake', label: 'Nord' }
+      ];
+
+      var isCustomTheme = customThemes.some(function(t) { return t.value === s.theme; });
+      var currentCustom = customThemes.find(function(t) { return t.value === s.theme; });
+
+      var themeBtnHtml = defaultThemes.map(function(t) {
+        return '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 12px;flex:1;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-base);transition:border-color 0.15s;' + (s.theme === t.value ? 'border-color:var(--accent-primary);' : '') + '">' +
           '<input type="radio" name="theme" value="' + t.value + '" ' + (s.theme === t.value ? 'checked' : '') + ' style="accent-color:var(--accent-primary);">' +
-          '<i data-lucide="' + t.icon + '" style="width:16px;height:16px;color:var(--text-muted);"></i>' +
-          '<span style="font-size:13px;color:var(--text-primary);">' + t.label + '</span>' +
+          '<i data-lucide="' + t.icon + '" style="width:14px;height:14px;color:var(--text-muted);flex-shrink:0;"></i>' +
+          '<span style="font-size:12px;color:var(--text-primary);">' + t.label + '</span>' +
         '</label>';
       }).join('');
+
+      var customDropdownHtml =
+        '<div style="position:relative;">' +
+          '<button id="theme-custom-trigger" style="display:flex;align-items:center;gap:6px;width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);font-size:12px;cursor:pointer;outline:none;' + (isCustomTheme ? 'border-color:var(--accent-primary);' : '') + '">' +
+            '<i data-lucide="' + (currentCustom ? currentCustom.icon : 'palette') + '" style="width:14px;height:14px;color:var(--text-muted);flex-shrink:0;"></i>' +
+            '<span style="flex:1;text-align:left;">' + (currentCustom ? currentCustom.label : 'Custom') + '</span>' +
+            '<i data-lucide="chevron-down" id="theme-custom-arrow" style="width:12px;height:12px;color:var(--text-muted);transition:transform 0.2s;"></i>' +
+          '</button>' +
+          '<div id="theme-custom-menu" style="display:none;position:absolute;top:calc(100% + 4px);left:0;width:100%;background:var(--bg-surface);border:1px solid var(--border-strong);border-radius:8px;box-shadow:var(--shadow-lg);z-index:200;overflow:hidden;">' +
+            customThemes.map(function(opt) {
+              return '<button class="theme-custom-option" data-value="' + opt.value + '" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;background:transparent;border:none;color:var(--text-primary);font-size:13px;cursor:pointer;text-align:left;transition:background 0.1s;' + (opt.value === s.theme ? 'background:var(--bg-hover);' : '') + '">' +
+                '<i data-lucide="' + opt.icon + '" style="width:16px;height:16px;color:var(--text-muted);flex-shrink:0;"></i>' +
+                '<span>' + opt.label + '</span>' +
+                (opt.value === s.theme ? '<i data-lucide="check" style="width:14px;height:14px;color:var(--accent-primary);margin-left:auto;"></i>' : '') +
+              '</button>';
+            }).join('') +
+          '</div>' +
+        '</div>';
 
       content.innerHTML =
         '<h3 style="font-family:var(--font-display);font-size:24px;margin-bottom:24px;">Appearance</h3>' +
 
         // Section: Theme
-        '<div class="settings-collapsible" style="margin-bottom:12px;border-radius:10px;border:1px solid var(--border-subtle);overflow:hidden;">' +
+        '<div class="settings-collapsible" style="margin-bottom:12px;border-radius:10px;border:1px solid var(--border-subtle);overflow:visible;">' +
           '<div class="collapsible-header" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--bg-base);cursor:pointer;user-select:none;" onclick="var b=this.nextElementSibling;var i=this.querySelector(\'.collapse-icon\');if(b.style.display===\'none\'){b.style.display=\'block\';i.style.transform=\'rotate(0deg)\'}else{b.style.display=\'none\';i.style.transform=\'rotate(-90deg)\'}">' +
             '<div style="display:flex;align-items:center;gap:8px;"><i data-lucide="palette" style="width:16px;height:16px;color:var(--text-muted);"></i><span style="font-size:13px;font-weight:600;color:var(--text-primary);">Theme</span></div>' +
             '<i data-lucide="chevron-down" class="collapse-icon" style="width:16px;height:16px;color:var(--text-muted);transition:transform 0.2s;"></i>' +
           '</div>' +
           '<div class="collapsible-body" style="padding:16px;display:block;">' +
-            '<div style="display:flex;gap:8px;margin-bottom:12px;">' + themeRadios + '</div>' +
-            '<label style="display:flex;align-items:center;gap:12px;font-size:14px;color:var(--text-primary);cursor:pointer;padding-top:8px;border-top:1px solid var(--border-subtle);">' +
+            '<div style="display:flex;gap:8px;margin-bottom:8px;">' + themeBtnHtml + '</div>' +
+            customDropdownHtml +
+            (s.enableCustomColors
+              ? '<button id="theme-custom-colors-btn" style="display:flex;align-items:center;gap:6px;width:100%;padding:8px 12px;margin-top:8px;border-radius:8px;border:1px dashed var(--border-subtle);background:transparent;color:var(--text-secondary);font-size:12px;cursor:pointer;text-align:center;justify-content:center;transition:border-color 0.15s,color 0.15s;">' +
+                '<i data-lucide="palette" style="width:14px;height:14px;"></i>' +
+                '<span>Custom Colors</span>' + experimentalBadge +
+              '</button>'
+              : '') +
+            '<label style="display:flex;align-items:center;gap:12px;font-size:14px;color:var(--text-primary);cursor:pointer;margin-top:16px;padding-top:12px;border-top:1px solid var(--border-subtle);">' +
               '<input id="set-24h" type="checkbox" '+(s.timeFormat24?'checked':'')+'>' +
               '<div><div>24-hour Time</div><div style="font-size:12px;color:var(--text-muted);font-weight:400;">Show timestamps in 24-hour format</div></div>' +
             '</label>' +
@@ -265,8 +386,34 @@ window.SettingsModal = {
               '</select>' +
             '</div>' +
             '<div>' +
-              '<label for="set-zoom" style="display:block;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;margin-bottom:6px;">App Zoom (<span id="zoom-val-label">'+s.appZoom+'</span>%)</label>' +
-              '<input id="set-zoom" type="range" min="80" max="150" value="'+s.appZoom+'" style="width:100%;accent-color:var(--accent-primary);">' +
+              '<label for="set-zoom" style="display:block;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;margin-bottom:6px;">App Zoom</label>' +
+              '<div style="display:flex;align-items:center;gap:10px;">' +
+                '<span style="font-size:11px;color:var(--text-muted);">80%</span>' +
+                '<input id="set-zoom" type="range" min="80" max="150" value="'+s.appZoom+'" style="flex:1;accent-color:var(--accent-primary);">' +
+                '<span style="font-size:11px;color:var(--text-muted);">150%</span>' +
+              '</div>' +
+              '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px;">' +
+                '<span id="zoom-val-label" style="font-size:13px;font-weight:600;color:var(--accent-primary);">' + s.appZoom + '%</span>' +
+                '<span style="font-size:11px;color:var(--text-muted);">(restart required)</span>' +
+              '</div>' +
+              '<div id="zoom-preview" style="margin-top:10px;border:1px solid var(--border-subtle);border-radius:8px;overflow:hidden;background:var(--bg-base);">' +
+                '<div style="padding:8px 10px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border-subtle);background:var(--bg-surface);">' +
+                  '<div style="width:20px;height:20px;border-radius:50%;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;color:white;font-size:9px;font-weight:600;">O</div>' +
+                  '<div style="flex:1;height:6px;border-radius:3px;background:var(--border-subtle);"></div>' +
+                  '<div style="width:16px;height:16px;border-radius:4px;background:var(--border-subtle);"></div>' +
+                '</div>' +
+                '<div style="padding:10px;display:flex;gap:8px;align-items:flex-start;">' +
+                  '<div style="width:24px;height:24px;border-radius:50%;background:var(--border-subtle);flex-shrink:0;"></div>' +
+                  '<div style="flex:1;">' +
+                    '<div style="height:6px;width:60%;border-radius:3px;background:var(--border-subtle);margin-bottom:4px;"></div>' +
+                    '<div style="height:24px;border-radius:4px;background:var(--accent-primary);opacity:0.15;"></div>' +
+                  '</div>' +
+                '</div>' +
+                '<div id="zoom-preview-scale" style="display:flex;align-items:center;justify-content:center;gap:4px;padding:6px;border-top:1px solid var(--border-subtle);font-size:10px;color:var(--text-muted);">' +
+                  '<i data-lucide="search" style="width:10px;height:10px;"></i>' +
+                  '<span id="zoom-preview-label">' + s.appZoom + '%</span>' +
+                '</div>' +
+              '</div>' +
             '</div>' +
             '<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border-subtle);">' +
               '<label style="display:block;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;margin-bottom:10px;">Sidebar Buttons</label>' +
@@ -344,6 +491,18 @@ window.SettingsModal = {
                 '<option '+(s.bgPattern==='None'?'selected':'')+'>None</option><option '+(s.bgPattern==='Dots'?'selected':'')+'>Dots</option><option '+(s.bgPattern==='Grid'?'selected':'')+'>Grid</option>' +
               '</select>' +
             '</div>' +
+            '<label style="display:flex;align-items:center;gap:12px;font-size:13px;color:var(--text-primary);cursor:pointer;padding:8px 0;border-top:1px solid var(--border-subtle);">' +
+              '<input id="set-enter-send" type="checkbox" '+(s.enterToSend!==false?'checked':'')+' style="accent-color:var(--accent-primary);">' +
+              '<div><div>Enter to Send</div><div style="font-size:11px;color:var(--text-muted);font-weight:400;">Press Enter to send, Shift+Enter for new line</div></div>' +
+            '</label>' +
+            '<label style="display:flex;align-items:center;gap:12px;font-size:13px;color:var(--text-primary);cursor:pointer;padding:8px 0;border-top:1px solid var(--border-subtle);">' +
+              '<input id="set-chat-avatars" type="checkbox" '+(s.showChatAvatars!==false?'checked':'')+' style="accent-color:var(--accent-primary);">' +
+              '<div><div>Show Avatars</div><div style="font-size:11px;color:var(--text-muted);font-weight:400;">Display user avatars next to messages</div></div>' +
+            '</label>' +
+            '<label style="display:flex;align-items:center;gap:12px;font-size:13px;color:var(--text-primary);cursor:pointer;padding:8px 0;border-top:1px solid var(--border-subtle);">' +
+              '<input id="set-image-previews" type="checkbox" '+(s.showImagePreviews!==false?'checked':'')+' style="accent-color:var(--accent-primary);">' +
+              '<div><div>Image Previews</div><div style="font-size:11px;color:var(--text-muted);font-weight:400;">Show inline image previews in chat</div></div>' +
+            '</label>' +
           '</div>' +
         '</div>';
 
@@ -354,6 +513,15 @@ window.SettingsModal = {
         newSettings[key] = val;
         window.store.setState({ settings: newSettings });
         window.Storage.set('settings', newSettings);
+        // Sync profileFrame to currentUser for beacon broadcast
+        if (key === 'profileFrame') {
+          var cu = window.store.getState().currentUser;
+          if (cu) {
+            var updated = { ...cu, profileFrame: val || null };
+            window.store.setState({ currentUser: updated });
+            if (window.orbitAPI) window.orbitAPI.dbSaveUser(updated);
+          }
+        }
       };
 
       content.querySelectorAll('input[name="theme"]').forEach(function(radio) {
@@ -364,14 +532,51 @@ window.SettingsModal = {
               r.parentElement.style.borderColor = 'var(--border-subtle)';
             });
             e.target.parentElement.style.borderColor = 'var(--accent-primary)';
+            if (window.SettingsModal) window.SettingsModal.renderTab('appearance');
           }
         });
       });
+
+      content.querySelector('#theme-custom-trigger').addEventListener('click', function(e) {
+        e.stopPropagation();
+        var menu = content.querySelector('#theme-custom-menu');
+        var arrow = content.querySelector('#theme-custom-arrow');
+        var isOpen = menu.style.display !== 'none';
+        menu.style.display = isOpen ? 'none' : 'block';
+        if (arrow) arrow.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+      });
+
+      content.querySelectorAll('.theme-custom-option').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var val = btn.dataset.value;
+          updateSettings('theme', val);
+          if (window.SettingsModal) window.SettingsModal.renderTab('appearance');
+        });
+      });
+
+      var customColorsBtn = content.querySelector('#theme-custom-colors-btn');
+      if (customColorsBtn) {
+        customColorsBtn.addEventListener('click', function() {
+          if (window.CustomThemeModal) window.CustomThemeModal.open();
+        });
+      }
+
       content.querySelector('#set-font').addEventListener('change', function(e) { updateSettings('fontSize', e.target.value); });
       content.querySelector('#set-bubbles').addEventListener('change', function(e) { updateSettings('messageBubbles', e.target.value.split(' ')[0]); });
       content.querySelector('#set-zoom').addEventListener('input', function(e) {
-        updateSettings('appZoom', parseInt(e.target.value));
-        e.target.previousElementSibling.querySelector('#zoom-val-label').textContent = e.target.value;
+        var val = e.target.value;
+        document.getElementById('zoom-val-label').textContent = val + '%';
+        var scaleEl = document.getElementById('zoom-preview-label');
+        if (scaleEl) scaleEl.textContent = val + '%';
+        var preview = document.getElementById('zoom-preview');
+        if (preview) preview.style.transform = 'scale(' + (val / 100) + ')';
+      });
+      content.querySelector('#set-zoom').addEventListener('change', function(e) {
+        var val = parseInt(e.target.value);
+        updateSettings('appZoom', val);
+        if (window.Toast) {
+          window.Toast.show('Zoom Changed', 'Restart the app to apply the new zoom level.', 'info', 5000);
+        }
       });
       content.querySelector('#set-anim-speed').addEventListener('change', function(e) { updateSettings('animSpeed', e.target.value); });
       content.querySelector('#set-anim').addEventListener('change', function(e) { updateSettings('animations', e.target.checked); });
@@ -379,6 +584,9 @@ window.SettingsModal = {
       content.querySelector('#set-msg-anim').addEventListener('change', function(e) { updateSettings('messageAnim', e.target.value); });
       content.querySelector('#set-24h').addEventListener('change', function(e) { updateSettings('timeFormat24', e.target.checked); });
       content.querySelector('#set-pattern').addEventListener('change', function(e) { updateSettings('bgPattern', e.target.value); });
+      content.querySelector('#set-enter-send').addEventListener('change', function(e) { updateSettings('enterToSend', e.target.checked); });
+      content.querySelector('#set-chat-avatars').addEventListener('change', function(e) { updateSettings('showChatAvatars', e.target.checked); });
+      content.querySelector('#set-image-previews').addEventListener('change', function(e) { updateSettings('showImagePreviews', e.target.checked); });
       content.querySelectorAll('.sidebar-btn-toggle').forEach(function(cb) {
         cb.addEventListener('change', function(e) {
           var btns = Object.assign({}, window.store.getState().settings.sidebarButtons || {});
@@ -573,12 +781,20 @@ window.SettingsModal = {
       var s = state.settings || {};
 
       var toggleRow = function(id, label, desc, checked) {
-        return '<label style="display:flex;align-items:center;gap:12px;padding:12px 0;font-size:14px;color:var(--text-primary);cursor:pointer;' +
-          (desc ? '' : '') + '">' +
+        return '<label style="display:flex;align-items:center;gap:12px;padding:12px 0;font-size:14px;color:var(--text-primary);cursor:pointer;">' +
           '<input id="' + id + '" type="checkbox" ' + (checked ? 'checked' : '') + ' style="width:18px;height:18px;accent-color:var(--accent-primary);cursor:pointer;">' +
           '<div><div>' + label + '</div>' +
           (desc ? '<div style="font-size:12px;color:var(--text-muted);font-weight:400;">' + desc + '</div>' : '') +
           '</div></label>';
+      };
+
+      var gatedToggleRow = function(id, label, desc, checked, enabled) {
+        if (enabled) return toggleRow(id, label, desc, checked);
+        return '<label style="display:flex;align-items:center;gap:12px;padding:12px 0;font-size:14px;color:var(--text-muted);cursor:not-allowed;opacity:0.5;">' +
+          '<input id="' + id + '" type="checkbox" style="width:18px;height:18px;accent-color:var(--accent-primary);cursor:not-allowed;" disabled>' +
+          '<div><div>' + label + '</div>' +
+          (desc ? '<div style="font-size:12px;color:var(--text-muted);font-weight:400;">Enable developer mode to access this setting.</div></div>' : '</div>') +
+          '</label>';
       };
 
       content.innerHTML =
@@ -599,8 +815,35 @@ window.SettingsModal = {
           '<div class="collapsible-body" style="display:block;">' +
             '<div style="padding:4px 16px 16px;">' +
               toggleRow('adv-dev-mode', 'Developer Mode', 'Enable developer tools and instrumentation.', s.devMode) +
-              '<div style="border-top:1px solid var(--border-subtle);"></div>' +
-              toggleRow('adv-experimental', 'Experimental Features', 'Enable experimental features that may be unstable.', s.enableExperimental) +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+
+        // Section: Experimental Features
+        '<div class="settings-collapsible" style="margin-bottom:12px;border-radius:10px;border:1px solid var(--border-subtle);overflow:hidden;">' +
+          '<div class="collapsible-header" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--bg-base);cursor:pointer;user-select:none;" onclick="var b=this.nextElementSibling;var i=this.querySelector(\'.collapse-icon\');if(b.style.display===\'none\'){b.style.display=\'block\';i.style.transform=\'rotate(0deg)\'}else{b.style.display=\'none\';i.style.transform=\'rotate(-90deg)\'}">' +
+            '<div style="display:flex;align-items:center;gap:8px;"><i data-lucide="flask-conical" style="width:16px;height:16px;color:var(--text-muted);"></i><span style="font-size:13px;font-weight:600;color:var(--text-primary);">Experimental Features</span></div>' +
+            '<i data-lucide="chevron-down" class="collapse-icon" style="width:16px;height:16px;color:var(--text-muted);transition:transform 0.2s;"></i>' +
+          '</div>' +
+          '<div class="collapsible-body" style="display:' + (s.devMode ? 'block' : 'none') + ';">' +
+            '<div style="padding:4px 16px 16px;">' +
+              gatedToggleRow('adv-experimental', 'Experimental Features' + experimentalBadge, 'Enable experimental features that may be unstable.', s.enableExperimental, s.devMode) +
+              (s.enableExperimental && s.devMode
+                ? '<div style="border-top:1px solid var(--border-subtle);margin-top:4px;"></div>' +
+                  '<div style="padding-top:4px;">' +
+                    gatedToggleRow('adv-profile-frames', 'Profile Frames' + experimentalBadge, 'Decorate profile avatars with frame overlays.', s.experimentalProfileFrames, true) +
+                    '<div style="border-top:1px solid var(--border-subtle);"></div>' +
+                    gatedToggleRow('adv-custom-colors', 'Custom Colors' + experimentalBadge, 'Customize UI colors with a live preview editor.', s.enableCustomColors, true) +
+                    '<div style="border-top:1px solid var(--border-subtle);"></div>' +
+                    gatedToggleRow('adv-animated-avatars', 'Animated Avatars' + experimentalBadge, 'Subtle pulse animation on user avatars.', s.experimentalAnimatedAvatars, true) +
+                    '<div style="border-top:1px solid var(--border-subtle);"></div>' +
+                    gatedToggleRow('adv-message-fx', 'Enhanced Message FX' + experimentalBadge, 'Sparkle effect on newly sent messages.', s.experimentalMessageFx, true) +
+                    '<div style="border-top:1px solid var(--border-subtle);"></div>' +
+                    gatedToggleRow('adv-message-translate', 'Message Translate' + experimentalBadge, 'Translate messages to your language.', s.experimentalMessageTranslate, true) +
+                    '<div style="border-top:1px solid var(--border-subtle);"></div>' +
+                    gatedToggleRow('adv-compact-spacing', 'Compact Spacing' + experimentalBadge, 'Tighter message layout with reduced padding.', s.experimentalCompactSpacing, true) +
+                  '</div>'
+                : '') +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -613,13 +856,13 @@ window.SettingsModal = {
           '</div>' +
           '<div class="collapsible-body" style="display:none;">' +
             '<div style="padding:4px 16px 16px;">' +
-              toggleRow('adv-debug-display', 'Debug Display', 'Show debug overlays on messages, search results, and UI components.', s.debugDisplay) +
+              gatedToggleRow('adv-debug-display', 'Debug Display', 'Show debug overlays on messages, search results, and UI components.', s.debugDisplay, s.devMode) +
               '<div style="border-top:1px solid var(--border-subtle);"></div>' +
-              toggleRow('adv-show-msg-ids', 'Show Message IDs', 'Display internal message IDs below each message.', s.showMessageIds) +
+              gatedToggleRow('adv-show-msg-ids', 'Show Message IDs', 'Display internal message IDs below each message.', s.showMessageIds, s.devMode) +
               '<div style="border-top:1px solid var(--border-subtle);"></div>' +
-              toggleRow('adv-log-packets', 'Log Network Packets', 'Log all incoming and outgoing network packets to the console.', s.logNetworkPackets) +
+              gatedToggleRow('adv-log-packets', 'Log Network Packets', 'Log all incoming and outgoing network packets to the console.', s.logNetworkPackets, s.devMode) +
               '<div style="border-top:1px solid var(--border-subtle);"></div>' +
-              toggleRow('adv-conn-stats', 'Show Connection Stats', 'Display live connection statistics overlay.', s.showConnectionStats) +
+              gatedToggleRow('adv-conn-stats', 'Show Connection Stats', 'Display live connection statistics overlay.', s.showConnectionStats, s.devMode) +
             '</div>' +
           '</div>' +
         '</div>';
@@ -635,20 +878,71 @@ window.SettingsModal = {
 
       content.querySelector('#adv-dev-mode').addEventListener('change', function(e) {
         updateSettings('devMode', e.target.checked);
+        if (!e.target.checked) {
+          updateSettings('enableExperimental', false);
+          updateSettings('experimentalProfileFrames', false);
+          updateSettings('enableCustomColors', false);
+          updateSettings('experimentalAnimatedAvatars', false);
+          updateSettings('experimentalMessageFx', false);
+          updateSettings('experimentalMessageTranslate', false);
+          updateSettings('experimentalCompactSpacing', false);
+          updateSettings('debugDisplay', false);
+          updateSettings('showMessageIds', false);
+          updateSettings('logNetworkPackets', false);
+          updateSettings('showConnectionStats', false);
+        }
         if (window.orbitAPI && window.orbitAPI.toggleDevtools) {
           window.orbitAPI.toggleDevtools();
         }
+        if (window.SettingsModal) window.SettingsModal.renderTab('advanced');
       });
-      content.querySelector('#adv-debug-display').addEventListener('change', function(e) { updateSettings('debugDisplay', e.target.checked); });
-      content.querySelector('#adv-show-msg-ids').addEventListener('change', function(e) { updateSettings('showMessageIds', e.target.checked); });
-      content.querySelector('#adv-log-packets').addEventListener('change', function(e) { updateSettings('logNetworkPackets', e.target.checked); });
-      content.querySelector('#adv-conn-stats').addEventListener('change', function(e) { updateSettings('showConnectionStats', e.target.checked); });
+      content.querySelector('#adv-debug-display').addEventListener('change', function(e) {
+        if (!window.store.getState().settings.devMode) { e.target.checked = false; return; }
+        updateSettings('debugDisplay', e.target.checked);
+      });
+      content.querySelector('#adv-show-msg-ids').addEventListener('change', function(e) {
+        if (!window.store.getState().settings.devMode) { e.target.checked = false; return; }
+        updateSettings('showMessageIds', e.target.checked);
+      });
+      content.querySelector('#adv-log-packets').addEventListener('change', function(e) {
+        if (!window.store.getState().settings.devMode) { e.target.checked = false; return; }
+        updateSettings('logNetworkPackets', e.target.checked);
+      });
+      content.querySelector('#adv-conn-stats').addEventListener('change', function(e) {
+        if (!window.store.getState().settings.devMode) { e.target.checked = false; return; }
+        updateSettings('showConnectionStats', e.target.checked);
+      });
       content.querySelector('#adv-experimental').addEventListener('change', function(e) {
+        if (!window.store.getState().settings.devMode) {
+          e.target.checked = false;
+          if (window.Toast) window.Toast.show('Notice', 'Enable Developer Mode first to access experimental features.');
+          return;
+        }
         updateSettings('enableExperimental', e.target.checked);
         if (e.target.checked && window.Toast) {
           window.Toast.show('Experimental', 'Experimental features enabled. Some features may be unstable.');
         }
+        if (window.SettingsModal) window.SettingsModal.renderTab('advanced');
       });
+
+      var expToggle = function(id, key) {
+        var el = content.querySelector('#' + id);
+        if (el) {
+          el.addEventListener('change', function(e) {
+            if (!window.store.getState().settings.devMode || !window.store.getState().settings.enableExperimental) {
+              e.target.checked = false;
+              return;
+            }
+            updateSettings(key, e.target.checked);
+          });
+        }
+      };
+      expToggle('adv-custom-colors', 'enableCustomColors');
+      expToggle('adv-animated-avatars', 'experimentalAnimatedAvatars');
+      expToggle('adv-message-fx', 'experimentalMessageFx');
+      expToggle('adv-profile-frames', 'experimentalProfileFrames');
+      expToggle('adv-message-translate', 'experimentalMessageTranslate');
+      expToggle('adv-compact-spacing', 'experimentalCompactSpacing');
 
     } else if (tabName === 'data') {
       var s = state.settings;
@@ -772,20 +1066,39 @@ window.SettingsModal = {
         el.style.color = isError ? 'var(--accent-danger)' : 'var(--accent-success)';
       };
 
-      content.querySelector('#btn-backup-orzip').addEventListener('click', async function() {
+      var withLoading = function(btn, fn) {
+        return async function() {
+          if (btn.disabled) return;
+          var origText = btn.textContent;
+          btn.disabled = true;
+          btn.style.opacity = '0.6';
+          btn.style.cursor = 'wait';
+          btn.textContent = 'Working...';
+          try {
+            await fn();
+          } finally {
+            btn.disabled = false;
+            btn.style.opacity = '';
+            btn.style.cursor = '';
+            btn.textContent = origText;
+          }
+        };
+      };
+
+      content.querySelector('#btn-backup-orzip').addEventListener('click', withLoading(content.querySelector('#btn-backup-orzip'), async function() {
         if (!window.orbitAPI || !window.orbitAPI.backupCreate) { window.Toast.show('Error', 'Backup not available'); return; }
         var result = await window.orbitAPI.backupCreate('orzip');
         if (result.canceled) return;
         if (result.error) { window.Toast.show('Backup Failed', result.error); return; }
         window.Toast.show('Backup Created', 'Saved (' + (result.size / 1024).toFixed(1) + ' KB)');
-      });
-      content.querySelector('#btn-backup-zip').addEventListener('click', async function() {
+      }));
+      content.querySelector('#btn-backup-zip').addEventListener('click', withLoading(content.querySelector('#btn-backup-zip'), async function() {
         if (!window.orbitAPI || !window.orbitAPI.backupCreate) { window.Toast.show('Error', 'Backup not available'); return; }
         var result = await window.orbitAPI.backupCreate('zip');
         if (result.canceled) return;
         if (result.error) { window.Toast.show('Backup Failed', result.error); return; }
         window.Toast.show('Backup Created', 'Saved (' + (result.size / 1024).toFixed(1) + ' KB)');
-      });
+      }));
 
       // Restore with confirmation
       content.querySelector('#btn-restore').addEventListener('click', function() {
@@ -815,6 +1128,10 @@ window.SettingsModal = {
       // Health check
       content.querySelector('#btn-db-health').addEventListener('click', function() {
         if (!window.orbitAPI || !window.orbitAPI.dbHealthCheck) { window.Toast.show('Error', 'Health check not available'); return; }
+        var btn = this;
+        btn.disabled = true;
+        btn.style.opacity = '0.6';
+        btn.textContent = 'Checking...';
         var result = window.orbitAPI.dbHealthCheck();
         var statusEl = content.querySelector('#health-status');
         if (result.ok && result.errors.length === 0) {
@@ -824,6 +1141,9 @@ window.SettingsModal = {
           var errMsg = result.errors ? result.errors.join('; ') : 'Unknown issue';
           updateStatus(statusEl, errMsg, true);
         }
+        btn.disabled = false;
+        btn.style.opacity = '';
+        btn.textContent = 'Run Health Check';
       });
 
       // Database repair

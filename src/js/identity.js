@@ -45,6 +45,7 @@ window.Identity = {
       aboutMe: "",
       avatar: null,
       banner: null,
+      profileFrame: null,
       status: "online",
       createdAt: new Date().toISOString(),
       publicKey: pubKey

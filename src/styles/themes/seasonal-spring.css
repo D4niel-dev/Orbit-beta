@@ -1,0 +1,29 @@
+/* src/styles/themes/seasonal-spring.css */
+:root[data-theme="seasonal-spring"] {
+  --bg-base:        #1A1F18;
+  --bg-surface:     #252A22;
+  --bg-sidebar:     #1E231C;
+  --bg-hover:       #30352C;
+  --bg-active:      #3A4036;
+
+  --text-primary:   #E8EDE4;
+  --text-secondary: #C0C8B8;
+  --text-muted:     #7A8470;
+  --text-inverse:   #1A1F18;
+
+  --accent-primary: #7EBF6A;
+  --accent-hover:   #6AAD56;
+  --accent-soft:    #2A4022;
+  --accent-danger:  #FF6B6B;
+  --accent-success: #7EBF6A;
+  --accent-warning: #FFD54F;
+
+  --border-subtle:  rgba(126, 191, 106, 0.15);
+  --border-strong:  rgba(126, 191, 106, 0.25);
+
+  --shadow-sm:      0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md:      0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-lg:      0 8px 32px rgba(0, 0, 0, 0.5);
+
+  --transition:  all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}

@@ -414,6 +414,10 @@ app.whenReady().then(() => {
     globalDb.deleteGroup(groupId);
     event.returnValue = true;
   });
+  ipcMain.on('db-delete-friend', (event, userId) => {
+    globalDb.deleteFriend(userId);
+    event.returnValue = true;
+  });
   ipcMain.on('db-update-group-field', (event, groupId, field, value) => {
     globalDb.updateGroupField(groupId, field, value);
     event.returnValue = true;

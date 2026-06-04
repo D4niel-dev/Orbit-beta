@@ -16,8 +16,10 @@ window.SidebarLeft = {
   renderAvatar(user) {
     const profileBtn = this.container.querySelector('#btn-profile');
     if (!profileBtn) return;
+    var frame = window.Frames.getFrameForUser(user ? user.userId : null);
     const avatarImg = user && user.avatar ? '<img src="' + window.Sanitize.escapeHtml(user.avatar) + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">' : '<i data-lucide="user"></i>';
-    profileBtn.innerHTML = '<div class="avatar avatar-md" style="position:relative;width:40px;height:40px;">' + avatarImg + '<div class="status-indicator ' + (user ? user.status : 'online') + '"></div></div>';
+    var frameHtml = frame ? '<img src="icons/frames/pfp_frame_' + frame + '.png" style="position:absolute;top:-24%;left:-20%;width:140%;height:140%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '';
+    profileBtn.innerHTML = '<div class="avatar avatar-md" style="position:relative;width:40px;height:40px;">' + avatarImg + frameHtml + '<div class="status-indicator ' + (user ? user.status : 'online') + '"></div></div>';
     lucide.createIcons({ root: profileBtn });
   },
 
@@ -83,12 +85,18 @@ window.SidebarLeft = {
       });
     });
 
-    document.getElementById('btn-nav-settings').addEventListener('click', () => {
-      if(window.SettingsModal) window.SettingsModal.open();
-    });
+    var settingsBtn = document.getElementById('btn-nav-settings');
+    if (settingsBtn) {
+      settingsBtn.addEventListener('click', () => {
+        if(window.SettingsModal) window.SettingsModal.open();
+      });
+    }
 
-    document.getElementById('btn-profile').addEventListener('click', () => {
-      if(window.ProfileCard) window.ProfileCard.toggle();
-    });
+    var profileBtn = document.getElementById('btn-profile');
+    if (profileBtn) {
+      profileBtn.addEventListener('click', () => {
+        if(window.ProfileCard) window.ProfileCard.toggle();
+      });
+    }
   }
 };
