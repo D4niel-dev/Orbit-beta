@@ -71,35 +71,59 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 Orbit is a **beta-stage desktop app** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
 ## Features
+<details>
+<summary>v0.0.1-beta</summary>
 
 - **P2P messaging** — Direct socket-based chat on your local network
 - **File & image sharing** — Send attachments peer-to-peer (configurable limit, default **500 MB**)
 - **Auto-discovery** — Find other Orbit clients on the LAN without manual IP entry
 - **Profiles & themes** — Custom display name, avatar, light/dark/system UI
-- **Group chat** *(v0.0.3+)* — Multi-peer group messaging with member management, roles (Owner/Admin/Member), avatars, and invite codes
-- **Message reactions** *(v0.0.3+)* — Emoji reactions on messages
-- **Markdown formatting** *(v0.0.3+)* — Rich message formatting with headings, lists, code blocks, and more
-- **Drag-and-drop uploads** *(v0.0.3+)* — Drop files and images directly into the chat panel
-- **Notification sounds** *(v0.0.3+)* — Web Audio notification chime with per-user mute settings
-- **Profile sidebar** *(v0.0.3+)* — Click any avatar to view a detailed profile panel
-- **Persistent storage** *(v0.0.2+)* — Messages and media archived in SQLite (`better-sqlite3`)
-- **Privacy mode** *(v0.0.2+)* — Optional session-only attachment storage
-- **Integrity checks** *(v0.0.2+)* — SHA-256 validation on file transfers
-- **End-to-end encryption** *(v0.0.5+)* — ECDH key exchange + AES-256-GCM message encryption for DMs. Toggle in Settings → Data Manager.
-- **Backup & Restore** *(v0.0.5+)* — Export/import full database as .orzip or .zip archives
-- **Unread Badges & Read Receipts** *(v0.0.5+)* — Per-chat unread counts, @mention badges, and read indicators
-- **Activity Center** *(v0.0.5+)* — Unified view of recent messages across all chats
-- **Customizable Sidebar** *(v0.0.5+)* — Show/hide Activity Center, Gallery, and Storage buttons in the left sidebar
-- **Custom Themes** *(v0.0.6+)* — True Dark, Dark Purple, Midnight, Sunset, Nord, Seasonal auto-rotating themes
-- **Custom Colors** *(v0.0.6+)* — Live preview color editor for all UI categories
-- **Profile Frames** *(v0.0.6+, experimental)* — 12 decorative frame overlays on avatars
-- **Animated Avatars** *(v0.0.6+, experimental)* — Subtle pulse animation on avatars
-- **Message Translate** *(v0.0.6+, experimental)* — Translate messages via MyMemory API
-- **Compact Spacing** *(v0.0.6+, experimental)* — Tighter message layout option
-- **App Zoom** *(v0.0.6+)* — Zoom slider with preview and restart notification
-- **Chat Settings** *(v0.0.6+)* — Enter to Send, Show Avatars, Image Preview toggles
 - **Gallery** — Browse shared images with WebP thumbnails for fast scrolling
 - **System tray** — Minimize to tray instead of quitting
+</details>
+<details>
+<summary>v0.0.2-beta</summary>
+
+- **Persistent storage** — Messages and media archived in SQLite (`better-sqlite3`)
+- **Privacy mode** — Optional session-only attachment storage
+- **Integrity checks** — SHA-256 validation on file transfers
+</details>
+<details>
+<summary>v0.0.3-beta</summary>
+
+- **Group chat** — Multi-peer group messaging with member management, roles (Owner/Admin/Member), avatars, and invite codes
+- **Message reactions** — Emoji reactions on messages
+- **Markdown formatting** — Rich message formatting with headings, lists, code blocks, and more
+- **Drag-and-drop uploads** — Drop files and images directly into the chat panel
+- **Notification sounds** — Web Audio notification chime with per-user mute settings
+- **Profile sidebar** — Click any avatar to view a detailed profile panel
+</details>
+<details>
+<summary>v0.0.4-beta</summary>
+
+- See [CHANGELOG.md](CHANGELOG.md), section 4
+</details>
+<details>
+<summary>v0.0.5-beta (Stable)</summary>
+
+- **End-to-end encryption** — ECDH key exchange + AES-256-GCM message encryption for DMs. Toggle in Settings → Data Manager.
+- **Backup & Restore** — Export/import full database as .orzip or .zip archives
+- **Unread Badges & Read Receipts** — Per-chat unread counts, @mention badges, and read indicators
+- **Activity Center** — Unified view of recent messages across all chats
+- **Customizable Sidebar** — Show/hide Activity Center, Gallery, and Storage buttons in the left sidebar
+</details>
+<details>
+<summary>v0.0.6-beta</summary>
+
+- **Custom Themes** — True Dark, Dark Purple, Midnight, Sunset, Nord, Seasonal auto-rotating themes
+- **Custom Colors** — Live preview color editor for all UI categories
+- **Profile Frames** *(experimental)* — 12 decorative frame overlays on avatars
+- **Animated Avatars** *(experimental)* — Subtle pulse animation on avatars
+- **Message Translate** *(experimental)* — Translate messages via MyMemory API
+- **Compact Spacing** *(experimental)* — Tighter message layout option
+- **App Zoom** — Zoom slider with preview and restart notification
+- **Chat Settings** — Enter to Send, Show Avatars, Image Preview toggles
+</details>
 
 See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
@@ -220,6 +244,9 @@ Transparency matters in beta. Current constraints include:
 
 ### Recently Shipped
 
+<details>
+<summary>Recently</summary>
+
 - **End-to-end encryption (E2EE)** — ECDH + AES-256-GCM for direct messages
 - **Backup & Restore** — Full database export/import (.orzip / .zip)
 - **Database Health & Repair** — Integrity checks, VACUUM, REINDEX
@@ -246,6 +273,7 @@ Transparency matters in beta. Current constraints include:
 - **App Zoom** — Slider with preview UI and restart notification
 - **Chat Settings** — Enter to Send, Show Avatars, Image Preview toggles
 - **Orbit Echo Bot** — Persistent echo bot account for testing messages
+</details>
 
 ### Planned
 
