@@ -81,11 +81,11 @@ var MStore = {
         name: 'Orbit Echo',
         tag: 'BOT',
         status: 'online',
-        avatar: '/desktop/src/icons/app/orbit_1024.png',
+        avatar: 'icons/app/orbit_1024.png',
         bio: 'Local echo channel for testing'
       });
     } else {
-      echoFriend.avatar = '/desktop/src/icons/app/orbit_1024.png';
+      echoFriend.avatar = 'icons/app/orbit_1024.png';
     }
     // Ensure echo chat exists and update avatar
     var echoChat = this.chats.find(function(c) { return c.id === 'echo'; });
@@ -93,13 +93,13 @@ var MStore = {
       this.chats.unshift({
         id: 'echo',
         name: 'Orbit Echo',
-        avatar: '/desktop/src/icons/app/orbit_1024.png',
+        avatar: 'icons/app/orbit_1024.png',
         lastMessage: '',
         lastTime: '',
         unread: 0
       });
     } else {
-      echoChat.avatar = '/desktop/src/icons/app/orbit_1024.png';
+      echoChat.avatar = 'icons/app/orbit_1024.png';
     }
     // Add default messages for echo
     if (!this.messages['echo'] || this.messages['echo'].length === 0) {

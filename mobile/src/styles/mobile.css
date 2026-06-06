@@ -342,6 +342,10 @@ html, body {
   background: var(--bg-base);
   transform: translateX(100%);
   transition: transform 0.25s ease;
+  padding-top: var(--safe-area-top);
+  padding-bottom: var(--safe-area-bottom);
+  display: flex;
+  flex-direction: column;
 }
 
 #panel-chat.open {
@@ -1116,6 +1120,8 @@ html, body {
   transition: transform 0.25s ease;
   pointer-events: none;
   visibility: hidden;
+  padding-top: var(--safe-area-top);
+  padding-bottom: var(--safe-area-bottom);
 }
 
 .overlay-panel.open {

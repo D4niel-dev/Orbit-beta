@@ -18,6 +18,7 @@
     "lucide": "^1.17.0"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^8.3.4"
   }
 }
