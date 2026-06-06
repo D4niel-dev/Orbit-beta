@@ -3,6 +3,8 @@ productName: Orbit
 directories:
   output: dist/
 
+publish: null
+
 files:
   - "**/*"
   - "!.agent/**"

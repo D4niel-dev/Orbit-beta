@@ -5,7 +5,7 @@
   "description": "Orbit P2P Chat — Android App",
   "main": "src/index.html",
   "scripts": {
-    "shared:sync": "xcopy /E /I /Y ..\\shared\\* src\\shared\\",
+    "shared:sync": "node -e \"const fs=require('fs');const p=require('path');function c(s,d){fs.mkdirSync(d,{recursive:true});fs.readdirSync(s).forEach(f=>{const sp=p.join(s,f),dp=p.join(d,f);fs.statSync(sp).isDirectory()?c(sp,dp):fs.copyFileSync(sp,dp)})};c(p.resolve(__dirname,'..','shared'),p.resolve(__dirname,'src','shared'))\"",
     "cap:sync": "npm run shared:sync && npx cap sync android",
     "cap:build": "npm run shared:sync && npx cap build android",
     "cap:open": "npm run shared:sync && npx cap open android"
