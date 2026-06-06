@@ -112,7 +112,7 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Activity Center** — Unified view of recent messages across all chats
 - **Customizable Sidebar** — Show/hide Activity Center, Gallery, and Storage buttons in the left sidebar
 </details>
-<details open>
+<details>
 <summary>v0.0.6-beta</summary>
 
 - **Custom Themes** — True Dark, Dark Purple, Midnight, Sunset, Nord, Seasonal auto-rotating themes
@@ -124,7 +124,7 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **App Zoom** — Zoom slider with preview and restart notification
 - **Chat Settings** — Enter to Send, Show Avatars, Image Preview toggles
 </details>
-<details>
+<details open>
 <summary>v0.0.7-beta</summary>
 
 - **Project restructured** — Desktop and mobile code separated into `desktop/` and `mobile/`
