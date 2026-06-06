@@ -1550,9 +1550,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var input = document.createElement('input');
         input.type = 'file';
         input.accept = 'image/*';
-        if (/android|iphone|ipad|ipod/i.test(navigator.userAgent)) {
-          input.setAttribute('capture', 'environment');
-        }
+
         input.style.display = 'none';
         document.body.appendChild(input);
         input.addEventListener('change', function() {
@@ -1984,9 +1982,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
-    if (/android|iphone|ipad|ipod/i.test(navigator.userAgent)) {
-      input.setAttribute('capture', 'environment');
-    }
+
     input.onchange = function(e) {
       var file = e.target.files[0];
       if (!file) return;
