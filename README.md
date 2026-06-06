@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="src/icons/app/orbit_1024.png" alt="Orbit" width="128">
+  <img src="desktop/src/icons/app/orbit_1024.png" alt="Orbit" width="128">
 </p>
 
 <h1 align="center">Orbit</h1>
@@ -14,11 +14,11 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v006-beta-current-version">v0.0.6-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v007-beta-current-version">v0.0.7-beta</a>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-0078D6?style=flat-square&logo=electron&logoColor=white" alt="Platform: Windows | macOS | Linux">
+  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-0078D6?style=flat-square&logo=electron&logoColor=white" alt="Platform: Windows | macOS | Linux | Android">
   <img src="https://img.shields.io/badge/Electron-32-47848F?style=flat-square&logo=electron&logoColor=white" alt="Electron 32">
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License: MIT">
   <img src="https://img.shields.io/badge/status-beta-orange?style=flat-square" alt="Status: Beta">
@@ -27,30 +27,30 @@
 ## Preview
 
 <p align="center">
-  <img src="src/icons/screenshots/preview-darkmode.png" alt="Orbit dark mode" width="720"><br>
+  <img src="desktop/src/icons/screenshots/preview-darkmode.png" alt="Orbit dark mode" width="720"><br>
   <em>Dark mode</em>
 </p>
 
 <p align="center">
-  <img src="src/icons/screenshots/preview-lightmode.png" alt="Orbit light mode" width="720"><br>
+  <img src="desktop/src/icons/screenshots/preview-lightmode.png" alt="Orbit light mode" width="720"><br>
   <em>Light mode</em>
 </p>
 
 <p align="center">
-  <img src="src/icons/screenshots/preview-settings-dark.png" alt="Orbit settings (dark)" width="360">
-  <img src="src/icons/screenshots/preview-settings-light.png" alt="Orbit settings (light)" width="360"><br>
+  <img src="desktop/src/icons/screenshots/preview-settings-dark.png" alt="Orbit settings (dark)" width="360">
+  <img src="desktop/src/icons/screenshots/preview-settings-light.png" alt="Orbit settings (light)" width="360"><br>
   <em>Settings</em>
 </p>
 
 <p align="center">
-  <img src="src/icons/screenshots/preview-gallery-dark.png" alt="Orbit gallery (dark)" width="360">
-  <img src="src/icons/screenshots/preview-gallery-light.png" alt="Orbit gallery (light)" width="360"><br>
+  <img src="desktop/src/icons/screenshots/preview-gallery-dark.png" alt="Orbit gallery (dark)" width="360">
+  <img src="desktop/src/icons/screenshots/preview-gallery-light.png" alt="Orbit gallery (light)" width="360"><br>
   <em>Gallery &amp; file sharing</em>
 </p>
 
 <p align="center">
-  <img src="src/icons/screenshots/preview-group-dark.png" alt="Orbit group chat (dark)" width="360">
-  <img src="src/icons/screenshots/preview-group-light.png" alt="Orbit group chat (light)" width="360"><br>
+  <img src="desktop/src/icons/screenshots/preview-group-dark.png" alt="Orbit group chat (dark)" width="360">
+  <img src="desktop/src/icons/screenshots/preview-group-light.png" alt="Orbit group chat (light)" width="360"><br>
   <em>Group chat</em>
 </p>
 
@@ -124,6 +124,15 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **App Zoom** — Zoom slider with preview and restart notification
 - **Chat Settings** — Enter to Send, Show Avatars, Image Preview toggles
 </details>
+<details>
+<summary>v0.0.7-beta</summary>
+
+- **Project restructured** — Desktop and mobile code separated into `desktop/` and `mobile/`
+- **Cross-platform abstraction** — `shared/` modules for database, network, protocol, crypto
+- **Privacy mode fixed** — Thumbnails now generated, gallery sidebar works, backup/restore preserves temp files
+- **Android build pipeline** — GitHub Actions builds `.apk` via Capacitor alongside desktop builds
+- **Mobile UI shell** — Touch-friendly layout with bottom navigation bar
+</details>
 
 See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
@@ -135,7 +144,7 @@ Pre-built Windows installers are published on [GitHub Releases](https://github.c
 
 | Release | Platform | Notes |
 |---------|----------|--------|
-| [Latest](https://github.com/D4niel-dev/Orbit-beta/releases/latest) | Win / Mac / Linux | Most recent build |
+| [Latest](https://github.com/D4niel-dev/Orbit-beta/releases/latest) | Win / Mac / Linux / Android | Most recent build |
 | [v0.0.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.2-beta) | Windows | SQLite storage, privacy mode, large file transfers |
 | [v0.0.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.1-beta) | Windows | Original release |
 
@@ -146,52 +155,83 @@ Pre-built Windows installers are published on [GitHub Releases](https://github.c
 
 **Requirements:** [Node.js](https://nodejs.org/) 18+ (LTS recommended), npm.
 
+#### Desktop (Electron)
+
 ```bash
 git clone https://github.com/D4niel-dev/Orbit-beta.git
 cd Orbit-beta-main
-npm install  # Installs the app modules
-npm start    # Start the app (might take a few seconds)
+cd desktop
+npm install
+npm start
 ```
 
 Peers on the same LAN are discovered automatically. Open Orbit on another machine to start chatting.
+
+#### Android
+
+```bash
+# From repo root
+cd mobile
+npm install
+npm run shared:sync    # copy cross-platform shared modules
+npx cap sync android   # sync Capacitor Android project
+npx cap open android   # open in Android Studio for building
+```
+
+Or let GitHub Actions build it automatically — push a `v*` tag or trigger the workflow manually.
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
 | Desktop shell | [Electron](https://www.electronjs.org/) 32 |
-| Runtime | [Node.js](https://nodejs.org/) |
+| Mobile shell | [Capacitor](https://capacitorjs.com/) 8 (Android) |
+| Runtime | [Node.js](https://nodejs.org/) (desktop), WebView (mobile) |
 | UI | HTML, CSS, JavaScript |
-| Storage | [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) |
+| Storage | [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) (desktop), `@capacitor-community/sqlite` (mobile) |
 | Networking | Raw TCP P2P sockets, LAN multicast discovery |
 | Media | [sharp](https://sharp.pixelplumbing.com/) (WebP thumbnails) |
-| Packaging | [electron-builder](https://www.electron.build/) (Windows NSIS, macOS DMG, Linux AppImage/deb) |
-| Mobile *(experimental)* | [Capacitor](https://capacitorjs.com/) Android shell |
+| Desktop packaging | [electron-builder](https://www.electron.build/) (Windows NSIS, macOS DMG, Linux AppImage/deb) |
+| Mobile packaging | [Gradle](https://gradle.org/) (Android APK/AAB) |
 
 ## How it works
 
-Orbit follows the standard Electron process model with strict context isolation:
+Orbit runs on two platforms with a shared cross-platform core:
 
-| Layer | Role |
-|-------|------|
-| **Main process** (`main.js`) | Owns network discovery, TCP sockets, chunked file transfers, SQLite persistence, system tray, and custom protocol handlers. |
-| **Preload** (`preload.js`) | Exposes a minimal, typed IPC surface to the renderer via `contextBridge` — no direct Node access in the UI. |
-| **Renderer** (`src/`) | HTML/CSS/JS chat interface; all privileged work is delegated to the main process. |
+| Layer | Desktop | Mobile |
+|-------|---------|--------|
+| **Main process** | Electron (`main.js`) — owns networking, DB, E2EE, IPC | N/A (runs in WebView) |
+| **Preload** | Context-bridge (`preload.js`) — typed IPC surface | N/A (uses Web APIs instead) |
+| **Renderer** | `desktop/src/` — HTML/CSS/JS chat UI via `<script>` tags | `mobile/src/` — same UI adapted for touch |
+| **Shared core** | `shared/` — env detection, database factory, protocol, crypto | Same `shared/` modules, mobile backends |
 
-Security defaults: `nodeIntegration: false`, `contextIsolation: true`.
+Security defaults (desktop): `nodeIntegration: false`, `contextIsolation: true`.
 
 ```
 Orbit-beta/
-├── main.js                 # Electron main process
-├── preload.js              # Context-isolated IPC bridge
-├── electron-builder.yml    # Windows/macOS/Linux packaging
-├── src/
-│   ├── index.html          # App shell
-│   ├── js/                 # UI, network, database
-│   ├── styles/             # Themes and layout
-│   └── icons/              # App icons & screenshots
-├── android/                # Capacitor Android shell (experimental)
-└── CHANGELOG.md
+├── desktop/                # Electron desktop app
+│   ├── main.js             # Electron main process
+│   ├── preload.js          # Context-isolated IPC bridge
+│   ├── electron-builder.yml
+│   ├── src/
+│   │   ├── index.html      # App shell
+│   │   ├── js/             # UI, network, database
+│   │   ├── styles/         # Themes and layout
+│   │   └── icons/          # App icons & screenshots
+│   └── package.json
+├── mobile/                 # Capacitor Android app
+│   ├── src/                # Mobile web UI
+│   ├── android/            # Android project (Gradle)
+│   ├── build-android.ps1   # Build script
+│   └── package.json
+├── shared/                 # Cross-platform modules
+│   ├── core/env.js         # Runtime detection
+│   ├── database/           # DB abstraction factory
+│   ├── network/protocol.js # Packet definitions
+│   ├── crypto/             # E2EE abstraction
+│   └── utils/              # Format, sanitize
+├── CHANGELOG.md
+└── README.md
 ```
 
 ### Custom protocols
@@ -236,8 +276,7 @@ Transparency matters in beta. Current constraints include:
 | **LAN-focused** | Peers must be reachable on the local network. NAT traversal is not implemented. |
 | **Unstable Wi-Fi** | Large transfers and discovery can degrade on flaky wireless links. |
 | **Group E2EE** | End-to-end encryption currently works for direct messages only. Group E2EE is planned. |
-| **Privacy mode bugs** | Privacy mode is intended to store sent/received attachments in a `temp/` folder and purge them on exit, but images and files may fail to load reliably in this mode today. |
-| **Mobile experimental** | The Capacitor Android shell is early-stage and not a supported release target yet. |
+| **Mobile networking** | Android app has the UI shell but P2P networking (TCP/UDP) is not yet ported to Capacitor plugins. |
 | **Unsigned builds** | Installers are not code-signed; Windows SmartScreen warnings are expected. |
 
 ## Roadmap
@@ -273,11 +312,18 @@ Transparency matters in beta. Current constraints include:
 - **App Zoom** — Slider with preview UI and restart notification
 - **Chat Settings** — Enter to Send, Show Avatars, Image Preview toggles
 - **Orbit Echo Bot** — Persistent echo bot account for testing messages
+- **Privacy Mode Fixes** — Thumbnails, gallery sidebar, and backup/restore now work in privacy mode
+- **Project Restructure** — `desktop/`, `mobile/`, `shared/` separation for multi-platform development
+- **Cross-Platform Abstraction** — `shared/` modules for database, network, protocol, crypto
+- **Mobile UI Shell** — Touch-friendly Android layout with bottom navigation
+- **Android Build Pipeline** — GitHub Actions builds `.apk` via Capacitor alongside desktop builds
 </details>
 
 ### Planned
 
 - **Group E2EE** — Extend encryption to group chats
+- **Mobile P2P Networking** — Port TCP/UDP to Capacitor plugins for Android peer discovery
+- **Mobile E2EE** — Web Crypto API implementation for Android
 - **Resumable file transfers** — Pause and resume across sessions
 - **Media compression & thumbnailing** — Smarter image/video handling
 - **Voice messages** — Record and send voice clips
@@ -288,36 +334,55 @@ Transparency matters in beta. Current constraints include:
 ### Experimental
 
 - **WebRTC fallback** — Partial connectivity path for difficult network conditions
-- **Capacitor Android client** — Mobile companion app
 - **WebRTC-based NAT traversal** — Connect across subnets
-- **Plugin system** — Community extensions API**
+- **Plugin system** — Community extensions API
 
 > Roadmap items are intentions, not commitments. See [GitHub Issues](https://github.com/D4niel-dev/Orbit-beta/issues) for tracking and discussion.
 
 ## Development
 
-| Command | Description |
-|---------|-------------|
-| `npm start` | Launch Electron in development |
-| `npm run build:win` | Build Windows installer (`.exe`) |
-| `npm run build:mac` | Build macOS disk image (`.dmg`) |
-| `npm run build:linux` | Build Linux packages (`.AppImage`, `.deb`) |
-| `npm run build:all` | Build for all platforms (requires macOS host for `.dmg`) |
-
-Build configuration lives in [electron-builder.yml](electron-builder.yml). Built artifacts (`dist/`, `release/`) are gitignored — attach them to [GitHub Releases](https://github.com/D4niel-dev/Orbit-beta/releases) instead of committing binaries.
-
-### Building
+### Desktop (Electron)
 
 ```bash
+cd desktop
 npm install
-
-# Platform-specific
-npm run build:win     # → dist/*.exe
-npm run build:mac     # → dist/*.dmg  (requires macOS host)
-npm run build:linux   # → dist/*.AppImage, dist/*.deb
+npm start                 # Launch Electron
+npm run build:win         # Build Windows installer
+npm run build:mac         # Build macOS .dmg (macOS host required)
+npm run build:linux       # Build Linux .AppImage + .deb
 ```
 
-> **Note:** macOS `.dmg` can only be built on a macOS machine (or via CI). Windows and Linux can be cross-compiled from any OS. The GitHub Actions workflow handles all three automatically on tag push.
+### Android (Capacitor)
+
+```bash
+cd mobile
+npm install
+npm run shared:sync       # Copy shared modules into mobile/src/
+npx cap sync android      # Sync Capacitor Android project
+npx cap open android      # Open in Android Studio
+```
+
+Or use the build script:
+
+```bash
+cd mobile
+powershell -File build-android.ps1   # Full build → APK
+```
+
+### From repo root
+
+| Command | Description |
+|---------|-------------|
+| `npm start` | Launch desktop Electron app |
+| `npm run desktop:build:win` | Build Windows installer |
+| `npm run desktop:build:mac` | Build macOS .dmg |
+| `npm run desktop:build:linux` | Build Linux packages |
+| `npm run mobile:sync` | Sync Android project |
+| `npm run mobile:build` | Build Android APK |
+
+Desktop build configuration lives in `desktop/electron-builder.yml`.
+Mobile build configuration lives in `mobile/android/` (Gradle).
+Built artifacts (`desktop/dist/`, `mobile/android/app/build/`) are gitignored — attach them to [GitHub Releases](https://github.com/D4niel-dev/Orbit-beta/releases) instead of committing binaries.
 
 ## Contributing
 

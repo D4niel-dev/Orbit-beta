@@ -1,0 +1,32 @@
+/* src/styles/variables.css */
+:root {
+  /* Spacing */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+
+  /* Border Radius */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-pill: 999px;
+
+  /* Typography */
+  --font-display: "Outfit", sans-serif;
+  --font-body: "DM Sans", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  --font-base-size: 14px;
+
+  /* Z-Index Layers */
+  --z-base: 1;
+  --z-hover: 10;
+  --z-titlebar: 9000;
+  --z-dropdown: 9100;
+  --z-modal-backdrop: 9500;
+  --z-modal: 9600;
+  --z-toast: 9900;
+}

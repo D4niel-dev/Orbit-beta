@@ -5,8 +5,17 @@ build/
 plans/
 .agent/
 .env
-orbit.db
 *.sqlite
 *.db
 *.log
 .DS_Store
+
+# Android
+mobile/.android/
+mobile/android/.gradle/
+mobile/android/build/
+mobile/android/app/build/
+mobile/android/capacitor-cordova-android-plugins/
+mobile/android/.idea/
+*.apk
+*.aab

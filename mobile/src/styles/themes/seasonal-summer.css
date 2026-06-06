@@ -1,0 +1,29 @@
+/* src/styles/themes/seasonal-summer.css */
+:root[data-theme="seasonal-summer"] {
+  --bg-base:        #1A1A18;
+  --bg-surface:     #2A2A22;
+  --bg-sidebar:     #22221C;
+  --bg-hover:       #35352C;
+  --bg-active:      #404036;
+
+  --text-primary:   #F0EDE0;
+  --text-secondary: #C8C4B0;
+  --text-muted:     #7A7660;
+  --text-inverse:   #1A1A18;
+
+  --accent-primary: #FFD54F;
+  --accent-hover:   #E8C040;
+  --accent-soft:    #3A3520;
+  --accent-danger:  #FF6B6B;
+  --accent-success: #4ADE80;
+  --accent-warning: #FFB547;
+
+  --border-subtle:  rgba(255, 213, 79, 0.15);
+  --border-strong:  rgba(255, 213, 79, 0.25);
+
+  --shadow-sm:      0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md:      0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-lg:      0 8px 32px rgba(0, 0, 0, 0.5);
+
+  --transition:  all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}

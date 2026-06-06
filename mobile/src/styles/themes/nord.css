@@ -1,0 +1,29 @@
+/* src/styles/themes/nord.css */
+:root[data-theme="nord"] {
+  --bg-base:        #2E3440;
+  --bg-surface:     #3B4252;
+  --bg-sidebar:     #2E3440;
+  --bg-hover:       #434C5E;
+  --bg-active:      #4C566A;
+
+  --text-primary:   #ECEFF4;
+  --text-secondary: #E5E9F0;
+  --text-muted:     #D8DEE9;
+  --text-inverse:   #2E3440;
+
+  --accent-primary: #88C0D0;
+  --accent-hover:   #81A1C1;
+  --accent-soft:    #3B4252;
+  --accent-danger:  #BF616A;
+  --accent-success: #A3BE8C;
+  --accent-warning: #EBCB8B;
+
+  --border-subtle:  rgba(216, 222, 233, 0.10);
+  --border-strong:  rgba(216, 222, 233, 0.20);
+
+  --shadow-sm:      0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md:      0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-lg:      0 8px 32px rgba(0, 0, 0, 0.5);
+
+  --transition:  all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}

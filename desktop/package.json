@@ -1,0 +1,37 @@
+{
+  "name": "orbit-beta",
+  "version": "0.0.7-beta",
+  "description": "Orbit P2P Chat Application",
+  "author": "Orbit Team <hello@orbit.chat>",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux",
+    "build:all": "electron-builder --win --mac --linux",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/core": "^8.3.4",
+    "archiver": "^8.0.0",
+    "bad-words": "^4.0.0",
+    "better-sqlite3": "^12.10.0",
+    "electron-store": "^8.2.0",
+    "emoji-picker-element": "^1.29.1",
+    "lucide": "^1.17.0",
+    "sharp": "^0.34.5",
+    "sqlite3": "^6.0.1",
+    "uuid": "^14.0.0",
+    "ws": "^8.21.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.3.4",
+    "electron": "^32.3.3",
+    "electron-builder": "^26.8.1"
+  }
+}

@@ -1,0 +1,29 @@
+/* src/styles/themes/seasonal-fall.css */
+:root[data-theme="seasonal-fall"] {
+  --bg-base:        #1A1410;
+  --bg-surface:     #2A2018;
+  --bg-sidebar:     #221812;
+  --bg-hover:       #35281E;
+  --bg-active:      #403228;
+
+  --text-primary:   #F0E6D8;
+  --text-secondary: #C8BAA8;
+  --text-muted:     #7A6A58;
+  --text-inverse:   #1A1410;
+
+  --accent-primary: #D9733A;
+  --accent-hover:   #C06530;
+  --accent-soft:    #3A2818;
+  --accent-danger:  #FF6B6B;
+  --accent-success: #8BC34A;
+  --accent-warning: #FFB547;
+
+  --border-subtle:  rgba(217, 115, 58, 0.15);
+  --border-strong:  rgba(217, 115, 58, 0.25);
+
+  --shadow-sm:      0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md:      0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-lg:      0 8px 32px rgba(0, 0, 0, 0.5);
+
+  --transition:  all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}

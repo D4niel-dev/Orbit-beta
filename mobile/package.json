@@ -1,0 +1,23 @@
+{
+  "name": "orbit-mobile",
+  "version": "0.0.7-beta",
+  "private": true,
+  "description": "Orbit P2P Chat — Android App",
+  "main": "src/index.html",
+  "scripts": {
+    "shared:sync": "xcopy /E /I /Y ..\\shared\\* src\\shared\\",
+    "cap:sync": "npm run shared:sync && npx cap sync android",
+    "cap:build": "npm run shared:sync && npx cap build android",
+    "cap:open": "npm run shared:sync && npx cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/core": "^8.3.4",
+    "@capacitor/filesystem": "^8.0.0",
+    "emoji-picker-element": "^1.29.1",
+    "lucide": "^1.17.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.3.4"
+  }
+}

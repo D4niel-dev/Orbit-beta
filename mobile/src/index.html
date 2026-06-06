@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Orbit</title>
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="styles/variables.css">
+  <link rel="stylesheet" href="styles/themes/dark.css">
+  <link rel="stylesheet" href="styles/themes/light.css">
+  <link rel="stylesheet" href="styles/themes/dark-purple.css">
+  <link rel="stylesheet" href="styles/themes/midnight.css">
+  <link rel="stylesheet" href="styles/themes/sunset.css">
+  <link rel="stylesheet" href="styles/themes/nord.css">
+  <link rel="stylesheet" href="styles/themes/seasonal-spring.css">
+  <link rel="stylesheet" href="styles/themes/seasonal-summer.css">
+  <link rel="stylesheet" href="styles/themes/seasonal-fall.css">
+  <link rel="stylesheet" href="styles/themes/seasonal-winter.css">
+  <link rel="stylesheet" href="styles/base.css">
+  <link rel="stylesheet" href="styles/components.css">
+  <link rel="stylesheet" href="styles/animations.css">
+  <link rel="stylesheet" href="styles/mobile.css?v2">
+
+  <!-- Lucide Icons -->
+  <script src="../node_modules/lucide/dist/umd/lucide.min.js"></script>
+  <!-- Emoji Picker Web Component -->
+  <script type="module" src="../node_modules/emoji-picker-element/index.js"></script>
+</head>
+<body>
+  <div id="app-layout">
+
+    <!-- Bottom Nav -->
+    <nav id="mobile-nav">
+      <button class="nav-btn active" data-view="chats"><i data-lucide="message-square"></i><span>Chats</span></button>
+      <button class="nav-btn" data-view="friends"><i data-lucide="users"></i><span>Friends</span></button>
+      <button class="nav-btn" data-view="activity"><i data-lucide="bell"></i><span>Activity</span></button>
+      <button class="nav-btn" data-view="settings"><div id="nav-user-avatar" class="nav-avatar"></div><span>You</span></button>
+    </nav>
+
+    <!-- Chats Panel -->
+    <aside id="panel-chats" class="mobile-panel active">
+      <div class="panel-header">
+        <div class="header-search-wrapper">
+          <i data-lucide="search"></i>
+          <input type="text" id="search-input" class="header-search" placeholder="Search chats..." autocomplete="off">
+        </div>
+        <button id="btn-new-chat" title="New chat"><i data-lucide="square-pen"></i></button>
+      </div>
+      <div id="chat-list" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
+    </aside>
+
+    <!-- Friends Panel -->
+    <aside id="panel-friends" class="mobile-panel">
+      <div class="panel-header">
+        <div class="header-search-wrapper">
+          <i data-lucide="search"></i>
+          <input type="text" id="search-friends" class="header-search" placeholder="Search friends..." autocomplete="off">
+        </div>
+        <button id="btn-add-friend" title="Add friend"><i data-lucide="user-plus"></i></button>
+      </div>
+      <div id="friends-list" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
+    </aside>
+
+    <!-- Activity Panel -->
+    <aside id="panel-activity" class="mobile-panel">
+      <div class="panel-header">
+        <div class="header-search-wrapper">
+          <i data-lucide="search"></i>
+          <input type="text" id="search-activity" class="header-search" placeholder="Search activity..." autocomplete="off">
+        </div>
+        <button id="btn-activity-action" title="Clear"><i data-lucide="trash-2"></i></button>
+      </div>
+      <div id="activity-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
+    </aside>
+
+    <!-- Settings Panel -->
+    <aside id="panel-settings" class="mobile-panel">
+      <div class="panel-header">
+        <div class="header-search-wrapper">
+          <i data-lucide="search"></i>
+          <input type="text" id="search-settings" class="header-search" placeholder="Search settings..." autocomplete="off">
+        </div>
+        <button id="btn-profile" title="My Profile"><i data-lucide="user"></i></button>
+      </div>
+      <div id="settings-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
+    </aside>
+
+    <!-- Chat View (slides in) -->
+    <main id="panel-chat" class="mobile-panel">
+      <div class="panel-header">
+        <button id="btn-back"><i data-lucide="arrow-left"></i></button>
+        <div id="chat-header-info" style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;"></div>
+        <button id="btn-privacy-badge" class="privacy-badge-btn" title="Privacy mode" style="display:none;"><i data-lucide="eye-off"></i></button>
+        <button id="btn-gallery" title="Gallery"><i data-lucide="image"></i></button>
+        <button id="btn-chat-more"><i data-lucide="more-vertical"></i></button>
+      </div>
+      <div id="message-feed"></div>
+      <div id="file-preview-area" class="file-preview-area" style="display:none;"></div>
+      <div id="reply-edit-bar" style="display:none;align-items:center;gap:8px;padding:8px 12px;border-radius:12px;font-size:13px;color:var(--text-secondary);margin:0 12px 4px;"></div>
+      <div id="chat-input-area">
+        <div style="position:relative;">
+          <div class="chat-input-wrapper">
+            <button id="btn-plus" title="Attach"><i data-lucide="plus-circle"></i></button>
+            <input type="text" id="chat-input" class="chat-input-field" placeholder="Message...">
+            <button id="btn-emoji" title="Emoji"><i data-lucide="smile"></i></button>
+            <button id="btn-send"><i data-lucide="send"></i></button>
+          </div>
+          <div id="dropup-menu">
+            <button class="dropup-item" data-upload="images">
+              <i data-lucide="image"></i> Upload Images
+            </button>
+            <button class="dropup-item" data-upload="files">
+              <i data-lucide="file"></i> Upload Files
+            </button>
+            <button class="dropup-item" data-upload="folder">
+              <i data-lucide="folder"></i> Upload Folder
+            </button>
+          </div>
+        </div>
+        <input type="file" id="file-input" style="display:none;" multiple>
+      </div>
+    </main>
+
+    <!-- Emoji Picker Container -->
+    <div id="emoji-picker-container" style="display:none; position:fixed; bottom:56px; left:0; right:0; z-index:150; max-height:320px; overflow:hidden; border-radius:16px 16px 0 0; box-shadow:0 -4px 20px rgba(0,0,0,0.3);"></div>
+
+    <!-- Profile Panel (slide-in overlay) -->
+    <div id="profile-overlay-backdrop" class="overlay-backdrop" style="display:none;" onclick="void(0)"></div>
+    <aside id="panel-profile-overlay" class="overlay-panel">
+      <div class="overlay-panel-header">
+        <button id="btn-close-profile"><i data-lucide="x"></i></button>
+        <h3>Profile</h3>
+      </div>
+      <div id="profile-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
+    </aside>
+
+    <!-- Gallery Panel (slide-in overlay) -->
+    <div id="gallery-overlay-backdrop" class="overlay-backdrop" style="display:none;"></div>
+    <aside id="panel-gallery-overlay" class="overlay-panel">
+      <div class="overlay-panel-header">
+        <button id="btn-close-gallery"><i data-lucide="x"></i></button>
+        <h3>Gallery</h3>
+      </div>
+      <div id="gallery-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
+    </aside>
+
+    <!-- Group Members Panel (slide-in overlay) -->
+    <div id="members-overlay-backdrop" class="overlay-backdrop" style="display:none;"></div>
+    <div id="image-preview-overlay">
+      <button class="close-btn" id="btn-close-image-preview">&times;</button>
+      <div class="preview-wrap"><img id="image-preview-img" src="" alt="Preview"></div>
+    </div>
+    <aside id="panel-members-overlay" class="overlay-panel">
+      <div class="overlay-panel-header">
+        <button id="btn-close-members"><i data-lucide="x"></i></button>
+        <h3>Members</h3>
+        <button id="btn-group-avatar" title="Group Avatar"><i data-lucide="camera"></i></button>
+        <button id="btn-add-member" style="color:var(--accent-primary);"><i data-lucide="user-plus"></i></button>
+      </div>
+      <div id="members-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
+    </aside>
+
+    <!-- Settings Overlay -->
+    <div id="settings-overlay-backdrop" class="overlay-backdrop" style="display:none;"></div>
+    <aside id="panel-settings-overlay" class="overlay-panel">
+      <div class="overlay-panel-header">
+        <button id="btn-settings-back" style="display:none;"><i data-lucide="arrow-left"></i></button>
+        <h3 id="settings-overlay-title">Settings</h3>
+        <button id="btn-close-settings"><i data-lucide="x"></i></button>
+      </div>
+      <div id="settings-overlay-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
+    </aside>
+
+    <!-- Add Friend Modal -->
+    <div id="modal-overlay" class="modal-overlay" style="display:none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Add Friend</h3>
+          <button id="btn-close-modal"><i data-lucide="x"></i></button>
+        </div>
+        <div class="modal-body">
+          <input type="text" id="modal-input" placeholder="IP address or Peer ID...">
+          <input type="text" id="modal-avatar-input" placeholder="Group avatar URL (optional)" style="display:none;margin-top:8px;width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-primary);color:var(--text-primary);font-size:13px;outline:none;">
+          <div id="modal-member-list" style="display:none;margin-top:8px;max-height:200px;overflow-y:auto;border-top:1px solid var(--border-color);padding-top:8px;"></div>
+          <div class="modal-actions">
+            <button id="btn-modal-cancel" class="modal-btn modal-btn-cancel">Cancel</button>
+            <button id="btn-modal-confirm" class="modal-btn modal-btn-confirm">Connect</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Toasts -->
+  <div id="toast-container"></div>
+
+  <!-- Scripts -->
+  <script src="shared/core/env.js"></script>
+  <script src="shared/utils/format.js"></script>
+  <script src="shared/utils/sanitize.js"></script>
+  <script src="shared/network/protocol.js"></script>
+  <script src="shared/crypto/e2ee-mobile.js"></script>
+  <script src="shared/network/p2p-mobile.js"></script>
+  <script src="shared/database/index.js"></script>
+  <script src="shared/database/sqlite-mobile.js"></script>
+  <script src="js/app.js?v2"></script>
+</body>
+</html>

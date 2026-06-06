@@ -1,0 +1,29 @@
+/* src/styles/themes/seasonal-winter.css */
+:root[data-theme="seasonal-winter"] {
+  --bg-base:        #0E1218;
+  --bg-surface:     #1A2028;
+  --bg-sidebar:     #141820;
+  --bg-hover:       #242C38;
+  --bg-active:      #2E3848;
+
+  --text-primary:   #E0E8F0;
+  --text-secondary: #B0C0D0;
+  --text-muted:     #607080;
+  --text-inverse:   #0E1218;
+
+  --accent-primary: #80B8E0;
+  --accent-hover:   #6AA0C8;
+  --accent-soft:    #1A2A3A;
+  --accent-danger:  #FF6B6B;
+  --accent-success: #4ADE80;
+  --accent-warning: #FFB547;
+
+  --border-subtle:  rgba(128, 184, 224, 0.15);
+  --border-strong:  rgba(128, 184, 224, 0.25);
+
+  --shadow-sm:      0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md:      0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-lg:      0 8px 32px rgba(0, 0, 0, 0.5);
+
+  --transition:  all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}

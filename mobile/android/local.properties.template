@@ -1,0 +1,7 @@
+# Android SDK location
+# Copy this file as local.properties and update the path to your Android SDK
+# Common locations:
+#   Windows: sdk.dir=C:\\Users\\<username>\\AppData\\Local\\Android\\Sdk
+#   macOS:   sdk.dir=/Users/<username>/Library/Android/sdk
+#   Linux:   sdk.dir=/home/<username>/Android/Sdk
+sdk.dir=C:\\Users\\YourUser\\AppData\\Local\\Android\\Sdk
