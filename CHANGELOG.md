@@ -191,7 +191,7 @@
 </p>
 
 <p align="center">
-  <img src="desktop/src/icons/screenshots/preivew-group-info-dark.png" alt="Group info (dark)" width="360">
+  <img src="desktop/src/icons/screenshots/preview-group-info-dark.png" alt="Group info (dark)" width="360">
   <img src="desktop/src/icons/screenshots/preview-group-info-light.png" alt="Group info (light)" width="360"><br>
   <em>Group info panel</em>
 </p>
