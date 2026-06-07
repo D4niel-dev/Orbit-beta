@@ -2853,4 +2853,16 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   console.log('[Orbit Mobile] Started');
+
+  // Pre-request Camera Permission on App Startup for QR Scanner
+  if (/android|iphone|ipad|ipod/i.test(navigator.userAgent) && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(function(stream) {
+        stream.getTracks().forEach(function(t) { t.stop(); });
+        console.log('[Orbit] Camera permission granted on startup');
+      })
+      .catch(function(err) {
+        console.warn('[Orbit] Camera permission denied on startup:', err);
+      });
+  }
 });
