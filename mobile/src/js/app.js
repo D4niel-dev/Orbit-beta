@@ -19,10 +19,11 @@ var MStore = {
     enterToSend: true,
     privacyMode: false,
     e2eeEnabled: false,
-    timeFormat24: false,
+    timeFormat24: true,
     messageBubbles: 'Modern',
     showChatAvatars: true,
     showImagePreviews: true,
+    showLinkPreviews: true,
     bgPattern: 'None',
     animations: true,
     animSpeed: 'normal',
@@ -267,25 +268,30 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     function renderChatRow(c, isGroup) {
-      var initial = c.name ? c.name.charAt(0).toUpperCase() : '?';
-      var avatarHtml = c.avatar
-        ? '<img src="' + escapeHtml(c.avatar) + '" alt="">'
-        : initial;
       var timeStr = c.lastTime ? formatTime(c.lastTime) : '';
+      var avatarHtml = '';
       var statusDot = '';
-      if (isGroup) {
-        var group = groupIds[c.id];
-        var memberCount = group && group.members ? group.members.length : 0;
-        statusDot = '<span style="font-size:11px;color:var(--text-muted);margin-left:auto;">' + memberCount + ' members</span>';
-      } else {
-        var statusClass = c.status && c.status !== 'offline' ? c.status : '';
-        statusDot = statusClass ? '<div class="chat-row-status-dot ' + statusClass + '"></div>' : '';
+      if (MStore.settings.showChatAvatars !== false) {
+        var initial = c.name ? c.name.charAt(0).toUpperCase() : '?';
+        avatarHtml = c.avatar
+          ? '<img src="' + escapeHtml(c.avatar) + '" alt="">'
+          : initial;
+        if (isGroup) {
+          var group = groupIds[c.id];
+          var memberCount = group && group.members ? group.members.length : 0;
+          statusDot = '<span style="font-size:11px;color:var(--text-muted);margin-left:auto;">' + memberCount + ' members</span>';
+        } else {
+          var statusClass = c.status && c.status !== 'offline' ? c.status : '';
+          statusDot = statusClass ? '<div class="chat-row-status-dot ' + statusClass + '"></div>' : '';
+        }
       }
       return '<div class="chat-row" data-chat="' + c.id + '">' +
-        '<div class="chat-row-avatar-wrapper">' +
-          '<div class="chat-row-avatar"' + (isGroup ? ' style="border-radius:12px;"' : '') + '>' + avatarHtml + '</div>' +
-          statusDot +
-        '</div>' +
+        (MStore.settings.showChatAvatars !== false
+          ? '<div class="chat-row-avatar-wrapper">' +
+            '<div class="chat-row-avatar"' + (isGroup ? ' style="border-radius:12px;"' : '') + '>' + avatarHtml + '</div>' +
+            statusDot +
+          '</div>'
+          : '') +
         '<div class="chat-row-info">' +
           '<div class="chat-row-name">' + escapeHtml(c.name) + '</div>' +
           '<div class="chat-row-preview">' + escapeHtml(c.lastMessage || 'No messages yet') + '</div>' +
@@ -421,6 +427,13 @@ document.addEventListener('DOMContentLoaded', function() {
     var modalClose = document.getElementById('btn-close-modal');
     var modalOverlay = document.getElementById('modal-overlay');
     var memberList = document.getElementById('modal-member-list');
+    var modalTabs = document.querySelector('.modal-tabs');
+
+    // Hide tabs, show add tab content for group creation
+    if (modalTabs) modalTabs.style.display = 'none';
+    document.querySelectorAll('.modal-tab-content').forEach(function(c) { c.style.display = 'none'; });
+    var addTab = document.getElementById('modal-tab-add');
+    if (addTab) addTab.style.display = 'block';
 
     modalTitle.textContent = 'Create Group';
     modalInput.placeholder = 'Group name...';
@@ -471,28 +484,10 @@ document.addEventListener('DOMContentLoaded', function() {
       showToast('Group "' + name + '" created' + (selectedMembers.length > 0 ? ' with ' + selectedMembers.length + ' member' + (selectedMembers.length !== 1 ? 's' : '') : ''), 'info');
       openChat(groupId);
     };
-
-    modalInput.onkeydown = function(e) {
-      if (e.key === 'Enter') modalConfirm.onclick();
-    };
   }
 
   function _finishGroupCreate() {
-    var modalTitle = document.querySelector('#modal-overlay .modal-header h3');
-    var modalInput = document.getElementById('modal-input');
-    var modalAvatarInput = document.getElementById('modal-avatar-input');
-    var modalConfirm = document.getElementById('btn-modal-confirm');
-
-    modalAvatarInput.style.display = 'none';
-    modalTitle.textContent = 'Add Friend';
-    modalInput.placeholder = 'IP address or Peer ID...';
-    modalConfirm.textContent = 'Connect';
-    _groupCreateMode = false;
-
-    modalConfirm.onclick = confirmAddFriend;
-    modalInput.onkeydown = function(e) {
-      if (e.key === 'Enter') confirmAddFriend();
-    };
+    resetModalToAddFriend();
     hideModal();
   }
 
@@ -643,9 +638,11 @@ document.addEventListener('DOMContentLoaded', function() {
       if (m.attachments && m.attachments.length > 0) {
         var gridHtml = '';
         var hasText = m.text && m.text.trim();
+        var showImages = MStore.settings.showImagePreviews !== false;
         m.attachments.forEach(function(a) {
           var safeAttId = escapeHtml(String(a.id || ''));
           if (a.type === 'image' && a.url) {
+            if (!showImages) return;
             // Limiting to max 4 images in the grid
             gridHtml += '<div class="att-grid-cell" data-open-image="' + safeAttId + '" data-msg-id="' + m.id + '">' +
               '<img src="' + escapeHtml(a.url) + '" style="width:100%;height:100%;object-fit:cover;" loading="lazy">' +
@@ -659,14 +656,33 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         attachmentsHtml = '<div class="att-grid" style="margin-bottom:' + (hasText ? '6px' : '0') + '">' + gridHtml + '</div>';
       }
+      // Link Preview detection (mobile — basic card without OG fetch)
+      var linkPreviewHtml = '';
+      if (m.text && MStore.settings.showLinkPreviews !== false) {
+        var urlMatch = m.text.match(/(https?:\/\/[^\s]+)/);
+        if (urlMatch) {
+          var url = urlMatch[1];
+          var domain = '';
+          try { domain = new URL(url).hostname; } catch(e) { domain = url; }
+          linkPreviewHtml = '<div class="link-preview-mob' + (isMine ? ' mine' : '') + '" onclick="window.open(\'' + escapeHtml(url) + '\', \'_blank\')">' +
+            '<div class="link-preview-mob-img"><i data-lucide="link-2" style="width:18px;height:18px;"></i></div>' +
+            '<div class="link-preview-mob-body">' +
+              '<div class="link-preview-mob-title">' + escapeHtml(domain) + '</div>' +
+              '<div class="link-preview-mob-url">' + escapeHtml(url) + '</div>' +
+            '</div>' +
+          '</div>';
+        }
+      }
       html += '<div class="message-row ' + (isMine ? 'mine' : 'other') + '" data-msg-id="' + m.id + '">' +
         '<div class="message-bubble">' +
           actionsHtml +
           senderLabel +
           replyHtml +
-          '<div>' + (m.text ? escapeHtml(m.text) : '') + editedBadge + '</div>' +
+          '<div>' + linkifyText(m.text) + editedBadge + '</div>' +
           attachmentsHtml +
+          linkPreviewHtml +
           '<div class="message-time">' + formatTime(m.time) + '</div>' +
+          (MStore.settings.showMessageIds ? '<div style="font-size:9px;color:var(--text-muted);opacity:0.5;margin-top:2px;">' + m.id + '</div>' : '') +
         '</div>' +
       '</div>';
     });
@@ -816,6 +832,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     MStore.user.id
                   );
                   Orbit.P2P.send(memberId, e2eePkt);
+                  if (MStore.settings.logNetworkPackets) console.log('[NET] P2P send (e2ee group) ->', memberId, e2eePkt);
                 }
               });
               useE2EE = true;
@@ -832,6 +849,7 @@ document.addEventListener('DOMContentLoaded', function() {
                   MStore.user.id
                 );
                 Orbit.P2P.send(activeChatId, e2eePacket);
+                if (MStore.settings.logNetworkPackets) console.log('[NET] P2P send (e2ee dm) ->', activeChatId, e2eePacket);
               }
             });
             useE2EE = true;
@@ -841,6 +859,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
       if (useE2EE) return;
       Orbit.P2P.send(activeChatId, sendData);
+      if (MStore.settings.logNetworkPackets) console.log('[NET] P2P send ->', activeChatId, sendData);
     }
   }
 
@@ -889,8 +908,15 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!e.target.files || e.target.files.length === 0) return;
     var total = e.target.files.length;
     var done = 0;
+    var maxBytes = (parseInt(MStore.settings.maxFileSize, 10) || 500) * 1024 * 1024;
     for (var i = 0; i < total; i++) {
       (function(file) {
+        if (file.size > maxBytes) {
+          showToast('File too large: ' + file.name + ' (max ' + (maxBytes / 1024 / 1024) + 'MB)', 'warning');
+          done++;
+          if (done === total) renderFilePreview();
+          return;
+        }
         var isImage = file.type.startsWith('image/');
         if (isImage) {
           var reader = new FileReader();
@@ -1237,6 +1263,10 @@ document.addEventListener('DOMContentLoaded', function() {
         '<div class="settings-row">' +
           '<div class="settings-row-content"><span class="settings-row-title">Image Previews</span><div class="settings-row-desc">Show inline image previews in chat</div></div>' +
           '<button class="settings-toggle ' + (s.showImagePreviews !== false ? 'on' : '') + '" id="set-image-previews"></button>' +
+        '</div>' +
+        '<div class="settings-row">' +
+          '<div class="settings-row-content"><span class="settings-row-title">Link Previews</span><div class="settings-row-desc">Show rich previews for shared links</div></div>' +
+          '<button class="settings-toggle ' + (s.showLinkPreviews !== false ? 'on' : '') + '" id="set-link-previews"></button>' +
         '</div>';
       case 'notifications':
         return '<div class="settings-row">' +
@@ -1296,7 +1326,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var friendsCount = MStore.friends.length;
         var chatsCount = MStore.chats.length;
         return '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.0.7-beta · Capacitor Android</div></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.0.8-beta · Capacitor Android</div></div>' +
         '</div>' +
         '<div class="settings-row">' +
           '<div class="settings-row-content"><span class="settings-row-title">Statistics</span><div class="settings-row-desc">' + friendsCount + ' friends · ' + chatsCount + ' chats</div></div>' +
@@ -1362,16 +1392,17 @@ document.addEventListener('DOMContentLoaded', function() {
       case 'appearance':
         bindSelect('set-theme', function(v) { s.theme = v; applyTheme(v); MStore.save(); });
         bindSelect('set-bubbles', function(v) { s.messageBubbles = v; document.documentElement.setAttribute('data-bubbles', v); MStore.save(); });
-        bindToggle('set-24h', function(on) { s.timeFormat24 = on; MStore.save(); }, s.timeFormat24);
+        bindToggle('set-24h', function(on) { s.timeFormat24 = on; MStore.save(); renderChatList(); if (activeChatId) renderMessages(activeChatId); renderActivity(); }, s.timeFormat24);
         bindToggle('set-animations', function(on) { s.animations = on; MStore.save(); applyAnimationSettings(); }, s.animations !== false);
         bindSelect('set-anim-speed', function(v) { s.animSpeed = v; MStore.save(); applyAnimationSettings(); });
         bindToggle('set-reduce-motion', function(on) { s.reduceMotion = on; MStore.save(); applyAnimationSettings(); }, s.reduceMotion);
         break;
       case 'chat':
         bindToggle('set-enter-send', function(on) { s.enterToSend = on; MStore.save(); }, s.enterToSend);
-        bindToggle('set-chat-avatars', function(on) { s.showChatAvatars = on; MStore.save(); }, s.showChatAvatars !== false);
+        bindToggle('set-chat-avatars', function(on) { s.showChatAvatars = on; MStore.save(); renderChatList(); }, s.showChatAvatars !== false);
         bindSelect('set-pattern', function(v) { s.bgPattern = v; MStore.save(); applyBgPattern(); });
-        bindToggle('set-image-previews', function(on) { s.showImagePreviews = on; MStore.save(); }, s.showImagePreviews !== false);
+        bindToggle('set-image-previews', function(on) { s.showImagePreviews = on; MStore.save(); if (activeChatId) renderMessages(activeChatId); }, s.showImagePreviews !== false);
+        bindToggle('set-link-previews', function(on) { s.showLinkPreviews = on; MStore.save(); if (activeChatId) renderMessages(activeChatId); }, s.showLinkPreviews !== false);
         break;
       case 'notifications':
         bindToggle('notify-preview', function(on) { s.notifyPreview = on; MStore.save(); }, s.notifyPreview !== false);
@@ -1390,7 +1421,8 @@ document.addEventListener('DOMContentLoaded', function() {
         bindSelect('set-delete-after', function(v) { s.deleteAttachmentsAfter = parseInt(v, 10); MStore.save(); });
         break;
       case 'network':
-        bindSelect('net-mode', function(v) { s.networkMode = v; MStore.save(); });
+        bindSelect('net-mode', function(v) { s.networkMode = v; MStore.save(); toggleNetworkPortFields(v); });
+        toggleNetworkPortFields(s.networkMode || 'LAN Auto-Discovery');
         ['net-udp', 'net-tcp', 'net-maxsize'].forEach(function(id) {
           var el = document.getElementById(id);
           if (el) {
@@ -1405,21 +1437,21 @@ document.addEventListener('DOMContentLoaded', function() {
         if (addFriendRow) addFriendRow.addEventListener('click', showAddFriendModal);
         break;
       case 'advanced':
-        bindToggle('set-dev-mode', function(on) { s.devMode = on; MStore.save(); }, s.devMode);
-        bindToggle('set-debug-display', function(on) { s.debugDisplay = on; MStore.save(); }, s.debugDisplay);
-        bindToggle('set-msg-ids', function(on) { s.showMessageIds = on; MStore.save(); }, s.showMessageIds);
+        bindToggle('set-dev-mode', function(on) { s.devMode = on; MStore.save(); document.documentElement.setAttribute('data-dev-mode', on ? 'true' : ''); updateDebugOverlay(); }, s.devMode);
+        bindToggle('set-debug-display', function(on) { s.debugDisplay = on; MStore.save(); updateDebugOverlay(); }, s.debugDisplay);
+        bindToggle('set-msg-ids', function(on) { s.showMessageIds = on; MStore.save(); if (activeChatId) renderMessages(activeChatId); }, s.showMessageIds);
         bindToggle('set-log-packets', function(on) { s.logNetworkPackets = on; MStore.save(); }, s.logNetworkPackets);
-        bindToggle('set-conn-stats', function(on) { s.showConnectionStats = on; MStore.save(); }, s.showConnectionStats);
+        bindToggle('set-conn-stats', function(on) { s.showConnectionStats = on; MStore.save(); updateDebugOverlay(); }, s.showConnectionStats);
         bindToggle('set-experimental', function(on) {
           s.enableExperimental = on; MStore.save();
           showSettingsSection('advanced');
         }, s.enableExperimental);
-        bindToggle('set-exp-avatars', function(on) { s.experimentalAnimatedAvatars = on; MStore.save(); }, s.experimentalAnimatedAvatars);
-        bindToggle('set-exp-fx', function(on) { s.experimentalMessageFx = on; MStore.save(); }, s.experimentalMessageFx);
-        bindToggle('set-exp-translate', function(on) { s.experimentalMessageTranslate = on; MStore.save(); }, s.experimentalMessageTranslate);
-        bindToggle('set-exp-spacing', function(on) { s.experimentalCompactSpacing = on; MStore.save(); }, s.experimentalCompactSpacing);
-        bindToggle('set-exp-colors', function(on) { s.enableCustomColors = on; MStore.save(); }, s.enableCustomColors);
-        bindToggle('set-exp-frames', function(on) { s.experimentalProfileFrames = on; MStore.save(); }, s.experimentalProfileFrames);
+        bindToggle('set-exp-avatars', function(on) { s.experimentalAnimatedAvatars = on; MStore.save(); document.documentElement.setAttribute('data-exp-avatars', on ? 'true' : ''); }, s.experimentalAnimatedAvatars);
+        bindToggle('set-exp-fx', function(on) { s.experimentalMessageFx = on; MStore.save(); document.documentElement.setAttribute('data-exp-fx', on ? 'true' : ''); }, s.experimentalMessageFx);
+        bindToggle('set-exp-translate', function(on) { s.experimentalMessageTranslate = on; MStore.save(); document.documentElement.setAttribute('data-exp-translate', on ? 'true' : ''); }, s.experimentalMessageTranslate);
+        bindToggle('set-exp-spacing', function(on) { s.experimentalCompactSpacing = on; MStore.save(); document.documentElement.setAttribute('data-compact-spacing', on ? 'true' : ''); if (activeChatId) renderMessages(activeChatId); }, s.experimentalCompactSpacing);
+        bindToggle('set-exp-colors', function(on) { s.enableCustomColors = on; MStore.save(); document.documentElement.setAttribute('data-exp-colors', on ? 'true' : ''); }, s.enableCustomColors);
+        bindToggle('set-exp-frames', function(on) { s.experimentalProfileFrames = on; MStore.save(); document.documentElement.setAttribute('data-exp-frames', on ? 'true' : ''); }, s.experimentalProfileFrames);
         break;
     }
   }
@@ -1471,6 +1503,56 @@ document.addEventListener('DOMContentLoaded', function() {
     } else {
       document.documentElement.removeAttribute('data-anim-speed');
     }
+  }
+
+  function updateDebugOverlay() {
+    var el = document.getElementById('debug-overlay');
+    if (!el) return;
+    if (!MStore.settings.debugDisplay && !MStore.settings.devMode) {
+      el.style.display = 'none';
+      return;
+    }
+    el.style.display = 'block';
+    var lines = [];
+    if (MStore.settings.devMode) {
+      lines.push('devMode=ON');
+    }
+    if (MStore.settings.showConnectionStats) {
+      var online = MStore.friends.filter(function(f) { return f.status && f.status !== 'offline'; }).length;
+      var chatCount = MStore.chats.length;
+      var msgCount = 0;
+      Object.keys(MStore.messages).forEach(function(k) { msgCount += MStore.messages[k].length; });
+      lines.push('friends=' + MStore.friends.length + ' online=' + online + ' chats=' + chatCount + ' msgs=' + msgCount);
+      if (window.Orbit && window.Orbit.P2P) {
+        lines.push('p2p=' + (Orbit.P2P.isAvailable() ? 'avail' : 'unavail'));
+      }
+    }
+    if (MStore.settings.debugDisplay) {
+      var storeSize = 0;
+      try { storeSize = new Blob([JSON.stringify(MStore.settings)]).size; } catch(e) {}
+      lines.push('store=' + (storeSize / 1024).toFixed(1) + 'KB theme=' + (MStore.settings.theme || 'dark'));
+    }
+    el.textContent = lines.join(' \u2022 ');
+  }
+
+  function updateDebugStats() {
+    if (MStore.settings.showConnectionStats || MStore.settings.debugDisplay || MStore.settings.devMode) {
+      updateDebugOverlay();
+    }
+    if (MStore.settings.showConnectionStats) {
+      setTimeout(updateDebugStats, 5000);
+    }
+  }
+
+  function toggleNetworkPortFields(mode) {
+    var ids = ['net-udp', 'net-tcp', 'net-maxsize'];
+    ids.forEach(function(id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      var row = el.closest('.settings-row');
+      if (!row) return;
+      row.style.display = (mode === 'Custom IP') ? '' : 'none';
+    });
   }
 
   function bindSelect(id, onChange) {
@@ -1538,6 +1620,7 @@ document.addEventListener('DOMContentLoaded', function() {
           escapeHtml(u ? u.id : '') +
         '</div>' +
       '</div>' +
+
       '<button class="profile-save-btn" id="btn-save-profile">Save Profile</button>';
 
     renderLucide({ root: container });
@@ -1797,7 +1880,36 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   /* -- Add Friend Modal -- */
+  function resetModalToAddFriend() {
+    var modalTitle = document.querySelector('#modal-overlay .modal-header h3');
+    var modalInput = document.getElementById('modal-input');
+    var modalAvatarInput = document.getElementById('modal-avatar-input');
+    var modalConfirm = document.getElementById('btn-modal-confirm');
+    var memberList = document.getElementById('modal-member-list');
+    var modalTabs = document.querySelector('.modal-tabs');
+
+    // Restore tabs, switch to Add Friend tab
+    if (modalTabs) modalTabs.style.display = '';
+    document.querySelectorAll('.modal-tab-content').forEach(function(c) { c.style.display = 'none'; });
+    var addTab = document.getElementById('modal-tab-add');
+    if (addTab) addTab.style.display = 'block';
+    document.querySelectorAll('.modal-tab').forEach(function(t) { t.classList.remove('active'); });
+    var addTabBtn = document.querySelector('.modal-tab[data-tab="add"]');
+    if (addTabBtn) addTabBtn.classList.add('active');
+
+    if (modalTitle) modalTitle.textContent = 'Add Friend';
+    if (modalInput) modalInput.placeholder = 'IP address or Peer ID...';
+    if (modalAvatarInput) modalAvatarInput.style.display = 'none';
+    if (memberList) memberList.style.display = 'none';
+    if (modalConfirm) {
+      modalConfirm.textContent = 'Connect';
+      modalConfirm.onclick = confirmAddFriend;
+    }
+    _groupCreateMode = false;
+  }
+
   function showAddFriendModal() {
+    resetModalToAddFriend();
     document.getElementById('modal-overlay').style.display = 'flex';
     document.getElementById('modal-input').value = '';
     document.getElementById('modal-input').focus();
@@ -1868,14 +1980,136 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
+  /* -- QR Scanner -- */
+  var _qrScanning = false;
+  var _qrStream = null;
+
+  function startQRScanner() {
+    var overlay = document.getElementById('qr-scanner-overlay');
+    var video = document.getElementById('qr-scanner-video');
+    if (!overlay || !video) return;
+    overlay.style.display = 'flex';
+
+    // Request camera
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: 640, height: 640 } }).then(function(stream) {
+      _qrStream = stream;
+      video.srcObject = stream;
+      video.setAttribute('playsinline', 'true');
+      video.play();
+      _qrScanning = true;
+      scanFrame();
+    }).catch(function() {
+      showToast('Camera access denied', 'info');
+      stopQRScanner();
+    });
+  }
+
+  function scanFrame() {
+    if (!_qrScanning) return;
+    var video = document.getElementById('qr-scanner-video');
+    var canvas = document.getElementById('qr-scanner-canvas');
+    if (!video || !canvas || video.readyState < 2) {
+      requestAnimationFrame(scanFrame);
+      return;
+    }
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    var ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    if (typeof jsQR !== 'undefined') {
+      var code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+      if (code && code.data) {
+        try {
+          var parsed = JSON.parse(code.data);
+          if (parsed && parsed.v === 1 && parsed.id) {
+            stopQRScanner();
+            // Auto-add friend from QR data
+            var peerId = parsed.id;
+            var peerName = parsed.n || 'Unknown';
+            var peerTag = parsed.t || '';
+            var existing = MStore.friends.find(function(f) { return f.id === peerId; });
+            if (!existing) {
+              MStore.friends.push({ id: peerId, name: peerName, tag: peerTag, status: 'offline', avatar: null, bio: '', ip: null, publicKey: null });
+              MStore.chats.push({ id: peerId, name: peerName, lastMessage: '', lastTime: '', unread: 0 });
+              MStore.save();
+              renderFriends();
+              renderChatList();
+              showToast('Added ' + peerName, 'info');
+            } else {
+              showToast(peerName + ' is already a friend', 'info');
+            }
+            return;
+          }
+        } catch(e) {}
+      }
+    }
+    requestAnimationFrame(scanFrame);
+  }
+
+  function stopQRScanner() {
+    _qrScanning = false;
+    if (_qrStream) {
+      _qrStream.getTracks().forEach(function(t) { t.stop(); });
+      _qrStream = null;
+    }
+    var overlay = document.getElementById('qr-scanner-overlay');
+    if (overlay) overlay.style.display = 'none';
+  }
+
   /* -- Toast -- */
+  function showIncomingNotification(chatId, fromId, text) {
+    if (activeChatId === chatId) return;
+    if (MStore.settings.notifyDnd) return;
+    var friend = MStore.friends.find(function(f) { return f.id === fromId; });
+    var name = friend ? friend.name : (fromId || 'Someone');
+    // Group mention check
+    var isGroup = MStore.groups.some(function(g) { return g.id === chatId; });
+    if (isGroup && MStore.settings.notifyGroupMentions) {
+      var myName = MStore.user ? MStore.user.name : '';
+      if (myName && text.indexOf('@' + myName) === -1) return;
+    }
+    var preview = MStore.settings.notifyPreview !== false ? text : 'New message';
+    showToast(name + ': ' + preview, 'info');
+    if (MStore.settings.notifySound) playNotificationSound();
+  }
+
+  function playNotificationSound() {
+    try {
+      var ctx = new (window.AudioContext || window.webkitAudioContext)();
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = 660;
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.2);
+    } catch(e) {}
+  }
+
   function showToast(msg, type) {
     var container = document.getElementById('toast-container');
     var el = document.createElement('div');
-    el.className = 'toast-mobile';
-    el.textContent = msg;
+    el.className = 'toast-mobile' + (type && type !== 'info' ? ' toast-' + type : '');
+
+    var icons = { info: 'info', success: 'check-circle', error: 'alert-circle', warning: 'alert-triangle' };
+    var iconName = icons[type] || 'info';
+
+    el.innerHTML = '<i data-lucide="' + iconName + '"></i><span class="toast-text">' + msg + '</span><div class="toast-bar"></div>';
+
     container.appendChild(el);
-    setTimeout(function() { el.style.opacity = '0'; el.style.transition = 'opacity 0.3s'; setTimeout(function() { el.remove(); }, 300); }, 2500);
+    if (window.lucide) lucide.createIcons({ root: el });
+
+    var duration = 2500;
+    setTimeout(function() {
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(-24px) scale(0.95)';
+      el.style.transition = 'opacity 0.3s, transform 0.3s';
+      setTimeout(function() { el.remove(); }, 300);
+    }, duration);
   }
 
   /* -- Helpers -- */
@@ -1896,13 +2130,27 @@ document.addEventListener('DOMContentLoaded', function() {
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
+  function linkifyText(text) {
+    if (!text) return '';
+    var html = escapeHtml(text);
+    html = html.replace(/(https?:\/\/[^\s]+)/g, function(url) {
+      return '<a href="' + url + '" target="_blank" rel="noopener noreferrer" class="msg-link-mob">' + url + '</a>';
+    });
+    return html;
+  }
+
   function formatTime(iso) {
     if (!iso) return '';
     try {
       var d = new Date(iso);
-      var h = d.getHours().toString().padStart(2, '0');
-      var m = d.getMinutes().toString().padStart(2, '0');
-      return h + ':' + m;
+      if (MStore.settings.timeFormat24 === false) {
+        var hour = d.getHours();
+        var ampm = hour >= 12 ? 'PM' : 'AM';
+        hour = hour % 12;
+        if (hour === 0) hour = 12;
+        return hour + ':' + d.getMinutes().toString().padStart(2, '0') + ' ' + ampm;
+      }
+      return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
     } catch(e) { return ''; }
   }
 
@@ -1950,8 +2198,12 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // Friends button
+  // Friends buttons
   document.getElementById('btn-add-friend').addEventListener('click', showAddFriendModal);
+  var scanBtn = document.getElementById('btn-scan-qr');
+  if (scanBtn) scanBtn.addEventListener('click', startQRScanner);
+  var closeScannerBtn = document.getElementById('btn-close-scanner');
+  if (closeScannerBtn) closeScannerBtn.addEventListener('click', stopQRScanner);
 
   // Gallery button
   document.getElementById('btn-gallery').addEventListener('click', showGallery);
@@ -2136,8 +2388,39 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }
   });
-  // Confirm button handler set per-mode in showCreateGroup / _finishGroupCreate
   document.getElementById('btn-modal-confirm').onclick = confirmAddFriend;
+
+  // Modal tab switching
+  document.querySelectorAll('.modal-tab').forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      document.querySelectorAll('.modal-tab').forEach(function(t) { t.classList.remove('active'); });
+      tab.classList.add('active');
+      document.querySelectorAll('.modal-tab-content').forEach(function(c) { c.style.display = 'none'; });
+      var target = document.getElementById('modal-tab-' + tab.dataset.tab);
+      if (target) target.style.display = 'block';
+
+      // Generate QR code when switching to QR tab
+      if (tab.dataset.tab === 'qr') {
+        var qrContainer = document.getElementById('modal-qr-code');
+        if (qrContainer && !qrContainer.hasChildNodes() && typeof QRCode !== 'undefined') {
+          var user = MStore.user;
+          if (user) {
+            var qrData = JSON.stringify({ v: 1, id: user.id, n: user.name, t: user.tag });
+            try {
+              var qr = QRCode(0, 'M');
+              qr.addData(qrData);
+              qr.make();
+              qrContainer.innerHTML = qr.createImgTag(3, 0);
+              var img = qrContainer.querySelector('img');
+              if (img) img.style.display = 'block';
+            } catch(e) {
+              qrContainer.innerHTML = '<span style="color:var(--text-muted);font-size:11px;">Error</span>';
+            }
+          }
+        }
+      }
+    });
+  });
 
   // Cancel reply/edit bar (delegated since button is dynamic)
   document.addEventListener('click', function(e) {
@@ -2193,6 +2476,29 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   /* -- Init P2P Networking -- */
+  function buildBeacon() {
+    var u = MStore.user;
+    if (!u) return {};
+    return {
+      type: Orbit.Protocol.Types.BEACON,
+      from: u.id,
+      senderId: u.id,
+      timestamp: new Date().toISOString(),
+      payload: {
+        userId: u.id,
+        username: u.name,
+        usertag: u.tag,
+        avatarHash: u.avatar ? 'has_avatar' : null,
+        status: u.status || 'online',
+        bio: u.bio || '',
+        publicKey: u.publicKey || null,
+        profileFrame: null,
+        tcpPort: 46000,
+        device: 'android'
+      }
+    };
+  }
+
   function initP2P() {
     if (!window.Orbit || !window.Orbit.P2P) return;
     if (!Orbit.P2P.isAvailable()) {
@@ -2207,6 +2513,9 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
 
+    // Start LAN discovery (sends beacon every 5s, receives beacons)
+    Orbit.P2P.startDiscovery(buildBeacon());
+
     // Listen for incoming connections
     Orbit.P2P.onConnection(function(data) {
       console.log('[P2P] Incoming connection:', data.connectionId);
@@ -2217,8 +2526,10 @@ document.addEventListener('DOMContentLoaded', function() {
       if (!data || !data.data) return;
       var packet = Orbit.Protocol.parsePacket(data.data);
       if (!packet) return;
+      if (MStore.settings.logNetworkPackets) console.log('[NET] P2P recv <-', data.connectionId, packet);
 
-      var chatId = data.connectionId;
+      var msgFrom = packet.from || packet.senderId || data.connectionId;
+      var chatId = msgFrom;
       // Group messages carry the group ID in payload
       if (packet.payload && packet.payload.groupId) {
         chatId = packet.payload.groupId;
@@ -2229,7 +2540,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
       if (packet.type === Orbit.Protocol.Types.MESSAGE) {
         var msgText = packet.payload.text || '';
-        var msgFrom = packet.senderId || data.connectionId;
 
         if (packet.payload.e2ee && window.Orbit.E2EE) {
           var senderFriend = MStore.friends.find(function(f) { return f.id === msgFrom; });
@@ -2248,6 +2558,7 @@ document.addEventListener('DOMContentLoaded', function() {
               });
               if (activeChatId === chatId) renderMessages(activeChatId);
               renderChatList();
+              showIncomingNotification(chatId, msgFrom, msgText);
             });
             return;
           }
@@ -2261,17 +2572,115 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         if (activeChatId === chatId) renderMessages(activeChatId);
         renderChatList();
+        showIncomingNotification(chatId, msgFrom, msgText);
+      }
+
+      // Handle typing indicators
+      if (packet.type === Orbit.Protocol.Types.TYPING) {
+        console.log('[P2P] Typing:', msgFrom, packet.payload && packet.payload.isTyping ? 'started' : 'stopped');
+      }
+
+      // Handle reactions
+      if (packet.type === Orbit.Protocol.Types.REACTION) {
+        var rPayload = packet.payload;
+        if (rPayload && rPayload.msgId) {
+          var msgs = MStore.messages[chatId] || [];
+          var msgIdx = msgs.findIndex(function(m) { return String(m.id) === String(rPayload.msgId); });
+          if (msgIdx >= 0) {
+            if (rPayload.action === 'add') {
+              msgs[msgIdx].reaction = rPayload.emoji;
+            } else {
+              delete msgs[msgIdx].reaction;
+            }
+            MStore.messages[chatId] = msgs;
+            MStore.save();
+            if (activeChatId === chatId) renderMessages(activeChatId);
+          }
+        }
       }
     });
 
     // Listen for disconnections
     Orbit.P2P.onDisconnect(function(data) {
       console.log('[P2P] Disconnected:', data.connectionId);
+      var friend = MStore.friends.find(function(f) { return f.id === data.connectionId; });
+      if (friend) {
+        friend.status = 'offline';
+        MStore.save();
+        renderFriends();
+        renderChatList();
+      }
     });
 
     // Listen for peers found via discovery
     Orbit.P2P.onPeerFound(function(data) {
+      if (!data || !data.host) return;
       console.log('[P2P] Peer found:', data.host);
+
+      // Parse beacon — Java plugin sends it as a JSON string
+      var beacon;
+      try {
+        beacon = typeof data.beacon === 'string' ? JSON.parse(data.beacon) : data.beacon;
+      } catch(e) {
+        return;
+      }
+      if (!beacon) return;
+
+      var peerId = beacon.from || beacon.senderId;
+      if (!peerId) return;
+      var pPayload = beacon.payload || beacon;
+      var peerName = pPayload.username || pPayload.name || data.host;
+      var peerTag = pPayload.usertag || pPayload.tag || '';
+
+      // Filter out own beacon
+      if (MStore.user && peerId === MStore.user.id) return;
+
+      // Add or update friend
+      var existing = MStore.friends.find(function(f) { return f.id === peerId; });
+      if (!existing) {
+        MStore.friends.push({
+          id: peerId,
+          name: peerName,
+          tag: peerTag,
+          status: 'online',
+          avatar: null,
+          bio: pPayload.bio || '',
+          ip: data.host,
+          publicKey: pPayload.publicKey || null
+        });
+        MStore.save();
+        renderFriends();
+      } else {
+        existing.status = 'online';
+        existing.ip = data.host;
+        MStore.save();
+        renderFriends();
+      }
+
+      // Ensure chat exists
+      var chatExists = MStore.chats.find(function(c) { return c.id === peerId; });
+      if (!chatExists) {
+        MStore.chats.push({ id: peerId, name: peerName, lastMessage: '', lastTime: '', unread: 0 });
+        MStore.save();
+        renderChatList();
+      }
+
+      // Auto-connect to peer (skip if already connected)
+      var existingConn = Orbit.P2P.getConnections().indexOf(peerId) >= 0;
+      if (!existingConn) {
+        var port = pPayload.tcpPort || 46000;
+        Orbit.P2P.connect(data.host, port, peerId).then(function(result) {
+          if (result.success) {
+            console.log('[P2P] Connected to', peerName);
+            var friend = MStore.friends.find(function(f) { return f.id === peerId; });
+            if (friend) {
+              friend.status = 'online';
+              MStore.save();
+              renderFriends();
+            }
+          }
+        });
+      }
     });
   }
 
@@ -2386,7 +2795,62 @@ document.addEventListener('DOMContentLoaded', function() {
   renderFriends();
   renderSettings();
   renderActivity();
+
+  // Init debug overlay
+  updateDebugOverlay();
+
+  // Init compact spacing from saved preference
+  if (MStore.settings.experimentalCompactSpacing) {
+    document.documentElement.setAttribute('data-compact-spacing', 'true');
+  }
+
+  // Init experimental data attributes
+  var expAttrs = {
+    'experimentalAnimatedAvatars': 'data-exp-avatars',
+    'experimentalMessageFx': 'data-exp-fx',
+    'experimentalMessageTranslate': 'data-exp-translate',
+    'enableCustomColors': 'data-exp-colors',
+    'experimentalProfileFrames': 'data-exp-frames'
+  };
+  Object.keys(expAttrs).forEach(function(key) {
+    if (MStore.settings[key]) document.documentElement.setAttribute(expAttrs[key], 'true');
+  });
+
+  // Auto-delete attachments timer
+  function runAutoDelete() {
+    var interval = parseInt(MStore.settings.deleteAttachmentsAfter, 10);
+    if (interval > 0) {
+      var cutoff = Date.now() - interval * 60 * 1000;
+      Object.keys(MStore.messages).forEach(function(chatId) {
+        var msgs = MStore.messages[chatId];
+        if (!msgs) return;
+        var changed = false;
+        msgs.forEach(function(m) {
+          if (m.attachments && m.attachments.length > 0) {
+            var msgTime = new Date(m.time).getTime();
+            if (msgTime < cutoff) {
+              m.attachments = [];
+              changed = true;
+            }
+          }
+        });
+        if (changed) MStore.save();
+      });
+    }
+    if (interval > 0) setTimeout(runAutoDelete, interval * 60 * 1000);
+  }
+  runAutoDelete();
+
   showToast('Orbit Mobile ready', 'info');
+
+  // Attempt immersive mode on Android
+  if (Orbit.env.isAndroid) {
+    try {
+      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.StatusBar) {
+        window.Capacitor.Plugins.StatusBar.setOverlaysWebView({ overlay: true });
+      }
+    } catch(e) {}
+  }
 
   console.log('[Orbit Mobile] Started');
 });

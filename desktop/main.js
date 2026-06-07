@@ -641,6 +641,44 @@ app.whenReady().then(() => {
     }
   });
 
+  // Open Graph metadata fetch for link previews
+  ipcMain.handle('fetch-og', async (event, url) => {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(function() { controller.abort(); }, 5000);
+      const resp = await net.fetch(url, { method: 'GET', redirect: 'follow', signal: controller.signal });
+      clearTimeout(timeout);
+      if (!resp.ok) return { url: url, title: '', description: '', image: '', domain: '' };
+      const html = await resp.text();
+      var domain = '';
+      try { domain = new URL(url).hostname; } catch(e) { domain = url; }
+      var og = { url: url, title: '', description: '', image: '', domain: domain };
+      var titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+      if (titleMatch) og.title = titleMatch[1].trim();
+      var ogTitleMatch = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["'][^>]*>/i);
+      if (ogTitleMatch) og.title = ogTitleMatch[1];
+      var ogDescMatch = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["'][^>]*>/i);
+      if (ogDescMatch) { og.description = ogDescMatch[1]; }
+      else {
+        var descMatch = html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["'][^>]*>/i);
+        if (descMatch) og.description = descMatch[1];
+      }
+      var ogImgMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["'][^>]*>/i);
+      if (ogImgMatch) {
+        og.image = ogImgMatch[1];
+        if (og.image && !og.image.startsWith('http')) {
+          try { og.image = new URL(og.image, url).href; } catch(e) {}
+        }
+      }
+      if (!og.image && !og.title && !og.description) {
+        og.description = html.replace(/<[^>]+>/g, '').substring(0, 200).trim();
+      }
+      return og;
+    } catch (e) {
+      return { url: url, title: '', description: '', image: '', domain: '', error: e.message };
+    }
+  });
+
   ipcMain.handle('check-disk-space', () => {
     try {
       const statfs = require('fs').statfsSync(require('os').tmpdir());

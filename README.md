@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v007-beta-current-version">v0.0.7-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v008-beta-current-version">v0.0.8-beta</a>
 </p>
 
 <p align="center">
@@ -112,7 +112,7 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Activity Center** — Unified view of recent messages across all chats
 - **Customizable Sidebar** — Show/hide Activity Center, Gallery, and Storage buttons in the left sidebar
 </details>
-<details open>
+<details>
 <summary>v0.0.6-beta</summary>
 
 - **Custom Themes** — True Dark, Dark Purple, Midnight, Sunset, Nord, Seasonal auto-rotating themes
@@ -123,6 +123,20 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Compact Spacing** *(experimental)* — Tighter message layout option
 - **App Zoom** — Zoom slider with preview and restart notification
 - **Chat Settings** — Enter to Send, Show Avatars, Image Preview toggles
+</details>
+<details open>
+<summary>v0.0.8-beta</summary>
+
+- **Rich Link Previews** — Open Graph metadata (title, description, image) fetched via Electron IPC; styled cards with left accent bar, hover/active link colors
+- **Message Link Styling** — URLs in chat text now clickable with hover (dark blue) and active (green) states on both desktop and mobile
+- **Cross-platform P2P** — Desktop ↔ Android LAN discovery and messaging via TCP/UDP
+- **QR Code Fixes** — Both desktop and mobile QR generation fixed; mobile QR moved to Add Friend modal
+- **Mobile Settings Wired** — All toggles now have real behavior (time format, avatars, images, notifications, debug tools, file size, auto-delete, experimental features)
+- **Mobile Toast Overhaul** — Type-based accent bar, icons, slide-in animation, progress bar
+- **Mobile Notification Sound** — Web Audio beep on incoming messages
+- **Desktop Settings Tabs** — Notifications (volume/sound/test), Network (collapsibles), About (version info)
+- **Chat Background Patterns** — Diagonal Stripes, Crosshatch, Circles
+- **Desktop Bug Fixes** — MIME mapping, cache headers, media retry, attachment URLs
 </details>
 <details>
 <summary>v0.0.7-beta</summary>

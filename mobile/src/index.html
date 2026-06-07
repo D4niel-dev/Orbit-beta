@@ -28,6 +28,9 @@
 
   <!-- Lucide Icons -->
   <script src="lib/lucide.min.js"></script>
+  <!-- QR Code Generator & Scanner -->
+  <script src="lib/qrcode.min.js"></script>
+  <script src="lib/jsqr.min.js"></script>
   <!-- Emoji Picker Web Component -->
   <script type="module" src="lib/emoji-picker-element/index.js"></script>
 </head>
@@ -61,10 +64,22 @@
           <i data-lucide="search"></i>
           <input type="text" id="search-friends" class="header-search" placeholder="Search friends..." autocomplete="off">
         </div>
+        <button id="btn-scan-qr" title="Scan QR"><i data-lucide="scan-qr-code"></i></button>
         <button id="btn-add-friend" title="Add friend"><i data-lucide="user-plus"></i></button>
       </div>
       <div id="friends-list" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
     </aside>
+
+    <!-- QR Scanner Overlay -->
+    <div id="qr-scanner-overlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:300;background:rgba(0,0,0,0.9);flex-direction:column;align-items:center;justify-content:center;">
+      <div style="position:relative;width:280px;height:280px;border:2px solid var(--accent-primary);border-radius:12px;overflow:hidden;">
+        <video id="qr-scanner-video" style="width:100%;height:100%;object-fit:cover;" playsinline></video>
+        <canvas id="qr-scanner-canvas" style="display:none;"></canvas>
+        <div style="position:absolute;top:0;left:0;right:0;bottom:0;border:2px solid rgba(255,255,255,0.3);border-radius:10px;pointer-events:none;"></div>
+      </div>
+      <p style="color:#fff;font-size:14px;margin:16px 0 0;opacity:0.8;">Point at a QR code</p>
+      <button id="btn-close-scanner" style="margin-top:24px;padding:10px 32px;border-radius:24px;border:none;background:var(--accent-primary);color:#fff;font-size:15px;font-weight:600;cursor:pointer;">Cancel</button>
+    </div>
 
     <!-- Activity Panel -->
     <aside id="panel-activity" class="mobile-panel">
@@ -183,13 +198,25 @@
           <h3>Add Friend</h3>
           <button id="btn-close-modal"><i data-lucide="x"></i></button>
         </div>
+        <div class="modal-tabs">
+          <button class="modal-tab active" data-tab="add">Add Friend</button>
+          <button class="modal-tab" data-tab="qr">My QR</button>
+        </div>
         <div class="modal-body">
-          <input type="text" id="modal-input" placeholder="IP address or Peer ID...">
-          <input type="text" id="modal-avatar-input" placeholder="Group avatar URL (optional)" style="display:none;margin-top:8px;width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-primary);color:var(--text-primary);font-size:13px;outline:none;">
-          <div id="modal-member-list" style="display:none;margin-top:8px;max-height:200px;overflow-y:auto;border-top:1px solid var(--border-color);padding-top:8px;"></div>
-          <div class="modal-actions">
-            <button id="btn-modal-cancel" class="modal-btn modal-btn-cancel">Cancel</button>
-            <button id="btn-modal-confirm" class="modal-btn modal-btn-confirm">Connect</button>
+          <div id="modal-tab-add" class="modal-tab-content">
+            <input type="text" id="modal-input" placeholder="IP address or Peer ID...">
+            <input type="text" id="modal-avatar-input" placeholder="Group avatar URL (optional)" style="display:none;margin-top:8px;width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-primary);color:var(--text-primary);font-size:13px;outline:none;">
+            <div id="modal-member-list" style="display:none;margin-top:8px;max-height:200px;overflow-y:auto;border-top:1px solid var(--border-color);padding-top:8px;"></div>
+            <div class="modal-actions">
+              <button id="btn-modal-cancel" class="modal-btn modal-btn-cancel">Cancel</button>
+              <button id="btn-modal-confirm" class="modal-btn modal-btn-confirm">Connect</button>
+            </div>
+          </div>
+          <div id="modal-tab-qr" class="modal-tab-content" style="display:none;">
+            <div style="text-align:center;padding:8px 0;">
+              <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px;">Share this QR code with others so they can add you.</p>
+              <div id="modal-qr-code" style="display:inline-block;padding:10px;background:#fff;border-radius:10px;"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -199,6 +226,9 @@
 
   <!-- Toasts -->
   <div id="toast-container"></div>
+
+  <!-- Debug Overlay (hidden by default) -->
+  <div id="debug-overlay" style="display:none;position:fixed;bottom:56px;left:0;right:0;z-index:250;background:rgba(0,0,0,0.85);color:#0f0;font-family:monospace;font-size:11px;padding:8px 10px;max-height:120px;overflow-y:auto;pointer-events:none;line-height:1.4;"></div>
 
   <!-- Scripts -->
   <script src="shared/core/env.js"></script>

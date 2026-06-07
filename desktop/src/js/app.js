@@ -253,8 +253,8 @@ document.addEventListener('DOMContentLoaded', () => {
       document.documentElement.style.setProperty('--chat-bg-image', 'linear-gradient(var(--border-subtle) 1px, transparent 1px), linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px)');
       document.documentElement.style.setProperty('--chat-bg-size', '20px 20px');
     } else if (settings.bgPattern === 'Diagonal Stripes') {
-      document.documentElement.style.setProperty('--chat-bg-image', 'repeating-linear-gradient(45deg, transparent, transparent 10px, var(--border-subtle) 10px, var(--border-subtle) 11px)');
-      document.documentElement.style.setProperty('--chat-bg-size', '20px 20px');
+      document.documentElement.style.setProperty('--chat-bg-image', 'repeating-linear-gradient(45deg, transparent, transparent 12px, var(--border-subtle) 12px, var(--border-subtle) 13px)');
+      document.documentElement.style.setProperty('--chat-bg-size', '');
     } else if (settings.bgPattern === 'Crosshatch') {
       document.documentElement.style.setProperty('--chat-bg-image', 'linear-gradient(var(--border-subtle) 1px, transparent 1px), linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px), radial-gradient(var(--border-subtle) 0.5px, transparent 0.5px)');
       document.documentElement.style.setProperty('--chat-bg-size', '30px 30px, 30px 30px, 15px 15px');

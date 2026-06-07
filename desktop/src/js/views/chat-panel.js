@@ -8,6 +8,15 @@ window.ChatPanel = {
     this.editingMsg = null; // { id, chatId, text }
     
     // Delegated click handler — attached ONCE in init
+
+    // Link preview click delegation
+    document.addEventListener('click', function(e) {
+      var lp = e.target.closest('.link-preview');
+      if (lp) {
+        var url = lp.getAttribute('data-url');
+        if (url) window.open(url, '_blank');
+      }
+    });
     this.initDelegatedActions();
     
     // Subscribe to store
@@ -463,13 +472,12 @@ window.ChatPanel = {
           var url = urlMatch[1];
           var domain = '';
           try { domain = new URL(url).hostname; } catch(e) { domain = url; }
-          linkPreviewHtml = '<div style="margin-top:8px; border:1px solid ' + (isMine ? 'rgba(255,255,255,0.2)' : 'var(--border-subtle)') + '; border-radius:12px; overflow:hidden; background:' + (isMine ? 'rgba(0,0,0,0.1)' : 'var(--bg-surface)') + '; cursor:pointer; width:100%; max-width:300px; display:flex; flex-direction:column; box-shadow:var(--shadow-sm);" onclick="window.open(\'' + window.Sanitize.escapeHtml(url) + '\', \'_blank\')">' +
-            '<div style="width:100%; height:80px; background:' + (isMine ? 'rgba(0,0,0,0.2)' : 'var(--bg-hover)') + '; display:flex; align-items:center; justify-content:center;">' +
-              '<i data-lucide="image" style="width:24px;height:24px;color:' + (isMine ? 'rgba(255,255,255,0.4)' : 'var(--text-muted)') + ';"></i>' +
-            '</div>' +
-            '<div style="padding:10px 12px;">' +
-              '<div style="font-size:12px; font-weight:600; color:' + (isMine ? '#fff' : 'var(--text-primary)') + '; margin-bottom:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:flex; align-items:center; gap:6px;"><i data-lucide="link-2" style="width:12px;height:12px;"></i> ' + window.Sanitize.escapeHtml(domain) + '</div>' +
-              '<div style="font-size:11px; color:' + (isMine ? 'rgba(255,255,255,0.7)' : 'var(--text-muted)') + '; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; line-height:1.4;">' + window.Sanitize.escapeHtml(url) + '</div>' +
+          var dataUrl = window.Sanitize.escapeHtml(url);
+          linkPreviewHtml = '<div class="link-preview' + (isMine ? ' link-preview-mine' : '') + '" data-url="' + dataUrl + '" data-og-loaded="false">' +
+            '<div class="link-preview-img"><i data-lucide="link-2" style="width:20px;height:20px;"></i></div>' +
+            '<div class="link-preview-body">' +
+              '<div class="link-preview-title">' + window.Sanitize.escapeHtml(domain) + '</div>' +
+              '<div class="link-preview-url">' + dataUrl + '</div>' +
             '</div>' +
           '</div>';
         }
@@ -728,6 +736,26 @@ window.ChatPanel = {
       '</div>';
 
     lucide.createIcons({ root: this.container });
+
+    // Link Preview OG fetch
+    if (!window._linkPreviewCache) window._linkPreviewCache = {};
+    var previews = this.container.querySelectorAll('.link-preview[data-og-loaded="false"]');
+    previews.forEach(function(el) {
+      var url = el.getAttribute('data-url');
+      if (!url) return;
+      if (window._linkPreviewCache[url]) {
+        applyOgData(el, window._linkPreviewCache[url]);
+        return;
+      }
+      if (window.orbitAPI && window.orbitAPI.invoke) {
+        window.orbitAPI.invoke('fetch-og', url).then(function(og) {
+          if (og && og.url) {
+            window._linkPreviewCache[og.url] = og;
+            applyOgData(el, og);
+          }
+        }).catch(function() {});
+      }
+    });
 
     // Pinned messages bar
     var pinnedBar = document.getElementById('pinned-messages-bar');
@@ -1739,3 +1767,18 @@ window.ChatPanel = {
     }
   }
 };
+
+function applyOgData(el, og) {
+  if (!el || !og) return;
+  el.setAttribute('data-og-loaded', 'true');
+  var titleEl = el.querySelector('.link-preview-title');
+  var urlEl = el.querySelector('.link-preview-url');
+  var imgEl = el.querySelector('.link-preview-img');
+  if (og.title && titleEl) titleEl.textContent = og.title.substring(0, 120);
+  if (og.description && urlEl) urlEl.textContent = og.description.substring(0, 200);
+  if (og.image && imgEl) {
+    imgEl.innerHTML = '<img src="' + window.Sanitize.escapeHtml(og.image) + '" alt="" loading="lazy" onerror="this.style.display=\'none\';this.parentNode.innerHTML=\'<i data-lucide=\\\'link-2\\\' style=\\\'width:20px;height:20px;\\\'></i>\';if(window.lucide)lucide.createIcons({root:this.parentNode});">';
+    if (window.lucide) lucide.createIcons({ root: imgEl });
+  }
+  if (og.domain && !og.title && titleEl) titleEl.textContent = og.domain;
+}

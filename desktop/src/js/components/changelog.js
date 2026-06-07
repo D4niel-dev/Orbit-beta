@@ -14,7 +14,19 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        changelogEntry('0.0.7-beta', 'Latest', [
+        changelogEntry('0.0.8-beta', 'Latest', [
+          'Rich Link Previews v2 — Open Graph metadata (title, description, image) fetched via Electron IPC',
+          'Message Link Styling — URLs in chat text now clickable with hover/active color states (both desktop + mobile)',
+          'Cross-Platform P2P — Desktop ↔ Android LAN discovery and messaging via TCP/UDP',
+          'QR Code Fixes — Both desktop and mobile QR generation fixed; mobile QR moved to Add Friend modal',
+          'Mobile Settings Wired — All toggles now have real behavior (time format, avatars, images, notifications, etc.)',
+          'Mobile Toast Overhaul — Type-based accent bar, icons, slide-in animation, progress bar',
+          'Mobile Notification Sound — Web Audio beep on incoming P2P messages',
+          'Desktop Settings Tabs — Notifications (volume/sound/test), Network (collapsibles), About (version info)',
+          'Chat Background Patterns — Diagonal Stripes, Crosshatch, Circles',
+          'Desktop Bug Fixes — MIME mapping, cache headers, media retry, attachment URL stability'
+        ]) +
+        changelogEntry('0.0.7-beta', '', [
           'First-Time User Tutorial (Welcome Tour) — skippable and replayable via Settings',
           'Link Previews — Rich URL cards rendered directly in chat messages',
           'Activity Center Overhaul — Modern notification timeline with Tabs (All, Mentions, Files, System Logs)',

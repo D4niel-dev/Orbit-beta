@@ -37,6 +37,7 @@ const Protocol = {
       packetId: null, // to be assigned
       type: type,
       from: fromId,
+      senderId: fromId,
       to: toId,
       timestamp: new Date().toISOString(),
       payload: payload

@@ -19,7 +19,7 @@ window.Sanitize = {
     // Links
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     html = html.replace(urlRegex, function(url) {
-      return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: var(--accent-primary); text-decoration: underline;">${url}</a>`;
+      return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="msg-link">${url}</a>`;
     });
 
     // @mentions

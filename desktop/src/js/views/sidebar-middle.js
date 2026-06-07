@@ -331,7 +331,7 @@ window.SidebarMiddle = {
             '<div style="flex:1;overflow-y:auto;padding:0 40px 16px;">' +
               '<div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;padding:8px 0 12px;letter-spacing:0.5px;">Select Members</div>' +
               friendOptions +
-              (friends.length === 0 ? '<div style="padding:16px 0;text-align:center;color:var(--text-muted);font-size:13px;">No friends available.</div>' : '') +
+              (friends.length === 0 ? '<div style="display:flex;flex-direction:column;align-items:center;padding:24px 0;color:var(--text-muted);gap:8px;"><i data-lucide="user-x" style="width:28px;height:28px;opacity:0.3;"></i><div style="font-size:13px;">No friends available.</div></div>' : '') +
             '</div>' +
             '<div style="padding:20px 40px 28px;border-top:1px solid var(--border-subtle);display:flex;gap:12px;justify-content:flex-end;background:var(--bg-surface);">' +
               '<button id="btn-cancel-group" style="padding:11px 24px;border-radius:10px;border:1px solid var(--border-subtle);background:transparent;color:var(--text-secondary);cursor:pointer;font-weight:500;flex-shrink:0;">Cancel</button>' +
@@ -491,8 +491,10 @@ window.SidebarMiddle = {
     if (!listContainer) return;
 
     if (!friends || friends.length === 0) {
-      listContainer.innerHTML = '<div style="padding: var(--spacing-lg); text-align: center; color: var(--text-muted); font-size: 13px;">' +
-        'No friends online.<br>Waiting for peers on the local network...' +
+      listContainer.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;padding:40px 20px;text-align:center;color:var(--text-muted);gap:12px;">' +
+        '<i data-lucide="wifi-off" style="width:40px;height:40px;opacity:0.3;"></i>' +
+        '<div style="font-size:14px;font-weight:500;">No friends online</div>' +
+        '<div style="font-size:12px;">Waiting for peers on the local network...</div>' +
       '</div>';
       return;
     }

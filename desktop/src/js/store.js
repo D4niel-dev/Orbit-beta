@@ -49,6 +49,7 @@ class Store {
         enterToSend: true,
         showChatAvatars: true,
         showImagePreviews: true,
+        showLinkPreviews: true,
         notifySound: true,
         notifyVolume: 80,
         notifySoundType: 'chime',

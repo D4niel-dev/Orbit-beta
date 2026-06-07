@@ -180,6 +180,11 @@ window.SettingsModal = {
           '<div class="collapsible-body" style="padding:16px;display:none;">' +
             '<div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">User ID</div>' +
             '<div style="font-size:13px;color:var(--text-secondary);font-family:var(--font-mono);word-break:break-all;padding:10px 12px;background:var(--bg-base);border-radius:8px;border:1px solid var(--border-subtle);">' + (user.userId || 'N/A') + '</div>' +
+            '<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border-subtle);text-align:center;">' +
+              '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Your QR Code</div>' +
+              '<p style="font-size:11px;color:var(--text-muted);margin:0 0 10px;">Share this with others so they can add you.</p>' +
+              '<div id="qr-code-container" style="display:inline-block;padding:10px;background:#fff;border-radius:10px;"></div>' +
+            '</div>' +
           '</div>' +
         '</div>' +
 
@@ -190,6 +195,30 @@ window.SettingsModal = {
         '</div>';
 
       lucide.createIcons({ root: content });
+
+      // Generate QR code for user profile
+      (function generateQR() {
+        var qrContainer = document.getElementById('qr-code-container');
+        if (!qrContainer || typeof QRCode === 'undefined') return;
+        var state = window.store.getState();
+        var user = state.currentUser;
+        if (!user) return;
+        var qrData = JSON.stringify({
+          v: 1,
+          id: user.userId,
+          n: user.username,
+          t: user.usertag
+        });
+        try {
+          var qr = QRCode(0, 'M');
+          qr.addData(qrData);
+          qr.make();
+          qrContainer.innerHTML = qr.createImgTag(4, 0);
+          qrContainer.querySelector('img').style.display = 'block';
+        } catch(e) {
+          qrContainer.innerHTML = '<span style="color:var(--text-muted);font-size:12px;">Could not generate QR code</span>';
+        }
+      })();
 
       // Live preview updates
       function updatePreview() {
@@ -534,6 +563,10 @@ window.SettingsModal = {
               '<input id="set-image-previews" type="checkbox" '+(s.showImagePreviews!==false?'checked':'')+' style="accent-color:var(--accent-primary);">' +
               '<div><div>Image Previews</div><div style="font-size:11px;color:var(--text-muted);font-weight:400;">Show inline image previews in chat</div></div>' +
             '</label>' +
+            '<label style="display:flex;align-items:center;gap:12px;font-size:13px;color:var(--text-primary);cursor:pointer;padding:8px 0;border-top:1px solid var(--border-subtle);">' +
+              '<input id="set-link-previews" type="checkbox" '+(s.showLinkPreviews!==false?'checked':'')+' style="accent-color:var(--accent-primary);">' +
+              '<div><div>Link Previews</div><div style="font-size:11px;color:var(--text-muted);font-weight:400;">Show rich previews for shared links</div></div>' +
+            '</label>' +
           '</div>' +
         '</div>';
 
@@ -650,6 +683,7 @@ window.SettingsModal = {
       content.querySelector('#set-enter-send').addEventListener('change', function(e) { updateSettings('enterToSend', e.target.checked); });
       content.querySelector('#set-chat-avatars').addEventListener('change', function(e) { updateSettings('showChatAvatars', e.target.checked); });
       content.querySelector('#set-image-previews').addEventListener('change', function(e) { updateSettings('showImagePreviews', e.target.checked); });
+      content.querySelector('#set-link-previews').addEventListener('change', function(e) { updateSettings('showLinkPreviews', e.target.checked); });
       content.querySelectorAll('.sidebar-btn-toggle').forEach(function(cb) {
         cb.addEventListener('change', function(e) {
           var btns = Object.assign({}, window.store.getState().settings.sidebarButtons || {});
@@ -728,7 +762,7 @@ window.SettingsModal = {
           '<div style="padding:12px 14px;background:var(--bg-base);border-radius:10px;border:1px solid var(--border-subtle);">' +
             '<div style="font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;margin-bottom:8px;">Online Peers</div>' +
             (peerCount === 0
-              ? '<div style="font-size:13px;color:var(--text-muted);padding:4px 0;">No peers online</div>'
+              ? '<div style="display:flex;flex-direction:column;align-items:center;padding:16px 0;color:var(--text-muted);gap:8px;"><i data-lucide="radio" style="width:28px;height:28px;opacity:0.3;"></i><div style="font-size:13px;">No peers online</div></div>'
               : '<div style="display:flex;flex-direction:column;gap:5px;">' + state.friends.filter(function(f) { return f.status === 'online'; }).map(function(f) {
                 return '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:var(--bg-surface);">' +
                   '<span style="width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block;"></span>' +
@@ -848,8 +882,19 @@ window.SettingsModal = {
       content.querySelector('#net-rtc').addEventListener('change', function(e) { updateNetwork('webrtcFallback', e.target.checked); });
       content.querySelector('#net-log').addEventListener('change', function(e) { updateNetwork('logLevel', e.target.value); });
       content.querySelector('#net-clear').addEventListener('click', function(e) {
-         e.target.textContent = 'Cleared!';
-         setTimeout(function(){ e.target.textContent = 'Clear Network Cache'; }, 2000);
+         var btn = e.target;
+         btn.textContent = 'Clearing...';
+         btn.disabled = true;
+         // Reset discovery and socket connections via IPC
+         if (window.orbitAPI) {
+           var user = window.store ? window.store.getState().currentUser : null;
+           if (user) window.orbitAPI.networkStart(user);
+         }
+         setTimeout(function() {
+           btn.textContent = 'Clear Network Cache';
+           btn.disabled = false;
+           if (window.Toast) window.Toast.show('Network cache cleared', 'info');
+         }, 1500);
       });
       content.querySelector('#net-timeout').addEventListener('change', function(e) { updateNetwork('netTimeout', parseInt(e.target.value, 10) || 30); });
       content.querySelector('#net-keepalive').addEventListener('change', function(e) { updateNetwork('netKeepAlive', parseInt(e.target.value, 10) || 30); });
@@ -1490,7 +1535,7 @@ window.SettingsModal = {
       });
 
     } else if (tabName === 'about') {
-      var version = window.orbitAPI ? (window.orbitAPI.version || '0.0.7-beta') : '0.0.7-beta';
+      var version = window.orbitAPI ? (window.orbitAPI.version || '0.0.8-beta') : '0.0.8-beta';
       var friendCount = state.friends ? state.friends.length : 0;
       var groupCount = state.groups ? state.groups.length : 0;
       var chatCount = Object.keys(state.messages || {}).length;

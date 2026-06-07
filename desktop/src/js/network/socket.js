@@ -70,8 +70,9 @@ class SocketManager extends EventEmitter {
             const packet = JSON.parse(jsonStr);
             
             // If we didn't know the peerId (incoming conn), register it now
-            if (!currentPeerId && packet.from) {
-              currentPeerId = packet.from;
+            var senderId = packet.from || packet.senderId;
+            if (!currentPeerId && senderId) {
+              currentPeerId = senderId;
               this.connections.set(currentPeerId, socket);
             }
             

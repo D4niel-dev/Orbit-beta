@@ -41,7 +41,8 @@ class Discovery {
         const packet = JSON.parse(payloadStr);
         if (packet.type === Protocol.Types.BEACON) {
           const myId = this.identityProvider().userId;
-          if (packet.from !== myId) {
+          const packetFrom = packet.from || packet.senderId;
+          if (packetFrom && packetFrom !== myId) {
             this.handleBeacon(packet, rinfo.address);
           }
         }

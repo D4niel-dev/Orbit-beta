@@ -27,12 +27,14 @@ Orbit.Protocol = {
     EDIT_MESSAGE: 'EDIT_MESSAGE',
     READ_RECEIPT: 'READ_RECEIPT',
     PING: 'PING',
-    PONG: 'PONG'
+    PONG: 'PONG',
+    BEACON: 'BEACON'
   },
 
   createPacket(type, payload, senderId) {
     return JSON.stringify({
       type: type,
+      from: senderId || '',
       senderId: senderId || '',
       timestamp: new Date().toISOString(),
       payload: payload || {}
