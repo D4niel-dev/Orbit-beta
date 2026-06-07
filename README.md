@@ -124,6 +124,15 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **App Zoom** — Zoom slider with preview and restart notification
 - **Chat Settings** — Enter to Send, Show Avatars, Image Preview toggles
 </details>
+<details>
+<summary>v0.0.7-beta</summary>
+
+- **Project restructured** — Desktop and mobile code separated into `desktop/` and `mobile/`
+- **Cross-platform abstraction** — `shared/` modules for database, network, protocol, crypto
+- **Privacy mode fixed** — Thumbnails now generated, gallery sidebar works, backup/restore preserves temp files
+- **Android build pipeline** — GitHub Actions builds `.apk` via Capacitor alongside desktop builds
+- **Mobile UI shell** — Touch-friendly layout with bottom navigation bar
+</details>
 <details open>
 <summary>v0.0.8-beta</summary>
 
@@ -137,15 +146,6 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Desktop Settings Tabs** — Notifications (volume/sound/test), Network (collapsibles), About (version info)
 - **Chat Background Patterns** — Diagonal Stripes, Crosshatch, Circles
 - **Desktop Bug Fixes** — MIME mapping, cache headers, media retry, attachment URLs
-</details>
-<details>
-<summary>v0.0.7-beta</summary>
-
-- **Project restructured** — Desktop and mobile code separated into `desktop/` and `mobile/`
-- **Cross-platform abstraction** — `shared/` modules for database, network, protocol, crypto
-- **Privacy mode fixed** — Thumbnails now generated, gallery sidebar works, backup/restore preserves temp files
-- **Android build pipeline** — GitHub Actions builds `.apk` via Capacitor alongside desktop builds
-- **Mobile UI shell** — Touch-friendly layout with bottom navigation bar
 </details>
 
 See [CHANGELOG.md](CHANGELOG.md) for the full version history.
