@@ -153,7 +153,7 @@ jobs:
       - name: Rename APK
         run: |
           VERSION="${{ github.event.inputs.version || github.ref_name }}"
-          mv mobile/android/app/build/outputs/apk/debug/app-debug.apk mobile/android/app/build/outputs/apk/debug/Orbit-${VERSION}.apk
+          mv android/app/build/outputs/apk/debug/app-debug.apk android/app/build/outputs/apk/debug/Orbit-${VERSION}.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
