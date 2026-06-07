@@ -185,14 +185,14 @@
 - **Persistent Mode Reliability:** Attachments in persistent mode now include proper error handling around file reads, ensuring data isn't silently lost if temp files are removed.
 
 <p align="center">
-  <img src="src/icons/screenshots/preview-group-dark.png" alt="Group chat (dark)" width="360">
-  <img src="src/icons/screenshots/preview-group-light.png" alt="Group chat (light)" width="360"><br>
+  <img src="desktop/icons/screenshots/preview-group-dark.png" alt="Group chat (dark)" width="360">
+  <img src="desktop/icons/screenshots/preview-group-light.png" alt="Group chat (light)" width="360"><br>
   <em>Group chat</em>
 </p>
 
 <p align="center">
-  <img src="src/icons/screenshots/preivew-group-info-dark.png" alt="Group info (dark)" width="360">
-  <img src="src/icons/screenshots/preview-group-info-light.png" alt="Group info (light)" width="360"><br>
+  <img src="desktop/icons/screenshots/preivew-group-info-dark.png" alt="Group info (dark)" width="360">
+  <img src="desktop/icons/screenshots/preview-group-info-light.png" alt="Group info (light)" width="360"><br>
   <em>Group info panel</em>
 </p>
 
