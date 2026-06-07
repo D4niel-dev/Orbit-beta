@@ -17,6 +17,9 @@ class SocketManager extends EventEmitter {
     this.server = net.createServer((socket) => {
       console.log('New incoming TCP connection from', socket.remoteAddress);
       this.setupSocket(socket, null);
+      
+      // Send identity beacon over TCP so peer can discover us
+      this.sendBeacon(socket);
     });
 
     this.server.on('error', (err) => {
@@ -26,6 +29,30 @@ class SocketManager extends EventEmitter {
     this.server.listen(this.TCP_PORT, () => {
       console.log(`TCP Server listening on port ${this.TCP_PORT}`);
     });
+  }
+
+  sendBeacon(socket) {
+    const identity = this.identityProvider();
+    if (!identity || !identity.userId) return;
+    const beaconData = {
+      userId: identity.userId,
+      username: identity.username,
+      usertag: identity.usertag,
+      avatarHash: identity.avatar ? 'has_avatar' : null,
+      status: identity.status || 'online',
+      bio: identity.bio || '',
+      publicKey: identity.publicKey || null,
+      profileFrame: identity.profileFrame || null,
+      tcpPort: this.TCP_PORT,
+      device: 'desktop'
+    };
+    const packet = Protocol.createPacket(Protocol.Types.BEACON, identity.userId, 'ALL', beaconData);
+    const serialized = Protocol.serialize(packet);
+    try {
+      if (socket && !socket.destroyed) socket.write(serialized);
+    } catch (e) {
+      // Ignore write errors on beacon
+    }
   }
 
   connectToPeer(peerId, ip, port = 46000) {
@@ -40,7 +67,8 @@ class SocketManager extends EventEmitter {
       this.connections.set(peerId, socket);
       this.setupSocket(socket, peerId);
       
-      // Handshake or ping could go here
+      // Send identity beacon over TCP so peer can discover us
+      this.sendBeacon(socket);
     });
 
     socket.on('error', (err) => {

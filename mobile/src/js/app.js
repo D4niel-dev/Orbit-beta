@@ -2516,9 +2516,24 @@ document.addEventListener('DOMContentLoaded', function() {
     // Start LAN discovery (sends beacon every 5s, receives beacons)
     Orbit.P2P.startDiscovery(buildBeacon());
 
-    // Listen for incoming connections
+    // Listen for incoming connections — send identity beacon over TCP
     Orbit.P2P.onConnection(function(data) {
       console.log('[P2P] Incoming connection:', data.connectionId);
+      // Send our beacon over TCP so the peer can discover us
+      var u = MStore.user;
+      if (u && data.connectionId) {
+        var beaconPacket = Orbit.Protocol.createPacket('BEACON', {
+          userId: u.id,
+          username: u.name,
+          usertag: u.tag,
+          status: u.status || 'online',
+          bio: u.bio || '',
+          publicKey: u.publicKey || null,
+          tcpPort: 46000,
+          device: 'android'
+        }, u.id);
+        Orbit.P2P.send(data.connectionId, beaconPacket);
+      }
     });
 
     // Listen for messages
@@ -2527,6 +2542,42 @@ document.addEventListener('DOMContentLoaded', function() {
       var packet = Orbit.Protocol.parsePacket(data.data);
       if (!packet) return;
       if (MStore.settings.logNetworkPackets) console.log('[NET] P2P recv <-', data.connectionId, packet);
+
+      // Handle BEACON packets received over TCP (handshake)
+      if (packet.type === Orbit.Protocol.Types.BEACON) {
+        var bp = packet.payload || {};
+        var peerId = bp.userId || packet.from || packet.senderId;
+        if (!peerId || (MStore.user && peerId === MStore.user.id)) return;
+        var peerName = bp.username || bp.name || data.connectionId;
+        var peerTag = bp.usertag || bp.tag || '';
+        // Add or update friend
+        var existing = MStore.friends.find(function(f) { return f.id === peerId; });
+        if (!existing) {
+          MStore.friends.push({
+            id: peerId,
+            name: peerName,
+            tag: peerTag,
+            status: bp.status || 'online',
+            avatar: null,
+            bio: bp.bio || '',
+            ip: null,
+            publicKey: bp.publicKey || null
+          });
+        } else {
+          existing.status = bp.status || 'online';
+          existing.name = peerName;
+        }
+        // Ensure chat exists
+        var chatExists = MStore.chats.find(function(c) { return c.id === peerId; });
+        if (!chatExists) {
+          MStore.chats.push({ id: peerId, name: peerName, lastMessage: '', lastTime: '', unread: 0 });
+        }
+        MStore.save();
+        renderFriends();
+        renderChatList();
+        console.log('[P2P] Beacon handshake from:', peerName);
+        return;
+      }
 
       var msgFrom = packet.from || packet.senderId || data.connectionId;
       var chatId = msgFrom;

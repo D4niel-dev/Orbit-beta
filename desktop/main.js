@@ -591,6 +591,13 @@ app.whenReady().then(() => {
             var reason = packet.payload.reason === 'disk_space' ? 'Recipient has insufficient disk space' : 'Transfer rejected by recipient';
             mainWindow.webContents.send('transfer-error', { fileId: packet.payload.fileId, error: reason });
           }
+        } else if (packet.type === Protocol.Types.BEACON) {
+          // TCP beacon handshake — treat like a discovery event
+          if (packet.payload && mainWindow) {
+            var peerData = packet.payload;
+            peerData.ip = peerData.ip || null;
+            mainWindow.webContents.send('peer-found', peerData);
+          }
         } else {
           mainWindow.webContents.send('network-message', packet);
         }
