@@ -95,8 +95,14 @@ class TransferManager {
     });
 
     const readStream = fs.createReadStream(filePath, { highWaterMark: this.CHUNK_SIZE });
+
+    // Handle read stream errors
+    readStream.on('error', (err) => {
+      this.socketManager.sendMessage(toPeerId, toIp, Protocol.Types.FILE_TRANSFER_CANCEL, { fileId, error: err.message });
+    });
+
     let chunkIndex = 0;
-    
+
     for await (const chunk of readStream) {
       if (this.cancelledSends.has(fileId)) {
         this.cancelledSends.delete(fileId);
@@ -116,12 +122,13 @@ class TransferManager {
         readStream.destroy();
         throw new Error(`Failed to send chunk ${chunkIndex}/${totalChunks} after ${MAX_CHUNK_RETRIES} retries`);
       }
-      
+
       if (this.onProgress) {
         this.onProgress(fileId, { received: chunkIndex + 1, total: totalChunks, isSending: true, name: displayName });
       }
-      
-      await new Promise(r => setTimeout(r, 2));
+
+      // Write backpressure: yield to event loop between chunks
+      await new Promise(r => setImmediate(r));
       chunkIndex++;
     }
     
@@ -165,10 +172,14 @@ class TransferManager {
     const payload = packet.payload;
     const transfer = this.activeReceives.get(payload.fileId);
     if (!transfer) return;
-    
+
     const buffer = Buffer.from(payload.data, 'base64');
     try {
-      transfer.stream.write(buffer);
+      const canContinue = transfer.stream.write(buffer);
+      // Apply backpressure if internal buffer is full
+      if (!canContinue) {
+        transfer.stream.once('drain', () => {});
+      }
     } catch (err) {
       this.cancelReceive(payload.fileId);
       if (this.onError) this.onError(payload.fileId, 'Disk write error: ' + err.message);
@@ -177,7 +188,7 @@ class TransferManager {
     transfer.sha256.update(buffer);
     transfer.receivedCount++;
     transfer.lastActivity = Date.now();
-    
+
     if (this.onProgress) {
       this.onProgress(payload.fileId, { received: transfer.receivedCount, total: transfer.totalChunks, isSending: false });
     }

@@ -1,4 +1,5 @@
 const dgram = require('dgram');
+const os = require('os');
 const Protocol = require('./protocol');
 
 class Discovery {
@@ -6,13 +7,38 @@ class Discovery {
     this.PORT = 45678;
     this.MULTICAST_ADDR = '224.0.0.251';
     this.socket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
-    this.identityProvider = identityProvider; // Function to get current identity
+    this.identityProvider = identityProvider;
     this.onPeerFound = onPeerFound;
     this.beaconInterval = null;
-    this.peers = new Map(); // track last seen
+    this.peers = new Map();
+    this._started = false;
+    this._localIps = null;
+  }
+
+  _getLocalIPs() {
+    if (this._localIps) return this._localIps;
+    const ips = new Set(['127.0.0.1', '0.0.0.0', '::1']);
+    try {
+      const interfaces = os.networkInterfaces();
+      for (const name of Object.keys(interfaces)) {
+        const iface = interfaces[name];
+        if (!iface) continue;
+        for (const addr of iface) {
+          if (addr.address) ips.add(addr.address);
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+    this._localIps = ips;
+    return ips;
   }
 
   start() {
+    if (this._started) return;
+    this._started = true;
+    this._getLocalIPs();
+
     this.socket.on('listening', () => {
       this.socket.setBroadcast(true);
       this.socket.setMulticastTTL(128);
@@ -22,22 +48,23 @@ class Discovery {
         console.error("Could not add multicast membership:", err);
       }
       console.log(`Discovery listening on ${this.MULTICAST_ADDR}:${this.PORT}`);
-      
+
       this.beaconInterval = setInterval(() => this.broadcastBeacon(), 5000);
-      this.broadcastBeacon(); // send one immediately
+      this.broadcastBeacon();
     });
 
     this.socket.on('message', (msg, rinfo) => {
       try {
-        // Find JSON payload ignoring 4-byte length prefix if any
+        // Skip self-beacon from local IPs (BUG-DT-5)
+        if (this._localIps.has(rinfo.address)) return;
+
         let payloadStr = msg.toString('utf8');
         if (msg.length > 4 && msg.readUInt32BE(0) === msg.length - 4) {
           payloadStr = msg.subarray(4).toString('utf8');
         } else if (msg.length > 4 && msg.toString('utf8', 0, 1) !== '{') {
-           // Skip prefix
            payloadStr = msg.subarray(4).toString('utf8');
         }
-        
+
         const packet = JSON.parse(payloadStr);
         if (packet.type === Protocol.Types.BEACON) {
           const myId = this.identityProvider().userId;
@@ -51,14 +78,18 @@ class Discovery {
       }
     });
 
+    this.socket.on('error', (err) => {
+      console.error('Discovery socket error:', err.message);
+    });
+
     this.socket.bind(this.PORT);
   }
 
   broadcastBeacon() {
+    if (!this._started) return;
     const identity = this.identityProvider();
     if (!identity || !identity.userId) return;
 
-    // If invisible, broadcast as offline to hide presence
     var broadcastStatus = identity.status === 'invisible' ? 'offline' : (identity.status || 'online');
 
     const beaconData = {
@@ -66,28 +97,32 @@ class Discovery {
       username: identity.username,
       usertag: identity.usertag,
       avatarHash: identity.avatar ? 'has_avatar' : null,
+      avatar: identity.avatar || null,
       status: broadcastStatus,
       bio: identity.bio,
       publicKey: identity.publicKey || null,
       profileFrame: identity.profileFrame || null,
-      tcpPort: 46000 // default port
+      tcpPort: 46000
     };
 
     const packet = Protocol.createPacket(Protocol.Types.BEACON, identity.userId, "ALL", beaconData);
     const buffer = Protocol.serialize(packet);
 
-    this.socket.send(buffer, 0, buffer.length, this.PORT, this.MULTICAST_ADDR);
+    try {
+      this.socket.send(buffer, 0, buffer.length, this.PORT, this.MULTICAST_ADDR);
+    } catch (e) {
+      console.error('Failed to broadcast beacon:', e.message);
+    }
   }
 
   handleBeacon(packet, ip) {
     if (!packet || !packet.payload) return;
     const peerData = packet.payload;
     const peerId = peerData.userId;
-    
-    // Update or add peer
+
     const now = Date.now();
     const existing = this.peers.get(peerId);
-    
+
     if (!existing || existing.status !== peerData.status || existing.username !== peerData.username) {
       this.onPeerFound({
         ...peerData,
@@ -95,15 +130,20 @@ class Discovery {
         lastSeen: now
       });
     }
-    
+
     this.peers.set(peerId, { ...peerData, ip, lastSeen: now });
   }
 
   stop() {
-    if (this.beaconInterval) clearInterval(this.beaconInterval);
+    this._started = false;
+    if (this.beaconInterval) {
+      clearInterval(this.beaconInterval);
+      this.beaconInterval = null;
+    }
     if (this.socket) {
       try { this.socket.close(); } catch(e) {}
     }
+    this.peers.clear();
   }
 }
 

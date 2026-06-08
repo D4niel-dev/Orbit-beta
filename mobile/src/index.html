@@ -112,7 +112,15 @@
         <div id="chat-header-info" style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;"></div>
         <button id="btn-privacy-badge" class="privacy-badge-btn" title="Privacy mode" style="display:none;"><i data-lucide="eye-off"></i></button>
         <button id="btn-gallery" title="Gallery"><i data-lucide="image"></i></button>
+        <button id="btn-chat-search" title="Search"><i data-lucide="search"></i></button>
         <button id="btn-chat-more"><i data-lucide="more-vertical"></i></button>
+      </div>
+      <div id="message-search-bar" style="display:none;padding:8px 12px;border-bottom:1px solid var(--border-subtle);">
+        <div style="display:flex;align-items:center;gap:8px;background:var(--bg-surface);border-radius:8px;padding:4px 10px;">
+          <i data-lucide="search" style="width:16px;height:16px;color:var(--text-muted);flex-shrink:0;"></i>
+          <input type="text" id="chat-search-input" placeholder="Search messages..." style="flex:1;border:none;background:transparent;outline:none;font-size:13px;color:var(--text-primary);">
+          <button id="btn-chat-search-close" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:2px;"><i data-lucide="x" style="width:14px;height:14px;"></i></button>
+        </div>
       </div>
       <div id="message-feed"></div>
       <div id="file-preview-area" class="file-preview-area" style="display:none;"></div>
@@ -173,9 +181,7 @@
     <aside id="panel-members-overlay" class="overlay-panel">
       <div class="overlay-panel-header">
         <button id="btn-close-members"><i data-lucide="x"></i></button>
-        <h3>Members</h3>
-        <button id="btn-group-avatar" title="Group Avatar"><i data-lucide="camera"></i></button>
-        <button id="btn-add-member" style="color:var(--accent-primary);"><i data-lucide="user-plus"></i></button>
+        <h3>Group Info</h3>
       </div>
       <div id="members-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
     </aside>

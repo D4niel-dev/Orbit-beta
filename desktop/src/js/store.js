@@ -746,7 +746,7 @@ class Store {
     }
     recipients.forEach(function(r) {
       if (window.orbitAPI) {
-        window.orbitAPI.networkSend(r.userId, r.ip, window.Protocol.Types.PIN_MESSAGE, { msgId: msgId });
+        window.orbitAPI.networkSend(r.userId, r.ip, window.Protocol.Types.PIN_MESSAGE, { msgId: msgId, groupId: chatId });
       }
     });
     this.pinMessage(chatId, msgId);
@@ -770,7 +770,7 @@ class Store {
     }
     recipients.forEach(function(r) {
       if (window.orbitAPI) {
-        window.orbitAPI.networkSend(r.userId, r.ip, window.Protocol.Types.UNPIN_MESSAGE, { msgId: msgId });
+        window.orbitAPI.networkSend(r.userId, r.ip, window.Protocol.Types.UNPIN_MESSAGE, { msgId: msgId, groupId: chatId });
       }
     });
     this.unpinMessage(chatId, msgId);

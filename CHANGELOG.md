@@ -1,42 +1,38 @@
 # Orbit Changelog
 
-## v0.0.8-beta **Current Version**
+## v0.0.9-beta **Current Version**
 
 ### Features & Enhancements
-- **Link Previews v2:** Rich preview cards now fetch Open Graph metadata (title, description, image) from shared URLs via Electron IPC. Cards auto-expand to message bubble width, with colored left accent bar, hover/active link color states (white → dark blue → green), and CSS-class-based styling. New "Link Previews" toggle in Chat settings. Mobile link previews added with styled cards and clickable URL text.
-- **Message Link Styling:** URLs in message text now render as actual `<a>` tags with hover (dark blue `#1a3a6b`) and active (green `#2d7a2d`) color states. Own messages show links in white by default. Mobile received the same `linkifyText()` treatment.
-- **Cross-Platform P2P Connectivity:** Desktop and Android now discover each other via LAN multicast beacons and establish TCP connections. Mobile `initP2P()` rewritten with beacon build/discovery, auto-adds friends, auto-creates chats, and handles TYPING/REACTION packets.
-- **Desktop Protocol Compatibility:** `shared/network/protocol.js` (and mobile copy) unified with `BEACON` type and `from` field. Desktop `discovery.js` and `socket.js` accept `packet.from || packet.senderId` for self-filtering and peer registration.
-- **QR Code Generation Fix (Both Platforms):** Root cause was `window.QRCode` not being properly exposed — desktop unpkg `qrcode.js` set global `qrcode` but not `window.QRCode`; mobile library called `qrcode()` (instance) instead of `qrcode` (constructor). Both fixed with proper direct `QRCode(0, 'M')` call.
-- **Mobile QR Code Relocated:** Removed from profile overlay, added as "My QR" tab in Add Friend modal. QR renders on first tab switch.
-- **QR Scanner Performance:** Added `{ willReadFrequently: true }` to `getContext('2d')` in `scanFrame()` — eliminates repeated `getImageData` console violation.
-- **Desktop Settings Tabs:** Notifications (volume slider 0–100%, sound type select, test button), Network (restyled collapsibles + timeout/keep-alive/auto-reconnect/bandwidth), About (version/electron/node info, GitHub link, report-issue link).
-- **Chat Background Patterns:** Added Diagonal Stripes, Crosshatch, Circles. Diagonal Stripes fixed by removing conflicting `background-size`.
-- **Empty State Icons:** Added `wifi-off` to "No friends online", `user-x` to "No friends available", `radio` to "No peers online" (Network tab).
-- **Mobile Toast Overhaul:** Type-based left accent bar, lucide icons per type (info/success/error/warning), slide-in animation, progress bar that shrinks over duration.
-- **Mobile Modal Tabs:** Add Friend modal now has "Add Friend" and "My QR" tabs. Create Group hides tabs and uses the Add Friend tab content.
-- **Mobile Settings Wired:** All settings now have real behavior — `timeFormat24` (12h/24h toggle), `showChatAvatars` (hide chat list avatars), `showImagePreviews` (toggle inline image rendering), `notifyDnd`/`notifyPreview`/`notifySound`/`notifyGroupMentions` (notification controls), `showMessageIds` (message IDs in bubbles), `devMode`/`debugDisplay`/`showConnectionStats` (debug overlay), `logNetworkPackets` (console P2P logging), `maxFileSize` (file size enforcement), `experimentalCompactSpacing` (CSS data attribute), `deleteAttachmentsAfter` (auto-cleanup timer), `networkMode` (show/hide port fields), experimental toggles (CSS data-* attributes).
-- **Mobile Notification Sound:** Plays a short 660Hz beep via Web Audio API on incoming P2P messages when `notifySound` is enabled.
-- **Clear Network Cache Button:** Now calls `window.orbitAPI.networkStart(user)` to reset discovery/socket connections.
+- **Android P2P Stability (10 fixes):** OrbitP2PPlugin.java — fixed `call.resolve()` moved before while loop (BUG-1), `MulticastLock` acquire/release (BUG-2), split `serverRunning`/`discoveryRunning` flags (BUG-3), `synchronized` sendLock (BUG-4), TCP buffer 64KB→4MB (BUG-5), self-beacon filter via `getLocalIPAddresses()` (BUG-6), 5s beacon interval with `lastBeaconTime` gating (BUG-7), `volatile MulticastSocket` + local copy (BUG-8). JS p2p-mobile.js — outbound connection tracking in `connect()` + `isPeerConnected()` (BUG-JS-1/2), 3s reconnect cooldown via `lastConnectAttempt` map (BUG-JS-3), `cleanup()` calls `removeAllListeners()` before re-init (BUG-JS-4).
+- **Desktop P2P Stability (9 fixes):** SocketManager — per-connection write queue (`_enqueueWrite`/`_processQueue`) prevents TCP byte interleaving (BUG-DT-1), 4MB max payload guard (BUG-DT-2), socket error handler (BUG-DT-3), `connectToPeer()` returns Promise (BUG-DT-4). Discovery — self-beacon filter via `os.networkInterfaces()` local IP set (BUG-DT-5), `broadcastBeacon()` try/catch + `_started` guard + socket error handler (BUG-DT-6). TransferManager — `setImmediate` between chunks, `drain` event listener (BUG-DT-7), `readStream.on('error')` cancels transfer (BUG-DT-8). Main process — `network-stop` IPC + `setupNetworkInstances()` extracted for clean restart (BUG-DT-9).
+- **Avatar in P2P Beacons:** Mobile `buildBeacon()` includes `avatar: u.avatar || null`; `onPeerFound` passes to new and existing friends. Desktop discovery.js includes `avatar` field for cross-platform parity.
+- **Mobile Group Info Panel:** Full group management panel — avatar display with owner "Change" button (file picker → dataURL), editable group name (owner only), editable description, invite code with Copy/Share buttons, Pin/Mute toggles, pinned messages section, member list with role badges (Owner/Admin) + join dates, promote/demote buttons (owner), remove button (owner/admin). Leave/Delete broadcast GROUP_LEAVE. All via event delegation on `members-content`.
+- **Cross-Platform Group Sync:** Group creation broadcasts `GROUP_CREATE` to each member with compatible payload. Messages broadcast via `_broadcastToGroupMembers()`. `onMessage` handler processes GROUP_CREATE (creates group + chat) and GROUP_LEAVE (removes member or self-deletes). Payloads compatible with desktop store.js handler.
+- **Pinned Messages (Phase 3a):** `pinnedMessages: []` field added to group defaults, migration, and GROUP_CREATE handler. Pin/unpin button in message action bar (groups only). Toggle updates local store and broadcasts `PIN_MESSAGE`/`UNPIN_MESSAGE` with `msgId`, `groupId`, `text`, `pinnedAt`. P2P receiver handles both types. Desktop store.js now sends `groupId` in pin/unpin payloads. Pinned messages section renders in group info with scroll-to-message on click.
+- **Message Search (Phase 3c):** Search icon button in mobile chat header. Toggles a search bar that filters messages in real-time by text content.
+- **Member Join Dates (Phase 3b):** Group member list shows "Joined Jan 15, 2026" date under each member name.
+- **Share Button:** `#btn-group-share-invite` button in invite code row. Auto-generates invite code if missing, sends invite text as chat message in current chat, broadcasts to group members. Desktop sidebar-middle share button fixed.
+- **Enhanced Message FX:** Bubble bounce animation with glow shadow + inline confetti particle system (circles, burst directions, staggered delays, auto-clean after 1.2s). Desktop and mobile both updated. Uses safe CSS: `rgba()` instead of `color-mix()`, no `overflow:hidden` on feed, no `clip-path` particles.
+- **Mobile Settings Added:** Font Size (Small/Medium/Large → `data-font-size` on `<html>` resizes bubbles, input, member names, chat rows). Message Animation (Slide/Fade → `data-msg-anim` on each row). Auto-Reconnect toggle. Connection Timeout (5/10/30/60s). All wired with defaults, UI rendering, and event bindings.
+- **Add Friend on Android Fixed:** `isAvailable()` gating removed from `confirmAddFriend()` — no more "P2P Preview" blocking message. `getPlugin()` retry mechanism added for resilient plugin acquisition. `android:usesCleartextTraffic="true"` added to AndroidManifest.xml (required for TCP sockets on Android 9+).
 
 ### Bug Fixes
-- **Desktop `positionCard()` brace mismatch** — Fixed syntax error in card layout logic.
-- **Desktop `contentTypeFromAtt()` MIME mapping** — Added proper MIME types for 6 protocol handler paths, fixing Chromium rejection of custom-protocol image loads.
-- **Desktop `cacheHeaders()`** — Added `Cache-Control: no-cache, no-store, must-revalidate` on all `orbit-db://` responses to prevent stale cached error responses.
-- **Desktop `handleMediaError`** — Added auto-retry for media load failures.
-- **Desktop `sendMessage()`** — Now always uses `orbit-db://` URLs with `path: file.path || file.name` fallback; removed blob URL fallback to avoid `ERR_FILE_NOT_FOUND`.
-- **Add Friend Modal + Create Group Modal** — `showCreateGroup()` hides tab bar and shows Add Friend content; `resetModalToAddFriend()` restores tab state. Removed duplicate `modalInput.onkeydown` assignments.
-- **Diagonal Stripes Pattern** — Removed conflicting `background-size` that created visible tile boundaries.
-- **Mobile Create Group Modal** — Fixed bug where modal showed with wrong tabs/corrupted state.
+- **Mobile DB Identity Corruption:** `_migrateGroups()` was called before `this.user` was loaded from localStorage — calling `this.save()` there wrote `undefined` for the user key, regenerating user ID on every restart. Fixed by moving migration after `this.user = this.get('user', null)` in `load()`.
+- **Desktop `require('crypto')` Error:** `require('crypto')` is undefined in Electron renderer process. Replaced with `window.crypto.getRandomValues()` in sidebar-middle.js.
+- **Desktop PIN_MESSAGE Without groupId:** Desktop store.js `pinMessage()`/`unpinMessage()` was missing `groupId` in the pin/unpin payload. Added `groupId` field for cross-platform routing.
+- **Message FX CSS Compatibility:** `color-mix()` CSS function unsupported on older Android WebViews — replaced with `rgba()`. `overflow:hidden` on message feed caused layout lockup — removed. `clip-path` star shapes replaced with simpler sparkle approach.
+
+### Mobile
+- **Mobile DB Migration:** `_migrateGroups()` upgrades existing groups adding `ownerId`, `description`, `inviteCode`, `pinned`, `notificationMuted`, `pinnedMessages`, and converts `members` from `string[]` to `{userId,role,joinedAt}[]` objects.
+- **All `crypto.getRandomValues()` → `window.crypto.getRandomValues()`** for Android WebView compatibility.
+- **New Settings UI:** Added `renderSectionHtml`/`bindSectionEvents` for Font Size (Appearance), Message Animation (Chat), Auto-Reconnect + Timeout (Network).
 
 ### Technical
-- **OG Metadata Fetch:** Added `ipcMain.handle('fetch-og')` in `main.js` — fetches page HTML via Electron `net.fetch`, parses `<title>`, `og:title`, `og:description`, `og:image` with 5s abort timeout. Results cached in `window._linkPreviewCache`.
-- **Message Link Sanitization:** Desktop `sanitize.js` URL regex now uses class `msg-link` instead of inline styles. Mobile added `linkifyText()` helper for the same purpose.
-- **Mobile `initP2P()`:** Full rewrite with `buildBeacon()`, LAN discovery, desktop-compatible beacon parsing, auto-add friend + create chat, auto TCP connect, handles both `from`/`senderId` fields, TYPING/REACTION support, friend status update on disconnect.
-- **Mobile Beacon Format:** Passed as JS object to Java plugin — `call.getObject("beacon", ...)` required for correct deserialization.
-- **TCP Framing:** 4-byte length prefix + JSON encoding is compatible between desktop (Node.js `Buffer`) and mobile (Java `DataInputStream`/`DataOutputStream`).
-- **Store Defaults:** Added `showLinkPreviews: true` to both desktop and mobile default settings.
-- **Version:** Bumped to `0.0.8-beta` across all manifests and About tabs.
+- **OrbitP2PPlugin.java:** `acquireMulticastLock()`/`releaseMulticastLock()` — without this Android drops all multicast UDP at WiFi hardware level. TCP framing uses 4-byte length prefix + JSON, compatible with desktop's Node.js Buffer approach.
+- **Desktop SocketManager:** Per-connection write queues (`_enqueueWrite`/`_processQueue`) — prevents byte interleaving on length-prefixed TCP stream when multiple writes happen in quick succession.
+- **Protocol:** `shared/network/protocol.js` updated with `PIN_MESSAGE` and `UNPIN_MESSAGE` message types.
+- **Android Manifest:** Added `android:usesCleartextTraffic="true"` — required for `new Socket().connect()` on Android 9+.
+- **Version:** Bumped to `0.0.9-beta` across mobile About tab, desktop Settings About tab, and all manifests.
 
 ## v0.0.7-beta
 

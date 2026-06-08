@@ -526,7 +526,7 @@ window.SidebarMiddle = {
       var avatarImg = friend.avatar
         ? '<img src="' + window.Sanitize.escapeHtml(friend.avatar) + '" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">'
         : '<i data-lucide="user"></i>';
-      var avatarContainer = '<div style="position:relative;display:inline-block;width:100%;height:100%;">' + avatarImg + (frame ? '<img src="icons/frames/pfp_frame_' + frame + '.png" style="position:absolute;top:-21%;left:-17%;width:133%;height:133%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '') + '</div>';
+      var avatarContainer = '<div style="position:relative;display:flex;align-items:center;justify-content:center;width:100%;height:100%;">' + avatarImg + (frame ? '<img src="icons/frames/pfp_frame_' + frame + '.png" style="position:absolute;top:-21%;left:-17%;width:133%;height:133%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '') + '</div>';
 
       var unreadCount = unreadCounts[friend.userId] || 0;
       var mentionCount = mentionCounts[friend.userId] || 0;
@@ -850,7 +850,7 @@ window.SidebarMiddle = {
     var shareInviteBtn = document.getElementById('group-info-share-invite');
     if (shareInviteBtn) {
       shareInviteBtn.addEventListener('click', function() {
-        group.inviteCode = group.inviteCode || require('crypto').randomBytes(4).toString('hex');
+        group.inviteCode = group.inviteCode || (function() { var b=new Uint8Array(4); window.crypto.getRandomValues(b); return Array.from(b).map(function(x){return x.toString(16).padStart(2,'0')}).join(''); })();
         var state = window.store.getState();
         var chatId = state.activeChatId;
         if (chatId && chatId !== 'local-echo') {

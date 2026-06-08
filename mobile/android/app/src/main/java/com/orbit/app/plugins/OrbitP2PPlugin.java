@@ -6,6 +6,8 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+import android.content.Context;
+import android.net.wifi.WifiManager;
 import android.os.AsyncTask;
 import android.util.Log;
 
@@ -30,15 +32,18 @@ import java.util.concurrent.Executors;
 public class OrbitP2PPlugin extends Plugin {
 
     private static final String TAG = "OrbitP2P";
-    private static final int TCP_BUFFER_SIZE = 65536;
+    private static final int TCP_BUFFER_SIZE = 4194304; // 4 MB — raised from 64 KB
     private static final String MULTICAST_ADDR = "224.0.0.251";
     private static final int DISCOVERY_PORT = 45678;
+    private static final int BEACON_INTERVAL_MS = 5000;
 
     private ServerSocket serverSocket;
-    private MulticastSocket multicastSocket;
+    private volatile MulticastSocket multicastSocket;
     private final ExecutorService executor = Executors.newCachedThreadPool();
     private final Map<String, PeerConnection> connections = new ConcurrentHashMap<>();
-    private boolean running = false;
+    private volatile boolean serverRunning = false;
+    private volatile boolean discoveryRunning = false;
+    private WifiManager.MulticastLock multicastLock;
 
     // ── TCP Server ──
 
@@ -49,10 +54,10 @@ public class OrbitP2PPlugin extends Plugin {
         executor.execute(() -> {
             try {
                 serverSocket = new ServerSocket(port);
-                running = true;
+                serverRunning = true;
                 call.resolve(new JSObject().put("port", port));
 
-                while (running && !serverSocket.isClosed()) {
+                while (serverRunning && !serverSocket.isClosed()) {
                     Socket client = serverSocket.accept();
                     String peerId = client.getInetAddress().getHostAddress() + ":" + client.getPort();
                     PeerConnection conn = new PeerConnection(peerId, client);
@@ -61,7 +66,7 @@ public class OrbitP2PPlugin extends Plugin {
                     conn.startReading();
                 }
             } catch (IOException e) {
-                if (running) {
+                if (serverRunning) {
                     call.reject("Server error: " + e.getMessage());
                 }
             }
@@ -70,7 +75,7 @@ public class OrbitP2PPlugin extends Plugin {
 
     @PluginMethod
     public void stopServer(PluginCall call) {
-        running = false;
+        serverRunning = false;
         try {
             if (serverSocket != null) serverSocket.close();
         } catch (IOException ignored) {}
@@ -91,6 +96,7 @@ public class OrbitP2PPlugin extends Plugin {
                 socket.connect(new InetSocketAddress(host, port), 5000);
                 PeerConnection conn = new PeerConnection(peerId, socket);
                 connections.put(peerId, conn);
+                notifyConnection(peerId);  // track outbound connections for JS
                 call.resolve(new JSObject().put("connectionId", peerId));
                 conn.startReading();
             } catch (IOException e) {
@@ -140,50 +146,71 @@ public class OrbitP2PPlugin extends Plugin {
 
         executor.execute(() -> {
             try {
-                multicastSocket = new MulticastSocket(DISCOVERY_PORT);
+                acquireMulticastLock();
+
+                MulticastSocket ms = new MulticastSocket(DISCOVERY_PORT);
+                multicastSocket = ms;
                 NetworkInterface ni = getWiFiNetworkInterface();
                 if (ni != null) {
-                    multicastSocket.setNetworkInterface(ni);
+                    ms.setNetworkInterface(ni);
                 }
                 InetAddress group = InetAddress.getByName(MULTICAST_ADDR);
-                multicastSocket.joinGroup(group);
+                ms.joinGroup(group);
 
-                // Send beacon every 5s
+                // Resolve promise immediately (BUG-1 fix)
+                call.resolve();
+
                 byte[] beaconData = beacon.toString().getBytes("UTF-8");
                 DatagramPacket outPacket = new DatagramPacket(beaconData, beaconData.length, group, DISCOVERY_PORT);
 
-                while (running && multicastSocket != null && !multicastSocket.isClosed()) {
-                    multicastSocket.send(outPacket);
+                // Local IPs for self-filtering (BUG-6)
+                java.util.Set<String> localIps = getLocalIPAddresses();
+
+                discoveryRunning = true;
+                long lastBeaconTime = 0;
+
+                while (discoveryRunning && ms != null && !ms.isClosed()) {
+                    long now = System.currentTimeMillis();
+
+                    // Send beacon every BEACON_INTERVAL_MS (BUG-7)
+                    if (now - lastBeaconTime >= BEACON_INTERVAL_MS) {
+                        ms.send(outPacket);
+                        lastBeaconTime = now;
+                    }
 
                     // Listen for incoming beacons (non-blocking)
                     byte[] buf = new byte[4096];
                     DatagramPacket inPacket = new DatagramPacket(buf, buf.length);
-                    multicastSocket.setSoTimeout(1000);
+                    ms.setSoTimeout(1000);
                     try {
-                        multicastSocket.receive(inPacket);
-                        String msg = new String(inPacket.getData(), 0, inPacket.getLength(), "UTF-8");
+                        ms.receive(inPacket);
                         String peerHost = inPacket.getAddress().getHostAddress();
+                        // Filter self-beacon (BUG-6)
+                        if (localIps.contains(peerHost)) continue;
+                        String msg = new String(inPacket.getData(), 0, inPacket.getLength(), "UTF-8");
                         notifyPeerFound(peerHost, msg);
                     } catch (java.net.SocketTimeoutException ignored) {
                         // No beacon this cycle, continue
                     }
                 }
-
-                call.resolve();
             } catch (IOException e) {
                 call.reject("Discovery error: " + e.getMessage());
+            } finally {
+                releaseMulticastLock();
             }
         });
     }
 
     @PluginMethod
     public void stopDiscovery(PluginCall call) {
+        discoveryRunning = false;
         try {
             if (multicastSocket != null) {
                 multicastSocket.close();
                 multicastSocket = null;
             }
         } catch (Exception ignored) {}
+        releaseMulticastLock();
         call.resolve();
     }
 
@@ -204,6 +231,55 @@ public class OrbitP2PPlugin extends Plugin {
             }
         } catch (Exception ignored) {}
         return null;
+    }
+
+    private void acquireMulticastLock() {
+        try {
+            Context ctx = getContext();
+            if (ctx == null) return;
+            WifiManager wm = (WifiManager) ctx.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            if (wm == null) return;
+            multicastLock = wm.createMulticastLock("OrbitP2P-MulticastLock");
+            multicastLock.setReferenceCounted(true);
+            multicastLock.acquire();
+            Log.d(TAG, "MulticastLock acquired");
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to acquire MulticastLock", e);
+        }
+    }
+
+    private void releaseMulticastLock() {
+        try {
+            if (multicastLock != null && multicastLock.isHeld()) {
+                multicastLock.release();
+                multicastLock = null;
+                Log.d(TAG, "MulticastLock released");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to release MulticastLock", e);
+        }
+    }
+
+    private java.util.Set<String> getLocalIPAddresses() {
+        java.util.Set<String> ips = new java.util.HashSet<>();
+        ips.add("127.0.0.1");
+        ips.add("0.0.0.0");
+        try {
+            for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                if (ni.isUp()) {
+                    for (java.net.InetAddress addr : Collections.list(ni.getInetAddresses())) {
+                        String host = addr.getHostAddress();
+                        if (host != null) {
+                            ips.add(host);
+                            // Also add the raw address without zone index
+                            int idx = host.indexOf('%');
+                            if (idx > 0) ips.add(host.substring(0, idx));
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+        return ips;
     }
 
     private void notifyConnection(String peerId) {
@@ -235,7 +311,8 @@ public class OrbitP2PPlugin extends Plugin {
     @Override
     protected void handleOnDestroy() {
         super.handleOnDestroy();
-        running = false;
+        serverRunning = false;
+        discoveryRunning = false;
         for (PeerConnection conn : connections.values()) {
             conn.close();
         }
@@ -246,6 +323,7 @@ public class OrbitP2PPlugin extends Plugin {
         try {
             if (multicastSocket != null) multicastSocket.close();
         } catch (Exception ignored) {}
+        releaseMulticastLock();
         executor.shutdownNow();
     }
 
@@ -256,6 +334,7 @@ public class OrbitP2PPlugin extends Plugin {
         final Socket socket;
         final DataInputStream input;
         final DataOutputStream output;
+        final Object sendLock = new Object();
 
         PeerConnection(String peerId, Socket socket) throws IOException {
             this.peerId = peerId;
@@ -267,7 +346,7 @@ public class OrbitP2PPlugin extends Plugin {
         void startReading() {
             executor.execute(() -> {
                 try {
-                    while (running && !socket.isClosed()) {
+                    while (serverRunning && !socket.isClosed()) {
                         int len = input.readInt();
                         if (len <= 0 || len > TCP_BUFFER_SIZE) break;
                         byte[] buf = new byte[len];
@@ -286,10 +365,12 @@ public class OrbitP2PPlugin extends Plugin {
         }
 
         void send(String data) throws IOException {
-            byte[] buf = data.getBytes("UTF-8");
-            output.writeInt(buf.length);
-            output.write(buf);
-            output.flush();
+            synchronized (sendLock) {
+                byte[] buf = data.getBytes("UTF-8");
+                output.writeInt(buf.length);
+                output.write(buf);
+                output.flush();
+            }
         }
 
         void close() {

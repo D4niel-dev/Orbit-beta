@@ -14,7 +14,23 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        changelogEntry('0.0.8-beta', 'Latest', [
+        changelogEntry('0.0.9-beta', 'Latest', [
+          'Android P2P Stability — 8 Java plugin fixes (multicast lock, beacon gating, TCP buffer, connection tracking) + 4 JS bridge fixes',
+          'Desktop P2P Stability — 9 fixes (write queue, oversized frames, socket errors, self-beacon filter, transfer backpressure, restart)',
+          'Desktop Socket Write Queue — per-connection queue prevents TCP byte interleaving on length-prefixed frames',
+          'Android Add Friend — no more P2P Preview gate; cleartext traffic flag; plugin retry mechanism',
+          'Mobile Group Info Panel — full panel: edit name/description, avatar change, invite code + share, pin/mute, members with roles + join dates, promote/demote/remove, leave/delete',
+          'Cross-Platform Group Sync — GROUP_CREATE/GROUP_LEAVE broadcast compatible between mobile and desktop',
+          'Mobile DB Fix — migration runs after user load to prevent identity corruption on restart',
+          'Pinned Messages — pin/unpin in action bar; pinned section in group info; cross-platform sync via shared protocol',
+          'Message Search — search bar filters messages in real-time on mobile chat header',
+          'Member Join Dates — shows "Joined Jan 15, 2026" in group member list',
+          'Enhanced Message FX — particle confetti system (both platforms); safe CSS (no color-mix, no overflow:hidden)',
+          'Mobile Settings — Font Size (S/M/L), Message Animation (Slide/Fade), Auto-Reconnect toggle, Connection Timeout (5/10/30/60s)',
+          'Desktop Bug Fixes — require(crypto) → window.crypto in sidebar-middle; PIN_MESSAGE groupId in payload',
+          'Avatar in P2P Beacons — cross-platform avatar sharing in discovery packets'
+        ]) +
+        changelogEntry('0.0.8-beta', '', [
           'Rich Link Previews v2 — Open Graph metadata (title, description, image) fetched via Electron IPC',
           'Message Link Styling — URLs in chat text now clickable with hover/active color states (both desktop + mobile)',
           'Cross-Platform P2P — Desktop ↔ Android LAN discovery and messaging via TCP/UDP',

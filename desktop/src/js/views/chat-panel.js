@@ -798,6 +798,9 @@ window.ChatPanel = {
       });
     });
     
+    // Inject message FX particles for own messages
+    this._injectMessageParticles();
+
     // Auto scroll to bottom
     var feed = document.getElementById('chat-message-feed');
     if (feed) feed.scrollTop = feed.scrollHeight;
@@ -1764,6 +1767,36 @@ window.ChatPanel = {
       var input = document.getElementById('chat-input');
       if (input) input.value = '';
       window.store.notify();
+    }
+  },
+
+  _injectMessageParticles() {
+    if (!window.store) return;
+    var s = window.store.getState();
+    if (!s.settings.experimentalMessageFx) return;
+    var feed = document.getElementById('chat-message-feed');
+    if (!feed) return;
+    var bubbles = feed.querySelectorAll('.message-own .message-bubble');
+    if (!bubbles.length) return;
+    var colors = ['#ffd700','#ff6b6b','#48dbfb','#ff9ff3','#feca57','#a29bfe','#fd79a8','#00cec9'];
+    var count = 10 + Math.floor(Math.random() * 6);
+    for (var bi = 0; bi < bubbles.length; bi++) {
+      for (var i = 0; i < count; i++) {
+        var p = document.createElement('div');
+        p.className = 'fx-particle';
+        var angle = Math.random() * 360;
+        var dist = 25 + Math.random() * 55;
+        var rad = angle * Math.PI / 180;
+        p.style.setProperty('--p-x', (Math.cos(rad) * dist) + 'px');
+        p.style.setProperty('--p-y', (Math.sin(rad) * dist) + 'px');
+        p.style.setProperty('--p-delay', (Math.random() * 0.12) + 's');
+        var sz = 3 + Math.random() * 4;
+        p.style.width = sz + 'px';
+        p.style.height = sz + 'px';
+        p.style.background = colors[Math.floor(Math.random() * colors.length)];
+        bubbles[bi].appendChild(p);
+        setTimeout(function(el) { if (el.parentNode) el.parentNode.removeChild(el); }, 1200, p);
+      }
     }
   }
 };

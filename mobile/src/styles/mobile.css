@@ -1491,6 +1491,352 @@ html, body {
   text-overflow: ellipsis;
 }
 
+/* ─── Group Info Panel ─── */
+.group-info-avatar-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 0 12px;
+  gap: 6px;
+}
+.group-info-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--accent-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--accent-primary);
+  flex-shrink: 0;
+}
+.group-info-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.group-info-change-avatar {
+  font-size: 11px;
+  color: var(--accent-primary);
+  cursor: pointer;
+  padding: 2px 8px;
+}
+.group-info-change-avatar:active {
+  opacity: 0.7;
+}
+.group-info-field {
+  padding: 8px 16px;
+}
+.group-info-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.group-info-input {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-size: 14px;
+  box-sizing: border-box;
+}
+.group-info-input:disabled {
+  opacity: 0.6;
+}
+.group-info-textarea {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-size: 13px;
+  resize: none;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+.group-info-textarea:disabled {
+  opacity: 0.6;
+}
+.group-info-invite-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.group-info-code {
+  font-size: 13px;
+  color: var(--accent-primary);
+  font-family: monospace;
+  flex: 1;
+}
+.group-info-btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.group-info-btn:active {
+  background: var(--bg-hover);
+}
+.group-info-btn-danger {
+  color: var(--accent-danger);
+  border-color: var(--accent-danger);
+  width: 100%;
+  justify-content: center;
+  padding: 10px;
+  font-size: 13px;
+}
+.group-info-btn-danger:active {
+  background: rgba(239,68,68,0.1);
+}
+.group-info-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  font-size: 13px;
+  color: var(--text-primary);
+  border-top: 1px solid var(--border-subtle);
+}
+.group-info-pinned-section {
+  border-top: 1px solid var(--border-subtle);
+  padding: 8px 16px 4px;
+  margin-top: 4px;
+}
+.group-info-pinned-header {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+.group-info-pinned-list {
+  max-height: 150px;
+  overflow-y: auto;
+}
+.group-info-pinned-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.group-info-pinned-item:hover {
+  background: var(--bg-hover);
+}
+.group-info-pinned-text {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.group-info-pinned-by {
+  font-size: 10px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.group-info-pinned-remove {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 12px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.group-info-pinned-remove:hover {
+  background: var(--bg-danger);
+  color: var(--accent-danger);
+}
+.group-info-pinned-empty {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 4px 8px;
+}
+.group-member-joined {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+.group-info-members-header {
+  display: flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 12px 16px 6px;
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 4px;
+}
+.group-info-members-list {
+  padding: 0 8px;
+}
+.group-member-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px;
+  border-radius: 8px;
+}
+.group-member-row:active {
+  background: var(--bg-hover);
+}
+.group-member-avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+.group-member-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent-primary);
+  overflow: hidden;
+}
+.group-member-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.group-member-status {
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--bg-base);
+}
+.group-member-info {
+  flex: 1;
+  min-width: 0;
+}
+.group-member-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.group-member-tag {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.group-role-badge {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+.group-role-owner {
+  background: var(--accent-primary);
+  color: white;
+}
+.group-role-admin {
+  background: var(--accent-warning);
+  color: #000;
+}
+.group-member-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.group-member-action {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.group-member-action:active {
+  background: var(--bg-hover);
+}
+.group-member-remove {
+  color: var(--accent-danger);
+}
+.group-member-promote {
+  color: var(--accent-primary);
+}
+.group-member-demote {
+  color: var(--accent-warning);
+}
+.group-info-actions {
+  padding: 16px;
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 8px;
+}
+
+/* ─── Toggle Switch ─── */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 22px;
+  cursor: pointer;
+}
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: #555;
+  border-radius: 11px;
+  transition: 0.2s;
+}
+.toggle-slider::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: white;
+  transition: 0.2s;
+}
+.toggle-switch input:checked + .toggle-slider {
+  background: var(--accent-primary);
+}
+.toggle-switch input:checked + .toggle-slider::after {
+  left: 20px;
+}
+
 /* ─── Modal ─── */
 .modal-overlay {
   position: fixed;
@@ -1909,4 +2255,49 @@ html, body {
 }
 .message-row:not(.mine) .msg-link-mob:active {
   color: #2d7a2d;
+}
+
+/* ─── Font Size ─── */
+[data-font-size="small"] .message-bubble {
+  font-size: 13px;
+  padding: 8px 12px;
+}
+[data-font-size="small"] .chat-input-field {
+  font-size: 14px;
+}
+[data-font-size="small"] .group-member-name {
+  font-size: 13px;
+}
+[data-font-size="small"] .chat-row-name {
+  font-size: 13px;
+}
+
+[data-font-size="large"] .message-bubble {
+  font-size: 17px;
+  padding: 12px 16px;
+}
+[data-font-size="large"] .chat-input-field {
+  font-size: 17px;
+}
+[data-font-size="large"] .group-member-name {
+  font-size: 15px;
+}
+[data-font-size="large"] .chat-row-name {
+  font-size: 15px;
+}
+
+/* ─── Message Animation ─── */
+.message-row[data-msg-anim="fade"] {
+  animation: msg-fade-in 0.3s ease-out;
+}
+@keyframes msg-fade-in {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+.message-row[data-msg-anim="slide"] {
+  animation: msg-slide-in 0.25s ease-out;
+}
+@keyframes msg-slide-in {
+  0% { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
 }

@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v008-beta-current-version">v0.0.8-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v009-beta-current-version">v0.0.9-beta</a>
 </p>
 
 <p align="center">
@@ -134,6 +134,20 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Mobile UI shell** — Touch-friendly layout with bottom navigation bar
 </details>
 <details open>
+<summary>v0.0.9-beta</summary>
+
+- **Android P2P Stability** — 8 Java plugin fixes (multicast lock, beacon gating, TCP buffer, connection tracking) + 4 JS bridge fixes for reliable Android discovery and messaging
+- **Desktop P2P Stability** — 9 fixes including per-connection write queue, oversized frame guard, socket error handlers, self-beacon IP filter, transfer backpressure, and clean restart support
+- **Mobile Group Info Panel** — Full panel: edit group name/description, change avatar, invite code with Copy/Share, pin/mute toggles, member list with roles (Owner/Admin) + join dates, promote/demote/remove members, leave/delete group
+- **Cross-Platform Group Sync** — Group creation (GROUP_CREATE) and leave (GROUP_LEAVE) broadcast compatible between mobile and desktop
+- **Pinned Messages** — Pin/unpin in message action bar; pinned messages section in group info; cross-platform sync via PIN_MESSAGE/UNPIN_MESSAGE protocol
+- **Message Search** — Search bar filters messages in real-time on mobile chat header
+- **Enhanced Message FX** — Particle confetti system on sent messages (both platforms); safe CSS for Android WebView compatibility
+- **Mobile Settings Added** — Font Size (Small/Medium/Large), Message Animation (Slide/Fade), Auto-Reconnect toggle, Connection Timeout (5/10/30/60s)
+- **Mobile DB Fix** — Critical fix: migration now runs after user data loads to prevent identity corruption on restart
+- **Add Friend on Android** — No more "P2P Preview" gating; `android:usesCleartextTraffic` flag; plugin retry mechanism for reliable friend addition
+</details>
+<details>
 <summary>v0.0.8-beta</summary>
 
 - **Rich Link Previews** — Open Graph metadata (title, description, image) fetched via Electron IPC; styled cards with left accent bar, hover/active link colors
@@ -290,7 +304,6 @@ Transparency matters in beta. Current constraints include:
 | **LAN-focused** | Peers must be reachable on the local network. NAT traversal is not implemented. |
 | **Unstable Wi-Fi** | Large transfers and discovery can degrade on flaky wireless links. |
 | **Group E2EE** | End-to-end encryption currently works for direct messages only. Group E2EE is planned. |
-| **Mobile networking** | Android app has the UI shell but P2P networking (TCP/UDP) is not yet ported to Capacitor plugins. |
 | **Unsigned builds** | Installers are not code-signed; Windows SmartScreen warnings are expected. |
 
 ## Roadmap
@@ -300,6 +313,16 @@ Transparency matters in beta. Current constraints include:
 <details>
 <summary>Recently</summary>
 
+- **Android P2P Stability** — 8 Java plugin fixes + 4 JS bridge fixes for reliable LAN discovery and messaging
+- **Desktop P2P Stability** — 9 fixes including write queue, oversized frame guard, socket error handlers, self-beacon filter, transfer backpressure
+- **Mobile Group Info Panel** — Full group management: edit, avatar, invite, pin/mute, members with roles/join dates, promote/demote/remove, leave/delete
+- **Cross-Platform Group Sync** — GROUP_CREATE/GROUP_LEAVE broadcast compatible between mobile and desktop
+- **Pinned Messages** — Pin/unpin with cross-platform sync; pinned section in group info panel
+- **Message Search (Mobile)** — Real-time message filtering in chat header
+- **Enhanced Message FX** — Particle confetti on sent messages (both platforms); safe CSS for WebView
+- **Mobile Settings Added** — Font Size, Message Animation, Auto-Reconnect, Connection Timeout
+- **Mobile DB Fix** — Migration runs after user data load to prevent identity corruption
+- **Android Add Friend Fix** — No P2P Preview gate; cleartext traffic flag; plugin retry
 - **End-to-end encryption (E2EE)** — ECDH + AES-256-GCM for direct messages
 - **Backup & Restore** — Full database export/import (.orzip / .zip)
 - **Database Health & Repair** — Integrity checks, VACUUM, REINDEX

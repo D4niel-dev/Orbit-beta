@@ -8,11 +8,16 @@ Orbit.P2P = (function() {
   var listeners = {};
   var connections = {};
   var discoveryActive = false;
+  var lastConnectAttempt = {};
+  var _pluginChecked = false;
 
   function getPlugin() {
     if (plugin) return plugin;
+    if (_pluginChecked) return null;
+    // Capacitor plugins may register asynchronously; re-check each call until found
     if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.OrbitP2P) {
       plugin = window.Capacitor.Plugins.OrbitP2P;
+      _pluginChecked = true;
     }
     return plugin;
   }
@@ -38,9 +43,11 @@ Orbit.P2P = (function() {
     var p = getPlugin();
     if (!p) return;
     for (var name in listeners) {
-      listeners[name].forEach(function(h) {
-        if (h && h.remove) h.remove();
-      });
+      if (listeners.hasOwnProperty(name)) {
+        listeners[name].forEach(function(h) {
+          if (h && h.remove) h.remove();
+        });
+      }
     }
     listeners = {};
   }
@@ -72,12 +79,26 @@ Orbit.P2P = (function() {
     async connect(host, port, peerId) {
       var p = getPlugin();
       if (!p) return { success: false, error: 'Plugin not available' };
+
+      // Reconnect cooldown (BUG-JS-3): skip if we tried within 3s
+      var key = peerId || (host + ':' + (port || 46000));
+      var now = Date.now();
+      var last = lastConnectAttempt[key] || 0;
+      if (now - last < 3000) {
+        return { success: false, error: 'Reconnect cooldown' };
+      }
+      lastConnectAttempt[key] = now;
+
       try {
         var result = await p.connect({
           host: host,
           port: port || 46000,
-          peerId: peerId || (host + ':' + (port || 46000))
+          peerId: key
         });
+        // Track outbound connections in JS map (BUG-JS-1/2)
+        if (result.connectionId) {
+          connections[result.connectionId] = { status: 'connected' };
+        }
         return { success: true, connectionId: result.connectionId };
       } catch(e) {
         return { success: false, error: e.message || String(e) };
@@ -90,6 +111,7 @@ Orbit.P2P = (function() {
       try {
         await p.disconnect({ connectionId: connectionId });
       } catch(e) {}
+      delete connections[connectionId];
     },
 
     async send(connectionId, data) {
@@ -108,6 +130,7 @@ Orbit.P2P = (function() {
       if (!p) return { success: false, error: 'Plugin not available' };
       discoveryActive = true;
       try {
+        // BUG-1: startDiscovery now resolves immediately on the Java side
         await p.startDiscovery({ beacon: beaconData || {} });
         return { success: true };
       } catch(e) {
@@ -127,6 +150,10 @@ Orbit.P2P = (function() {
 
     isDiscoveryActive() {
       return discoveryActive;
+    },
+
+    isPeerConnected(peerId) {
+      return !!connections[peerId];
     },
 
     getConnections() {
@@ -154,6 +181,7 @@ Orbit.P2P = (function() {
       this.stopDiscovery();
       removeAllListeners();
       connections = {};
+      lastConnectAttempt = {};
     }
   };
 })();

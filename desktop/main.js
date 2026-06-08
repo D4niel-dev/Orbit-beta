@@ -548,64 +548,65 @@ app.whenReady().then(() => {
     }
   });
 
+  function setupNetworkInstances() {
+    if (socketInstance) return;
+    socketInstance = new SocketManager(() => currentIdentity);
+    transferInstance = new TransferManager(socketInstance);
+
+    transferInstance.onProgress = (fileId, progressData) => {
+      if (mainWindow) {
+        mainWindow.webContents.send('transfer-progress', { fileId, ...progressData });
+      }
+    };
+
+    transferInstance.onError = (fileId, errorMsg) => {
+      if (mainWindow) {
+        mainWindow.webContents.send('transfer-error', { fileId, error: errorMsg });
+      }
+    };
+
+    socketInstance.on('message', (packet) => {
+      if (packet.type === Protocol.Types.FILE_TRANSFER_START) {
+        transferInstance.handleStart(packet);
+      } else if (packet.type === Protocol.Types.FILE_CHUNK) {
+        transferInstance.handleChunk(packet);
+      } else if (packet.type === Protocol.Types.FILE_TRANSFER_END) {
+        transferInstance.handleEnd(packet, (savedPath, fileName, fileId, fileSize) => {
+           mainWindow.webContents.send('file-received', { path: savedPath, name: fileName, sender: packet.from, fileId: fileId, size: fileSize });
+        }, (errorMsg, fileId) => {
+           console.error('File Transfer Error:', errorMsg);
+           if (mainWindow) {
+             mainWindow.webContents.send('transfer-error', { fileId, error: errorMsg });
+           }
+        });
+      } else if (packet.type === Protocol.Types.FILE_TRANSFER_CANCEL) {
+        transferInstance.handleCancel(packet);
+        if (mainWindow) {
+          mainWindow.webContents.send('transfer-error', { fileId: packet.payload.fileId, error: 'Sender cancelled the transfer' });
+        }
+      } else if (packet.type === Protocol.Types.FILE_TRANSFER_REJECT) {
+        if (mainWindow) {
+          var reason = packet.payload.reason === 'disk_space' ? 'Recipient has insufficient disk space' : 'Transfer rejected by recipient';
+          mainWindow.webContents.send('transfer-error', { fileId: packet.payload.fileId, error: reason });
+        }
+      } else if (packet.type === Protocol.Types.BEACON) {
+        if (packet.payload && mainWindow) {
+          var peerData = packet.payload;
+          peerData.ip = peerData.ip || null;
+          mainWindow.webContents.send('peer-found', peerData);
+        }
+      } else {
+        mainWindow.webContents.send('network-message', packet);
+      }
+    });
+
+    socketInstance.startServer();
+  }
+
   ipcMain.on('network-start', (event, identity) => {
     currentIdentity = identity;
-    
-    if (!socketInstance) {
-      socketInstance = new SocketManager(() => currentIdentity);
-      transferInstance = new TransferManager(socketInstance);
-      
-      transferInstance.onProgress = (fileId, progressData) => {
-        if (mainWindow) {
-          mainWindow.webContents.send('transfer-progress', { fileId, ...progressData });
-        }
-      };
+    setupNetworkInstances();
 
-      transferInstance.onError = (fileId, errorMsg) => {
-        if (mainWindow) {
-          mainWindow.webContents.send('transfer-error', { fileId, error: errorMsg });
-        }
-      };
-      
-      socketInstance.on('message', (packet) => {
-        if (packet.type === Protocol.Types.FILE_TRANSFER_START) {
-          transferInstance.handleStart(packet);
-        } else if (packet.type === Protocol.Types.FILE_CHUNK) {
-          transferInstance.handleChunk(packet);
-        } else if (packet.type === Protocol.Types.FILE_TRANSFER_END) {
-          transferInstance.handleEnd(packet, (savedPath, fileName, fileId, fileSize) => {
-             mainWindow.webContents.send('file-received', { path: savedPath, name: fileName, sender: packet.from, fileId: fileId, size: fileSize });
-          }, (errorMsg, fileId) => {
-             console.error('File Transfer Error:', errorMsg);
-             if (mainWindow) {
-               mainWindow.webContents.send('transfer-error', { fileId, error: errorMsg });
-             }
-          });
-        } else if (packet.type === Protocol.Types.FILE_TRANSFER_CANCEL) {
-          transferInstance.handleCancel(packet);
-          if (mainWindow) {
-            mainWindow.webContents.send('transfer-error', { fileId: packet.payload.fileId, error: 'Sender cancelled the transfer' });
-          }
-        } else if (packet.type === Protocol.Types.FILE_TRANSFER_REJECT) {
-          if (mainWindow) {
-            var reason = packet.payload.reason === 'disk_space' ? 'Recipient has insufficient disk space' : 'Transfer rejected by recipient';
-            mainWindow.webContents.send('transfer-error', { fileId: packet.payload.fileId, error: reason });
-          }
-        } else if (packet.type === Protocol.Types.BEACON) {
-          // TCP beacon handshake — treat like a discovery event
-          if (packet.payload && mainWindow) {
-            var peerData = packet.payload;
-            peerData.ip = peerData.ip || null;
-            mainWindow.webContents.send('peer-found', peerData);
-          }
-        } else {
-          mainWindow.webContents.send('network-message', packet);
-        }
-      });
-      
-      socketInstance.startServer();
-    }
-    
     if (!discoveryInstance) {
       discoveryInstance = new Discovery(() => currentIdentity, (peer) => {
         mainWindow.webContents.send('peer-found', peer);
@@ -613,6 +614,21 @@ app.whenReady().then(() => {
       discoveryInstance.start();
     }
     event.returnValue = true;
+  });
+
+  ipcMain.on('network-stop', () => {
+    if (socketInstance) {
+      socketInstance.stop();
+      socketInstance = null;
+    }
+    if (discoveryInstance) {
+      discoveryInstance.stop();
+      discoveryInstance = null;
+    }
+    if (transferInstance) {
+      transferInstance.destroy();
+      transferInstance = null;
+    }
   });
 
   ipcMain.on('network-connect', (event, ip) => {
