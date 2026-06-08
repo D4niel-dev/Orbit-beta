@@ -1,6 +1,8 @@
 // mobile/src/js/app.js
 // Orbit Mobile — Main App Controller
 
+console.log('[APP] app.js loaded at', new Date().toISOString());
+
 /* ---- Data Store ---- */
 var MStore = {
   get(key, fallback) {
@@ -3167,9 +3169,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var entry = { t: new Date().toISOString().slice(11,23), cat: category, msg: msg, data: data || null };
     _logBuffer.push(entry);
     if (_logBuffer.length > 500) _logBuffer.shift();
-    if (MStore && MStore.settings && MStore.settings.devMode) {
-      console.log('[' + category + ']', msg, data || '');
-    }
+    console.log('[' + category + ']', msg, data || '');
   }
   function showLogOverlay() {
     if (_logOverlay) { _logOverlay.style.display = 'flex'; return; }
