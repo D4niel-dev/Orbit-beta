@@ -14,6 +14,12 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
+        changelogEntry('0.0.9.1-beta', 'Unrelease', [
+          'Mobile initP2P Logging — detailed debug logs throughout P2P initialization and lifecycle',
+          'Dev Mode DevTools — toggling Developer Mode loads eruda on-device inspector panel',
+          'Debug Log Buffer — scrollable log overlay when dev mode is active',
+          'Cross-platform v0.0.9.1-beta version sync'
+        ]) +
         changelogEntry('0.0.9-beta', 'Latest', [
           'Android P2P Stability — 8 Java plugin fixes (multicast lock, beacon gating, TCP buffer, connection tracking) + 4 JS bridge fixes',
           'Desktop P2P Stability — 9 fixes (write queue, oversized frames, socket errors, self-beacon filter, transfer backpressure, restart)',

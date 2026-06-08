@@ -1514,7 +1514,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var friendsCount = MStore.friends.length;
         var chatsCount = MStore.chats.length;
         return '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.0.9-beta · Capacitor Android</div></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.0.9.1-beta · Capacitor Android</div></div>' +
         '</div>' +
         '<div class="settings-row">' +
           '<div class="settings-row-content"><span class="settings-row-title">Statistics</span><div class="settings-row-desc">' + friendsCount + ' friends · ' + chatsCount + ' chats</div></div>' +
@@ -1629,7 +1629,37 @@ document.addEventListener('DOMContentLoaded', function() {
         if (addFriendRow) addFriendRow.addEventListener('click', showAddFriendModal);
         break;
       case 'advanced':
-        bindToggle('set-dev-mode', function(on) { s.devMode = on; MStore.save(); document.documentElement.setAttribute('data-dev-mode', on ? 'true' : ''); updateDebugOverlay(); }, s.devMode);
+        bindToggle('set-dev-mode', function(on) {
+          s.devMode = on; MStore.save(); document.documentElement.setAttribute('data-dev-mode', on ? 'true' : ''); updateDebugOverlay();
+          if (on) {
+            // Load eruda for on-device devtools
+            if (!window.eruda) {
+              var sc = document.createElement('script');
+              sc.src = 'https://cdn.jsdelivr.net/npm/eruda';
+              sc.onload = function() { eruda.init(); showToast('DevTools loaded (eruda)', 'info'); };
+              sc.onerror = function() { showToast('Could not load DevTools — use chrome://inspect', 'warning'); };
+              document.body.appendChild(sc);
+            } else {
+              eruda.init();
+            }
+            // Show log overlay button
+            if (!document.getElementById('p2p-log-btn')) {
+              var btn = document.createElement('button');
+              btn.id = 'p2p-log-btn';
+              btn.textContent = 'P2P Log';
+              btn.style.cssText = 'position:fixed;bottom:12px;right:12px;z-index:99998;background:#0a0;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:11px;font-family:monospace;cursor:pointer;opacity:0.7;';
+              btn.addEventListener('click', showLogOverlay);
+              document.body.appendChild(btn);
+            }
+            renderLogBuffer();
+            showToast('Dev Mode ON — Logs enabled', 'info');
+          } else {
+            if (window.eruda) try { eruda.destroy(); } catch(e) {}
+            var lb = document.getElementById('p2p-log-btn');
+            if (lb) lb.remove();
+            if (_logOverlay) { _logOverlay.remove(); _logOverlay = null; }
+          }
+        }, s.devMode);
         bindToggle('set-debug-display', function(on) { s.debugDisplay = on; MStore.save(); updateDebugOverlay(); }, s.debugDisplay);
         bindToggle('set-msg-ids', function(on) { s.showMessageIds = on; MStore.save(); if (activeChatId) renderMessages(activeChatId); }, s.showMessageIds);
         bindToggle('set-log-packets', function(on) { s.logNetworkPackets = on; MStore.save(); }, s.logNetworkPackets);
@@ -3126,27 +3156,86 @@ document.addEventListener('DOMContentLoaded', function() {
     };
   }
 
+  /* -- Debug log buffer (visible when devMode is on) -- */
+  var _logBuffer = [];
+  var _logOverlay = null;
+  function escHtml(s) {
+    if (typeof s !== 'string') return String(s || '');
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function debugLog(category, msg, data) {
+    var entry = { t: new Date().toISOString().slice(11,23), cat: category, msg: msg, data: data || null };
+    _logBuffer.push(entry);
+    if (_logBuffer.length > 500) _logBuffer.shift();
+    if (MStore && MStore.settings && MStore.settings.devMode) {
+      console.log('[' + category + ']', msg, data || '');
+    }
+  }
+  function showLogOverlay() {
+    if (_logOverlay) { _logOverlay.style.display = 'flex'; return; }
+    var overlay = document.createElement('div');
+    overlay.id = 'p2p-log-overlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.85);z-index:99999;display:flex;flex-direction:column;padding:12px;font-family:monospace;font-size:11px;color:#0f0;';
+    var header = document.createElement('div');
+    header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-shrink:0;';
+    header.innerHTML = '<span style="font-weight:700;font-size:13px;">P2P Log</span><button id="p2p-log-close" style="background:transparent;border:1px solid #0f0;color:#0f0;border-radius:4px;padding:4px 12px;cursor:pointer;">Close</button>';
+    var content = document.createElement('div');
+    content.id = 'p2p-log-content';
+    content.style.cssText = 'flex:1;overflow-y:auto;white-space:pre-wrap;line-height:1.5;';
+    overlay.appendChild(header);
+    overlay.appendChild(content);
+    document.body.appendChild(overlay);
+    _logOverlay = overlay;
+    renderLogBuffer();
+    document.getElementById('p2p-log-close').addEventListener('click', function() { overlay.style.display = 'none'; });
+  }
+  function renderLogBuffer() {
+    var el = document.getElementById('p2p-log-content');
+    if (!el) return;
+    el.innerHTML = _logBuffer.map(function(e) {
+      return '<span style="color:#888;">' + e.t + '</span> <span style="color:#0af;">[' + e.cat + ']</span> ' + escHtml(e.msg) + (e.data ? ' <span style="color:#fa0;">' + escHtml(JSON.stringify(e.data)) + '</span>' : '');
+    }).join('\n');
+    el.scrollTop = el.scrollHeight;
+  }
+
   function initP2P() {
-    if (!window.Orbit || !window.Orbit.P2P) return;
+    if (!window.Orbit || !window.Orbit.P2P) {
+      debugLog('P2P', 'initP2P aborted — Orbit.P2P not available');
+      return;
+    }
+    debugLog('P2P', 'initP2P called');
+    var u = MStore.user;
 
     // Remove stale listeners before re-initializing (BUG-JS-4)
+    debugLog('P2P', 'Cleaning up stale listeners');
     Orbit.P2P.cleanup();
 
+    debugLog('P2P', 'P2P plugin available: ' + Orbit.P2P.isAvailable());
+
     // Start TCP server
+    debugLog('P2P', 'Starting TCP server on port 46000');
     Orbit.P2P.startServer(46000).then(function(result) {
       if (result.success) {
-        console.log('[P2P] Server started on port ' + result.port);
+        debugLog('P2P', 'Server started on port ' + result.port);
+      } else {
+        debugLog('P2P', 'Server start failed: ' + (result.error || 'unknown'));
       }
     });
 
+    // Build beacon
+    var beacon = buildBeacon();
+    debugLog('P2P', 'Beacon built', { userId: u ? u.id : 'none', username: u ? u.name : 'none' });
+
     // Start LAN discovery (sends beacon every 5s, receives beacons)
-    Orbit.P2P.startDiscovery(buildBeacon());
+    debugLog('P2P', 'Starting LAN discovery');
+    Orbit.P2P.startDiscovery(beacon).then(function(r) {
+      debugLog('P2P', 'Discovery start result', r);
+    });
 
     // Listen for incoming connections — send identity beacon over TCP
     Orbit.P2P.onConnection(function(data) {
-      console.log('[P2P] Incoming connection:', data.connectionId);
+      debugLog('P2P', 'Incoming connection', { connectionId: data.connectionId, host: data.host });
       // Send our beacon over TCP so the peer can discover us
-      var u = MStore.user;
       if (u && data.connectionId) {
         var beaconPacket = Orbit.Protocol.createPacket('BEACON', {
           userId: u.id,
@@ -3159,15 +3248,24 @@ document.addEventListener('DOMContentLoaded', function() {
           tcpPort: 46000,
           device: 'android'
         }, u.id);
+        debugLog('P2P', 'Sending TCP beacon to', { connectionId: data.connectionId, target: u.name });
         Orbit.P2P.send(data.connectionId, beaconPacket);
       }
     });
 
     // Listen for messages
     Orbit.P2P.onMessage(function(data) {
-      if (!data || !data.data) return;
+      if (!data || !data.data) {
+        debugLog('P2P', 'onMessage received empty data');
+        return;
+      }
+      debugLog('P2P', 'Raw message from ' + (data.connectionId || '?'), { length: data.data.length, preview: data.data.substring(0, 80) });
       var packet = Orbit.Protocol.parsePacket(data.data);
-      if (!packet) return;
+      if (!packet) {
+        debugLog('P2P', 'Failed to parse packet from ' + (data.connectionId || '?'));
+        return;
+      }
+      debugLog('P2P', 'Parsed packet type=' + packet.type + ' from=' + (packet.from || packet.senderId || '?'), packet.payload);
       if (MStore.settings.logNetworkPackets) console.log('[NET] P2P recv <-', data.connectionId, packet);
 
       // Handle BEACON packets received over TCP (handshake)
@@ -3383,42 +3481,61 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Listen for disconnections
     Orbit.P2P.onDisconnect(function(data) {
-      console.log('[P2P] Disconnected:', data.connectionId);
+      debugLog('P2P', 'Disconnected', { connectionId: data.connectionId });
       var friend = MStore.friends.find(function(f) { return f.id === data.connectionId; });
       if (friend) {
+        debugLog('P2P', 'Marking friend offline', { name: friend.name, id: friend.id });
         friend.status = 'offline';
         MStore.save();
         renderFriends();
         renderChatList();
+      } else {
+        debugLog('P2P', 'No friend found for disconnected ID', { id: data.connectionId });
       }
     });
 
     // Listen for peers found via discovery
     Orbit.P2P.onPeerFound(function(data) {
-      if (!data || !data.host) return;
-      console.log('[P2P] Peer found:', data.host);
+      if (!data || !data.host) {
+        debugLog('P2P', 'onPeerFound called with invalid data', data);
+        return;
+      }
+      debugLog('P2P', 'Peer found via discovery', { host: data.host, beaconType: typeof data.beacon });
 
       // Parse beacon — Java plugin sends it as a JSON string
       var beacon;
       try {
         beacon = typeof data.beacon === 'string' ? JSON.parse(data.beacon) : data.beacon;
       } catch(e) {
+        debugLog('P2P', 'Failed to parse beacon JSON from', data.host);
         return;
       }
-      if (!beacon) return;
+      if (!beacon) {
+        debugLog('P2P', 'Empty beacon from', data.host);
+        return;
+      }
 
       var peerId = beacon.from || beacon.senderId;
-      if (!peerId) return;
+      if (!peerId) {
+        debugLog('P2P', 'Beacon missing from/senderId', beacon);
+        return;
+      }
       var pPayload = beacon.payload || beacon;
       var peerName = pPayload.username || pPayload.name || data.host;
       var peerTag = pPayload.usertag || pPayload.tag || '';
 
       // Filter out own beacon
-      if (MStore.user && peerId === MStore.user.id) return;
+      if (MStore.user && peerId === MStore.user.id) {
+        debugLog('P2P', 'Ignoring own beacon from', data.host);
+        return;
+      }
+
+      debugLog('P2P', 'Discovered peer', { id: peerId, name: peerName, host: data.host, device: pPayload.device || '?' });
 
       // Add or update friend
       var existing = MStore.friends.find(function(f) { return f.id === peerId; });
       if (!existing) {
+        debugLog('P2P', 'Adding new friend from beacon', { name: peerName, id: peerId });
         MStore.friends.push({
           id: peerId,
           name: peerName,
@@ -3432,6 +3549,7 @@ document.addEventListener('DOMContentLoaded', function() {
         MStore.save();
         renderFriends();
       } else {
+        debugLog('P2P', 'Updating existing friend status', { name: existing.name, id: peerId });
         existing.status = 'online';
         existing.ip = data.host;
         if (pPayload.avatar) existing.avatar = pPayload.avatar;
@@ -3442,6 +3560,7 @@ document.addEventListener('DOMContentLoaded', function() {
       // Ensure chat exists
       var chatExists = MStore.chats.find(function(c) { return c.id === peerId; });
       if (!chatExists) {
+        debugLog('P2P', 'Creating chat for new peer', { name: peerName, id: peerId });
         MStore.chats.push({ id: peerId, name: peerName, lastMessage: '', lastTime: '', unread: 0 });
         MStore.save();
         renderChatList();
@@ -3449,19 +3568,25 @@ document.addEventListener('DOMContentLoaded', function() {
 
       // Auto-connect to peer (skip if already connected)
       var existingConn = Orbit.P2P.isPeerConnected(peerId);
+      debugLog('P2P', 'Checking connection status for ' + peerName, { connected: !!existingConn });
       if (!existingConn) {
         var port = pPayload.tcpPort || 46000;
+        debugLog('P2P', 'Auto-connecting to ' + peerName + ' at ' + data.host + ':' + port);
         Orbit.P2P.connect(data.host, port, peerId).then(function(result) {
           if (result.success) {
-            console.log('[P2P] Connected to', peerName);
+            debugLog('P2P', 'Connected to', { name: peerName, id: peerId, connectionId: result.connectionId });
             var friend = MStore.friends.find(function(f) { return f.id === peerId; });
             if (friend) {
               friend.status = 'online';
               MStore.save();
               renderFriends();
             }
+          } else {
+            debugLog('P2P', 'Connection to ' + peerName + ' failed', { error: result.error });
           }
         });
+      } else {
+        debugLog('P2P', 'Already connected to ' + peerName + ', skipping');
       }
     });
   }
@@ -3556,6 +3681,7 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   /* -- Init -- */
+  debugLog('P2P', 'App initialization starting');
   initP2P();
   migrateOldData();
   initEmojiPicker();
