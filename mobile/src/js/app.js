@@ -3501,13 +3501,14 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
       debugLog('P2P', 'Peer found via discovery', { host: data.host, beaconType: typeof data.beacon });
+      debugLog('P2P', 'Raw beacon string', typeof data.beacon === 'string' ? data.beacon : JSON.stringify(data.beacon));
 
       // Parse beacon — Java plugin sends it as a JSON string
       var beacon;
       try {
         beacon = typeof data.beacon === 'string' ? JSON.parse(data.beacon) : data.beacon;
       } catch(e) {
-        debugLog('P2P', 'Failed to parse beacon JSON from', data.host);
+        debugLog('P2P', 'Failed to parse beacon JSON from ' + data.host, { raw: typeof data.beacon === 'string' ? data.beacon.substring(0, 300) : String(data.beacon).substring(0, 300), error: e.message });
         return;
       }
       if (!beacon) {

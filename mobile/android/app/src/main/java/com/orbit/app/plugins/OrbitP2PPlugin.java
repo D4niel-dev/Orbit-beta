@@ -188,6 +188,7 @@ public class OrbitP2PPlugin extends Plugin {
                         // Filter self-beacon (BUG-6)
                         if (localIps.contains(peerHost)) continue;
                         String msg = new String(inPacket.getData(), 0, inPacket.getLength(), "UTF-8");
+                        Log.d(TAG, "Raw beacon from " + peerHost + ": " + msg);
                         notifyPeerFound(peerHost, msg);
                     } catch (java.net.SocketTimeoutException ignored) {
                         // No beacon this cycle, continue

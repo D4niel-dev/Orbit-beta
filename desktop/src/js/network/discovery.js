@@ -65,6 +65,7 @@ class Discovery {
            payloadStr = msg.subarray(4).toString('utf8');
         }
 
+        console.log('[Discovery] Raw beacon from ' + rinfo.address + ': ' + payloadStr.substring(0, 500));
         const packet = JSON.parse(payloadStr);
         if (packet.type === Protocol.Types.BEACON) {
           const myId = this.identityProvider().userId;
