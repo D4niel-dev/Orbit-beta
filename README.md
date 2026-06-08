@@ -133,20 +133,6 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Android build pipeline** — GitHub Actions builds `.apk` via Capacitor alongside desktop builds
 - **Mobile UI shell** — Touch-friendly layout with bottom navigation bar
 </details>
-<details open>
-<summary>v0.0.9-beta</summary>
-
-- **Android P2P Stability** — 8 Java plugin fixes (multicast lock, beacon gating, TCP buffer, connection tracking) + 4 JS bridge fixes for reliable Android discovery and messaging
-- **Desktop P2P Stability** — 9 fixes including per-connection write queue, oversized frame guard, socket error handlers, self-beacon IP filter, transfer backpressure, and clean restart support
-- **Mobile Group Info Panel** — Full panel: edit group name/description, change avatar, invite code with Copy/Share, pin/mute toggles, member list with roles (Owner/Admin) + join dates, promote/demote/remove members, leave/delete group
-- **Cross-Platform Group Sync** — Group creation (GROUP_CREATE) and leave (GROUP_LEAVE) broadcast compatible between mobile and desktop
-- **Pinned Messages** — Pin/unpin in message action bar; pinned messages section in group info; cross-platform sync via PIN_MESSAGE/UNPIN_MESSAGE protocol
-- **Message Search** — Search bar filters messages in real-time on mobile chat header
-- **Enhanced Message FX** — Particle confetti system on sent messages (both platforms); safe CSS for Android WebView compatibility
-- **Mobile Settings Added** — Font Size (Small/Medium/Large), Message Animation (Slide/Fade), Auto-Reconnect toggle, Connection Timeout (5/10/30/60s)
-- **Mobile DB Fix** — Critical fix: migration now runs after user data loads to prevent identity corruption on restart
-- **Add Friend on Android** — No more "P2P Preview" gating; `android:usesCleartextTraffic` flag; plugin retry mechanism for reliable friend addition
-</details>
 <details>
 <summary>v0.0.8-beta</summary>
 
@@ -160,6 +146,20 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Desktop Settings Tabs** — Notifications (volume/sound/test), Network (collapsibles), About (version info)
 - **Chat Background Patterns** — Diagonal Stripes, Crosshatch, Circles
 - **Desktop Bug Fixes** — MIME mapping, cache headers, media retry, attachment URLs
+</details>
+<details open>
+<summary>v0.0.9-beta</summary>
+
+- **Android P2P Stability** — 8 Java plugin fixes (multicast lock, beacon gating, TCP buffer, connection tracking) + 4 JS bridge fixes for reliable Android discovery and messaging
+- **Desktop P2P Stability** — 9 fixes including per-connection write queue, oversized frame guard, socket error handlers, self-beacon IP filter, transfer backpressure, and clean restart support
+- **Mobile Group Info Panel** — Full panel: edit group name/description, change avatar, invite code with Copy/Share, pin/mute toggles, member list with roles (Owner/Admin) + join dates, promote/demote/remove members, leave/delete group
+- **Cross-Platform Group Sync** — Group creation (GROUP_CREATE) and leave (GROUP_LEAVE) broadcast compatible between mobile and desktop
+- **Pinned Messages** — Pin/unpin in message action bar; pinned messages section in group info; cross-platform sync via PIN_MESSAGE/UNPIN_MESSAGE protocol
+- **Message Search** — Search bar filters messages in real-time on mobile chat header
+- **Enhanced Message FX** — Particle confetti system on sent messages (both platforms); safe CSS for Android WebView compatibility
+- **Mobile Settings Added** — Font Size (Small/Medium/Large), Message Animation (Slide/Fade), Auto-Reconnect toggle, Connection Timeout (5/10/30/60s)
+- **Mobile DB Fix** — Critical fix: migration now runs after user data loads to prevent identity corruption on restart
+- **Add Friend on Android** — No more "P2P Preview" gating; `android:usesCleartextTraffic` flag; plugin retry mechanism for reliable friend addition
 </details>
 
 See [CHANGELOG.md](CHANGELOG.md) for the full version history.
