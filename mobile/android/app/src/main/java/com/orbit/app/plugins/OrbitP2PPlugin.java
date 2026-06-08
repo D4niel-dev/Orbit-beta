@@ -345,7 +345,7 @@ public class OrbitP2PPlugin extends Plugin {
     // ── Connection Handler ──
 
     private class PeerConnection {
-        final String peerId;
+        String peerId;
         final Socket socket;
         final DataInputStream input;
         final DataOutputStream output;
@@ -358,6 +358,8 @@ public class OrbitP2PPlugin extends Plugin {
             this.output = new DataOutputStream(socket.getOutputStream());
         }
 
+        private boolean firstPacket = true;
+
         void startReading() {
             executor.execute(() -> {
                 try {
@@ -367,6 +369,24 @@ public class OrbitP2PPlugin extends Plugin {
                         byte[] buf = new byte[len];
                         input.readFully(buf);
                         String msg = new String(buf, "UTF-8");
+
+                        // Remap inbound connection from ip:port to userId (matching desktop socket.js:149-156)
+                        if (firstPacket) {
+                            firstPacket = false;
+                            try {
+                                org.json.JSONObject pkt = new org.json.JSONObject(msg);
+                                String senderId = pkt.optString("from");
+                                if (senderId == null || senderId.isEmpty()) {
+                                    senderId = pkt.optString("senderId");
+                                }
+                                if (senderId != null && !senderId.isEmpty() && !senderId.equals(peerId)) {
+                                    Log.d(TAG, "Dual mapping connection: " + peerId + " + " + senderId);
+                                    connections.put(senderId, this);
+                                    peerId = senderId;
+                                }
+                            } catch (Exception ignored) {}
+                        }
+
                         notifyMessage(peerId, msg);
                     }
                 } catch (IOException e) {
