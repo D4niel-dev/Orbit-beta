@@ -304,6 +304,7 @@ public class OrbitP2PPlugin extends Plugin {
     }
 
     private void notifyMessage(String peerId, String data) {
+        Log.d(TAG, "notifyMessage: peerId=" + peerId + " data(len=" + (data != null ? data.length() : 0) + "): " + (data != null ? data.substring(0, Math.min(data.length(), 120)) : "null"));
         JSObject obj = new JSObject();
         obj.put("connectionId", peerId);
         obj.put("data", data);

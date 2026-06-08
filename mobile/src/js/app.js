@@ -3313,7 +3313,10 @@ document.addEventListener('DOMContentLoaded', function() {
       }
 
       var chat = MStore.chats.find(function(c) { return c.id === chatId; });
-      if (!chat) return;
+      if (!chat) {
+        debugLog('P2P', 'Chat not found for message from ' + msgFrom + ' chatId=' + chatId + ' type=' + packet.type, { availableChats: MStore.chats.map(function(c){return c.id;}).join(',') });
+        return;
+      }
 
       if (packet.type === Orbit.Protocol.Types.MESSAGE) {
         var msgText = packet.payload.text || '';
@@ -3341,6 +3344,7 @@ document.addEventListener('DOMContentLoaded', function() {
           }
         }
 
+        debugLog('P2P', 'Incoming MESSAGE from ' + msgFrom + ' chatId=' + chatId, { text: msgText.substring(0, 100) });
         MStore.addMessage(chatId, {
           id: 'p2p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
           from: msgFrom,
@@ -3374,6 +3378,16 @@ document.addEventListener('DOMContentLoaded', function() {
             if (activeChatId === chatId) renderMessages(activeChatId);
           }
         }
+      }
+
+      // File transfers — not yet supported on mobile
+      if (packet.type === Orbit.Protocol.Types.FILE_TRANSFER_OFFER ||
+          packet.type === Orbit.Protocol.Types.FILE_TRANSFER_ACCEPT ||
+          packet.type === Orbit.Protocol.Types.FILE_TRANSFER_COMPLETE ||
+          packet.type === Orbit.Protocol.Types.FILE_TRANSFER_CANCEL) {
+        debugLog('P2P', 'File transfer not supported on mobile — ignoring ' + packet.type + ' from ' + msgFrom);
+        showToast('File transfers not available on mobile yet', 'warning');
+        return;
       }
 
       // Handle GROUP_CREATE — receive group from peer
@@ -3489,6 +3503,19 @@ document.addEventListener('DOMContentLoaded', function() {
         MStore.save();
         renderFriends();
         renderChatList();
+        // Auto-reconnect if enabled
+        if (MStore.settings.netAutoReconnect !== false && friend.ip) {
+          debugLog('P2P', 'Auto-reconnect scheduled in 5s for ' + friend.name);
+          setTimeout(function() {
+            if (friend.status === 'offline') {
+              debugLog('P2P', 'Auto-reconnecting to ' + friend.name + ' at ' + friend.ip);
+              Orbit.P2P.connect(friend.ip, 46000, friend.id).then(function(r) {
+                if (r.success) debugLog('P2P', 'Auto-reconnect OK', { name: friend.name, connectionId: r.connectionId });
+                else debugLog('P2P', 'Auto-reconnect failed for ' + friend.name, { error: r.error });
+              });
+            }
+          }, 5000);
+        }
       } else {
         debugLog('P2P', 'No friend found for disconnected ID', { id: data.connectionId });
       }
