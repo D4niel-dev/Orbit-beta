@@ -1516,7 +1516,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var friendsCount = MStore.friends.length;
         var chatsCount = MStore.chats.length;
         return '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.0.9.1-beta · Capacitor Android</div></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.0.9.3-beta · Capacitor Android</div></div>' +
         '</div>' +
         '<div class="settings-row">' +
           '<div class="settings-row-content"><span class="settings-row-title">Statistics</span><div class="settings-row-desc">' + friendsCount + ' friends · ' + chatsCount + ' chats</div></div>' +
@@ -1649,7 +1649,7 @@ document.addEventListener('DOMContentLoaded', function() {
               var btn = document.createElement('button');
               btn.id = 'p2p-log-btn';
               btn.textContent = 'P2P Log';
-              btn.style.cssText = 'position:fixed;bottom:12px;right:12px;z-index:99998;background:#0a0;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:11px;font-family:monospace;cursor:pointer;opacity:0.7;';
+              btn.style.cssText = 'position:fixed;bottom:100px;right:16px;z-index:99998;background:#0a0;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-family:monospace;cursor:pointer;opacity:0.85;box-shadow:0 2px 8px rgba(0,0,0,0.3);';
               btn.addEventListener('click', showLogOverlay);
               document.body.appendChild(btn);
             }
@@ -3095,6 +3095,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Friends tab: click to start chat
   document.addEventListener('click', function(e) {
+    // Don't open chat if context menu is showing
+    if (document.getElementById('friend-context-overlay')) return;
     var friendRow = e.target.closest('.friend-row');
     if (friendRow) {
       var fid = friendRow.getAttribute('data-friend');
@@ -3113,6 +3115,98 @@ document.addEventListener('DOMContentLoaded', function() {
       openChat(fid);
     }
   });
+
+  /* -- Long-press context menu for friend rows -- */
+  var _lpTimer = null;
+  var _lpTarget = null;
+
+  function showFriendContextMenu(friend, touchX, touchY) {
+    hideFriendContextMenu();
+    var backdrop = document.createElement('div');
+    backdrop.id = 'friend-context-overlay';
+    backdrop.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:99999;background:rgba(0,0,0,0.3);';
+    backdrop.addEventListener('click', hideFriendContextMenu);
+    backdrop.addEventListener('touchmove', function(e) { e.preventDefault(); }, { passive: false });
+
+    var menu = document.createElement('div');
+    menu.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:100000;background:var(--bg-surface);border-radius:16px 16px 0 0;padding:16px 0;box-shadow:0 -4px 20px rgba(0,0,0,0.3);';
+    menu.addEventListener('click', function(e) { e.stopPropagation(); });
+
+    var header = document.createElement('div');
+    header.style.cssText = 'padding:0 16px 12px;border-bottom:1px solid var(--border-subtle);margin-bottom:4px;';
+    header.innerHTML = '<div style="font-size:15px;font-weight:600;color:var(--text-primary);">' + escapeHtml(friend.name) + '</div><div style="font-size:12px;color:var(--text-muted);">' + (friend.status || 'offline') + '</div>';
+    menu.appendChild(header);
+
+    function addMenuItem(label, icon, onClick) {
+      var item = document.createElement('div');
+      item.style.cssText = 'display:flex;align-items:center;gap:12px;padding:14px 16px;color:var(--text-primary);font-size:15px;cursor:pointer;';
+      item.addEventListener('click', function(e) { e.stopPropagation(); onClick(); hideFriendContextMenu(); });
+      item.innerHTML = '<i data-lucide="' + icon + '" style="width:20px;height:20px;color:var(--text-muted);flex-shrink:0;"></i><span>' + label + '</span>';
+      menu.appendChild(item);
+    }
+
+    var isMuted = MStore.settings.mutedChats && MStore.settings.mutedChats[friend.id];
+    addMenuItem(isMuted ? 'Unmute Notifications' : 'Mute Notifications', isMuted ? 'bell' : 'bell-off', function() {
+      if (!MStore.settings.mutedChats) MStore.settings.mutedChats = {};
+      if (MStore.settings.mutedChats[friend.id]) {
+        delete MStore.settings.mutedChats[friend.id];
+      } else {
+        MStore.settings.mutedChats[friend.id] = true;
+      }
+      MStore.save();
+      showToast(isMuted ? 'Unmuted' : 'Muted', 'info');
+    });
+
+    addMenuItem('View Profile', 'user', function() {
+      showToast(friend.name + ' — ' + (friend.status || 'offline'), 'info');
+    });
+
+    addMenuItem('Close DM', 'x', function() {
+      MStore.chats = MStore.chats.filter(function(c) { return c.id !== friend.id; });
+      delete MStore.messages[friend.id];
+      MStore.friends = MStore.friends.filter(function(f) { return f.id !== friend.id; });
+      MStore.save();
+      if (activeChatId === friend.id) closeChat();
+      renderChatList();
+      renderFriends();
+      showToast(friend.name + ' — DM closed', 'info');
+    });
+
+    var cancel = document.createElement('div');
+    cancel.style.cssText = 'display:flex;align-items:center;justify-content:center;padding:14px 16px;margin-top:4px;border-top:1px solid var(--border-subtle);color:var(--text-muted);font-size:15px;cursor:pointer;';
+    cancel.textContent = 'Cancel';
+    cancel.addEventListener('click', function(e) { e.stopPropagation(); hideFriendContextMenu(); });
+    menu.appendChild(cancel);
+
+    backdrop.appendChild(menu);
+    document.body.appendChild(backdrop);
+    renderLucide({ root: menu });
+  }
+
+  function hideFriendContextMenu() {
+    var el = document.getElementById('friend-context-overlay');
+    if (el) el.remove();
+  }
+
+  document.addEventListener('touchstart', function(e) {
+    var friendRow = e.target.closest('.friend-row');
+    if (!friendRow) return;
+    _lpTarget = friendRow.getAttribute('data-friend');
+    _lpTimer = setTimeout(function() {
+      _lpTimer = null;
+      var friend = MStore.friends.find(function(f) { return f.id === _lpTarget; });
+      if (!friend) return;
+      showFriendContextMenu(friend, e.touches ? e.touches[0].clientX : 0, e.touches ? e.touches[0].clientY : 0);
+    }, 500);
+  }, { passive: true });
+
+  document.addEventListener('touchmove', function(e) {
+    if (_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; _lpTarget = null; }
+  }, { passive: true });
+
+  document.addEventListener('touchend', function(e) {
+    if (_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; _lpTarget = null; }
+  }, { passive: true });
 
   /* -- Init E2EE (async, non-blocking) -- */
   if (window.Orbit && window.Orbit.E2EE && window.Orbit.E2EE.init) {
@@ -3275,8 +3369,31 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!peerId || (MStore.user && peerId === MStore.user.id)) return;
         var peerName = bp.username || bp.name || data.connectionId;
         var peerTag = bp.usertag || bp.tag || '';
-        // Add or update friend
+        // Add or update friend — with peer merging (Bug #2)
         var existing = MStore.friends.find(function(f) { return f.id === peerId; });
+        // Also search by connectionId to catch host:port-based peers
+        if (!existing && data.connectionId && data.connectionId !== peerId) {
+          var connIp = data.connectionId.split(':')[0];
+          var connFriend = MStore.friends.find(function(f) { return f.id === data.connectionId || (connIp && f.ip === connIp); });
+          if (connFriend) {
+            debugLog('P2P', 'Merging TCP peer: ' + connFriend.id + ' → ' + peerId, { name: peerName });
+            var oldChatId = connFriend.id;
+            if (oldChatId !== peerId) {
+              if (MStore.messages[oldChatId]) {
+                MStore.messages[peerId] = (MStore.messages[peerId] || []).concat(MStore.messages[oldChatId]);
+                delete MStore.messages[oldChatId];
+              }
+              MStore.chats = MStore.chats.filter(function(c) { return c.id !== oldChatId; });
+            }
+            connFriend.id = peerId;
+            connFriend.name = peerName;
+            connFriend.tag = peerTag;
+            connFriend.status = bp.status || 'online';
+            if (bp.avatar) connFriend.avatar = bp.avatar;
+            if (bp.publicKey) connFriend.publicKey = bp.publicKey;
+            existing = connFriend;
+          }
+        }
         if (!existing) {
           MStore.friends.push({
             id: peerId,
@@ -3293,10 +3410,17 @@ document.addEventListener('DOMContentLoaded', function() {
           existing.name = peerName;
           if (bp.avatar) existing.avatar = bp.avatar;
         }
-        // Ensure chat exists
+        // Ensure chat exists (avoid duplicates from host:port→UUID merge)
         var chatExists = MStore.chats.find(function(c) { return c.id === peerId; });
         if (!chatExists) {
           MStore.chats.push({ id: peerId, name: peerName, lastMessage: '', lastTime: '', unread: 0 });
+        } else {
+          // Clean up any orphan chats
+          var ipChat = MStore.chats.find(function(c) { return c.id !== peerId && c.name === peerName; });
+          if (ipChat) {
+            MStore.chats = MStore.chats.filter(function(c) { return c.id !== ipChat.id; });
+            delete MStore.messages[ipChat.id];
+          }
         }
         MStore.save();
         renderFriends();
@@ -3387,6 +3511,43 @@ document.addEventListener('DOMContentLoaded', function() {
           packet.type === Orbit.Protocol.Types.FILE_TRANSFER_CANCEL) {
         debugLog('P2P', 'File transfer not supported on mobile — ignoring ' + packet.type + ' from ' + msgFrom);
         showToast('File transfers not available on mobile yet', 'warning');
+        return;
+      }
+
+      // Handle MESSAGE_EDIT — desktop sends edited messages
+      if (packet.type === Orbit.Protocol.Types.MESSAGE_EDIT) {
+        var me = packet.payload || {};
+        if (me.msgId && MStore.messages[chatId]) {
+          var msgIdx = MStore.messages[chatId].findIndex(function(m) { return String(m.id) === String(me.msgId); });
+          if (msgIdx !== -1) {
+            MStore.messages[chatId][msgIdx].text = me.newText || me.text;
+            MStore.save();
+            if (activeChatId === chatId) renderMessages(chatId);
+          }
+        }
+        return;
+      }
+
+      // Handle READ — desktop sends read receipts
+      if (packet.type === Orbit.Protocol.Types.READ) {
+        var rr = packet.payload || {};
+        if (rr.chatId && MStore.messages[rr.chatId]) {
+          MStore.messages[rr.chatId].forEach(function(m) {
+            if (m.id <= rr.lastReadMsgId && !m.read) m.read = true;
+          });
+          MStore.save();
+        }
+        return;
+      }
+
+      // Handle MESSAGE_DELETE — desktop deletes messages
+      if (packet.type === Orbit.Protocol.Types.MESSAGE_DELETE) {
+        var md = packet.payload || {};
+        if (md.msgId && MStore.messages[chatId]) {
+          MStore.messages[chatId] = MStore.messages[chatId].filter(function(m) { return String(m.id) !== String(md.msgId); });
+          MStore.save();
+          if (activeChatId === chatId) renderMessages(chatId);
+        }
         return;
       }
 
@@ -3491,6 +3652,48 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         return;
       }
+
+      // Handle GROUP_MEMBER_ADDED — new member added by admin/owner
+      if (packet.type === Orbit.Protocol.Types.GROUP_MEMBER_ADDED) {
+        var gm = packet.payload || {};
+        var gmGroupId = gm.groupId;
+        var newMember = gm.user;
+        if (!gmGroupId || !newMember) return;
+        var gmGrp = MStore.groups.find(function(g) { return g.id === gmGroupId; });
+        if (gmGrp) {
+          var alreadyMember = (gmGrp.members || []).find(function(m) { return (typeof m === 'string' ? m : m.userId) === newMember.userId; });
+          if (!alreadyMember) {
+            gmGrp.members = gmGrp.members || [];
+            gmGrp.members.push(newMember);
+            MStore.save();
+            showToast(newMember.name || newMember.username || 'Someone' + ' was added to ' + gmGrp.name || 'group', 'info');
+            if (activeChatId === gmGroupId) {
+              var hi = document.getElementById('chat-header-info');
+              if (hi) {
+                var sd2 = hi.querySelector('div:last-child');
+                if (sd2) sd2.textContent = gmGrp.members.length + ' members';
+              }
+            }
+          }
+        }
+        return;
+      }
+
+      // Handle GROUP_OWNER_TRANSFER — ownership transferred
+      if (packet.type === Orbit.Protocol.Types.GROUP_OWNER_TRANSFER) {
+        var gt = packet.payload || {};
+        var gtGroupId = gt.groupId;
+        var newOwnerId = gt.newOwnerId;
+        if (!gtGroupId || !newOwnerId) return;
+        var gtGrp = MStore.groups.find(function(g) { return g.id === gtGroupId; });
+        if (gtGrp) {
+          gtGrp.ownerId = newOwnerId;
+          MStore.save();
+          var newOwnerFriend = MStore.friends.find(function(f) { return f.id === newOwnerId; });
+          showToast('Ownership transferred to ' + (newOwnerFriend ? newOwnerFriend.name : 'someone'), 'info');
+        }
+        return;
+      }
     });
 
     // Listen for disconnections
@@ -3560,8 +3763,34 @@ document.addEventListener('DOMContentLoaded', function() {
 
       debugLog('P2P', 'Discovered peer', { id: peerId, name: peerName, host: data.host, device: pPayload.device || '?' });
 
-      // Add or update friend
+      // Add or update friend — with peer merging (Bug #2)
       var existing = MStore.friends.find(function(f) { return f.id === peerId; });
+      // Also search by IP to catch host:port-based peers
+      if (!existing && data.host) {
+        var ipFriend = MStore.friends.find(function(f) { return f.ip === data.host; });
+        if (ipFriend) {
+          debugLog('P2P', 'Merging friend by IP: ' + ipFriend.id + ' → ' + peerId, { name: peerName });
+          // Move messages from old chat to new chat
+          var oldChatId = ipFriend.id;
+          if (oldChatId !== peerId) {
+            if (MStore.messages[oldChatId]) {
+              MStore.messages[peerId] = (MStore.messages[peerId] || []).concat(MStore.messages[oldChatId]);
+              delete MStore.messages[oldChatId];
+            }
+            // Remove old chat
+            MStore.chats = MStore.chats.filter(function(c) { return c.id !== oldChatId; });
+          }
+          // Upgrade friend ID
+          ipFriend.id = peerId;
+          ipFriend.name = peerName;
+          ipFriend.tag = peerTag;
+          ipFriend.status = 'online';
+          ipFriend.ip = data.host;
+          if (pPayload.avatar) ipFriend.avatar = pPayload.avatar;
+          if (pPayload.publicKey) ipFriend.publicKey = pPayload.publicKey;
+          existing = ipFriend;
+        }
+      }
       if (!existing) {
         debugLog('P2P', 'Adding new friend from beacon', { name: peerName, id: peerId });
         MStore.friends.push({
@@ -3585,17 +3814,27 @@ document.addEventListener('DOMContentLoaded', function() {
         renderFriends();
       }
 
-      // Ensure chat exists
+      // Ensure chat exists (avoid duplicates from host:port→UUID merge)
       var chatExists = MStore.chats.find(function(c) { return c.id === peerId; });
       if (!chatExists) {
         debugLog('P2P', 'Creating chat for new peer', { name: peerName, id: peerId });
         MStore.chats.push({ id: peerId, name: peerName, lastMessage: '', lastTime: '', unread: 0 });
         MStore.save();
         renderChatList();
+      } else {
+        // Clean up any orphan chats from host:port ID (Bug #2)
+        var ipChat = MStore.chats.find(function(c) { return c.id !== peerId && c.name === peerName; });
+        if (ipChat) {
+          debugLog('P2P', 'Removing orphan chat: ' + ipChat.id);
+          MStore.chats = MStore.chats.filter(function(c) { return c.id !== ipChat.id; });
+          delete MStore.messages[ipChat.id];
+          MStore.save();
+          renderChatList();
+        }
       }
 
-      // Auto-connect to peer (skip if already connected)
-      var existingConn = Orbit.P2P.isPeerConnected(peerId);
+      // Auto-connect to peer (skip if already connected) (Bug #2)
+      var existingConn = Orbit.P2P.isPeerConnected(peerId) || Orbit.P2P.isPeerConnected(data.host);
       debugLog('P2P', 'Checking connection status for ' + peerName, { connected: !!existingConn });
       if (!existingConn) {
         var port = pPayload.tcpPort || 46000;

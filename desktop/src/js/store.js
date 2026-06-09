@@ -49,6 +49,7 @@ class Store {
         enterToSend: true,
         showChatAvatars: true,
         showImagePreviews: true,
+        galleryViewMode: 'grid',
         showLinkPreviews: true,
         notifySound: true,
         notifyVolume: 80,
@@ -104,6 +105,8 @@ class Store {
       mentionCounts: {}, // { chatId: number }
       lastReadIds: {}, // { chatId: lastReadMsgId }
       mutedChats: savedMutedChats, // { chatId: true }
+      closedDMs: {}, // { userId: true }
+      pinnedDMs: {}, // { userId: true }
       readReceipts: {}, // { chatId: { userId: lastReadMsgId } }
       peerPublicKeys: {}, // { peerId: hexPublicKey }
       ...initialState
@@ -270,6 +273,44 @@ class Store {
     this.setState({ friends, messages, pinnedMessages, unreadCounts, mentionCounts, lastReadIds, mutedChats });
   }
 
+  closeDM(userId) {
+    const friends = this.state.friends.filter(function(f) { return f.userId !== userId; });
+    if (window.orbitAPI) window.orbitAPI.dbDeleteFriend(userId);
+    const messages = { ...this.state.messages };
+    delete messages[userId];
+    const pinnedMessages = { ...this.state.pinnedMessages };
+    delete pinnedMessages[userId];
+    const unreadCounts = { ...this.state.unreadCounts };
+    delete unreadCounts[userId];
+    const mentionCounts = { ...this.state.mentionCounts };
+    delete mentionCounts[userId];
+    const lastReadIds = { ...this.state.lastReadIds };
+    delete lastReadIds[userId];
+    const mutedChats = { ...this.state.mutedChats };
+    delete mutedChats[userId];
+    const pinnedDMs = { ...this.state.pinnedDMs };
+    delete pinnedDMs[userId];
+    const closedDMs = { ...this.state.closedDMs, [userId]: true };
+    this.setState({ friends, messages, pinnedMessages, unreadCounts, mentionCounts, lastReadIds, mutedChats, pinnedDMs, closedDMs, activeChatId: 'local-echo' });
+    if (window.Toast) window.Toast.show('Closed', 'DM closed — friend removed');
+  }
+
+  togglePinDM(userId) {
+    const pinnedDMs = { ...this.state.pinnedDMs };
+    if (pinnedDMs[userId]) {
+      delete pinnedDMs[userId];
+    } else {
+      pinnedDMs[userId] = true;
+    }
+    this.setState({ pinnedDMs });
+  }
+
+  reopenDM(userId) {
+    const closedDMs = { ...this.state.closedDMs };
+    delete closedDMs[userId];
+    this.setState({ closedDMs, activeChatId: userId });
+  }
+
   removeGroupMember(groupId, userId) {
     const groups = this.state.groups.map(g => {
       if (g.groupId === groupId) {
@@ -391,6 +432,29 @@ class Store {
       return;
     }
 
+    if (packet.type === 'GROUP_MEMBER_ADDED') {
+      const { groupId, user } = packet.payload;
+      if (groupId && user && user.userId) {
+        this.addMemberToGroup(groupId, user);
+        var g = this.state.groups.find(function(gg) { return gg.groupId === groupId; });
+        if (window.Toast) window.Toast.show('New Member', (user.username || 'Someone') + ' was added to ' + (g ? g.groupName : 'group'));
+      }
+      return;
+    }
+
+    if (packet.type === 'GROUP_OWNER_TRANSFER') {
+      const { groupId, newOwnerId } = packet.payload;
+      if (groupId && newOwnerId) {
+        this.updateGroupField(groupId, 'ownerId', newOwnerId);
+        var tGroup = this.state.groups.find(function(gg) { return gg.groupId === groupId; });
+        if (tGroup && window.Toast) {
+          var newOwner = tGroup.members ? tGroup.members.find(function(m) { return m.userId === newOwnerId; }) : null;
+          window.Toast.show('Ownership Transferred', 'Group ownership transferred to ' + (newOwner ? newOwner.username : 'someone'));
+        }
+      }
+      return;
+    }
+
     if (packet.type === 'REACTION') {
       const { msgId, emoji, action, userId } = packet.payload;
       const chatId = packet.to || packet.from;
@@ -438,6 +502,13 @@ class Store {
         replyTo: packet.payload.replyTo,
         attachments: packet.payload.attachments
       });
+
+      // Auto-reopen DM if it was closed
+      if (this.state.closedDMs && this.state.closedDMs[fromId]) {
+        const closedDMs = { ...this.state.closedDMs };
+        delete closedDMs[fromId];
+        this.setState({ closedDMs });
+      }
 
       // Clear typing indicator for sender
       if (window.TypingState) {

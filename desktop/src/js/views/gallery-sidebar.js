@@ -54,6 +54,25 @@ window.GallerySidebar = {
         self.close();
       }
     });
+
+    // File download handler
+    if (this.container) {
+      this.container.addEventListener('click', function(e) {
+        var downloadBtn = e.target.closest('.gallery-file-download');
+        if (downloadBtn) {
+          var url = downloadBtn.getAttribute('data-url');
+          var name = downloadBtn.getAttribute('data-name');
+          if (url && window.orbitAPI && window.orbitAPI.downloadFile) {
+            window.orbitAPI.downloadFile(url, name || 'file');
+          } else if (url) {
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = name || 'file';
+            a.click();
+          }
+        }
+      });
+    }
   },
 
   getDayCategory(ts) {
@@ -186,17 +205,19 @@ window.GallerySidebar = {
           const safeSender = window.Sanitize.escapeHtml(file.senderName);
           const ext = safeName.split('.').pop().toLowerCase();
           var icon = 'file';
-          if (['mp3', 'wav', 'ogg', 'webm'].includes(ext)) icon = 'music';
-          if (['mp4', 'mov', 'avi'].includes(ext)) icon = 'video';
-          if (['pdf', 'doc', 'docx', 'txt'].includes(ext)) icon = 'file-text';
+          if (['mp3', 'wav', 'ogg', 'webm', 'flac', 'aac', 'm4a', 'wma'].indexOf(ext) !== -1) icon = 'music';
+          if (['mp4', 'mov', 'avi', 'mkv', 'wmv'].indexOf(ext) !== -1) icon = 'video';
+          if (['pdf', 'doc', 'docx', 'txt', 'rtf'].indexOf(ext) !== -1) icon = 'file-text';
+          if (['zip', 'rar', '7z', 'gz', 'tar'].indexOf(ext) !== -1) icon = 'archive';
+          if (['js', 'ts', 'py', 'java', 'c', 'cpp', 'html', 'css', 'json', 'xml', 'sh'].indexOf(ext) !== -1) icon = 'code';
 
-          html += '<div style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:12px;background:var(--bg-base);border:1px solid var(--border-subtle);cursor:pointer;transition:border-color 0.2s;" onmouseenter="this.style.borderColor=\'var(--accent-primary)\';" onmouseleave="this.style.borderColor=\'var(--border-subtle)\';" onclick="window.open(\'' + safeUrl + '\')">' +
+          html += '<div style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:12px;background:var(--bg-base);border:1px solid var(--border-subtle);cursor:pointer;transition:border-color 0.2s;" onmouseenter="this.style.borderColor=\'var(--accent-primary)\';" onmouseleave="this.style.borderColor=\'var(--border-subtle)\';">' +
             '<div style="width:36px;height:36px;border-radius:8px;background:var(--bg-hover);display:flex;align-items:center;justify-content:center;color:var(--text-secondary);flex-shrink:0;"><i data-lucide="' + icon + '"></i></div>' +
             '<div style="flex:1;min-width:0;">' +
               '<div style="font-size:13px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">' + safeName + '</div>' +
-              '<div style="font-size:11px;color:var(--text-muted);">' + safeSender + ' &middot; ' + window.Format.bytes(file.size || 0) + '</div>' +
+              '<div style="font-size:11px;color:var(--text-muted);">' + safeSender + ' &middot; ' + window.Format.fileSize(file.size || 0) + '</div>' +
             '</div>' +
-            '<button style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;"><i data-lucide="download" style="width:16px;height:16px;"></i></button>' +
+            '<button class="gallery-file-download" data-url="' + safeUrl + '" data-name="' + safeName + '" style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;"><i data-lucide="download" style="width:16px;height:16px;"></i></button>' +
           '</div>';
         });
         html += '</div>';

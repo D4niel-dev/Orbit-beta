@@ -174,8 +174,13 @@ Orbit.P2P = (function() {
     },
 
     isPeerConnected(peerId) {
-      var connected = !!connections[peerId];
-      return connected;
+      if (!peerId) return false;
+      if (connections[peerId]) return true;
+      // Broad search: connections keyed by "ip:port", but called with bare IP or userId
+      for (var key in connections) {
+        if (key.indexOf(peerId) === 0 || peerId.indexOf(key) === 0) return true;
+      }
+      return false;
     },
 
     getConnections() {

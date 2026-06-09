@@ -173,7 +173,21 @@ window.NotificationSound = {
 
 document.addEventListener('DOMContentLoaded', () => {
   console.log('Orbit Shell Booting...');
-  
+
+  // Debug log buffer for P2P Diagnostics
+  window._debugLogBuffer = [];
+  var _origConsole = { log: console.log, warn: console.warn, error: console.error, debug: console.debug };
+  ['log','warn','error','debug'].forEach(function(level) {
+    console[level] = function() {
+      _origConsole[level].apply(console, arguments);
+      try {
+        var msgs = Array.prototype.slice.call(arguments).map(function(a) { return typeof a === 'string' ? a : JSON.stringify(a); });
+        window._debugLogBuffer.push('[' + level.toUpperCase() + '] ' + msgs.join(' '));
+        if (window._debugLogBuffer.length > 500) window._debugLogBuffer.shift();
+      } catch(e) {}
+    };
+  });
+
   // Initialize Lucide icons
   lucide.createIcons();
 

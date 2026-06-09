@@ -2301,3 +2301,9 @@ html, body {
   0% { opacity: 0; transform: translateY(8px); }
   100% { opacity: 1; transform: translateY(0); }
 }
+
+/* Hide status indicators when dev mode is on */
+[data-dev-mode="true"] #chat-header-info div:last-child,
+[data-dev-mode="true"] .friend-status-dot,
+[data-dev-mode="true"] .chat-row-status-dot,
+[data-dev-mode="true"] .group-member-status { display: none; }

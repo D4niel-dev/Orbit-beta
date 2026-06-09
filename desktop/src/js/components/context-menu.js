@@ -22,20 +22,36 @@ window.ContextMenu = {
 
   show(x, y, items) {
     if (!this.container) return;
-    
-    var html = '';
-    items.forEach(function(item) {
+    var self = this;
+
+    this.container.innerHTML = '';
+    items.forEach(function(item, idx) {
       if (item === 'separator') {
-        html += '<div style="height:1px;background:var(--border-subtle);margin:4px 0;"></div>';
+        var sep = document.createElement('div');
+        sep.style.cssText = 'height:1px;background:var(--border-subtle);margin:4px 0;';
+        self.container.appendChild(sep);
       } else {
         var color = item.color || 'var(--text-primary)';
-        html += '<button class="context-item" data-action="' + window.Sanitize.escapeHtml(String(item.action || '')) + '" style="display:flex;align-items:center;gap:12px;padding:8px 16px;width:100%;text-align:left;background:transparent;border:none;color:' + color + ';font-size:14px;cursor:pointer;">';
-        if (item.icon) html += '<i data-lucide="' + window.Sanitize.escapeHtml(item.icon) + '" style="width:16px;"></i>';
-        html += window.Sanitize.escapeHtml(String(item.label)) + '</button>';
+        var btn = document.createElement('button');
+        btn.className = 'context-item';
+        btn.style.cssText = 'display:flex;align-items:center;gap:12px;padding:8px 16px;width:100%;text-align:left;background:transparent;border:none;color:' + color + ';font-size:14px;cursor:pointer;';
+        if (item.icon) {
+          var icon = document.createElement('i');
+          icon.setAttribute('data-lucide', item.icon);
+          icon.style.cssText = 'width:16px;';
+          btn.appendChild(icon);
+        }
+        btn.appendChild(document.createTextNode(item.label));
+        btn.addEventListener('mouseover', function() { btn.style.background = 'var(--bg-hover)'; });
+        btn.addEventListener('mouseout', function() { btn.style.background = 'transparent'; });
+        btn.addEventListener('click', function() {
+          if (item.onClick) item.onClick();
+          self.close();
+        });
+        self.container.appendChild(btn);
       }
     });
 
-    this.container.innerHTML = html;
     lucide.createIcons({ root: this.container });
 
     // Ensure it doesn't go off screen
@@ -46,21 +62,6 @@ window.ContextMenu = {
 
     this.container.style.left = x + 'px';
     this.container.style.top = y + 'px';
-
-    var self = this;
-    var btns = this.container.querySelectorAll('.context-item');
-    btns.forEach(function(btn) {
-      btn.addEventListener('mouseover', function() { btn.style.background = 'var(--bg-hover)'; });
-      btn.addEventListener('mouseout', function() { btn.style.background = 'transparent'; });
-      btn.addEventListener('click', function() {
-        var action = btn.getAttribute('data-action');
-        var matchedItem = items.find(function(i) { return i.action === action; });
-        if (matchedItem && matchedItem.onClick) {
-          matchedItem.onClick();
-        }
-        self.close();
-      });
-    });
   },
 
   close() {

@@ -1,12 +1,42 @@
 # Orbit Changelog
 
-## v0.0.9.1-beta **Unrelease**
+## v0.0.9.3-beta **Unrelease**
+
+### Features & Enhancements
+- **Group Info Panel Overhaul:** Redesigned with Add Member (friend picker with avatar/frame display), Leave Group (non-owners), Transfer Ownership (owner only), member search bar, created date, online/total count, wider 500px panel. Protocol additions `GROUP_MEMBER_ADDED` and `GROUP_OWNER_TRANSFER` with full cross-platform handlers.
+- **Group DM Context Menu:** Desktop right-click on DM rows now mirrors group context menu — Pin/Unpin, Mute, View Profile, Copy ID, danger-styled Close DM. Mobile long-press bottom sheet includes Mute/Unmute, View Profile, Close DM (removes from friends list).
+- **Pinned DMs:** `pinnedDMs` state with `togglePinDM()` store method. Sidebar sorts pinned DMs first with pin icon.
+- **Close DM Removes Friend:** `closeDM()` calls `dbDeleteFriend(userId)` — permanently removes friend from DB, friends list, messages, pinned/muted/closed state. Auto-reopens on new message. Desktop sidebar filters out `closedDMs`.
+- **P2P Diagnostics Panel:** Button in connection stats overlay opens modal showing P2P status, discovery, connected peers, muted/closed/pinned counts, and scrollable log buffer. Desktop console monkey-patch captures last 500 `console.log/warn/error/debug` entries.
+- **Global Gallery Type Filters:** New All/Images/Files toggle filters attachments by media type. Non-image files render with type-aware Lucide icons (file-text, archive, music, video, code) instead of broken `<img>` tags. Masonry view groups files separately. Item count in header.
+- **Global Gallery View Mode Persistence:** `galleryViewMode` setting stored in DB — survives page reloads.
+- **Gallery Sidebar Files Tab Fixed:** `window.Format.bytes` → `window.Format.fileSize` (function didn't exist). `window.open()` replaced with download button using `orbitAPI.downloadFile()`. Extended file extension icon mapping.
+- **Create Group Modal Avatars:** Friend list in create group modal now shows actual avatar images with profile frame overlays instead of initial-letter fallback.
+- **Mobile DM Enhancements:** Long-press context menu includes View Profile. Close DM removes from `MStore.friends` permanently. Debug log button moved above nav bottom bar.
+- **Dev Mode Hides Status:** CSS hides `.friend-status-dot`, `.chat-row-status-dot`, `#chat-header-info`, `.group-member-status` in dev mode.
+
+### Bug Fixes
+- **Context Menu `data-action` Broken:** `context-menu.js` looked up `data-action` attribute to find `item.onClick` — no item in the codebase ever set an `action` property. Rewritten to use DOM methods with closure-captured `item.onClick` directly.
+- **Context Menu Not Attached:** The only `contextmenu` listener was inside `renderGroups()` — never executed if user never visited Groups tab. Moved to `attachEvents()` which runs at `init()`.
+- **P2P Protocol Audit:** Fixed `isPeerConnected()` key mismatch (partial key match), protocol type strings (`MESSAGE_EDIT`/`EDIT_MESSAGE`, `READ`/`READ_RECEIPT`), TCP merge IP comparison (strip port).
+- **Gallery Sidebar Files Tab Crash:** `window.Format.bytes(...)` threw TypeError — function is named `fileSize`. Replaced with correct call.
+- **Gallery Sidebar `window.open()` for Custom Protocol:** `orbit-db://` URLs can't be opened in a new browser tab. Replaced with download button + `orbitAPI.downloadFile()` with `<a>` fallback.
+
+### Technical
+- **Protocol:** Added `GROUP_MEMBER_ADDED` and `GROUP_OWNER_TRANSFER` types to `shared/network/protocol.js`, `desktop/src/js/network/protocol.js`, and mobile copy.
+- **Store:** Added `galleryViewMode: 'grid'` setting default. `handleIncomingPacket` handles `GROUP_MEMBER_ADDED` and `GROUP_OWNER_TRANSFER` on desktop and mobile.
+- **Database:** Gallery view mode persisted via `dbSetSetting('settings', ...)`.
+- **Debug Log Buffer:** Desktop `app.js` monkey-patches `console.log/warn/error/debug` at init, capturing last 500 entries into `window._debugLogBuffer`.
+- **Version:** Bumped to `v0.0.9.3-beta`.
+
+## v0.0.9.2-beta
 
 ### Changes
 - **Mobile initP2P Logging:** Added verbose `debugLog()` calls throughout P2P initialization — server start, beacon build, discovery, incoming connections, message parsing, peer found/disconnected events. All logs feed an in-app scrollable overlay and console.
 - **Dev Mode DevTools:** Enabling Developer Mode now dynamically loads [eruda](https://github.com/liriliri/eruda) — an on-device devtools panel with console, elements, network, sources, and more. Also shows a floating "P2P Log" button that opens the debug log overlay. Disabling Dev Mode destroys eruda and removes the button.
 - **P2P Bridge Logging:** `p2p-mobile.js` now logs every method call — `getPlugin()`, `startServer()`, `connect()`, `send()`, `startDiscovery()`, `cleanup()` — with parameters and results for easy troubleshooting.
 - **Version:** Bumped to `v0.0.9.1-beta` across mobile About tab, desktop Settings About tab, and changelog.
+- **Version:** Bumped to `v0.0.9.2-beta` for P2P messaging fixes (Bug #1 and Bug #2).
 
 ## v0.0.9-beta **Current Version**
 

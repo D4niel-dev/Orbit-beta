@@ -14,11 +14,28 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        changelogEntry('0.0.9.1-beta', 'Unrelease', [
+        changelogEntry('0.0.9.3-beta', 'Unrelease', [
+          'Group Info Panel overhaul — Add Member (friend picker), Leave Group, Transfer Ownership, member search, created date, online/total count',
+          'GROUP_MEMBER_ADDED and GROUP_OWNER_TRANSFER protocol types — cross-platform support',
+          'DM context menus — right-click on desktop, long-press on mobile: Pin/Unpin, Mute, View Profile, Copy ID, Close DM (removes friend from DB)',
+          'Pinned DMs — pinned state sorted first in sidebar with pin icon',
+          'Close DM removes friend — calls dbDeleteFriend; persists closedDMs; auto-reopens on new message',
+          'P2P Diagnostics panel — logs, errors, peer info, connection stats via button in connection stats overlay',
+          'Debug log buffer — window._debugLogBuffer captures last 500 console entries',
+          'Global Gallery type filters — All/Images/Files, non-images render with file icons, gallery view mode persisted to DB',
+          'Gallery sidebar Files tab fix — Format.bytes→fileSize, download button replaces window.open for custom protocol URLs',
+          'Create Group modal — shows friend avatars with profile frames',
+          'Context menu fix — data-action attribute never set; rewritten to use DOM methods with captured onClick',
+          'P2P protocol audit — isPeerConnected key mismatch, protocol type string fixes, TCP merge IP strip port'
+        ]) +
+        changelogEntry('0.0.9.2-beta', '', [
           'Mobile initP2P Logging — detailed debug logs throughout P2P initialization and lifecycle',
           'Dev Mode DevTools — toggling Developer Mode loads eruda on-device inspector panel',
           'Debug Log Buffer — scrollable log overlay when dev mode is active',
-          'Cross-platform v0.0.9.1-beta version sync'
+          'Cross-platform v0.0.9.1-beta version sync',
+          'Bug #1: Desktop sends messages to mobile (socket.remoteAddress as BEACON IP fallback)',
+          'Bug #2: Mobile peer merging (host:port→UUID dedup)',
+          'Cross-platform v0.0.9.2-beta version sync'
         ]) +
         changelogEntry('0.0.9-beta', 'Latest', [
           'Android P2P Stability — 8 Java plugin fixes (multicast lock, beacon gating, TCP buffer, connection tracking) + 4 JS bridge fixes',

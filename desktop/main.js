@@ -592,7 +592,8 @@ app.whenReady().then(() => {
       } else if (packet.type === Protocol.Types.BEACON) {
         if (packet.payload && mainWindow) {
           var peerData = packet.payload;
-          peerData.ip = peerData.ip || null;
+          // Bug #1: mobile BEACON lacks ip — fall back to socket remote address
+          peerData.ip = peerData.ip || packet._fromIp || null;
           mainWindow.webContents.send('peer-found', peerData);
         }
       } else {

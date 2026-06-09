@@ -155,6 +155,9 @@ class SocketManager extends EventEmitter {
               socket.__orbitKey = currentPeerId;
             }
 
+            // Attach sender IP for BEACON IP fallback (Bug #1)
+            packet._fromIp = socket.remoteAddress;
+
             // Emit to main process which forwards to renderer
             this.emit('message', packet);
           } catch (err) {
