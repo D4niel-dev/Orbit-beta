@@ -789,6 +789,24 @@ document.addEventListener('DOMContentLoaded', function() {
           '</div>';
         }
       }
+      var reactionsHtml = '';
+      if (m.reactions && m.reactions.length > 0) {
+        var rxGroups = {};
+        m.reactions.forEach(function(r) {
+          if (!rxGroups[r.emoji]) rxGroups[r.emoji] = [];
+          rxGroups[r.emoji].push(r.userId);
+        });
+        var rxHtml = '';
+        for (var emoji in rxGroups) {
+          var count = rxGroups[emoji].length;
+          rxHtml += '<div style="display:inline-flex;align-items:center;background:var(--bg-hover);border:1px solid var(--border-subtle);border-radius:12px;padding:2px 6px;margin-right:4px;margin-top:4px;font-size:12px;gap:4px;">' +
+            '<span>' + escapeHtml(emoji) + '</span>' +
+            (count > 1 ? '<span style="color:var(--text-muted);font-size:10px;">' + count + '</span>' : '') +
+            '</div>';
+        }
+        reactionsHtml = '<div style="display:flex;flex-wrap:wrap;margin-top:4px;border-top:1px solid var(--border-subtle);padding-top:4px;">' + rxHtml + '</div>';
+      }
+
       html += '<div class="message-row ' + (isMine ? 'mine' : 'other') + '" data-msg-id="' + m.id + '" data-msg-anim="' + (MStore.settings.messageAnim || 'slide') + '">' +
         '<div class="message-bubble">' +
           actionsHtml +
@@ -797,6 +815,7 @@ document.addEventListener('DOMContentLoaded', function() {
           '<div>' + linkifyText(m.text) + editedBadge + '</div>' +
           attachmentsHtml +
           linkPreviewHtml +
+          reactionsHtml +
           '<div class="message-time">' + formatTime(m.time) + '</div>' +
           (MStore.settings.showMessageIds ? '<div style="font-size:9px;color:var(--text-muted);opacity:0.5;margin-top:2px;">' + m.id + '</div>' : '') +
         '</div>' +
@@ -978,7 +997,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (encrypted) {
               var e2eePkt = Orbit.Protocol.createPacket(
                 Orbit.Protocol.Types.MESSAGE,
-                { e2ee: true, ciphertext: encrypted.ciphertext, nonce: encrypted.nonce, groupId: groupId },
+                { e2ee: true, ciphertext: encrypted.ciphertext, nonce: encrypted.nonce, groupId: groupId, msgId: newMsg.id, replyTo: newMsg.replyTo, attachments: newMsg.attachments },
                 MStore.user.id
               );
               Orbit.P2P.send(memberId, e2eePkt);
@@ -988,7 +1007,7 @@ document.addEventListener('DOMContentLoaded', function() {
         } else if (!isE2EE) {
           var pkt = Orbit.Protocol.createPacket(
             Orbit.Protocol.Types.MESSAGE,
-            { text: textToSend, groupId: groupId },
+            { text: textToSend, groupId: groupId, msgId: newMsg.id, replyTo: newMsg.replyTo, attachments: newMsg.attachments },
             MStore.user ? MStore.user.id : 'mobile'
           );
           Orbit.P2P.send(memberId, pkt);
@@ -1016,7 +1035,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (encrypted) {
               var e2eePacket = Orbit.Protocol.createPacket(
                 Orbit.Protocol.Types.MESSAGE,
-                { e2ee: true, ciphertext: encrypted.ciphertext, nonce: encrypted.nonce },
+                { e2ee: true, ciphertext: encrypted.ciphertext, nonce: encrypted.nonce, msgId: newMsg.id, replyTo: newMsg.replyTo, attachments: newMsg.attachments },
                 myId
               );
               Orbit.P2P.send(activeChatId, e2eePacket);
@@ -1029,7 +1048,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
       var packet = Orbit.Protocol.createPacket(
         Orbit.Protocol.Types.MESSAGE,
-        { text: text },
+        { text: text, msgId: newMsg.id, replyTo: newMsg.replyTo, attachments: newMsg.attachments },
         myId
       );
       Orbit.P2P.send(activeChatId, packet);
@@ -3444,6 +3463,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
       if (packet.type === Orbit.Protocol.Types.MESSAGE) {
         var msgText = packet.payload.text || '';
+        var msgAttachments = packet.payload.attachments || undefined;
+        var msgReplyTo = packet.payload.replyTo || undefined;
 
         if (packet.payload.e2ee && window.Orbit.E2EE) {
           var senderFriend = MStore.friends.find(function(f) { return f.id === msgFrom; });
@@ -3455,10 +3476,12 @@ document.addEventListener('DOMContentLoaded', function() {
             ).then(function(decrypted) {
               if (decrypted) msgText = decrypted;
               MStore.addMessage(chatId, {
-                id: 'p2p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+                id: packet.payload.msgId || ('p2p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)),
                 from: msgFrom,
                 text: msgText,
-                time: new Date().toISOString()
+                time: new Date().toISOString(),
+                replyTo: msgReplyTo,
+                attachments: msgAttachments
               });
               if (activeChatId === chatId) renderMessages(activeChatId);
               renderChatList();
@@ -3470,10 +3493,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
         debugLog('P2P', 'Incoming MESSAGE from ' + msgFrom + ' chatId=' + chatId, { text: msgText.substring(0, 100) });
         MStore.addMessage(chatId, {
-          id: 'p2p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+          id: packet.payload.msgId || ('p2p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)),
           from: msgFrom,
           text: msgText,
-          time: new Date().toISOString()
+          time: new Date().toISOString(),
+          replyTo: msgReplyTo,
+          attachments: msgAttachments
         });
         if (activeChatId === chatId) renderMessages(activeChatId);
         renderChatList();
@@ -3492,11 +3517,15 @@ document.addEventListener('DOMContentLoaded', function() {
           var msgs = MStore.messages[chatId] || [];
           var msgIdx = msgs.findIndex(function(m) { return String(m.id) === String(rPayload.msgId); });
           if (msgIdx >= 0) {
-            if (rPayload.action === 'add') {
-              msgs[msgIdx].reaction = rPayload.emoji;
-            } else {
-              delete msgs[msgIdx].reaction;
+            var msg = msgs[msgIdx];
+            var reactions = msg.reactions ? msg.reactions.slice() : [];
+            var existingIdx = reactions.findIndex(function(r) { return r.emoji === rPayload.emoji && r.userId === rPayload.userId; });
+            if (rPayload.action === 'add' && existingIdx < 0) {
+              reactions.push({ emoji: rPayload.emoji, userId: rPayload.userId });
+            } else if (rPayload.action === 'remove' && existingIdx >= 0) {
+              reactions.splice(existingIdx, 1);
             }
+            msgs[msgIdx].reactions = reactions;
             MStore.messages[chatId] = msgs;
             MStore.save();
             if (activeChatId === chatId) renderMessages(activeChatId);
@@ -3504,13 +3533,66 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       }
 
-      // File transfers — not yet supported on mobile
-      if (packet.type === Orbit.Protocol.Types.FILE_TRANSFER_OFFER ||
-          packet.type === Orbit.Protocol.Types.FILE_TRANSFER_ACCEPT ||
-          packet.type === Orbit.Protocol.Types.FILE_TRANSFER_COMPLETE ||
-          packet.type === Orbit.Protocol.Types.FILE_TRANSFER_CANCEL) {
-        debugLog('P2P', 'File transfer not supported on mobile — ignoring ' + packet.type + ' from ' + msgFrom);
-        showToast('File transfers not available on mobile yet', 'warning');
+      // File transfers (Receive from Desktop)
+      if (packet.type === 'FILE_TRANSFER_START') {
+        window.activeTransfers = window.activeTransfers || {};
+        window.activeTransfers[packet.payload.fileId] = {
+          chunks: new Array(packet.payload.totalChunks),
+          fileName: packet.payload.fileName,
+          total: packet.payload.totalChunks,
+          received: 0,
+          senderId: msgFrom
+        };
+        debugLog('P2P', 'Started receiving file ' + packet.payload.fileName);
+        return;
+      }
+      
+      if (packet.type === 'FILE_CHUNK') {
+        window.activeTransfers = window.activeTransfers || {};
+        var tx = window.activeTransfers[packet.payload.fileId];
+        if (tx) {
+          tx.chunks[packet.payload.chunkIndex] = packet.payload.data;
+          tx.received++;
+        }
+        return;
+      }
+      
+      if (packet.type === 'FILE_TRANSFER_END') {
+        window.activeTransfers = window.activeTransfers || {};
+        var txEnd = window.activeTransfers[packet.payload.fileId];
+        if (txEnd) {
+          var base64Data = txEnd.chunks.join('');
+          var extMatch = txEnd.fileName.match(/\.(png|jpe?g|gif|webp)$/i);
+          var mimeType = extMatch ? 'image/' + extMatch[1].replace('jpg','jpeg').toLowerCase() : 'application/octet-stream';
+          var isImage = !!extMatch;
+          
+          var fileDataUrl = 'data:' + mimeType + ';base64,' + base64Data;
+          
+          MStore.addMessage(chatId, {
+            id: 'p2p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+            from: msgFrom,
+            text: '',
+            time: new Date().toISOString(),
+            attachments: [{
+              id: packet.payload.fileId,
+              name: txEnd.fileName,
+              type: isImage ? 'image' : 'file',
+              url: fileDataUrl
+            }]
+          });
+          
+          delete window.activeTransfers[packet.payload.fileId];
+          if (activeChatId === chatId) renderMessages(activeChatId);
+          renderChatList();
+          debugLog('P2P', 'Completed receiving file ' + txEnd.fileName);
+        }
+        return;
+      }
+
+      if (packet.type === 'FILE_TRANSFER_CANCEL' || packet.type === 'FILE_TRANSFER_REJECT') {
+        if (packet.payload && packet.payload.fileId && window.activeTransfers) {
+          delete window.activeTransfers[packet.payload.fileId];
+        }
         return;
       }
 
