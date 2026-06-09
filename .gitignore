@@ -9,8 +9,8 @@ plans/
 *.db
 *.log
 .DS_Store
-*graphify/
-*graphify-out/
+graphify/
+graphify-out/
 *.AGENTS.md
 
 # Android
