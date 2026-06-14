@@ -340,6 +340,10 @@ app.whenReady().then(() => {
   });
 
   // Database IPC
+  ipcMain.on('db-get-all-startup-data', (event) => {
+    if (!globalDb) { event.returnValue = null; return; }
+    event.returnValue = globalDb.getAllStartupData();
+  });
   ipcMain.on('db-get-local-user', (event) => {
     event.returnValue = globalDb.getLocalUser();
   });

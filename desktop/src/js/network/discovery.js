@@ -98,7 +98,6 @@ class Discovery {
       username: identity.username,
       usertag: identity.usertag,
       avatarHash: identity.avatar ? 'has_avatar' : null,
-      avatar: identity.avatar || null,
       status: broadcastStatus,
       bio: identity.bio,
       publicKey: identity.publicKey || null,
@@ -124,7 +123,7 @@ class Discovery {
     const now = Date.now();
     const existing = this.peers.get(peerId);
 
-    if (!existing || existing.status !== peerData.status || existing.username !== peerData.username) {
+    if (!existing || existing.status !== peerData.status || existing.username !== peerData.username || existing.ip !== ip) {
       this.onPeerFound({
         ...peerData,
         ip: ip,

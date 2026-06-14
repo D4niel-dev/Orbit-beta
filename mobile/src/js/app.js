@@ -9,8 +9,72 @@ var MStore = {
     try { var d = JSON.parse(localStorage.getItem('orbit_' + key)); return d !== null ? d : fallback; }
     catch(e) { return fallback; }
   },
-  set(key, val) { localStorage.setItem('orbit_' + key, JSON.stringify(val)); },
+  set(key, val) { 
+    try {
+      localStorage.setItem('orbit_' + key, JSON.stringify(val)); 
+    } catch(e) {
+      if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+        console.error('Storage quota exceeded for', key);
+        if (typeof showToast === 'function') {
+          showToast('Storage full! Clear some chat history or use smaller images.', 'error');
+        }
+        
+        // Emergency cleanup: if saving messages failed, trim old messages
+        if (key === 'messages') {
+          var trimmed = {};
+          var didTrim = false;
+          for (var c in val) {
+            if (val[c] && val[c].length > 50) {
+              trimmed[c] = val[c].slice(-50);
+              didTrim = true;
+            } else {
+              trimmed[c] = val[c];
+            }
+          }
+          if (didTrim) {
+            try {
+              localStorage.setItem('orbit_' + key, JSON.stringify(trimmed));
+              this.messages = trimmed; // update active reference
+              return; // Successfully saved trimmed version
+            } catch(e2) {
+              console.error('Still exceeded after trimming', e2);
+            }
+          }
+        }
+      }
+    }
+  },
 
+  // Compress large images before storing
+  compressImage(dataUrl, maxWidth, maxHeight, quality, callback) {
+    if (!dataUrl || !dataUrl.startsWith('data:image')) {
+      return callback(dataUrl);
+    }
+    var img = new Image();
+    img.onload = function() {
+      var canvas = document.createElement('canvas');
+      var w = img.width;
+      var h = img.height;
+      if (w > maxWidth || h > maxHeight) {
+        if (w / h > maxWidth / maxHeight) {
+          h = Math.round(h * maxWidth / w);
+          w = maxWidth;
+        } else {
+          w = Math.round(w * maxHeight / h);
+          h = maxHeight;
+        }
+      }
+      canvas.width = w;
+      canvas.height = h;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      callback(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = function() {
+      callback(dataUrl);
+    };
+    img.src = dataUrl;
+  },
   friends: [],
   chats: [],
   groups: [],
@@ -270,6 +334,19 @@ document.addEventListener('DOMContentLoaded', function() {
   var chatSearchFilter = '';
 
   /* -- Render Chat List -- */
+  /* ─── End-of-list cat footer ─── */
+  function endOfListHTML() {
+    return '<div class="end-of-list">' +
+      '<pre class="end-of-list-cat" style="font-family: monospace; line-height: 1.2; letter-spacing: 0;">' +
+        '   |\\      _,,,---,,_\n' +
+        '   /,`.-\'`\'    -.  ;-;;,_\n' +
+        '  |,4-  ) )-,_..;\\ (  `\'-\'\n' +
+        ' \'---\'\'(_/--\'  `-\'\\_)' +
+      '</pre>' +
+      '<div class="end-of-list-text">Nothing else to see here...</div>' +
+    '</div>';
+  }
+
   function renderChatList() {
     var container = document.getElementById('chat-list');
     var chats = MStore.getChats();
@@ -284,7 +361,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (filtered.length === 0) {
       container.innerHTML =
-        '<div class="empty-state"><i data-lucide="message-square"></i>' +
+        '<div class="empty-state"><i data-lucide="message-circle"></i>' +
         '<div class="empty-state-text">' + (searchFilter ? 'No matching chats' : 'No conversations yet') + '</div>' +
         '<div class="empty-state-sub">' + (searchFilter ? 'Try a different search' : 'Start a new chat from the Friends tab') + '</div></div>';
       renderLucide({ root: container });
@@ -316,13 +393,30 @@ document.addEventListener('DOMContentLoaded', function() {
         if (isGroup) {
           var group = groupIds[c.id];
           var memberCount = group && group.members ? group.members.length : 0;
-          statusDot = '<span style="font-size:11px;color:var(--text-muted);margin-left:auto;">' + memberCount + ' members</span>';
+          statusDot = '<span style="font-size:10px;color:var(--text-muted);background:var(--bg-hover);padding:1px 6px;border-radius:8px;margin-left:auto;">' + memberCount + '</span>';
         } else {
           var statusClass = c.status && c.status !== 'offline' ? c.status : '';
           statusDot = statusClass ? '<div class="chat-row-status-dot ' + statusClass + '"></div>' : '';
+          if (statusClass) {
+            avatarHtml = '<div class="avatar-glow-' + statusClass + '" style="border-radius:50%;width:100%;height:100%;overflow:hidden;display:flex;align-items:center;justify-content:center;">' + avatarHtml + '</div>';
+          }
         }
       }
-      return '<div class="chat-row" data-chat="' + c.id + '">' +
+      // Check if last message has attachments
+      var hasAtt = false;
+      var chatMsgs = MStore.messages[c.id];
+      if (chatMsgs && chatMsgs.length > 0) {
+        var last = chatMsgs[chatMsgs.length - 1];
+        hasAtt = last && last.attachments && last.attachments.length > 0;
+      }
+      var previewHtml = '';
+      if (hasAtt) {
+        previewHtml += '<i data-lucide="paperclip" class="chat-row-attachment-icon"></i>';
+      }
+      previewHtml += escapeHtml(c.lastMessage || 'No messages yet');
+      var rowClass = 'chat-row';
+      if (c.unread > 0) rowClass += ' unread';
+      return '<div class="' + rowClass + '" data-chat="' + c.id + '">' +
         (MStore.settings.showChatAvatars !== false
           ? '<div class="chat-row-avatar-wrapper">' +
             '<div class="chat-row-avatar"' + (isGroup ? ' style="border-radius:12px;"' : '') + '>' + avatarHtml + '</div>' +
@@ -331,11 +425,11 @@ document.addEventListener('DOMContentLoaded', function() {
           : '') +
         '<div class="chat-row-info">' +
           '<div class="chat-row-name">' + escapeHtml(c.name) + '</div>' +
-          '<div class="chat-row-preview">' + escapeHtml(c.lastMessage || 'No messages yet') + '</div>' +
+          '<div class="chat-row-preview">' + previewHtml + '</div>' +
         '</div>' +
         '<div class="chat-row-meta">' +
           '<div class="chat-row-time">' + timeStr + '</div>' +
-          (c.unread > 0 ? '<div class="chat-row-badge">' + c.unread + '</div>' : '') +
+          (c.unread > 0 ? '<div class="chat-row-badge premium-badge">' + (c.unread > 99 ? '99+' : c.unread) + '</div>' : '') +
         '</div>' +
       '</div>';
     }
@@ -345,17 +439,23 @@ document.addEventListener('DOMContentLoaded', function() {
     // Direct Messages section
     if (dms.length > 0) {
       html += '<div class="chat-section-header"><i data-lucide="message-circle" style="width:14px;height:14px;"></i> Direct Messages</div>';
+      html += '<div>';
       dms.forEach(function(c) { html += renderChatRow(c, false); });
+      html += '</div>';
     }
 
     // Groups section
     if (grpChats.length > 0) {
       html += '<div class="chat-section-header"><i data-lucide="users" style="width:14px;height:14px;"></i> Groups</div>';
+      html += '<div>';
       grpChats.forEach(function(c) { html += renderChatRow(c, true); });
+      html += '</div>';
     }
 
     // Create Group button
-    html += '<div class="create-group-btn" id="btn-create-group"><i data-lucide="plus-circle" style="width:16px;height:16px;"></i> Create Group</div>';
+    html += '<div class="create-group-btn" id="btn-create-group" style="border-top:none;margin-top:0;"><i data-lucide="plus-circle" style="width:16px;height:16px;"></i> Create Group</div>';
+
+    html += endOfListHTML();
 
     container.innerHTML = html;
     renderLucide({ root: container });
@@ -705,10 +805,26 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     var isGroup = MStore.groups.some(function(g) { return g.id === chatId; });
     var html = '';
+    var prevSender = null;
+    var prevTime = null;
+    var prevIsMine = null;
     msgs.forEach(function(m) {
       var isMine = m.from === 'me';
+      var currentSender = isGroup && !isMine ? m.from : null;
+      // Group consecutive messages from same sender within 5 min
+      var isGrouped = false;
+      if (prevSender === currentSender && prevIsMine === isMine) {
+        var timeDiff = prevTime && m.time ? new Date(m.time) - new Date(prevTime) : Infinity;
+        if (timeDiff < 300000) { // 5 minutes
+          isGrouped = true;
+        }
+      }
+      prevSender = currentSender;
+      prevTime = m.time;
+      prevIsMine = isMine;
+
       var senderLabel = '';
-      if (isGroup && !isMine) {
+      if (isGroup && !isMine && !isGrouped) {
         var senderFriend = MStore.friends.find(function(f) { return f.id === m.from; });
         var senderName = senderFriend ? senderFriend.name : (m.fromName || m.from);
         senderLabel = '<div style="font-size:11px;font-weight:600;color:var(--accent-primary);margin-bottom:2px;">' + escapeHtml(senderName) + '</div>';
@@ -799,15 +915,16 @@ document.addEventListener('DOMContentLoaded', function() {
         var rxHtml = '';
         for (var emoji in rxGroups) {
           var count = rxGroups[emoji].length;
-          rxHtml += '<div style="display:inline-flex;align-items:center;background:var(--bg-hover);border:1px solid var(--border-subtle);border-radius:12px;padding:2px 6px;margin-right:4px;margin-top:4px;font-size:12px;gap:4px;">' +
+          var hasMe = rxGroups[emoji].indexOf(MStore.user ? MStore.user.id : '') !== -1;
+          rxHtml += '<div class="reaction-pill' + (hasMe ? ' mine' : '') + '">' +
             '<span>' + escapeHtml(emoji) + '</span>' +
-            (count > 1 ? '<span style="color:var(--text-muted);font-size:10px;">' + count + '</span>' : '') +
+            (count > 1 ? '<span class="reaction-pill-count">' + count + '</span>' : '') +
             '</div>';
         }
-        reactionsHtml = '<div style="display:flex;flex-wrap:wrap;margin-top:4px;border-top:1px solid var(--border-subtle);padding-top:4px;">' + rxHtml + '</div>';
+        reactionsHtml = '<div class="reactions-row">' + rxHtml + '</div>';
       }
 
-      html += '<div class="message-row ' + (isMine ? 'mine' : 'other') + '" data-msg-id="' + m.id + '" data-msg-anim="' + (MStore.settings.messageAnim || 'slide') + '">' +
+      html += '<div class="message-row ' + (isMine ? 'mine' : 'other') + (isGrouped ? ' grouped' : '') + '" data-msg-id="' + m.id + '" data-msg-anim="' + (MStore.settings.messageAnim || 'slide') + '">' +
         '<div class="message-bubble">' +
           actionsHtml +
           senderLabel +
@@ -822,6 +939,7 @@ document.addEventListener('DOMContentLoaded', function() {
       '</div>';
     });
     feed.innerHTML = html;
+    freezeGifImages(feed);
     // Bind action buttons
     feed.querySelectorAll('.msg-reply-btn').forEach(function(btn) {
       btn.addEventListener('click', function(e) { e.stopPropagation(); startReply(this.getAttribute('data-msg-id')); });
@@ -920,6 +1038,40 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   /* -- Send Message -- */
+  var _frozenCache = new Map();
+  function freezeGifImages(root) {
+    if (!root || !root.querySelectorAll) return;
+    if (!MStore.settings || !MStore.settings.reduceMotion) return;
+    function freezeOne(img) {
+      img.setAttribute('data-frozen', 'true');
+      var src = img.currentSrc || img.src;
+      if (_frozenCache.has(src)) {
+        if (img.src !== _frozenCache.get(src)) img.src = _frozenCache.get(src);
+        return;
+      }
+      if (img.complete && img.naturalWidth > 0) {
+        var canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        canvas.getContext('2d').drawImage(img, 0, 0);
+        var frozen = canvas.toDataURL('image/png');
+        _frozenCache.set(src, frozen);
+        img.src = frozen;
+      } else {
+        img.addEventListener('load', function() {
+          var c = document.createElement('canvas');
+          c.width = img.naturalWidth;
+          c.height = img.naturalHeight;
+          c.getContext('2d').drawImage(img, 0, 0);
+          var frozen = c.toDataURL('image/png');
+          _frozenCache.set(img.currentSrc || img.src, frozen);
+          img.src = frozen;
+        });
+      }
+    }
+    root.querySelectorAll('img[src*=".gif"]:not([data-frozen]), img[src*="data:image/gif"]:not([data-frozen]), .avatar img:not([data-frozen])').forEach(freezeOne);
+  }
+
   function sendMessage() {
     var input = document.getElementById('chat-input');
     var text = input.value.trim();
@@ -1114,14 +1266,16 @@ document.addEventListener('DOMContentLoaded', function() {
         if (isImage) {
           var reader = new FileReader();
           reader.onload = function(ev) {
-            stagedFiles.push({
-              name: file.name,
-              size: file.size,
-              type: 'image',
-              url: ev.target.result
+            MStore.compressImage(ev.target.result, 1200, 1200, 0.7, function(compressedUrl) {
+              stagedFiles.push({
+                name: file.name,
+                size: file.size,
+                type: 'image',
+                url: compressedUrl
+              });
+              done++;
+              if (done === total) renderFilePreview();
             });
-            done++;
-            if (done === total) renderFilePreview();
           };
           reader.readAsDataURL(file);
         } else {
@@ -1244,20 +1398,23 @@ document.addEventListener('DOMContentLoaded', function() {
     filtered.forEach(function(f) {
       var color = statusColors[f.status] || 'var(--text-muted)';
       var initial = f.name ? f.name.charAt(0).toUpperCase() : '?';
-      html += '<div class="friend-row" data-friend="' + f.id + '">' +
+      html += '<div class="list-row friend-row" data-friend="' + f.id + '">' +
         '<div class="chat-row-avatar-wrapper" style="width:44px;height:44px;">' +
           '<div class="chat-row-avatar" style="width:44px;height:44px;font-size:16px;">' + (f.avatar ? '<img src="' + escapeHtml(f.avatar) + '">' : initial) + '</div>' +
-          '<div class="friend-status-dot" style="background:' + color + ';position:absolute;bottom:0;right:0;width:12px;height:12px;border-radius:50%;border:2px solid var(--bg-base);"></div>' +
+          '<div class="friend-status-dot" style="background:' + color + ';position:absolute;bottom:0;right:0;width:12px;height:12px;border-radius:50%;border:2px solid var(--bg-surface);"></div>' +
         '</div>' +
-        '<div style="flex:1;min-width:0;">' +
-          '<div style="font-size:15px;font-weight:600;color:var(--text-primary);">' + escapeHtml(f.name) + '</div>' +
-          '<div style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:4px;">' +
-            '<span style="width:8px;height:8px;border-radius:50%;background:' + color + ';display:inline-block;"></span>' +
+        '<div style="flex:1;min-width:0;margin-left:14px;">' +
+          '<div style="font-size:16px;font-weight:700;color:var(--text-primary);margin-bottom:2px;">' + escapeHtml(f.name) + '</div>' +
+          '<div style="font-size:13px;color:var(--text-muted);display:flex;align-items:center;gap:6px;">' +
+            '<span style="width:8px;height:8px;border-radius:50%;background:' + color + ';display:inline-block;box-shadow:0 0 4px ' + color + ';"></span>' +
             (f.status || 'offline') +
           '</div>' +
         '</div>' +
+        '<div style="color:var(--text-muted);opacity:0.5;"><i data-lucide="chevron-right" style="width:16px;height:16px;"></i></div>' +
       '</div>';
     });
+    html += endOfListHTML();
+
     container.innerHTML = html;
     renderLucide({ root: container });
   }
@@ -1372,25 +1529,26 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function renderSettingsOverviewInner(container, animate) {
-    var html = '';
-    SETTINGS_SECTIONS.forEach(function(sec) {
+    var html = '<div class="settings-list" style="margin-top: 8px;">';
+    SETTINGS_SECTIONS.forEach(function(sec, i) {
       html +=
-        '<div class="settings-section-item" data-section="' + sec.key + '">' +
+        '<div class="list-row" data-section="' + sec.key + '" style="gap: 16px;">' +
           '<i data-lucide="' + sec.icon + '" class="settings-section-icon"></i>' +
           '<div class="settings-section-info">' +
-            '<div class="settings-section-title">' + sec.title + '</div>' +
+            '<div class="settings-section-title" style="margin-bottom: 2px;">' + sec.title + '</div>' +
             '<div class="settings-section-desc">' + sec.desc + '</div>' +
           '</div>' +
           '<i data-lucide="chevron-right" class="settings-section-arrow"></i>' +
         '</div>';
     });
+    html += '</div>';
     container.innerHTML = html;
     if (animate) {
       container.classList.remove('settings-slide-right');
       container.classList.add('settings-slide-left');
     }
 
-    container.querySelectorAll('.settings-section-item').forEach(function(el) {
+    container.querySelectorAll('.list-row').forEach(function(el) {
       el.addEventListener('click', function() {
         showSettingsSection(this.getAttribute('data-section'));
       });
@@ -1441,7 +1599,7 @@ document.addEventListener('DOMContentLoaded', function() {
           sel([{v:'Small',l:'Small'},{v:'Medium',l:'Medium'},{v:'Large',l:'Large'}], 'set-font-size', s.fontSize || 'Medium') +
         '</div>' +
         '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Reduce Motion</span><div class="settings-row-desc">Minimize animations for accessibility</div></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Reduce Motion</span><div class="settings-row-desc">Disable animations, freeze GIF previews, and stop avatar effects</div></div>' +
           '<button class="settings-toggle ' + (s.reduceMotion ? 'on' : '') + '" id="set-reduce-motion"></button>' +
         '</div>';
       case 'chat':
@@ -1535,7 +1693,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var friendsCount = MStore.friends.length;
         var chatsCount = MStore.chats.length;
         return '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.0.9.3-beta · Capacitor Android</div></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.1.0-beta · Capacitor Android</div></div>' +
         '</div>' +
         '<div class="settings-row">' +
           '<div class="settings-row-content"><span class="settings-row-title">Statistics</span><div class="settings-row-desc">' + friendsCount + ' friends · ' + chatsCount + ' chats</div></div>' +
@@ -1604,7 +1762,7 @@ document.addEventListener('DOMContentLoaded', function() {
         bindToggle('set-24h', function(on) { s.timeFormat24 = on; MStore.save(); renderChatList(); if (activeChatId) renderMessages(activeChatId); renderActivity(); }, s.timeFormat24);
         bindToggle('set-animations', function(on) { s.animations = on; MStore.save(); applyAnimationSettings(); }, s.animations !== false);
         bindSelect('set-anim-speed', function(v) { s.animSpeed = v; MStore.save(); applyAnimationSettings(); });
-        bindToggle('set-reduce-motion', function(on) { s.reduceMotion = on; MStore.save(); applyAnimationSettings(); }, s.reduceMotion);
+        bindToggle('set-reduce-motion', function(on) { s.reduceMotion = on; MStore.save(); applyAnimationSettings(); if (activeChatId) renderMessages(activeChatId); }, s.reduceMotion);
         bindSelect('set-font-size', function(v) { s.fontSize = v; MStore.save(); applyFontSize(); });
         break;
       case 'chat':
@@ -1738,6 +1896,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     if (s.reduceMotion) {
       document.documentElement.setAttribute('data-reduce-motion', 'true');
+      freezeGifImages(document);
     } else {
       document.documentElement.removeAttribute('data-reduce-motion');
     }
@@ -1827,50 +1986,71 @@ document.addEventListener('DOMContentLoaded', function() {
 
     var bannerStyle = u && u.banner
       ? 'background-image:url(' + escapeHtml(u.banner) + ');background-size:cover;background-position:center;'
-      : 'background:linear-gradient(135deg,var(--accent-primary),var(--accent-secondary,var(--accent-primary)));';
+      : '';
 
     container.innerHTML =
-      '<div class="profile-banner" style="' + bannerStyle + '"></div>' +
-      '<div class="profile-avatar-section">' +
-        '<div class="profile-avatar">' + (u.avatar ? '<img src="' + escapeHtml(u.avatar) + '">' : initial) + '</div>' +
-      '</div>' +
-      '<div class="profile-name-section">' +
-        '<div class="profile-name">' + escapeHtml(u ? u.name : 'User') + '</div>' +
-        '<div class="profile-tag">#' + escapeHtml(u ? u.tag : '0000') + '</div>' +
-      '</div>' +
-      // Editable fields
-      '<div class="profile-section">' +
-        '<div class="profile-section-label">Username</div>' +
-        '<input class="profile-input" id="edit-username" value="' + escapeHtml(u ? u.name : '') + '" maxlength="32" placeholder="Your name">' +
-      '</div>' +
-      '<div class="profile-section">' +
-        '<div class="profile-section-label">Bio</div>' +
-        '<textarea class="profile-textarea" id="edit-bio" placeholder="Tell us about yourself..." maxlength="160">' + escapeHtml(u && u.bio ? u.bio : '') + '</textarea>' +
-      '</div>' +
-      '<div class="profile-section">' +
-        '<div class="profile-section-label">Avatar</div>' +
-        '<div style="display:flex;gap:8px;">' +
-          '<input class="profile-input" id="edit-avatar" value="' + escapeHtml(u && u.avatar ? u.avatar : '') + '" placeholder="Image URL" style="flex:1;">' +
-          '<button class="profile-upload-btn" id="btn-upload-avatar" data-target="avatar">Choose</button>' +
+      '<div class="profile-hero" style="' + bannerStyle + '">' +
+        '<div class="profile-hero-bg"></div>' +
+        '<div class="profile-hero-content">' +
+          '<div class="profile-avatar-wrapper">' + (u.avatar ? '<img src="' + escapeHtml(u.avatar) + '">' : '<div class="avatar-placeholder">' + initial + '</div>') + '</div>' +
+          '<div class="profile-name">' + escapeHtml(u ? u.name : 'User') + '</div>' +
+          '<div class="profile-id">#' + escapeHtml(u ? u.tag : '0000') + '</div>' +
         '</div>' +
       '</div>' +
-      '<div class="profile-section">' +
-        '<div class="profile-section-label">Banner</div>' +
-        '<div style="display:flex;gap:8px;">' +
-          '<input class="profile-input" id="edit-banner" value="' + escapeHtml(u && u.banner ? u.banner : '') + '" placeholder="Image URL" style="flex:1;">' +
-          '<button class="profile-upload-btn" id="btn-upload-banner" data-target="banner">Choose</button>' +
+      '<div style="padding: 16px;">' +
+      '<div class="settings-section">' +
+        '<div class="settings-section-title">Edit Profile</div>' +
+        '<div class="settings-item">' +
+          '<div style="color:var(--text-secondary);font-size:14px;width:70px;font-weight:600;">Name</div>' +
+          '<input class="profile-input" id="edit-username" value="' + escapeHtml(u ? u.name : '') + '" maxlength="32" placeholder="Your name" style="flex:1;background:transparent;border:none;color:var(--text-primary);text-align:right;font-size:15px;outline:none;min-width:0;">' +
+        '</div>' +
+        '<div class="settings-item" style="flex-direction:column;align-items:flex-start;gap:8px;">' +
+          '<div style="color:var(--text-secondary);font-size:14px;font-weight:600;">Bio</div>' +
+          '<textarea class="profile-textarea" id="edit-bio" placeholder="Tell us about yourself..." maxlength="160" style="width:100%;box-sizing:border-box;background:var(--bg-hover);border-radius:12px;border:none;padding:12px;color:var(--text-primary);resize:none;outline:none;font-size:14px;min-height:80px;">' + escapeHtml(u && u.bio ? u.bio : '') + '</textarea>' +
+        '</div>' +
+        '<div class="settings-item">' +
+          '<div style="color:var(--text-secondary);font-size:14px;width:70px;font-weight:600;">Avatar</div>' +
+          '<div style="display:flex;gap:8px;flex:1;min-width:0;">' +
+            '<input class="profile-input" id="edit-avatar" value="' + escapeHtml(u && u.avatar ? u.avatar : '') + '" placeholder="URL" style="flex:1;min-width:0;background:transparent;border:none;color:var(--text-primary);font-size:14px;outline:none;text-align:right;">' +
+            '<button class="profile-upload-btn" id="btn-upload-avatar" data-target="avatar" style="background:var(--bg-hover);border:none;color:var(--accent-primary);font-weight:700;padding:6px 12px;border-radius:10px;cursor:pointer;font-size:12px;text-transform:uppercase;flex-shrink:0;">Edit</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="settings-item" style="border:none;">' +
+          '<div style="color:var(--text-secondary);font-size:14px;width:70px;font-weight:600;">Banner</div>' +
+          '<div style="display:flex;gap:8px;flex:1;min-width:0;">' +
+            '<input class="profile-input" id="edit-banner" value="' + escapeHtml(u && u.banner ? u.banner : '') + '" placeholder="URL" style="flex:1;min-width:0;background:transparent;border:none;color:var(--text-primary);font-size:14px;outline:none;text-align:right;">' +
+            '<button class="profile-upload-btn" id="btn-upload-banner" data-target="banner" style="background:var(--bg-hover);border:none;color:var(--accent-primary);font-weight:700;padding:6px 12px;border-radius:10px;cursor:pointer;font-size:12px;text-transform:uppercase;flex-shrink:0;">Edit</button>' +
+          '</div>' +
         '</div>' +
       '</div>' +
-      '<div class="profile-section">' +
-        '<div class="profile-section-label">User ID</div>' +
-        '<div class="profile-section-text" style="font-family:var(--font-mono);font-size:12px;word-break:break-all;">' +
-          escapeHtml(u ? u.id : '') +
+      '<div class="settings-section">' +
+        '<div class="settings-item" style="border:none;">' +
+          '<div style="color:var(--text-secondary);font-size:14px;flex-shrink:0;">User ID</div>' +
+          '<div style="font-family:var(--font-mono);font-size:12px;color:var(--text-muted);word-break:break-all;text-align:right;margin-left:10px;">' + escapeHtml(u ? u.id : '') + '</div>' +
         '</div>' +
       '</div>' +
-
-      '<button class="profile-save-btn" id="btn-save-profile">Save Profile</button>';
-
+      '<div style="height:64px;"></div>' +
+      '</div>';
     renderLucide({ root: container });
+
+    function checkChanges() {
+      var username = document.getElementById('edit-username').value.trim();
+      var bio = document.getElementById('edit-bio').value.trim();
+      var avatar = document.getElementById('edit-avatar').value.trim();
+      var banner = document.getElementById('edit-banner').value.trim();
+      
+      var changed = (username !== (u && u.name ? u.name : '')) ||
+                    (bio !== (u && u.bio ? u.bio : '')) ||
+                    (avatar !== (u && u.avatar ? u.avatar : '')) ||
+                    (banner !== (u && u.banner ? u.banner : ''));
+      
+      document.getElementById('btn-save-profile-header').style.display = changed ? 'block' : 'none';
+    }
+
+    document.getElementById('edit-username').addEventListener('input', checkChanges);
+    document.getElementById('edit-bio').addEventListener('input', checkChanges);
+    document.getElementById('edit-avatar').addEventListener('input', checkChanges);
+    document.getElementById('edit-banner').addEventListener('input', checkChanges);
 
     // File upload handlers for avatar/banner
     function setupProfileUpload(btnId, inputId) {
@@ -1887,7 +2067,10 @@ document.addEventListener('DOMContentLoaded', function() {
           if (this.files && this.files[0]) {
             var reader = new FileReader();
             reader.onload = function(e) {
-              document.getElementById(inputId).value = e.target.result;
+              MStore.compressImage(e.target.result, 800, 800, 0.8, function(compressedUrl) {
+                document.getElementById(inputId).value = compressedUrl;
+                checkChanges();
+              });
             };
             reader.readAsDataURL(this.files[0]);
           }
@@ -1899,8 +2082,14 @@ document.addEventListener('DOMContentLoaded', function() {
     setupProfileUpload('btn-upload-avatar', 'edit-avatar');
     setupProfileUpload('btn-upload-banner', 'edit-banner');
 
+    // Remove any previous event listeners on the header save button
+    var oldBtn = document.getElementById('btn-save-profile-header');
+    var newBtn = oldBtn.cloneNode(true);
+    oldBtn.parentNode.replaceChild(newBtn, oldBtn);
+    newBtn.style.display = 'none'; // reset state
+
     // Bind save button
-    document.getElementById('btn-save-profile').addEventListener('click', function() {
+    newBtn.addEventListener('click', function() {
       var username = document.getElementById('edit-username').value.trim();
       var bio = document.getElementById('edit-bio').value.trim();
       var avatar = document.getElementById('edit-avatar').value.trim();
@@ -1925,6 +2114,8 @@ document.addEventListener('DOMContentLoaded', function() {
       // Re-render this profile with updated values
       renderProfile();
       showToast('Profile saved', 'info');
+      
+      newBtn.style.display = 'none';
     });
   }
 
@@ -1934,11 +2125,13 @@ document.addEventListener('DOMContentLoaded', function() {
     var backdrop = document.getElementById('profile-overlay-backdrop');
     panel.classList.add('open');
     backdrop.style.display = 'block';
+    document.getElementById('mobile-nav').classList.add('nav-hidden');
   }
 
   function hideProfile() {
     document.getElementById('panel-profile-overlay').classList.remove('open');
     document.getElementById('profile-overlay-backdrop').style.display = 'none';
+    document.getElementById('mobile-nav').classList.remove('nav-hidden');
   }
 
   /* -- Gallery Overlay -- */
@@ -1962,12 +2155,20 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
 
-    var html = '<div class="gallery-grid">';
+    var html = '<style>' +
+      '.gallery-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(110px, 1fr));gap:2px;padding:2px;}' +
+      '.gallery-item{aspect-ratio:1;position:relative;cursor:pointer;background:var(--bg-hover);}' +
+      '.gallery-item::after{content:"";position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.1);opacity:0;transition:opacity 0.2s;}' +
+      '.gallery-item:active::after{opacity:1;}' +
+      '.gallery-item img{width:100%;height:100%;object-fit:cover;}' +
+      '</style>';
+    
+    html += '<div class="gallery-grid">';
     images.forEach(function(m) {
       if (m.attachments) {
         m.attachments.forEach(function(a) {
           if (a.type === 'image' && a.url) {
-            html += '<div class="gallery-item"><img src="' + escapeHtml(a.url) + '" loading="lazy"></div>';
+            html += '<div class="gallery-item" onclick="openLightbox(\'' + escapeHtml(a.url).replace(/'/g, "\\'") + '\')"><img src="' + escapeHtml(a.url) + '" loading="lazy"></div>';
           }
         });
       }
@@ -1976,6 +2177,28 @@ document.addEventListener('DOMContentLoaded', function() {
     container.innerHTML = html;
     renderLucide({ root: container });
   }
+
+  window.openLightbox = function(url) {
+    var existing = document.getElementById('image-lightbox');
+    if (existing) existing.remove();
+
+    var html = '<div id="image-lightbox" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.95);z-index:10000;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.2s;">' +
+      '<button onclick="this.parentNode.remove()" style="position:absolute;top:16px;right:16px;background:rgba(255,255,255,0.1);border:none;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#fff;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);"><i data-lucide="x"></i></button>' +
+      '<img src="' + escapeHtml(url) + '" style="max-width:100%;max-height:100%;object-fit:contain;animation:scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);">' +
+    '</div>';
+    
+    var div = document.createElement('div');
+    div.innerHTML = html;
+    var lightbox = div.firstChild;
+    document.body.appendChild(lightbox);
+    
+    // allow clicking background to close
+    lightbox.addEventListener('click', function(e) {
+      if (e.target === lightbox) lightbox.remove();
+    });
+    
+    renderLucide({ root: lightbox });
+  };
 
   function showGallery() {
     renderGallery();
@@ -2218,9 +2441,13 @@ document.addEventListener('DOMContentLoaded', function() {
         var isMine = m.from === 'me';
         var senderName = isMine ? 'You' : c.name;
         var text = m.text || (m.attachments ? '[Attachment]' : '');
+        var icon = isMine ? 'arrow-up-right' : 'message-square';
         html += '<div class="activity-item" data-chat="' + c.id + '">' +
-          '<span class="activity-item-time">' + formatTime(m.time) + '</span>' +
-          '<span class="activity-item-text"><strong>' + escapeHtml(senderName) + ':</strong> ' + escapeHtml(text) + '</span>' +
+          '<div class="activity-icon-container"><i data-lucide="' + icon + '" style="width:20px;height:20px;"></i></div>' +
+          '<div class="activity-details" style="flex:1;min-width:0;">' +
+            '<div class="activity-user" style="font-weight:700;color:var(--text-primary);margin-bottom:2px;">' + escapeHtml(senderName) + ' <span class="activity-time" style="font-weight:normal;color:var(--text-muted);font-size:12px;float:right;">' + formatTime(m.time) + '</span></div>' +
+            '<div class="activity-text" style="color:var(--text-secondary);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escapeHtml(text) + '</div>' +
+          '</div>' +
         '</div>';
       });
 
@@ -2231,6 +2458,8 @@ document.addEventListener('DOMContentLoaded', function() {
       html = '<div class="empty-state"><i data-lucide="bell"></i>' +
         '<div class="empty-state-text">No activity yet</div>' +
         '<div class="empty-state-sub">Messages from your chats will appear here</div></div>';
+    } else {
+      html += endOfListHTML();
     }
 
     container.innerHTML = html;
@@ -2593,6 +2822,62 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  // --- Add Three Dots Menu ---
+  var moreBtn = document.getElementById('btn-chat-more');
+  if (moreBtn) {
+    moreBtn.addEventListener('click', function() {
+      if (!activeChatId) return;
+      var isGroup = !!MStore.groups.find(function(g) { return g.id === activeChatId; });
+      var html = '<div class="action-sheet-overlay" id="chat-more-action-sheet" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;flex-direction:column;justify-content:flex-end;">' +
+        '<div class="action-sheet-content" style="background:var(--bg-surface);border-radius:24px 24px 0 0;padding:24px 16px;animation:slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);">' +
+          '<div style="width:40px;height:5px;background:var(--border-subtle);border-radius:4px;margin:0 auto 24px;"></div>' +
+          '<div class="action-btn" id="action-view-info" style="padding:16px;display:flex;align-items:center;gap:14px;font-size:16px;font-weight:600;color:var(--text-primary);cursor:pointer;border-radius:12px;transition:background 0.2s;">' +
+            '<i data-lucide="' + (isGroup ? 'users' : 'user') + '"></i> ' + (isGroup ? 'Group Info' : 'View Profile') +
+          '</div>' +
+          '<div class="action-btn" id="action-mute" style="padding:16px;display:flex;align-items:center;gap:14px;font-size:16px;font-weight:600;color:var(--text-primary);cursor:pointer;border-radius:12px;transition:background 0.2s;">' +
+            '<i data-lucide="bell-off"></i> Mute Notifications' +
+          '</div>' +
+          '<div class="action-btn" id="action-clear-chat" style="padding:16px;display:flex;align-items:center;gap:14px;font-size:16px;font-weight:600;color:var(--accent-danger);cursor:pointer;border-radius:12px;transition:background 0.2s;">' +
+            '<i data-lucide="trash-2"></i> Clear Chat' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+      
+      var div = document.createElement('div');
+      div.innerHTML = html;
+      var sheet = div.firstChild;
+      document.body.appendChild(sheet);
+      renderLucide({ root: sheet });
+
+      sheet.addEventListener('click', function(e) {
+        if (e.target === sheet) sheet.remove();
+      });
+      
+      document.getElementById('action-view-info').addEventListener('click', function() {
+        sheet.remove();
+        if (isGroup) showGroupInfo();
+        else showToast('Profile view coming soon', 'info');
+      });
+      
+      document.getElementById('action-mute').addEventListener('click', function() {
+        sheet.remove();
+        showToast('Notifications muted', 'success');
+      });
+      
+      document.getElementById('action-clear-chat').addEventListener('click', function() {
+        sheet.remove();
+        // Custom simple modal or confirm
+        if (confirm('Are you sure you want to clear this chat?')) {
+          MStore.messages[activeChatId] = [];
+          MStore.save();
+          renderMessages(activeChatId);
+          renderChatList();
+          showToast('Chat cleared', 'info');
+        }
+      });
+    });
+  }
+
   // Friends buttons
   document.getElementById('btn-add-friend').addEventListener('click', showAddFriendModal);
   var scanBtn = document.getElementById('btn-scan-qr');
@@ -2638,14 +2923,16 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!file) return;
         var reader = new FileReader();
         reader.onload = function(ev2) {
-          var dataUrl = ev2.target.result;
-          group.avatar = dataUrl;
-          MStore.save();
-          var chat = MStore.chats.find(function(c) { return c.id === activeChatId; });
-          if (chat) chat.avatar = dataUrl;
-          renderGroupInfo();
-          renderChatList();
-          showToast('Group avatar updated', 'info');
+          MStore.compressImage(ev2.target.result, 400, 400, 0.8, function(compressedUrl) {
+            var dataUrl = compressedUrl;
+            group.avatar = dataUrl;
+            MStore.save();
+            var chat = MStore.chats.find(function(c) { return c.id === activeChatId; });
+            if (chat) chat.avatar = dataUrl;
+            renderGroupInfo();
+            renderChatList();
+            showToast('Group avatar updated', 'info');
+          });
         };
         reader.readAsDataURL(file);
       };
@@ -3260,7 +3547,6 @@ document.addEventListener('DOMContentLoaded', function() {
         username: u.name,
         usertag: u.tag,
         avatarHash: u.avatar ? 'has_avatar' : null,
-        avatar: u.avatar || null,
         status: u.status || 'online',
         bio: u.bio || '',
         publicKey: u.publicKey || null,
@@ -3311,11 +3597,32 @@ document.addEventListener('DOMContentLoaded', function() {
     el.scrollTop = el.scrollHeight;
   }
 
+  /* ─── Connection Status ─── */
+  var _connectedShown = false;
+  function showConnectionStatus(state, text) {
+    var el = document.getElementById('connection-status');
+    if (!el) return;
+    var textEl = document.getElementById('conn-status-text');
+    if (state === 'connected') {
+      if (_connectedShown) return;
+      _connectedShown = true;
+    }
+    if (state === 'disconnected') {
+      _connectedShown = false;
+    }
+    el.className = 'conn-status visible ' + (state || '');
+    if (textEl) textEl.textContent = text || '';
+    if (state === 'connected' || state === 'disconnected') {
+      setTimeout(function() { el.classList.remove('visible'); }, 3000);
+    }
+  }
+
   function initP2P() {
     if (!window.Orbit || !window.Orbit.P2P) {
       debugLog('P2P', 'initP2P aborted — Orbit.P2P not available');
       return;
     }
+    showConnectionStatus('connecting', 'Connecting...');
     debugLog('P2P', 'initP2P called');
     var u = MStore.user;
 
@@ -3354,9 +3661,9 @@ document.addEventListener('DOMContentLoaded', function() {
           userId: u.id,
           username: u.name,
           usertag: u.tag,
+          avatarHash: u.avatar ? 'has_avatar' : null,
           status: u.status || 'online',
           bio: u.bio || '',
-          avatar: u.avatar || null,
           publicKey: u.publicKey || null,
           tcpPort: 46000,
           device: 'android'
@@ -3444,6 +3751,7 @@ document.addEventListener('DOMContentLoaded', function() {
         MStore.save();
         renderFriends();
         renderChatList();
+        showConnectionStatus('connected', 'Connected');
         console.log('[P2P] Beacon handshake from:', peerName);
         return;
       }
@@ -3781,6 +4089,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Listen for disconnections
     Orbit.P2P.onDisconnect(function(data) {
       debugLog('P2P', 'Disconnected', { connectionId: data.connectionId });
+      showConnectionStatus('disconnected', 'Disconnected');
       var friend = MStore.friends.find(function(f) { return f.id === data.connectionId; });
       if (friend) {
         debugLog('P2P', 'Marking friend offline', { name: friend.name, id: friend.id });

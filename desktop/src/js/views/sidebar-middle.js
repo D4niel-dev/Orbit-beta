@@ -5,11 +5,14 @@ window.SidebarMiddle = {
     this.container = document.getElementById('middle-sidebar-container');
     
     // Subscribe to store
-    this.unsubscribe = window.store.subscribe((state) => {
-      if (state.activeView === 'groups') {
-        this.renderGroups();
-      } else {
-        this.renderList(state);
+    this.unsubscribe = window.store.subscribe((state, changedState) => {
+      var relevant = ['messages', 'friends', 'groups', 'activeChatId', 'activeTab', 'activeView', 'currentUser', 'unreadCounts'];
+      if (!changedState || relevant.some(function(k) { return k in changedState; })) {
+        if (state.activeView === 'groups') {
+          this.renderGroups();
+        } else {
+          this.renderList(state);
+        }
       }
     });
 
@@ -336,8 +339,8 @@ window.SidebarMiddle = {
 
         if (window.orbitAPI) {
           allMembers.forEach(function(m) {
-            if (m.userId !== state.currentUser.userId && m.ip) {
-              window.orbitAPI.networkSend(m.userId, m.ip, window.Protocol.Types.GROUP_CREATE, {
+            if (m.userId !== state.currentUser.userId) {
+              window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.GROUP_CREATE, {
                 groupId: groupId,
                 groupName: groupName,
                 ownerId: state.currentUser.userId,
@@ -364,8 +367,8 @@ window.SidebarMiddle = {
 
         if (window.orbitAPI) {
           state.friends.forEach(function(f) {
-            if (f.ip) {
-              window.orbitAPI.networkSend(f.userId, f.ip, window.Protocol.Types.GROUP_JOIN_REQUEST, {
+            if (f.userId !== state.currentUser.userId) {
+              window.orbitAPI.networkSend(f.userId, f.ip || '', window.Protocol.Types.GROUP_JOIN_REQUEST, {
                 inviteCode: code,
                 userId: state.currentUser.userId,
                 username: state.currentUser.username
@@ -694,8 +697,8 @@ window.SidebarMiddle = {
                   onConfirm: function() {
                     if (window.orbitAPI) {
                       group.members.forEach(function(m) {
-                        if (m.userId !== state.currentUser.userId && m.ip) {
-                          window.orbitAPI.networkSend(m.userId, m.ip, window.Protocol.Types.GROUP_LEAVE, { groupId: id, userId: state.currentUser.userId });
+                        if (m.userId !== state.currentUser.userId) {
+                          window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.GROUP_LEAVE, { groupId: id, userId: state.currentUser.userId });
                         }
                       });
                     }
@@ -717,8 +720,8 @@ window.SidebarMiddle = {
                   onConfirm: function() {
                     if (window.orbitAPI) {
                       group.members.forEach(function(m) {
-                        if (m.userId !== state.currentUser.userId && m.ip) {
-                          window.orbitAPI.networkSend(m.userId, m.ip, window.Protocol.Types.GROUP_LEAVE, { groupId: id, userId: state.currentUser.userId });
+                        if (m.userId !== state.currentUser.userId) {
+                          window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.GROUP_LEAVE, { groupId: id, userId: state.currentUser.userId });
                         }
                       });
                     }
@@ -927,8 +930,8 @@ window.SidebarMiddle = {
               onConfirm: function() {
                 if (window.orbitAPI) {
                   group.members.forEach(function(m) {
-                    if (m.userId !== myId && m.userId !== targetUserId && m.ip) {
-                      window.orbitAPI.networkSend(m.userId, m.ip, window.Protocol.Types.GROUP_LEAVE, { groupId: groupId, userId: targetUserId });
+                    if (m.userId !== myId && m.userId !== targetUserId) {
+                      window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.GROUP_LEAVE, { groupId: groupId, userId: targetUserId });
                     }
                   });
                 }
@@ -976,9 +979,7 @@ window.SidebarMiddle = {
                 // Notify all members
                 if (window.orbitAPI) {
                   group.members.forEach(function(m) {
-                    if (m.ip) {
-                      window.orbitAPI.networkSend(m.userId, m.ip, window.Protocol.Types.GROUP_OWNER_TRANSFER, { groupId: groupId, newOwnerId: targetUserId });
-                    }
+                    window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.GROUP_OWNER_TRANSFER, { groupId: groupId, newOwnerId: targetUserId });
                   });
                 }
                 scopeEl.remove();
@@ -1013,15 +1014,11 @@ window.SidebarMiddle = {
           window.store.addMemberToGroup(groupId, userObj);
           if (window.orbitAPI) {
             group.members.forEach(function(m) {
-              if (m.ip) {
-                window.orbitAPI.networkSend(m.userId, m.ip, window.Protocol.Types.GROUP_MEMBER_ADDED, { groupId: groupId, user: { userId: friend.userId, username: friend.username || friend.name, usertag: friend.usertag, avatar: friend.avatar, status: friend.status || 'offline', role: 'member' } });
-              }
+              window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.GROUP_MEMBER_ADDED, { groupId: groupId, user: { userId: friend.userId, username: friend.username || friend.name, usertag: friend.usertag, avatar: friend.avatar, status: friend.status || 'offline', role: 'member' } });
             });
-            if (friend.ip) {
-              var membersForNew = group.members.map(function(m) { return { userId: m.userId, username: m.username, usertag: m.usertag, avatar: m.avatar, status: m.status, role: m.role }; });
-              membersForNew.push({ userId: myId, username: state2.currentUser.username, usertag: state2.currentUser.usertag || state2.currentUser.userTag || '', avatar: state2.currentUser.avatar || '', status: 'online', role: isOwner ? 'owner' : 'admin' });
-              window.orbitAPI.networkSend(friend.userId, friend.ip, window.Protocol.Types.GROUP_JOIN_RESPONSE, { groupId: groupId, groupName: group.groupName, accepted: true, members: membersForNew });
-            }
+            var membersForNew = group.members.map(function(m) { return { userId: m.userId, username: m.username, usertag: m.usertag, avatar: m.avatar, status: m.status, role: m.role }; });
+            membersForNew.push({ userId: myId, username: state2.currentUser.username, usertag: state2.currentUser.usertag || state2.currentUser.userTag || '', avatar: state2.currentUser.avatar || '', status: 'online', role: isOwner ? 'owner' : 'admin' });
+            window.orbitAPI.networkSend(friend.userId, friend.ip || '', window.Protocol.Types.GROUP_JOIN_RESPONSE, { groupId: groupId, groupName: group.groupName, accepted: true, members: membersForNew });
           }
           scopeEl.remove();
           window.SidebarMiddle.showGroupInfo(groupId);
@@ -1141,14 +1138,14 @@ window.SidebarMiddle = {
           var msg = { id: Date.now() + 2, sender: state2.currentUser.userId, text: text, timestamp: new Date().toISOString() };
           window.store.addMessage(chatId, msg);
           var friend = state2.friends.find(function(f) { return f.userId === chatId; });
-          if (friend && friend.ip && window.orbitAPI) {
-            window.orbitAPI.networkSend(friend.userId, friend.ip, window.Protocol.Types.MESSAGE, { text: text, msgId: msg.id, chatId: chatId });
+          if (friend && window.orbitAPI) {
+            window.orbitAPI.networkSend(friend.userId, friend.ip || '', window.Protocol.Types.MESSAGE, { text: text, msgId: msg.id });
           }
           var activeGroup = state2.groups.find(function(g) { return g.groupId === chatId; });
           if (activeGroup && activeGroup.members && window.orbitAPI) {
             activeGroup.members.forEach(function(m) {
-              if (m.userId !== state2.currentUser.userId && m.ip) {
-                window.orbitAPI.networkSend(m.userId, m.ip, window.Protocol.Types.MESSAGE, { text: text, msgId: msg.id, chatId: chatId });
+              if (m.userId !== state2.currentUser.userId) {
+                window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.MESSAGE, { text: text, msgId: msg.id, chatId: chatId });
               }
             });
           }
@@ -1244,8 +1241,8 @@ window.SidebarMiddle = {
             onConfirm: function() {
               if (window.orbitAPI) {
                 group.members.forEach(function(m) {
-                  if (m.userId !== myId && m.ip) {
-                    window.orbitAPI.networkSend(m.userId, m.ip, window.Protocol.Types.GROUP_LEAVE, { groupId: groupId, userId: myId });
+                  if (m.userId !== myId) {
+                    window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.GROUP_LEAVE, { groupId: groupId, userId: myId });
                   }
                 });
               }

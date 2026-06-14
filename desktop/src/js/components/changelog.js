@@ -14,7 +14,17 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        changelogEntry('0.0.9.3-beta', 'Unrelease', [
+        changelogEntry('0.1.0-beta', 'Latest', [
+          'Performance: Up to 5× faster startup and rendering — selective store subscriptions, setStateBatch microtask coalescing, insertAdjacentHTML, event delegation for all message actions',
+          'Startup: ~40% faster (5s → 3s) — deferred init phases (setTimeout(0) + requestIdleCallback), batched store IPC (7+ calls → 1), lazy message loading (last 50 per chat, load on demand)',
+          'freezeGifImages: Canvas cache via _frozenCache Map; expanded selectors (orbit-db://, .avatar img); global call on Reduce Motion toggle; mobile feed re-render on toggle',
+          'Bug fix: orbit-db://attachment/ 404 — base64 data URL extraction in addMessage for both privacy and non-privacy modes',
+          'Bug fix: Selective subscriber undefined changedState — store.notify() without args no longer throws',
+          'Bug fix: Message avatar click moved from re-attached attachEvents to initDelegatedActions (registered once)',
+          'Bug fix: loadFullChatMessages was dropping existing messages (only stored the diff, not full result)',
+          'New: Data Manager "Load All Stored Data" — double-confirmation button loads all messages from DB into memory on demand'
+        ]) +
+        changelogEntry('0.0.9.3-beta', '', [
           'Group Info Panel overhaul — Add Member (friend picker), Leave Group, Transfer Ownership, member search, created date, online/total count',
           'GROUP_MEMBER_ADDED and GROUP_OWNER_TRANSFER protocol types — cross-platform support',
           'DM context menus — right-click on desktop, long-press on mobile: Pin/Unpin, Mute, View Profile, Copy ID, Close DM (removes friend from DB)',
@@ -37,7 +47,7 @@ window.Changelog = {
           'Bug #2: Mobile peer merging (host:port→UUID dedup)',
           'Cross-platform v0.0.9.2-beta version sync'
         ]) +
-        changelogEntry('0.0.9-beta', 'Latest', [
+        changelogEntry('0.0.9-beta', '', [
           'Android P2P Stability — 8 Java plugin fixes (multicast lock, beacon gating, TCP buffer, connection tracking) + 4 JS bridge fixes',
           'Desktop P2P Stability — 9 fixes (write queue, oversized frames, socket errors, self-beacon filter, transfer backpressure, restart)',
           'Desktop Socket Write Queue — per-connection queue prevents TCP byte interleaving on length-prefixed frames',

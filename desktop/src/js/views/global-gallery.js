@@ -10,8 +10,11 @@ window.GlobalGallery = {
     this.searchQuery = '';
     this.displayMode = (window.store.getState().settings || {}).galleryViewMode || 'grid';
 
-    this.unsubscribe = window.store.subscribe((state) => {
-      this.render(state);
+    this.unsubscribe = window.store.subscribe((state, changedState) => {
+      var relevant = ['friends', 'messages', 'activeChatId', 'activeTab', 'settings'];
+      if (!changedState || relevant.some(function(k) { return k in changedState; })) {
+        this.render(state);
+      }
     });
     
     this.render(window.store.getState());

@@ -6,7 +6,7 @@ contextBridge.exposeInMainWorld('orbitAPI', {
   on:       (channel, cb)     => ipcRenderer.on(channel, (e, data) => cb(data)),
   invoke:   (channel, data)   => ipcRenderer.invoke(channel, data),
   platform: process.platform,
-  version:  process.env.npm_package_version ?? '0.0.7-beta',
+  version:  process.env.npm_package_version ?? '0.1.0-beta',
   electronVersion: process.versions.electron,
   nodeVersion: process.versions.node,
   
@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld('orbitAPI', {
   e2eeDecrypt: (ciphertext, peerPublicKey) => ipcRenderer.sendSync('e2ee-decrypt', ciphertext, peerPublicKey),
 
   // Database
+  dbGetAllStartupData: () => ipcRenderer.sendSync('db-get-all-startup-data'),
   dbGetLocalUser: () => ipcRenderer.sendSync('db-get-local-user'),
   dbGetUser: (userId) => ipcRenderer.sendSync('db-get-user', userId),
   dbSaveUser: (user) => ipcRenderer.sendSync('db-save-user', user),

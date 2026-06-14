@@ -75,6 +75,7 @@ class OrbitDatabase {
 
       // Read state
       getReadState: this.db.prepare('SELECT * FROM read_state WHERE chatId = ?'),
+      getAllReadStates: this.db.prepare('SELECT * FROM read_state'),
       setReadState: this.db.prepare('INSERT OR REPLACE INTO read_state (chatId, lastReadMsgId, lastReadTimestamp) VALUES (@chatId, @lastReadMsgId, @lastReadTimestamp)'),
 
       // Mentions
@@ -222,6 +223,28 @@ class OrbitDatabase {
     return this.stmts.getReadState.get(chatId) || null;
   }
 
+  getAllReadStates() {
+    const rows = this.stmts.getAllReadStates.all();
+    const map = {};
+    for (const row of rows) {
+      map[row.chatId] = { lastReadMsgId: row.lastReadMsgId, lastReadTimestamp: row.lastReadTimestamp };
+    }
+    return map;
+  }
+
+  getAllStartupData() {
+    return this.db.transaction(() => ({
+      settings: this.getSetting('settings', {}),
+      networkSettings: this.getSetting('networkSettings', {}),
+      friends: this.getFriends(),
+      messages: this.getRecentMessagesByChat(50),
+      groups: this.getGroups(),
+      uiState: this.getSetting('uiState', { activeTab: 'dms', activeChatId: 'local-echo' }),
+      mutedChats: this.getSetting('mutedChats', {}),
+      readStates: this.getAllReadStates()
+    }))();
+  }
+
   setReadState(chatId, lastReadMsgId) {
     this.stmts.setReadState.run({
       chatId: chatId,
@@ -299,6 +322,33 @@ class OrbitDatabase {
     return result;
   }
 
+  getRecentMessagesByChat(limit) {
+    if (limit == null) limit = 50;
+    const stmt = this.db.prepare('SELECT * FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY chatId ORDER BY timestamp DESC) as rn FROM messages) WHERE rn <= ?');
+    const rawMsgs = stmt.all(limit);
+    const result = {};
+    rawMsgs.forEach(m => {
+      if (!result[m.chatId]) result[m.chatId] = [];
+      const atts = this.stmts.getAttachmentsForMessage.all(m.id);
+      const attachments = atts.map(a => ({
+        id: a.id,
+        type: a.type,
+        name: a.name,
+        size: a.size,
+        url: a.localPath ? `orbit-file://${encodeURIComponent(a.localPath)}` : `orbit-db://attachment/${a.id}`
+      }));
+      
+      result[m.chatId].push({
+        id: m.id,
+        sender: m.sender,
+        text: m.text,
+        timestamp: m.timestamp,
+        attachments: attachments.length > 0 ? attachments : undefined
+      });
+    });
+    return result;
+  }
+
   addMessage(chatId, msg) {
     const pendingThumbnails = [];
 
@@ -346,6 +396,23 @@ class OrbitDatabase {
                 console.error('Failed to write attachment to temp dir:', e.message);
                 localPath = null;
               }
+            } else if (att.url && att.url.startsWith('data:')) {
+              const commaIdx = att.url.indexOf(';base64,');
+              if (commaIdx > -1) {
+                try {
+                  const base64Data = att.url.substring(commaIdx + 8);
+                  const decoded = Buffer.from(base64Data, 'base64');
+                  if (decoded.length > 0) {
+                    localPath = path.join(this.tempDirPath || require('os').tmpdir(), 'orbit_att_' + attId + '_' + (att.name || 'file'));
+                    const dir = path.dirname(localPath);
+                    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+                    fs.writeFileSync(localPath, decoded);
+                  }
+                } catch(e) {
+                  console.error('Failed to write data URL attachment to temp dir:', e.message);
+                  localPath = null;
+                }
+              }
             }
           } else {
             if (att.data) {
@@ -363,6 +430,21 @@ class OrbitDatabase {
                } catch(e) {
                  console.error('Failed to read attachment from path ' + att.path + ':', e.message);
                }
+            }
+            if (bufferData.length === 0 && att.url && att.url.startsWith('data:')) {
+              try {
+                const commaIdx = att.url.indexOf(';base64,');
+                if (commaIdx > -1) {
+                  bufferData = Buffer.from(att.url.substring(commaIdx + 8), 'base64');
+                } else {
+                  const rawIdx = att.url.indexOf(',');
+                  if (rawIdx > -1) {
+                    bufferData = Buffer.from(decodeURIComponent(att.url.substring(rawIdx + 1)), 'binary');
+                  }
+                }
+              } catch(e) {
+                console.error('Failed to decode data URL for attachment ' + attId + ':', e.message);
+              }
             }
           }
 

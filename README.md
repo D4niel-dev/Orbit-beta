@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v009-beta-current-version">v0.0.9-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v010-beta-current-version">v0.1.0-beta</a>
 </p>
 
 <p align="center">

@@ -169,7 +169,19 @@ window.ImageViewer = {
     this.currentImg = imgObj;
     this.zoomLevel = 1;
     
-    document.getElementById('iv-image').src = imgObj.url;
+    var ivImg = document.getElementById('iv-image');
+    ivImg.src = imgObj.url;
+    if (window.freezeGifImages && imgObj.url && (imgObj.url.indexOf('.gif') > -1 || imgObj.url.indexOf('image/gif') > -1)) {
+      ivImg.onload = function() {
+        if (window.store && window.store.getState && window.store.getState().settings && window.store.getState().settings.reduceMotion) {
+          var c = document.createElement('canvas');
+          c.width = ivImg.naturalWidth;
+          c.height = ivImg.naturalHeight;
+          c.getContext('2d').drawImage(ivImg, 0, 0);
+          ivImg.src = c.toDataURL('image/png');
+        }
+      };
+    }
     var titleText = imgObj.name || 'Image Preview';
     if (this.galleryImages.length > 1) {
       titleText += ' (' + (this.currentIndex + 1) + '/' + this.galleryImages.length + ')';

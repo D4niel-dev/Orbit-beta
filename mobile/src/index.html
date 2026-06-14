@@ -24,7 +24,7 @@
   <link rel="stylesheet" href="styles/base.css">
   <link rel="stylesheet" href="styles/components.css">
   <link rel="stylesheet" href="styles/animations.css">
-  <link rel="stylesheet" href="styles/mobile.css?v2">
+  <link rel="stylesheet" href="styles/mobile.css?v4">
 
   <!-- Lucide Icons -->
   <script src="lib/lucide.min.js"></script>
@@ -37,9 +37,14 @@
 <body>
   <div id="app-layout">
 
+    <!-- Connection Status Bar -->
+    <div id="connection-status" class="conn-status" style="display:none;">
+      <span id="conn-status-text">Connecting...</span>
+    </div>
+
     <!-- Bottom Nav -->
     <nav id="mobile-nav">
-      <button class="nav-btn active" data-view="chats"><i data-lucide="message-square"></i><span>Chats</span></button>
+      <button class="nav-btn active" data-view="chats"><i data-lucide="message-circle"></i><span>Chats</span></button>
       <button class="nav-btn" data-view="friends"><i data-lucide="users"></i><span>Friends</span></button>
       <button class="nav-btn" data-view="activity"><i data-lucide="bell"></i><span>Activity</span></button>
       <button class="nav-btn" data-view="settings"><div id="nav-user-avatar" class="nav-avatar"></div><span>You</span></button>
@@ -158,6 +163,7 @@
       <div class="overlay-panel-header">
         <button id="btn-close-profile"><i data-lucide="x"></i></button>
         <h3>Profile</h3>
+        <button id="btn-save-profile-header" style="display:none; color: var(--accent-primary); font-weight: 700; background: none; border: none; font-size: 15px; cursor: pointer; position: absolute; right: 16px;">Save</button>
       </div>
       <div id="profile-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
     </aside>
@@ -245,6 +251,6 @@
   <script src="shared/network/p2p-mobile.js"></script>
   <script src="shared/database/index.js"></script>
   <script src="shared/database/sqlite-mobile.js"></script>
-  <script src="js/app.js?v2"></script>
+  <script src="js/app.js?v3"></script>
 </body>
 </html>

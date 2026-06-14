@@ -20,9 +20,19 @@ window.ChatPanel = {
     this.initDelegatedActions();
     
     // Subscribe to store
-    this.unsubscribe = window.store.subscribe((state) => {
-      this.renderChat(state);
+    this.unsubscribe = window.store.subscribe((state, changedState) => {
+      var relevant = ['messages', 'activeChatId', 'activeTab', 'friends', 'groups', 'currentUser', 'settings', 'transferProgress', 'transferErrors'];
+      if (!changedState || relevant.some(function(k) { return k in changedState; })) {
+        if (changedState && 'activeChatId' in changedState && state.activeChatId) {
+          window.store.loadFullChatMessages(state.activeChatId);
+        }
+        this.renderChat(state);
+      }
     });
+
+    // Load full messages for the initial active chat
+    var initialId = window.store.getState().activeChatId;
+    if (initialId) window.store.loadFullChatMessages(initialId);
 
     this.render();
     this.attachEvents();
@@ -167,14 +177,14 @@ window.ChatPanel = {
         var g = s.groups.find(function(g) { return g.groupId === chatId; });
         if (g) {
           (g.members || []).forEach(function(m) {
-            if (m.userId !== s.currentUser.userId && m.ip) {
-              window.orbitAPI.networkSend(m.userId, m.ip, type, payload);
+            if (m.userId !== s.currentUser.userId) {
+              window.orbitAPI.networkSend(m.userId, m.ip || '', type, payload);
             }
           });
         } else {
           var friend = s.friends.find(function(f) { return f.userId === chatId; });
           if (friend) {
-            window.orbitAPI.networkSend(chatId, friend.ip, type, payload);
+            window.orbitAPI.networkSend(chatId, friend.ip || '', type, payload);
           }
         }
       }
@@ -262,6 +272,124 @@ window.ChatPanel = {
         if (window.ImageViewer) window.ImageViewer.openFromMessage(msgId, attId);
         return;
       }
+
+      // Reaction pill toggle
+      var pill = e.target.closest('.reaction-pill');
+      if (pill) {
+        e.stopPropagation();
+        var msgId = pill.getAttribute('data-msg-id');
+        var emoji = pill.getAttribute('data-emoji');
+        var state = window.store.getState();
+        var chatId = state.activeChatId;
+        var msg = (state.messages[chatId] || []).find(function(m) { return String(m.id) === msgId; });
+        if (!msg) return;
+        var hasReacted = msg.reactions && msg.reactions.some(function(r) { return r.emoji === emoji && r.userId === state.currentUser.userId; });
+        window.store.sendReaction(chatId, msgId, emoji, hasReacted ? 'remove' : 'add');
+        return;
+      }
+
+      // Header avatar click
+      var headerAvatar = e.target.closest('.chat-header-avatar');
+      if (headerAvatar) {
+        e.stopPropagation();
+        var state = window.store.getState();
+        var activeFriend = state.friends.find(function(f) { return f.userId === state.activeChatId; });
+        if (activeFriend && window.ProfileSidebar) window.ProfileSidebar.open(activeFriend);
+        return;
+      }
+
+      // Cancel transfer
+      var cancelBtn = e.target.closest('.btn-cancel-transfer');
+      if (cancelBtn) {
+        var fid = cancelBtn.getAttribute('data-file-id');
+        if (window.orbitAPI && window.orbitAPI.cancelTransfer) {
+          window.orbitAPI.cancelTransfer(fid);
+        }
+        var cp = { ...window.store.getState().transferProgress };
+        delete cp[fid];
+        window.store.setState({ transferProgress: cp });
+        return;
+      }
+
+      // Dismiss error
+      var dismissBtn = e.target.closest('.btn-dismiss-error');
+      if (dismissBtn) {
+        var fid = dismissBtn.getAttribute('data-file-id');
+        var errs = { ...window.store.getState().transferErrors };
+        delete errs[fid];
+        window.store.setState({ transferErrors: errs });
+        return;
+      }
+
+      // Per-message avatar click → open ProfileSidebar
+      var avatarEl = e.target.closest('.msg-avatar');
+      if (avatarEl) {
+        var userId = avatarEl.getAttribute('data-user-id');
+        if (!userId) return;
+        var state = window.store.getState();
+        var user = state.friends.find(function(f) { return f.userId === userId; });
+        if (!user) {
+          var group = state.groups.find(function(g) { return g.groupId === state.activeChatId; });
+          if (group) {
+            user = group.members.find(function(m) { return m.userId === userId; });
+          }
+        }
+        if (userId === state.currentUser.userId) {
+          user = state.currentUser;
+        }
+        if (user && window.ProfileSidebar) window.ProfileSidebar.open(user);
+        return;
+      }
+    });
+    // Context menu delegation for message bubbles
+    this.container.addEventListener('contextmenu', function(e) {
+      var bubble = e.target.closest('.message-bubble');
+      if (!bubble || !window.ContextMenu) return;
+      e.preventDefault();
+      var msgId = bubble.getAttribute('data-msg-id');
+      var state = window.store.getState();
+      var msgs = state.messages[state.activeChatId] || [];
+      var msg = msgs.find(function(m) { return m.id == msgId; });
+      if (!msg) return;
+      var isMine = msg.sender === state.currentUser.userId;
+      var items = [
+        { label: 'Reply', action: 'reply', icon: 'corner-up-left', onClick: function() { 
+          var input = document.getElementById('chat-input');
+          if (input) {
+            var snippet = msg.text || 'Attachment';
+            if (snippet.length > 25) snippet = snippet.substring(0, 25) + '...';
+            input.value = '[Reply to: "' + snippet + '"] ' + input.value;
+            input.focus();
+          }
+        } },
+        { label: 'Copy Text', action: 'copy', icon: 'copy', onClick: function() {
+          var text = msg.text || '';
+          if (window.orbitAPI && window.orbitAPI.writeClipboard) {
+            window.orbitAPI.writeClipboard(text);
+          } else {
+            navigator.clipboard.writeText(text).catch(function(e) { console.warn('Clipboard write failed', e); });
+          }
+        } },
+      ];
+      var pinnedMsgs = window.store.getPinnedMessages(state.activeChatId);
+      var isPinned = pinnedMsgs.some(function(p) { return String(p.msgId) === String(msg.id); });
+      if (isPinned) {
+        items.push({ label: 'Unpin Message', action: 'unpin', icon: 'pin-off', onClick: function() {
+          window.store.sendUnpinMessage(state.activeChatId, msg.id);
+        } });
+      } else {
+        items.push({ label: 'Pin Message', action: 'pin', icon: 'pin', onClick: function() {
+          window.store.sendPinMessage(state.activeChatId, msg.id);
+        } });
+      }
+      if (isMine) {
+        items.push('separator');
+        items.push({ label: 'Edit Message', action: 'edit', icon: 'edit-2', onClick: function() { console.log('Edit', msg.id); } });
+        items.push({ label: 'Delete Message', action: 'delete', icon: 'trash-2', color: 'var(--accent-danger)', onClick: function() { 
+          window.store.deleteMessage(state.activeChatId, msg.id);
+        } });
+      }
+      if (window.ContextMenu.show) window.ContextMenu.show(e.clientX, e.clientY, items);
     });
   },
 
@@ -719,7 +847,7 @@ window.ChatPanel = {
         '<span id="typing-text"></span>' +
       '</div>';
 
-    this.container.innerHTML +=
+    this.container.insertAdjacentHTML('beforeend',
       '<!-- Chat Input -->' +
       '<div class="chat-input-area" style="padding: var(--spacing-md) var(--spacing-lg) 48px var(--spacing-lg); display: flex; flex-direction: column;">' +
         '<div id="file-preview-area" style="display:none; gap: 8px; padding: 12px; margin-bottom: 8px; overflow-x: auto; white-space: nowrap; border-radius: 16px; background: var(--bg-hover); border: 1px solid var(--border-subtle);"></div>' +
@@ -733,9 +861,11 @@ window.ChatPanel = {
           '<button id="btn-send"><i data-lucide="send"></i></button>' +
           '<input type="file" id="file-input" style="display:none;" multiple>' +
         '</div>' +
-      '</div>';
+      '</div>');
 
-    lucide.createIcons({ root: this.container });
+    lucide.createIcons({ root: this.container.querySelector('.chat-input-area') });
+
+    if (window.freezeGifImages) window.freezeGifImages(this.container);
 
     // Link Preview OG fetch
     if (!window._linkPreviewCache) window._linkPreviewCache = {};
@@ -782,22 +912,6 @@ window.ChatPanel = {
       }
     }
 
-    // Reaction pill toggle
-    var pills = this.container.querySelectorAll('.reaction-pill');
-    pills.forEach(function(pill) {
-      pill.addEventListener('click', function(e) {
-        e.stopPropagation();
-        var msgId = pill.getAttribute('data-msg-id');
-        var emoji = pill.getAttribute('data-emoji');
-        var state = window.store.getState();
-        var chatId = state.activeChatId;
-        var msg = (state.messages[chatId] || []).find(function(m) { return String(m.id) === msgId; });
-        if (!msg) return;
-        var hasReacted = msg.reactions && msg.reactions.some(function(r) { return r.emoji === emoji && r.userId === state.currentUser.userId; });
-        window.store.sendReaction(chatId, msgId, emoji, hasReacted ? 'remove' : 'add');
-      });
-    });
-    
     // Inject message FX particles for own messages
     this._injectMessageParticles();
 
@@ -881,8 +995,8 @@ window.ChatPanel = {
         var members = state.groups.find(function(g) { return g.groupId === chatId; });
         var recipients = members ? members.members : [state.friends.find(function(f) { return f.userId === chatId; })].filter(Boolean);
         recipients.forEach(function(r) {
-          if (r.userId !== state.currentUser.userId && r.ip) {
-            window.orbitAPI.networkSend(r.userId, r.ip, window.Protocol.Types.TYPING, { isTyping: isTyping, username: state.currentUser.username });
+          if (r.userId !== state.currentUser.userId) {
+            window.orbitAPI.networkSend(r.userId, r.ip || '', window.Protocol.Types.TYPING, { isTyping: isTyping, username: state.currentUser.username });
           }
         });
       };
@@ -1052,98 +1166,6 @@ window.ChatPanel = {
       });
     }
 
-    // Context Menu for messages
-    var bubbles = this.container.querySelectorAll('.message-bubble');
-    bubbles.forEach(function(bubble) {
-      bubble.addEventListener('contextmenu', function(e) {
-        e.preventDefault();
-        if (!window.ContextMenu) return;
-        
-        var msgId = bubble.getAttribute('data-msg-id');
-        var state = window.store.getState();
-        var msgs = state.messages[state.activeChatId] || [];
-        var msg = msgs.find(function(m) { return m.id == msgId; });
-        if (!msg) return;
-
-        var isMine = msg.sender === state.currentUser.userId;
-        var items = [
-          { label: 'Reply', action: 'reply', icon: 'corner-up-left', onClick: function() { 
-            var input = document.getElementById('chat-input');
-            if (input) {
-              var snippet = msg.text || 'Attachment';
-              if (snippet.length > 25) snippet = snippet.substring(0, 25) + '...';
-              input.value = '[Reply to: "' + snippet + '"] ' + input.value;
-              input.focus();
-            }
-          } },
-          { label: 'Copy Text', action: 'copy', icon: 'copy', onClick: function() {
-            var text = msg.text || '';
-            if (window.orbitAPI && window.orbitAPI.writeClipboard) {
-              window.orbitAPI.writeClipboard(text);
-            } else {
-              navigator.clipboard.writeText(text).catch(function(e) { console.warn('Clipboard write failed', e); });
-            }
-          } },
-        ];
-        
-        // Check if message is already pinned
-        var pinnedMsgs = window.store.getPinnedMessages(state.activeChatId);
-        var isPinned = pinnedMsgs.some(function(p) { return String(p.msgId) === String(msg.id); });
-        if (isPinned) {
-          items.push({ label: 'Unpin Message', action: 'unpin', icon: 'pin-off', onClick: function() {
-            window.store.sendUnpinMessage(state.activeChatId, msg.id);
-          } });
-        } else {
-          items.push({ label: 'Pin Message', action: 'pin', icon: 'pin', onClick: function() {
-            window.store.sendPinMessage(state.activeChatId, msg.id);
-          } });
-        }
-        
-        if (isMine) {
-          items.push('separator');
-          items.push({ label: 'Edit Message', action: 'edit', icon: 'edit-2', onClick: function() { console.log('Edit', msg.id); } });
-          items.push({ label: 'Delete Message', action: 'delete', icon: 'trash-2', color: 'var(--accent-danger)', onClick: function() { 
-            window.store.deleteMessage(state.activeChatId, msg.id);
-          } });
-        }
-        
-        window.ContextMenu.show(e.clientX, e.clientY, items);
-      });
-    });
-
-    var headerAvatarBtn = this.container.querySelector('.chat-header-avatar');
-    if (headerAvatarBtn) {
-      headerAvatarBtn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        var state = window.store.getState();
-        var activeFriend = state.friends.find(function(f) { return f.userId === state.activeChatId; });
-        if (activeFriend && window.ProfileSidebar) window.ProfileSidebar.open(activeFriend);
-      });
-    }
-
-    // Per-message avatar clicks → open ProfileSidebar
-    this.container.addEventListener('click', function(e) {
-      var avatarEl = e.target.closest('.msg-avatar');
-      if (avatarEl) {
-        var userId = avatarEl.getAttribute('data-user-id');
-        if (!userId) return;
-        var state = window.store.getState();
-        // Look up user in friends, group members, or currentUser
-        var user = state.friends.find(function(f) { return f.userId === userId; });
-        if (!user) {
-          // Check group members
-          var group = state.groups.find(function(g) { return g.groupId === state.activeChatId; });
-          if (group) {
-            user = group.members.find(function(m) { return m.userId === userId; });
-          }
-        }
-        if (userId === state.currentUser.userId) {
-          user = state.currentUser;
-        }
-        if (user && window.ProfileSidebar) window.ProfileSidebar.open(user);
-      }
-    });
-
     var btnChatMore = document.getElementById('btn-chat-more');
     if (btnChatMore) {
       btnChatMore.addEventListener('click', function(e) {
@@ -1186,28 +1208,6 @@ window.ChatPanel = {
     }
 
     // Cancel transfer buttons
-    self.container.querySelectorAll('.btn-cancel-transfer').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        var fid = btn.getAttribute('data-file-id');
-        if (window.orbitAPI && window.orbitAPI.cancelTransfer) {
-          window.orbitAPI.cancelTransfer(fid);
-        }
-        var cp = { ...window.store.getState().transferProgress };
-        delete cp[fid];
-        window.store.setState({ transferProgress: cp });
-      });
-    });
-
-    // Dismiss error buttons
-    self.container.querySelectorAll('.btn-dismiss-error').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        var fid = btn.getAttribute('data-file-id');
-        var errs = { ...window.store.getState().transferErrors };
-        delete errs[fid];
-        window.store.setState({ transferErrors: errs });
-      });
-    });
-
     // Drag and drop file uploads
     this.container.addEventListener('dragover', function(e) {
       e.preventDefault();
@@ -1622,17 +1622,21 @@ window.ChatPanel = {
     if (isGroup) {
       var members = activeGroup.members || [];
       members.forEach(function(m) {
-        if (m.userId !== myId && m.ip) {
-          recipients.push({ userId: m.userId, ip: m.ip });
+        if (m.userId !== myId) {
+          recipients.push({ userId: m.userId, ip: m.ip || '' });
         }
       });
-    } else if (friend && friend.ip) {
-      recipients.push({ userId: friend.userId, ip: friend.ip });
+    } else if (friend) {
+      recipients.push({ userId: friend.userId, ip: friend.ip || '' });
     }
 
-    // Helper: send to all recipients
+    // Helper: send to all recipients (with packet size logging)
     function sendToAll(type, payload) {
       if (window.orbitAPI && activeChatId !== 'local-echo') {
+        var payloadStr = JSON.stringify(payload);
+        if (payloadStr.length > 100 * 1024) {
+          console.log('[SEND] type=' + type + ' size=' + (payloadStr.length / 1024).toFixed(1) + 'KB recipients=' + recipients.length);
+        }
         recipients.forEach(function(r) {
           window.orbitAPI.networkSend(r.userId, r.ip, type, payload);
         });
@@ -1652,11 +1656,27 @@ window.ChatPanel = {
       }
     }
 
-    // 1. Send files first (if any)
-    if (this.stagedFiles.length > 0) {
-      var attId = Date.now();
+    // Handle edit separately (text-only)
+    if (this.editingMsg) {
+      const editId = this.editingMsg.id;
+      sendToAll(window.Protocol.Types.MESSAGE_EDIT, { msgId: editId, newText: text || '' });
+      window.store.editMessage(activeChatId, editId, text || '');
+      this.editingMsg = null;
+      var input = document.getElementById('chat-input');
+      if (input) input.value = '';
+      window.store.notify();
+      return;
+    }
 
-      // Read file data in renderer for persistence (needed when path is unavailable)
+    // Limit: files over this size use chunked FILE_TRANSFER instead of inline base64
+    var INLINE_LIMIT = 1.5 * 1024 * 1024; // 1.5 MB
+    var CHUNK_SIZE = 64 * 1024; // 64 KB
+
+    var localAttachments = [];
+    var inlineAttachments = [];
+    var largeFiles = []; // { staged, data, att }
+
+    if (this.stagedFiles.length > 0) {
       const fileBuffers = await Promise.all(this.stagedFiles.map(async (s) => {
         if (s.file) {
           try {
@@ -1667,107 +1687,186 @@ window.ChatPanel = {
         return null;
       }));
 
-      const attachments = this.stagedFiles.map((s, idx) => ({
-        id: String(attId++),
-        type: s.type,
-        name: s.name,
-        size: s.size,
-        path: s.path,
-        data: fileBuffers[idx],
-        url: `orbit-db://attachment/${String(attId - 1)}?t=${Date.now()}`,
-        width: s.width || 0,
-        height: s.height || 0
-      }));
+      var attId = Date.now();
+      for (var fi = 0; fi < this.stagedFiles.length; fi++) {
+        var s = this.stagedFiles[fi];
+        var fileData = fileBuffers[fi];
+        var att = {
+          id: String(attId + fi),
+          type: s.type,
+          name: s.name,
+          size: s.size,
+          path: s.path,
+          data: fileData,
+          url: 'orbit-db://attachment/' + String(attId + fi) + '?t=' + Date.now(),
+          width: s.width || 0,
+          height: s.height || 0
+        };
+        localAttachments.push(att);
 
-      // Send files and create progress entries from returned fileIds
-      if (window.orbitAPI && activeChatId !== 'local-echo') {
-        var maxMB = state.settings.maxFileSize || 500;
-        for (var i = 0; i < this.stagedFiles.length; i++) {
-          var s = this.stagedFiles[i];
-          if (recipients.length === 0) continue;
-          if (s.size > maxMB * 1024 * 1024) {
-            if (window.Toast) window.Toast.show('File Too Large', s.name + ' exceeds ' + maxMB + 'MB limit');
-            continue;
+        if (fileData && fileData.byteLength >= INLINE_LIMIT) {
+          // Large file: send via chunked FILE_TRANSFER protocol (mobile-compatible)
+          largeFiles.push({ staged: s, data: fileData, att: att });
+        } else if (fileData) {
+          // Small file: inline as base64 data URL in MESSAGE payload
+          var bytes = new Uint8Array(fileData);
+          var binary = '';
+          for (var b = 0; b < bytes.byteLength; b++) {
+            binary += String.fromCharCode(bytes[b]);
           }
-          try {
-            for (var j = 0; j < recipients.length; j++) {
-              var r = recipients[j];
-              var fid = await window.orbitAPI.networkSendFile(r.userId, r.ip, s.path, s.name);
-              if (fid) {
-                var cp = window.store.getState().transferProgress;
-                if (cp && cp[fid]) {
-                  var updated = { ...cp };
-                  updated[fid] = { ...updated[fid], name: s.name };
-                  window.store.setState({ transferProgress: updated });
-                }
-              }
-            }
-          } catch(err) {
-            console.error("File send error:", err);
-            if (window.Toast) window.Toast.show('Send Failed', s.name + ': ' + err.message);
+          var mimeType = s.file ? s.file.type : (s.type === 'image' ? 'image/png' : 'application/octet-stream');
+          var dataUrl = 'data:' + mimeType + ';base64,' + btoa(binary);
+          inlineAttachments.push({
+            id: att.id,
+            name: s.name,
+            type: s.type,
+            size: s.size,
+            url: dataUrl,
+            width: s.width || 0,
+            height: s.height || 0
+          });
+        } else if (s.url && typeof s.url === 'string' && s.url.indexOf('data:') === 0) {
+          inlineAttachments.push({
+            id: att.id,
+            name: s.name,
+            type: s.type,
+            size: s.size,
+            url: s.url,
+            width: s.width || 0,
+            height: s.height || 0
+          });
+        }
+      }
+    }
+
+    // ---- Send MESSAGE with text + small file data URLs ----
+    var msgId = Date.now() + 2;
+    if (text || inlineAttachments.length > 0) {
+      var payload = {
+        text: text || '',
+        msgId: msgId
+      };
+      if (isGroup) {
+        payload.chatId = activeChatId;
+      }
+      if (this.replyingTo) {
+        payload.replyTo = this.replyingTo.id;
+      }
+      if (inlineAttachments.length > 0) {
+        payload.attachments = inlineAttachments;
+      }
+
+      // E2EE: encrypt text for each recipient
+      var settings = window.store.getState().settings;
+      if (settings.e2eeEnabled && !isGroup && recipients.length === 1 && text) {
+        var pubKey = window.store.getPeerPublicKey(recipients[0].userId);
+        if (pubKey && window.orbitAPI && window.orbitAPI.e2eeEncrypt) {
+          var encrypted = window.orbitAPI.e2eeEncrypt(text, pubKey);
+          if (encrypted) {
+            payload.text = encrypted;
+            payload.e2ee = true;
           }
         }
       }
 
-      window.store.addMessage(activeChatId, {
-        id: Date.now(),
-        sender: myId,
-        text: '',
-        attachments: attachments,
-        timestamp: new Date().toISOString()
+      sendToAll(window.Protocol.Types.MESSAGE, payload);
+    }
+
+    // ---- Send large files via chunked FILE_TRANSFER protocol ----
+    for (var li = 0; li < largeFiles.length; li++) {
+      var lf = largeFiles[li];
+      var fileData = lf.data;
+      var fileId = (window.orbitAPI && window.orbitAPI.getUuid) ? window.orbitAPI.getUuid() : (Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8));
+      var totalChunks = Math.ceil(fileData.byteLength / CHUNK_SIZE);
+
+      // Compute SHA-256 hash
+      var hash = '';
+      try {
+        if (window.crypto && window.crypto.subtle) {
+          var hashBuffer = await window.crypto.subtle.digest('SHA-256', fileData);
+          var hashView = new Uint8Array(hashBuffer);
+          var hashParts = [];
+          for (var hi = 0; hi < hashView.length; hi++) {
+            var h = hashView[hi].toString(16);
+            if (h.length < 2) h = '0' + h;
+            hashParts.push(h);
+          }
+          hash = hashParts.join('');
+        }
+      } catch (e) {
+        hash = '';
+      }
+
+      // Send FILE_TRANSFER_START
+      sendToAll(window.Protocol.Types.FILE_TRANSFER_START, {
+        fileId: fileId,
+        fileName: lf.staged.name,
+        fileSize: fileData.byteLength,
+        totalChunks: totalChunks,
+        hash: hash
       });
-      
-      this.stagedFiles = [];
-      this.renderPreviewArea();
-    }
 
-    // 2. Send text message (if any)
-    if (text) {
-      if (this.editingMsg) {
-        // Edit flow
-        const msgId = this.editingMsg.id;
-        sendToAll(window.Protocol.Types.MESSAGE_EDIT, { msgId, newText: text });
-        window.store.editMessage(activeChatId, msgId, text);
-        this.editingMsg = null;
-      } else {
-        // Send new text
-        const msgId = Date.now() + 2;
-        var payload = { text: text, msgId: msgId, chatId: activeChatId };
-        if (this.replyingTo) {
-          payload.replyTo = this.replyingTo.id;
+      for (var ci = 0; ci < totalChunks; ci++) {
+        var start = ci * CHUNK_SIZE;
+        var end = Math.min(start + CHUNK_SIZE, fileData.byteLength);
+        var chunkBytes = new Uint8Array(fileData.slice(start, end));
+        var chunkBinary = '';
+        for (var cb = 0; cb < chunkBytes.byteLength; cb++) {
+          chunkBinary += String.fromCharCode(chunkBytes[cb]);
         }
+        var chunkBase64 = btoa(chunkBinary);
 
-        // E2EE: encrypt text for each recipient
-        var settings = window.store.getState().settings;
-        if (settings.e2eeEnabled && !isGroup && recipients.length === 1) {
-          var pubKey = window.store.getPeerPublicKey(recipients[0].userId);
-          if (pubKey && window.orbitAPI && window.orbitAPI.e2eeEncrypt) {
-            var encrypted = window.orbitAPI.e2eeEncrypt(text, pubKey);
-            if (encrypted) {
-              payload.text = encrypted;
-              payload.e2ee = true;
-            }
-          }
-        }
-
-        sendToAll(window.Protocol.Types.MESSAGE, payload);
-        
-        window.store.addMessage(activeChatId, {
-          id: msgId,
-          sender: myId,
-          text: text,
-          replyTo: payload.replyTo,
-          timestamp: new Date().toISOString()
+        sendToAll(window.Protocol.Types.FILE_CHUNK, {
+          fileId: fileId,
+          chunkIndex: ci,
+          data: chunkBase64
         });
-        
-        this.replyingTo = null;
+
+        // Report progress
+        if (window.store) {
+          var cp = window.store.getState().transferProgress || {};
+          var updated = {};
+          updated[fileId] = { received: ci + 1, total: totalChunks, name: lf.staged.name, isSending: true };
+          window.store.setState({
+            transferProgress: Object.assign({}, cp, updated)
+          });
+        }
+
+        // Yield to event loop between chunks
+        await new Promise(function(r) { setTimeout(r, 0); });
       }
-      
-      // Clear UI state
-      var input = document.getElementById('chat-input');
-      if (input) input.value = '';
-      window.store.notify();
+
+      // Send FILE_TRANSFER_END
+      sendToAll(window.Protocol.Types.FILE_TRANSFER_END, {
+        fileId: fileId,
+        hash: hash
+      });
     }
+
+    // Store locally with orbit-db attachment URLs
+    var localId = (text || inlineAttachments.length > 0) ? msgId : (Date.now() + 3);
+    var localMsg = {
+      id: localId,
+      sender: myId,
+      text: text || '',
+      timestamp: new Date().toISOString()
+    };
+    if (localAttachments.length > 0) {
+      localMsg.attachments = localAttachments;
+    }
+    if (this.replyingTo) {
+      localMsg.replyTo = this.replyingTo.id;
+    }
+    window.store.addMessage(activeChatId, localMsg);
+
+    this.stagedFiles = [];
+    this.renderPreviewArea();
+    this.replyingTo = null;
+
+    // Clear UI state
+    var input = document.getElementById('chat-input');
+    if (input) input.value = '';
+    window.store.notify();
   },
 
   _injectMessageParticles() {

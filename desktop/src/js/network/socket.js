@@ -75,7 +75,6 @@ class SocketManager extends EventEmitter {
       username: identity.username,
       usertag: identity.usertag,
       avatarHash: identity.avatar ? 'has_avatar' : null,
-      avatar: identity.avatar || null,
       status: identity.status || 'online',
       bio: identity.bio || '',
       publicKey: identity.publicKey || null,
@@ -131,6 +130,10 @@ class SocketManager extends EventEmitter {
       while (buffer.length >= 4) {
         const payloadLength = buffer.readUInt32BE(0);
 
+        if (payloadLength > 100 * 1024) {
+          console.log('[RECV] frame size=' + (payloadLength / 1024).toFixed(1) + 'KB from=' + (currentPeerId || socket.remoteAddress));
+        }
+
         // Guard against oversized frames (BUG-DT-2)
         if (payloadLength <= 0 || payloadLength > MAX_PAYLOAD_SIZE) {
           console.error(`Invalid payload length ${payloadLength}, closing connection`);
@@ -153,6 +156,8 @@ class SocketManager extends EventEmitter {
               this.connections.set(currentPeerId, socket);
               // Track socket for write queue cleanup
               socket.__orbitKey = currentPeerId;
+              // Send our BEACON so the connecting peer can identify us
+              this.sendBeacon(socket);
             }
 
             // Attach sender IP for BEACON IP fallback (Bug #1)

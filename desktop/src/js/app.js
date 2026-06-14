@@ -205,58 +205,47 @@ document.addEventListener('DOMContentLoaded', () => {
   // Detect system dark mode preference
   const darkModeMedia = window.matchMedia('(prefers-color-scheme: dark)');
 
-  // Apply settings from store
+  // ---- Apply settings from store ----
   const applySettings = (settings) => {
     var theme = settings.theme || 'dark';
     if (theme === 'system') {
       theme = darkModeMedia.matches ? 'dark' : 'light';
     } else if (theme === 'seasonal') {
       var m = new Date().getMonth();
-      if (m >= 2 && m <= 4) {
-        theme = 'seasonal-spring';
-      } else if (m >= 5 && m <= 7) {
-        theme = 'seasonal-summer';
-      } else if (m >= 8 && m <= 10) {
-        theme = 'seasonal-fall';
-      } else {
-        theme = 'seasonal-winter';
-      }
+      if (m >= 2 && m <= 4) { theme = 'seasonal-spring'; }
+      else if (m >= 5 && m <= 7) { theme = 'seasonal-summer'; }
+      else if (m >= 8 && m <= 10) { theme = 'seasonal-fall'; }
+      else { theme = 'seasonal-winter'; }
     }
     document.documentElement.setAttribute('data-theme', theme);
 
-    // Apply custom theme colors
     if (settings.customThemeColors && theme === 'custom') {
       Object.keys(settings.customThemeColors).forEach(function(key) {
         document.documentElement.style.setProperty('--' + key, settings.customThemeColors[key]);
       });
     } else if (theme !== 'custom') {
-      // Clear any previously applied custom colors
       var customKeys = ['bg-base','bg-surface','bg-sidebar','bg-hover','bg-active','text-primary','text-secondary','text-muted','accent-primary','accent-hover','accent-soft','border-subtle','border-strong'];
       customKeys.forEach(function(key) {
         document.documentElement.style.removeProperty('--' + key);
       });
     }
-    
-    // Animation Speed
+
     var speed = settings.animSpeed || 'normal';
     var durations = { slow: '0.35s', normal: '0.18s', fast: '0.1s' };
     var dur = durations[speed] || '0.18s';
     document.documentElement.style.setProperty('--transition-duration', dur);
 
-    // Animations on/off
     if (settings.animations === false) {
       document.documentElement.style.setProperty('--transition', 'none');
     } else {
       document.documentElement.style.setProperty('--transition', 'all ' + dur + ' cubic-bezier(0.4, 0, 0.2, 1)');
     }
-    
-    // Reduce Motion
-    document.documentElement.classList.toggle('reduce-motion', !!settings.reduceMotion);
 
-    // Message Animation
+    document.documentElement.classList.toggle('reduce-motion', !!settings.reduceMotion);
+    if (settings.reduceMotion && window.freezeGifImages) window.freezeGifImages(document);
+
     document.body.setAttribute('data-message-anim', settings.messageAnim || 'slide');
 
-    // Pattern or Wallpaper
     if (settings.chatWallpaper) {
       document.documentElement.style.setProperty('--chat-bg-image', 'url("' + settings.chatWallpaper + '")');
       document.documentElement.style.setProperty('--chat-bg-size', 'cover');
@@ -278,56 +267,64 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       document.documentElement.style.setProperty('--chat-bg-image', 'none');
     }
-    
-    // Bubbles
+
     document.body.setAttribute('data-bubbles', settings.messageBubbles || 'Modern');
-    
-    // Font Size
+
     if (settings.fontSize === 'Small') document.body.style.fontSize = '14px';
     else if (settings.fontSize === 'Large') document.body.style.fontSize = '18px';
     else document.body.style.fontSize = '16px';
 
-    // Developer Mode
     document.documentElement.classList.toggle('dev-mode', !!settings.devMode);
-
-    // Debug Display
     document.documentElement.classList.toggle('debug-display', !!settings.debugDisplay);
-
-    // Show Message IDs
     document.documentElement.classList.toggle('show-message-ids', !!settings.showMessageIds);
-
-    // Show Connection Stats
     document.documentElement.classList.toggle('show-conn-stats', !!settings.showConnectionStats);
-
-    // Experimental
     document.documentElement.classList.toggle('experimental', !!settings.enableExperimental);
-
-    // Experimental features
     document.documentElement.classList.toggle('experimental-animated-avatars', !!settings.experimentalAnimatedAvatars);
     document.documentElement.classList.toggle('experimental-message-fx', !!settings.experimentalMessageFx);
     document.documentElement.classList.toggle('experimental-compact-spacing', !!settings.experimentalCompactSpacing);
   };
-  
+
   applySettings(window.store.getState().settings);
 
-  // Apply zoom once at startup (not on every settings change)
   document.body.style.zoom = (window.store.getState().settings.appZoom || 100) + '%';
 
-  // Sync profileFrame from settings to currentUser
-  (function() {
-    var state = window.store.getState();
-    var pf = state.settings && state.settings.profileFrame;
-    if (pf && state.currentUser) {
-      var updated = { ...state.currentUser, profileFrame: pf };
-      window.store.setState({ currentUser: updated });
+  // Freeze GIF images when reduce-motion is enabled
+  window._frozenCache = new Map();
+  window.freezeGifImages = function(root) {
+    if (!root) root = document;
+    if (!root.querySelectorAll) return;
+    var reduceMotion = window.store && window.store.getState && window.store.getState().settings && window.store.getState().settings.reduceMotion;
+    if (!reduceMotion) return;
+    function freezeOne(img) {
+      img.setAttribute('data-frozen', 'true');
+      var src = img.currentSrc || img.src;
+      if (window._frozenCache.has(src)) {
+        if (img.src !== window._frozenCache.get(src)) img.src = window._frozenCache.get(src);
+        return;
+      }
+      if (img.complete && img.naturalWidth > 0) {
+        var canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        canvas.getContext('2d').drawImage(img, 0, 0);
+        var frozen = canvas.toDataURL('image/png');
+        window._frozenCache.set(src, frozen);
+        img.src = frozen;
+      } else {
+        img.addEventListener('load', function() {
+          var c = document.createElement('canvas');
+          c.width = img.naturalWidth;
+          c.height = img.naturalHeight;
+          c.getContext('2d').drawImage(img, 0, 0);
+          var frozen = c.toDataURL('image/png');
+          window._frozenCache.set(img.currentSrc || img.src, frozen);
+          img.src = frozen;
+        });
+      }
     }
-  })();
+    root.querySelectorAll('img[src*=".gif"]:not([data-frozen]), img[src*="data:image/gif"]:not([data-frozen]), img[src*="orbit-db://"]:not([data-frozen]), .avatar img:not([data-frozen])').forEach(freezeOne);
+  };
 
-  window.store.subscribe((state) => {
-    applySettings(state.settings);
-  });
-
-  // Listen for OS theme changes when in 'system' mode
   darkModeMedia.addEventListener('change', () => {
     var state = window.store.getState();
     if (state.settings.theme === 'system') {
@@ -335,10 +332,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Initialize Identity
-  if (window.Identity) window.Identity.init();
-
-  // Scalable Sidebar Logic
+  // ---- Phase 1 (immediate): Settings, layout, keyboard shortcuts ----
   const appLayout = document.getElementById('app-layout');
   const resizer = document.getElementById('sidebar-resizer');
   let isResizing = false;
@@ -348,23 +342,20 @@ document.addEventListener('DOMContentLoaded', () => {
     if (width < 200) width = 200;
     if (width > 500) width = 500;
     currentSidebarWidth = width;
-    appLayout.style.gridTemplateColumns = `64px ${width}px 1fr`;
+    appLayout.style.gridTemplateColumns = '64px ' + width + 'px 1fr';
   };
 
-  // Set initial width
   updateSidebarWidth(currentSidebarWidth);
 
   if (resizer) {
     resizer.addEventListener('mousedown', (e) => {
       isResizing = true;
       document.body.style.cursor = 'col-resize';
-      // Prevent text selection while dragging
       e.preventDefault();
     });
 
     document.addEventListener('mousemove', (e) => {
       if (!isResizing) return;
-      // Calculate new width: mouse X minus left panel width (64)
       const newWidth = e.clientX - 64;
       updateSidebarWidth(newWidth);
     });
@@ -378,200 +369,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Handle activeTab + sidebar toggle changes
-  window.store.subscribe((state) => {
-    const panelMiddle = document.getElementById('panel-middle');
-    if (state.activeTab === 'gallery') {
-      if (panelMiddle) panelMiddle.style.display = 'none';
-      appLayout.classList.remove('sidebar-collapsed');
-      appLayout.style.gridTemplateColumns = '64px 1fr';
-      if (window._sidebarToggleBtn) window._sidebarToggleBtn.style.display = 'none';
-      return;
-    }
-    // DM mode
-    if (panelMiddle) panelMiddle.style.display = 'flex';
-    if (!state.sidebarMiddleVisible) {
-      appLayout.classList.add('sidebar-collapsed');
-      appLayout.style.gridTemplateColumns = '';
-      // Show floating re-open button
-      var btn = window._sidebarToggleBtn;
-      if (!btn) {
-        btn = document.createElement('button');
-        btn.id = 'btn-reopen-sidebar';
-        btn.title = 'Show Sidebar';
-        btn.style.cssText = 'position:absolute;left:0;top:50%;transform:translateY(-50%);z-index:10;width:24px;height:48px;border:1px solid var(--border-subtle);border-left:none;background:var(--bg-surface);color:var(--text-secondary);cursor:pointer;border-radius:0 8px 8px 0;display:flex;align-items:center;justify-content:center;transition:opacity 0.2s;';
-        btn.innerHTML = '<i data-lucide="chevrons-right" style="width:16px;height:16px;"></i>';
-        btn.addEventListener('click', function() {
-          window.store.setState({ sidebarMiddleVisible: true });
-        });
-        document.getElementById('panel-right').appendChild(btn);
-        if (window.lucide) window.lucide.createIcons({ root: btn });
-        window._sidebarToggleBtn = btn;
-      }
-      btn.style.display = 'flex';
-    } else {
-      appLayout.classList.remove('sidebar-collapsed');
-      appLayout.style.gridTemplateColumns = '64px ' + currentSidebarWidth + 'px 1fr';
-      if (window._sidebarToggleBtn) window._sidebarToggleBtn.style.display = 'none';
-    }
-  });
-
-  // Start Networking
-  if (window.orbitAPI) {
-    window.orbitAPI.networkStart(window.store.getState().currentUser);
-    
-    // Listen for peer discovery
-    window.orbitAPI.on('peer-found', (peer) => {
-      console.log('Discovered peer:', peer.username);
-      window.store.addOrUpdatePeer(peer);
-    });
-
-    // Listen for incoming messages
-    window.orbitAPI.on('network-message', (packet) => {
-      // Handle typing indicators directly (lightweight, skip store)
-      if (packet.type === window.Protocol.Types.TYPING) {
-        var chatId = packet.to || packet.from;
-        var isTyping = packet.payload && packet.payload.isTyping;
-        var username = packet.payload ? packet.payload.username : 'Someone';
-        if (isTyping) {
-          window.TypingState.addUser(chatId, packet.from, username);
-        } else {
-          window.TypingState.removeUser(chatId, packet.from);
-        }
-        return;
-      }
-
-      // Handle group join requests with accept/deny modal for owner
-      if (packet.type === window.Protocol.Types.GROUP_JOIN_REQUEST) {
-        var joinPayload = packet.payload;
-        var currentState = window.store.getState();
-        var myGroup = currentState.groups.find(function(g) { return g.inviteCode === joinPayload.inviteCode && g.ownerId === currentState.currentUser.userId; });
-        if (myGroup && window.ConfirmModal) {
-          var requester = currentState.friends.find(function(f) { return f.userId === joinPayload.userId; });
-          var requesterName = requester ? requester.username : joinPayload.username || 'Someone';
-          window.ConfirmModal.show({
-            title: 'Join Request',
-            message: requesterName + ' wants to join "' + myGroup.groupName + '". Allow them in?',
-            confirmText: 'Accept',
-            cancelText: 'Deny',
-            danger: false,
-            onConfirm: function() {
-              var newMember = { userId: joinPayload.userId, username: joinPayload.username, status: 'online', ip: null, role: 'member' };
-              window.store.addMemberToGroup(myGroup.groupId, newMember);
-              if (window.orbitAPI && requester && requester.ip) {
-                window.orbitAPI.networkSend(joinPayload.userId, requester.ip, window.Protocol.Types.GROUP_JOIN_RESPONSE, {
-                  groupId: myGroup.groupId,
-                  groupName: myGroup.groupName,
-                  accepted: true,
-                  members: [...(myGroup.members || []), newMember]
-                });
-              }
-            },
-            onCancel: function() {
-              if (window.orbitAPI && requester && requester.ip) {
-                window.orbitAPI.networkSend(joinPayload.userId, requester.ip, window.Protocol.Types.GROUP_JOIN_RESPONSE, {
-                  groupId: myGroup.groupId,
-                  groupName: myGroup.groupName,
-                  accepted: false
-                });
-              }
-            }
-          });
-        } else if (myGroup) {
-          // Fallback: auto-accept if ConfirmModal not available
-          var newMember = { userId: joinPayload.userId, username: joinPayload.username, status: 'online', ip: null, role: 'member' };
-          window.store.addMemberToGroup(myGroup.groupId, newMember);
-          var requester = currentState.friends.find(function(f) { return f.userId === joinPayload.userId; });
-          if (window.orbitAPI && requester && requester.ip) {
-            window.orbitAPI.networkSend(joinPayload.userId, requester.ip, window.Protocol.Types.GROUP_JOIN_RESPONSE, {
-              groupId: myGroup.groupId,
-              groupName: myGroup.groupName,
-              accepted: true,
-              members: [...(myGroup.members || []), newMember]
-            });
-          }
-        }
-        return;
-      }
-
-      window.store.handleIncomingPacket(packet);
-    });
-
-    // Listen for incoming files
-    window.orbitAPI.on('file-received', (data) => {
-      console.log('File received:', data);
-
-      // Fire notification for incoming file
-      var settings = window.store.getState().settings || {};
-      if (settings.notifySound && !settings.notifyDnd && window.NotificationSound) {
-        window.NotificationSound.play({ volume: settings.notifyVolume, type: settings.notifySoundType });
-      }
-      if ((document.hidden || window.store.getState().activeChatId !== data.sender) && window.orbitAPI && window.orbitAPI.showNotification) {
-        var senderName = 'Someone';
-        var friend = window.store.getState().friends.find(function(f) { return f.userId === data.sender; });
-        if (friend) senderName = friend.username;
-        window.orbitAPI.showNotification('File from ' + senderName, data.name);
-      }
-      
-      const isImage = data.name.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) != null;
-      const attId = data.fileId || (window.orbitAPI ? window.orbitAPI.getUuid() : Date.now().toString());
-      const fileSize = data.size || 0;
-      
-      window.store.handleIncomingPacket({
-        type: window.Protocol.Types.MESSAGE,
-        from: data.sender,
-        payload: { 
-          text: '',
-          attachments: [{
-            id: attId,
-            type: isImage ? 'image' : 'file',
-            mimeType: isImage ? (data.name.toLowerCase().endsWith('.gif') ? 'image/gif' : (data.name.toLowerCase().endsWith('.png') ? 'image/png' : (data.name.toLowerCase().endsWith('.webp') ? 'image/webp' : (data.name.toLowerCase().endsWith('.svg') ? 'image/svg+xml' : 'image/jpeg')))) : 'application/octet-stream',
-            name: data.name,
-            size: fileSize,
-            path: data.path,
-            url: `orbit-db://attachment/${attId}`
-          }]
-        }
-      });
-    });
-
-    window.orbitAPI.on('transfer-progress', (data) => {
-      window.store.handleTransferProgress(data);
-    });
-
-    window.orbitAPI.on('transfer-error', (data) => {
-      window.store.handleTransferError(data);
-    });
-
-    window.orbitAPI.on('state-invalidate', () => {
-      window.location.reload();
-    });
-  }
-
-  // Load views
-  if (window.SidebarLeft) window.SidebarLeft.init();
-  if (window.SidebarMiddle) window.SidebarMiddle.init();
-  if (window.ChatPanel) window.ChatPanel.init();
-  
-  // Load components
-  if (window.EmojiPicker) window.EmojiPicker.init();
-  if (window.Toast) window.Toast.init();
-  if (window.ContextMenu) window.ContextMenu.init();
-  if (window.CustomThemeModal) window.CustomThemeModal.init();
-
-  // Keyboard shortcuts
   document.addEventListener('keydown', function(e) {
     var ctrl = e.ctrlKey || e.metaKey;
     var key = e.key.toLowerCase();
-
-    // Ctrl+K: Open search
     if (ctrl && key === 'k') {
       e.preventDefault();
       if (window.ChatPanel) window.ChatPanel.showSearchModal();
       return;
     }
-
-    // Ctrl+Shift+M: Mute/unmute active chat
     if (ctrl && e.shiftKey && key === 'm') {
       e.preventDefault();
       var state = window.store.getState();
@@ -583,8 +388,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       return;
     }
-
-    // Ctrl+Shift+I or F12: Toggle DevTools (only if Developer Mode is enabled)
     if ((ctrl && e.shiftKey && key === 'i') || key === 'f12') {
       e.preventDefault();
       var state = window.store.getState();
@@ -599,8 +402,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       return;
     }
-
-    // / to focus chat input
     if (key === '/' && !ctrl && !e.shiftKey && !e.altKey) {
       var active = document.activeElement;
       if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return;
@@ -611,14 +412,199 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  console.log('Orbit Shell Ready.');
-
-  // Show welcome tour on first launch
+  // ---- Phase 2 (next frame): Identity, network, views ----
   setTimeout(function() {
-    if (window.TutorialModal && window.TutorialModal.shouldShowOnStartup()) {
-      window.TutorialModal.show();
+    (function() {
+      var state = window.store.getState();
+      var pf = state.settings && state.settings.profileFrame;
+      if (pf && state.currentUser) {
+        var updated = { ...state.currentUser, profileFrame: pf };
+        window.store.setState({ currentUser: updated });
+      }
+    })();
+
+    window.store.subscribe((state) => {
+      applySettings(state.settings);
+    });
+
+    window.store.subscribe((state, changedState) => {
+      if (!changedState || !('activeTab' in changedState || 'sidebarMiddleVisible' in changedState)) return;
+      const panelMiddle = document.getElementById('panel-middle');
+      if (state.activeTab === 'gallery') {
+        if (panelMiddle) panelMiddle.style.display = 'none';
+        appLayout.classList.remove('sidebar-collapsed');
+        appLayout.style.gridTemplateColumns = '64px 1fr';
+        if (window._sidebarToggleBtn) window._sidebarToggleBtn.style.display = 'none';
+        return;
+      }
+      if (panelMiddle) panelMiddle.style.display = 'flex';
+      if (!state.sidebarMiddleVisible) {
+        appLayout.classList.add('sidebar-collapsed');
+        appLayout.style.gridTemplateColumns = '';
+        var btn = window._sidebarToggleBtn;
+        if (!btn) {
+          btn = document.createElement('button');
+          btn.id = 'btn-reopen-sidebar';
+          btn.title = 'Show Sidebar';
+          btn.style.cssText = 'position:absolute;left:0;top:50%;transform:translateY(-50%);z-index:10;width:24px;height:48px;border:1px solid var(--border-subtle);border-left:none;background:var(--bg-surface);color:var(--text-secondary);cursor:pointer;border-radius:0 8px 8px 0;display:flex;align-items:center;justify-content:center;transition:opacity 0.2s;';
+          btn.innerHTML = '<i data-lucide="chevrons-right" style="width:16px;height:16px;"></i>';
+          btn.addEventListener('click', function() {
+            window.store.setState({ sidebarMiddleVisible: true });
+          });
+          document.getElementById('panel-right').appendChild(btn);
+          if (window.lucide) window.lucide.createIcons({ root: btn });
+          window._sidebarToggleBtn = btn;
+        }
+        btn.style.display = 'flex';
+      } else {
+        appLayout.classList.remove('sidebar-collapsed');
+        appLayout.style.gridTemplateColumns = '64px ' + currentSidebarWidth + 'px 1fr';
+        if (window._sidebarToggleBtn) window._sidebarToggleBtn.style.display = 'none';
+      }
+    });
+
+    if (window.Identity) window.Identity.init();
+
+    if (window.orbitAPI) {
+      window.orbitAPI.networkStart(window.store.getState().currentUser);
+
+      window.orbitAPI.on('peer-found', (peer) => {
+        console.log('Discovered peer:', peer.username);
+        window.store.addOrUpdatePeer(peer);
+      });
+
+      window.orbitAPI.on('network-message', (packet) => {
+        if (packet.type === window.Protocol.Types.TYPING) {
+          var chatId = packet.to || packet.from;
+          var isTyping = packet.payload && packet.payload.isTyping;
+          var username = packet.payload ? packet.payload.username : 'Someone';
+          if (isTyping) {
+            window.TypingState.addUser(chatId, packet.from, username);
+          } else {
+            window.TypingState.removeUser(chatId, packet.from);
+          }
+          return;
+        }
+        if (packet.type === window.Protocol.Types.GROUP_JOIN_REQUEST) {
+          var joinPayload = packet.payload;
+          var currentState = window.store.getState();
+          var myGroup = currentState.groups.find(function(g) { return g.inviteCode === joinPayload.inviteCode && g.ownerId === currentState.currentUser.userId; });
+          if (myGroup && window.ConfirmModal) {
+            var requester = currentState.friends.find(function(f) { return f.userId === joinPayload.userId; });
+            var requesterName = requester ? requester.username : joinPayload.username || 'Someone';
+            window.ConfirmModal.show({
+              title: 'Join Request',
+              message: requesterName + ' wants to join "' + myGroup.groupName + '". Allow them in?',
+              confirmText: 'Accept',
+              cancelText: 'Deny',
+              danger: false,
+              onConfirm: function() {
+                var newMember = { userId: joinPayload.userId, username: joinPayload.username, status: 'online', ip: null, role: 'member' };
+                window.store.addMemberToGroup(myGroup.groupId, newMember);
+                if (window.orbitAPI && requester) {
+                  window.orbitAPI.networkSend(joinPayload.userId, requester.ip || '', window.Protocol.Types.GROUP_JOIN_RESPONSE, {
+                    groupId: myGroup.groupId,
+                    groupName: myGroup.groupName,
+                    accepted: true,
+                    members: [...(myGroup.members || []), newMember]
+                  });
+                }
+              },
+              onCancel: function() {
+                if (window.orbitAPI && requester) {
+                  window.orbitAPI.networkSend(joinPayload.userId, requester.ip || '', window.Protocol.Types.GROUP_JOIN_RESPONSE, {
+                    groupId: myGroup.groupId,
+                    groupName: myGroup.groupName,
+                    accepted: false
+                  });
+                }
+              }
+            });
+          } else if (myGroup) {
+            var newMember = { userId: joinPayload.userId, username: joinPayload.username, status: 'online', ip: null, role: 'member' };
+            window.store.addMemberToGroup(myGroup.groupId, newMember);
+            var requester = currentState.friends.find(function(f) { return f.userId === joinPayload.userId; });
+            if (window.orbitAPI && requester) {
+              window.orbitAPI.networkSend(joinPayload.userId, requester.ip || '', window.Protocol.Types.GROUP_JOIN_RESPONSE, {
+                groupId: myGroup.groupId,
+                groupName: myGroup.groupName,
+                accepted: true,
+                members: [...(myGroup.members || []), newMember]
+              });
+            }
+          }
+          return;
+        }
+        window.store.handleIncomingPacket(packet);
+      });
+
+      window.orbitAPI.on('file-received', (data) => {
+        console.log('File received:', data);
+        var settings = window.store.getState().settings || {};
+        if (settings.notifySound && !settings.notifyDnd && window.NotificationSound) {
+          window.NotificationSound.play({ volume: settings.notifyVolume, type: settings.notifySoundType });
+        }
+        if ((document.hidden || window.store.getState().activeChatId !== data.sender) && window.orbitAPI && window.orbitAPI.showNotification) {
+          var senderName = 'Someone';
+          var friend = window.store.getState().friends.find(function(f) { return f.userId === data.sender; });
+          if (friend) senderName = friend.username;
+          window.orbitAPI.showNotification('File from ' + senderName, data.name);
+        }
+        const isImage = data.name.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) != null;
+        const attId = data.fileId || (window.orbitAPI ? window.orbitAPI.getUuid() : Date.now().toString());
+        const fileSize = data.size || 0;
+        window.store.handleIncomingPacket({
+          type: window.Protocol.Types.MESSAGE,
+          from: data.sender,
+          payload: {
+            text: '',
+            attachments: [{
+              id: attId,
+              type: isImage ? 'image' : 'file',
+              mimeType: isImage ? (data.name.toLowerCase().endsWith('.gif') ? 'image/gif' : (data.name.toLowerCase().endsWith('.png') ? 'image/png' : (data.name.toLowerCase().endsWith('.webp') ? 'image/webp' : (data.name.toLowerCase().endsWith('.svg') ? 'image/svg+xml' : 'image/jpeg')))) : 'application/octet-stream',
+              name: data.name,
+              size: fileSize,
+              path: data.path,
+              url: 'orbit-db://attachment/' + attId
+            }]
+          }
+        });
+      });
+
+      window.orbitAPI.on('transfer-progress', (data) => {
+        window.store.handleTransferProgress(data);
+      });
+
+      window.orbitAPI.on('transfer-error', (data) => {
+        window.store.handleTransferError(data);
+      });
+
+      window.orbitAPI.on('state-invalidate', () => {
+        window.location.reload();
+      });
     }
-  }, 800);
+
+    if (window.SidebarLeft) window.SidebarLeft.init();
+    if (window.SidebarMiddle) window.SidebarMiddle.init();
+    if (window.ChatPanel) window.ChatPanel.init();
+
+    if (window.ContextMenu) window.ContextMenu.init();
+
+    console.log('Orbit Shell Ready.');
+  }, 0);
+
+  // ---- Phase 3 (idle): Non-critical components ----
+  requestIdleCallback(function() {
+    if (window.EmojiPicker) window.EmojiPicker.init();
+    if (window.Toast) window.Toast.init();
+    if (window.CustomThemeModal) window.CustomThemeModal.init();
+
+    setTimeout(function() {
+      if (window.TutorialModal && window.TutorialModal.shouldShowOnStartup()) {
+        window.TutorialModal.show();
+      }
+    }, 800);
+  });
 });
 
 // Frame overlay helper

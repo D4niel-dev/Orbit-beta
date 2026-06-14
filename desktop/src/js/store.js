@@ -1,13 +1,30 @@
 // src/js/store.js
 class Store {
   constructor(initialState = {}) {
-    const savedSettings = window.orbitAPI ? window.orbitAPI.dbGetSetting('settings', {}) : (window.Storage ? window.Storage.get('settings', {}) : {});
-    const savedNetwork = window.orbitAPI ? window.orbitAPI.dbGetSetting('networkSettings', {}) : (window.Storage ? window.Storage.get('networkSettings', {}) : {});
-    
-    let dbFriends = window.orbitAPI ? window.orbitAPI.dbGetFriends() : (window.Storage ? (window.Storage.get('appData', {}).friends || []) : []);
-    if (!dbFriends || dbFriends.length === 0) {
-      dbFriends = [];
+    var data, savedSettings, savedNetwork, dbFriends, dbMessages, dbGroups, uiState, savedMutedChats, lastReadIds;
+
+    // Batch all DB reads into a single IPC call
+    if (window.orbitAPI && window.orbitAPI.dbGetAllStartupData) {
+      data = window.orbitAPI.dbGetAllStartupData();
+      savedSettings = data.settings || {};
+      savedNetwork = data.networkSettings || {};
+      dbFriends = data.friends || [];
+      dbMessages = data.messages || {};
+      dbGroups = data.groups || [];
+      uiState = data.uiState || { activeTab: 'dms', activeChatId: 'local-echo' };
+      savedMutedChats = data.mutedChats || {};
+      lastReadIds = data.readStates || {};
+    } else {
+      savedSettings = window.Storage ? window.Storage.get('settings', {}) : {};
+      savedNetwork = window.Storage ? window.Storage.get('networkSettings', {}) : {};
+      dbFriends = window.Storage ? (window.Storage.get('appData', {}).friends || []) : [];
+      dbMessages = window.Storage ? (window.Storage.get('appData', {}).messages || {}) : {};
+      dbGroups = window.Storage ? (window.Storage.get('appData', {}).groups || []) : [];
+      uiState = { activeTab: 'dms', activeChatId: 'local-echo' };
+      savedMutedChats = {};
+      lastReadIds = {};
     }
+
     // Ensure Orbit Echo is always in the friends list
     var echoFriend = {
       userId: 'local-echo',
@@ -19,13 +36,8 @@ class Store {
     };
     if (!dbFriends.some(function(f) { return f.userId === 'local-echo'; })) {
       dbFriends.unshift(echoFriend);
-      if (window.orbitAPI) window.orbitAPI.dbSaveFriend(echoFriend);
+      if (window.orbitAPI && window.orbitAPI.dbSaveFriend) window.orbitAPI.dbSaveFriend(echoFriend);
     }
-    
-    const dbMessages = window.orbitAPI ? window.orbitAPI.dbAllMessagesRaw() : (window.Storage ? (window.Storage.get('appData', {}).messages || {}) : {});
-    const dbGroups = window.orbitAPI ? window.orbitAPI.dbGetGroups() : (window.Storage ? (window.Storage.get('appData', {}).groups || []) : []);
-    const uiState = window.orbitAPI ? window.orbitAPI.dbGetSetting('uiState', { activeTab: 'dms', activeChatId: 'local-echo' }) : { activeTab: 'dms', activeChatId: 'local-echo' };
-    const savedMutedChats = window.orbitAPI ? (window.orbitAPI.dbGetSetting('mutedChats', {}) || {}) : {};
 
     this.state = {
       currentUser: {
@@ -98,38 +110,46 @@ class Store {
       activeChatId: uiState.activeChatId || 'local-echo',
       sidebarMiddleVisible: true,
       messages: dbMessages,
-      transferProgress: {}, // { fileId: { received, total, isSending } }
-      transferErrors: {}, // { fileId: { error, name } }
-      pinnedMessages: {}, // { chatId: [{ msgId, text, sender, timestamp }] }
-      unreadCounts: {}, // { chatId: number }
-      mentionCounts: {}, // { chatId: number }
-      lastReadIds: {}, // { chatId: lastReadMsgId }
-      mutedChats: savedMutedChats, // { chatId: true }
-      closedDMs: {}, // { userId: true }
-      pinnedDMs: {}, // { userId: true }
-      readReceipts: {}, // { chatId: { userId: lastReadMsgId } }
-      peerPublicKeys: {}, // { peerId: hexPublicKey }
+      transferProgress: {},
+      transferErrors: {},
+      pinnedMessages: {},
+      unreadCounts: {},
+      mentionCounts: {},
+      lastReadIds: lastReadIds,
+      mutedChats: savedMutedChats,
+      closedDMs: {},
+      pinnedDMs: {},
+      readReceipts: {},
+      peerPublicKeys: {},
       ...initialState
     };
     this.listeners = [];
     this._prevActiveChatId = this.state.activeChatId;
+    this._messagesFullyLoaded = {};
+  }
 
-    // Load persisted read state for all chats
-    if (window.orbitAPI) {
-      try {
-        const chatIds = Object.keys(this.state.messages);
-        const lastReadIds = {};
-        chatIds.forEach(function(id) {
-          const rs = window.orbitAPI.dbGetReadState(id);
-          if (rs && rs.lastReadMsgId) {
-            lastReadIds[id] = rs.lastReadMsgId;
-          }
-        });
-        this.state.lastReadIds = lastReadIds;
-      } catch (e) {
-        // ignore
-      }
+  // Lazy-load full messages for a chat that was only partially loaded at startup
+  loadFullChatMessages(chatId) {
+    if (!chatId || this._messagesFullyLoaded[chatId]) return;
+    var allMsgs = window.orbitAPI ? window.orbitAPI.dbGetMessages(chatId) : [];
+    if (!allMsgs || allMsgs.length === 0) {
+      this._messagesFullyLoaded[chatId] = true;
+      return;
     }
+    this.state.messages[chatId] = allMsgs;
+    this.setState({ messages: { ...this.state.messages } });
+    this._messagesFullyLoaded[chatId] = true;
+  }
+
+  // Force-load ALL messages, images, and files from the database into memory
+  loadAllMessages() {
+    if (!window.orbitAPI) return;
+    var raw = window.orbitAPI.dbAllMessagesRaw();
+    if (!raw) return;
+    this.state.messages = raw;
+    this._messagesFullyLoaded = {};
+    Object.keys(raw).forEach(function(id) { this._messagesFullyLoaded[id] = true; }, this);
+    this.setState({ messages: raw });
   }
 
   addOrUpdatePeer(peer) {
@@ -174,6 +194,20 @@ class Store {
     this.setState({ activityLog: logs });
   }
 
+  setStateBatch(newState) {
+    if (!this._batchQueue) this._batchQueue = {};
+    Object.assign(this._batchQueue, newState);
+    if (!this._batchScheduled) {
+      this._batchScheduled = true;
+      Promise.resolve().then(() => {
+        this._batchScheduled = false;
+        const batch = this._batchQueue || {};
+        this._batchQueue = null;
+        if (Object.keys(batch).length > 0) this.setState(batch);
+      });
+    }
+  }
+
   handleTransferProgress(data) {
     const { fileId, received, total, isSending, name } = data;
     const currentProgress = { ...this.state.transferProgress };
@@ -184,7 +218,7 @@ class Store {
       const existing = currentProgress[fileId];
       currentProgress[fileId] = { received, total, isSending, name: name || (existing ? existing.name : undefined) };
     }
-    this.setState({ transferProgress: currentProgress });
+    this.setStateBatch({ transferProgress: currentProgress });
   }
 
   addTransferProgress(name, fileId) {
@@ -203,10 +237,9 @@ class Store {
     const prog = currentProgress[fileId];
     const name = prog ? prog.name : 'Unknown file';
     delete currentProgress[fileId];
-    this.setState({ transferProgress: currentProgress });
     const currentErrors = { ...this.state.transferErrors };
     currentErrors[fileId] = { error, name };
-    this.setState({ transferErrors: currentErrors });
+    this.setStateBatch({ transferProgress: currentProgress, transferErrors: currentErrors });
     if (window.Toast) {
       window.Toast.show('Transfer Failed', name + ': ' + error);
     }
@@ -496,7 +529,7 @@ class Store {
 
       this.addMessage(fromId, {
         id: packet.payload.msgId || packet.packetId || Date.now(),
-        sender: fromId,
+        sender: packet.from,
         text: text,
         timestamp: packet.timestamp || new Date().toISOString(),
         replyTo: packet.payload.replyTo,
@@ -534,7 +567,7 @@ class Store {
           senderName = member ? member.username : (isGroup.groupName || 'Group');
           senderAvatar = member ? member.avatar : null;
         } else {
-          const friend = this.state.friends.find(f => f.userId === fromId);
+          const friend = this.state.friends.find(f => f.userId === packet.from);
           if (friend) {
             senderName = friend.username;
             senderAvatar = friend.avatar;
@@ -700,14 +733,14 @@ class Store {
       if (window.orbitAPI) {
         if (members.length > 0) {
           members.forEach(m => {
-            if (m.userId !== state.currentUser.userId && m.ip) {
-              window.orbitAPI.networkSend(m.userId, m.ip, window.Protocol.Types.MESSAGE_EDIT, { msgId, newText });
+            if (m.userId !== state.currentUser.userId) {
+              window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.MESSAGE_EDIT, { msgId, newText });
             }
           });
         } else {
           const friend = state.friends.find(f => f.userId === chatId);
-          if (friend && friend.ip) {
-            window.orbitAPI.networkSend(chatId, friend.ip, window.Protocol.Types.MESSAGE_EDIT, { msgId, newText });
+          if (friend) {
+            window.orbitAPI.networkSend(chatId, friend.ip || '', window.Protocol.Types.MESSAGE_EDIT, { msgId, newText });
           }
         }
       }
@@ -730,14 +763,14 @@ class Store {
     if (window.orbitAPI) {
       if (members.length > 0) {
         members.forEach(m => {
-          if (m.userId !== state.currentUser.userId && m.ip) {
-            window.orbitAPI.networkSend(m.userId, m.ip, window.Protocol.Types.REACTION, { msgId, emoji, action, userId: state.currentUser.userId });
+          if (m.userId !== state.currentUser.userId) {
+            window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.REACTION, { msgId, emoji, action, userId: state.currentUser.userId });
           }
         });
       } else {
         const friend = state.friends.find(f => f.userId === chatId);
-        if (friend && friend.ip) {
-          window.orbitAPI.networkSend(chatId, friend.ip, window.Protocol.Types.REACTION, { msgId, emoji, action, userId: state.currentUser.userId });
+        if (friend) {
+          window.orbitAPI.networkSend(chatId, friend.ip || '', window.Protocol.Types.REACTION, { msgId, emoji, action, userId: state.currentUser.userId });
         }
       }
     }
@@ -805,14 +838,14 @@ class Store {
     var recipients = [];
     if (members.length > 0) {
       members.forEach(function(m) {
-        if (m.userId !== state.currentUser.userId && m.ip) {
-          recipients.push({ userId: m.userId, ip: m.ip });
+        if (m.userId !== state.currentUser.userId) {
+          recipients.push({ userId: m.userId, ip: m.ip || '' });
         }
       });
     } else {
       var friend = state.friends.find(function(f) { return f.userId === chatId; });
-      if (friend && friend.ip) {
-        recipients.push({ userId: friend.userId, ip: friend.ip });
+      if (friend) {
+        recipients.push({ userId: friend.userId, ip: friend.ip || '' });
       }
     }
     recipients.forEach(function(r) {
@@ -829,14 +862,14 @@ class Store {
     var recipients = [];
     if (members.length > 0) {
       members.forEach(function(m) {
-        if (m.userId !== state.currentUser.userId && m.ip) {
-          recipients.push({ userId: m.userId, ip: m.ip });
+        if (m.userId !== state.currentUser.userId) {
+          recipients.push({ userId: m.userId, ip: m.ip || '' });
         }
       });
     } else {
       var friend = state.friends.find(function(f) { return f.userId === chatId; });
-      if (friend && friend.ip) {
-        recipients.push({ userId: friend.userId, ip: friend.ip });
+      if (friend) {
+        recipients.push({ userId: friend.userId, ip: friend.ip || '' });
       }
     }
     recipients.forEach(function(r) {
@@ -853,7 +886,7 @@ class Store {
 
   setState(newState) {
     this.state = { ...this.state, ...newState };
-    
+
     // Automatically persist app data if changed (only for web fallback now)
     if (!window.orbitAPI && (newState.messages || newState.friends || newState.groups)) {
       if (window.Storage) {
@@ -869,7 +902,7 @@ class Store {
     if (window.orbitAPI && newState.groups) {
       newState.groups.forEach(g => window.orbitAPI.dbSaveGroup(g));
     }
-    
+
     if (window.orbitAPI && (newState.activeTab !== undefined || newState.activeChatId !== undefined)) {
        window.orbitAPI.dbSetSetting('uiState', {
          activeTab: this.state.activeTab,
@@ -888,7 +921,7 @@ class Store {
     }
     this._prevActiveChatId = this.state.activeChatId;
 
-    this.notify();
+    this.notify(newState);
   }
 
   _markAsReadInternal(chatId) {
@@ -918,14 +951,14 @@ class Store {
     const members = this.getGroupMembers(chatId);
     if (members.length > 0) {
       members.forEach(m => {
-        if (m.userId !== state.currentUser.userId && m.ip) {
-          window.orbitAPI.networkSend(m.userId, m.ip, window.Protocol.Types.READ, { chatId, lastReadMsgId: lastId });
+        if (m.userId !== state.currentUser.userId) {
+          window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.READ, { chatId, lastReadMsgId: lastId });
         }
       });
     } else {
       const friend = state.friends.find(f => f.userId === chatId);
-      if (friend && friend.ip) {
-        window.orbitAPI.networkSend(chatId, friend.ip, window.Protocol.Types.READ, { chatId, lastReadMsgId: lastId });
+      if (friend) {
+        window.orbitAPI.networkSend(chatId, friend.ip || '', window.Protocol.Types.READ, { chatId, lastReadMsgId: lastId });
       }
     }
   }
@@ -937,8 +970,8 @@ class Store {
     };
   }
 
-  notify() {
-    this.listeners.forEach(listener => listener(this.state));
+  notify(changedState) {
+    this.listeners.forEach(listener => listener(this.state, changedState));
   }
 }
 

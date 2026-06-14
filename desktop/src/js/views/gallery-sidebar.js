@@ -14,9 +14,12 @@ window.GallerySidebar = {
     this.attachEvents();
 
     var self = this;
-    this.unsubscribe = window.store.subscribe((state) => {
+    this.unsubscribe = window.store.subscribe((state, changedState) => {
       if (self.isOpen) {
-        self.render(state);
+        var relevant = ['friends', 'messages', 'activeChatId', 'activeTab', 'groups'];
+        if (!changedState || relevant.some(function(k) { return k in changedState; })) {
+          self.render(state);
+        }
       }
     });
   },

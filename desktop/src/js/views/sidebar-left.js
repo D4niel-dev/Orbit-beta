@@ -7,8 +7,10 @@ window.SidebarLeft = {
     this.render();
     this.attachEvents();
     
-    this.unsubscribe = window.store.subscribe((state) => {
-      this.renderAvatar(state.currentUser);
+    this.unsubscribe = window.store.subscribe((state, changedState) => {
+      if (!changedState || 'currentUser' in changedState) {
+        this.renderAvatar(state.currentUser);
+      }
     });
     this.renderAvatar(window.store.getState().currentUser);
   },

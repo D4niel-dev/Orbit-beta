@@ -523,7 +523,7 @@ window.SettingsModal = {
               '<div>' +
                 '<label style="display:flex;align-items:center;gap:12px;font-size:14px;color:var(--text-primary);cursor:pointer;">' +
                   '<input id="set-reduce-motion" type="checkbox" '+(s.reduceMotion?'checked':'')+'>' +
-                  '<div><div>Reduce Motion</div><div style="font-size:12px;color:var(--text-muted);font-weight:400;">Disable pulse, bounce, and spin animations</div></div>' +
+                   '<div><div>Reduce Motion</div><div style="font-size:12px;color:var(--text-muted);font-weight:400;">Disable animations, freeze GIF previews, and stop avatar effects</div></div>' +
                 '</label>' +
               '</div>' +
             '</div>' +
@@ -1143,19 +1143,24 @@ window.SettingsModal = {
       };
 
       content.querySelector('#adv-dev-mode').addEventListener('change', function(e) {
-        updateSettings('devMode', e.target.checked);
         if (!e.target.checked) {
-          updateSettings('enableExperimental', false);
-          updateSettings('experimentalProfileFrames', false);
-          updateSettings('enableCustomColors', false);
-          updateSettings('experimentalAnimatedAvatars', false);
-          updateSettings('experimentalMessageFx', false);
-          updateSettings('experimentalMessageTranslate', false);
-          updateSettings('experimentalCompactSpacing', false);
-          updateSettings('debugDisplay', false);
-          updateSettings('showMessageIds', false);
-          updateSettings('logNetworkPackets', false);
-          updateSettings('showConnectionStats', false);
+          var s = { ...window.store.getState().settings };
+          s.devMode = false;
+          s.enableExperimental = false;
+          s.experimentalProfileFrames = false;
+          s.enableCustomColors = false;
+          s.experimentalAnimatedAvatars = false;
+          s.experimentalMessageFx = false;
+          s.experimentalMessageTranslate = false;
+          s.experimentalCompactSpacing = false;
+          s.debugDisplay = false;
+          s.showMessageIds = false;
+          s.logNetworkPackets = false;
+          s.showConnectionStats = false;
+          window.store.setState({ settings: s });
+          window.Storage.set('settings', s);
+        } else {
+          updateSettings('devMode', true);
         }
         if (window.SettingsModal) window.SettingsModal.renderTab('advanced');
       });
@@ -1305,7 +1310,17 @@ window.SettingsModal = {
             '</div>' +
             '<p style="margin-top:8px;font-size:12px;color:var(--text-muted);">Attachments older than this will be automatically removed from the database. Max: 24 hours (1440 minutes).</p>' +
           '</div>' +
-          '<div style="padding:20px;background:var(--bg-hover);border-radius:12px;border:1px solid var(--border-subtle);">' +
+           '<div id="load-all-data-section" style="padding:20px;background:var(--bg-hover);border-radius:12px;border:1px solid var(--border-subtle);">' +
+            '<div style="flex:1;">' +
+              '<div style="font-weight:600;color:var(--text-primary);font-size:15px;">Load All Stored Data</div>' +
+              '<div style="font-size:13px;color:var(--text-secondary);margin-top:4px;line-height:1.4;">Load all messages, images, and files from the database into memory. Use this to ensure all historical data is available for search and gallery.</div>' +
+              '<div style="margin-top:14px;">' +
+                '<button id="btn-load-all-data" style="padding:10px 20px;border-radius:10px;border:1px solid var(--border-subtle);background:transparent;color:var(--text-secondary);cursor:pointer;font-weight:500;">Load All Data</button>' +
+                '<span id="load-all-msg" style="margin-left:12px;font-size:13px;color:var(--text-muted);display:none;"></span>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+           '<div style="padding:20px;background:var(--bg-hover);border-radius:12px;border:1px solid var(--border-subtle);">' +
             '<div style="flex:1;">' +
               '<div style="font-weight:600;color:var(--text-primary);font-size:15px;">Storage Management</div>' +
               '<div style="font-size:13px;color:var(--text-secondary);margin-top:4px;margin-bottom:14px;line-height:1.4;">Permanently delete local storage files to free up disk space.</div>' +
@@ -1512,6 +1527,37 @@ window.SettingsModal = {
         });
       }
 
+      // Load all stored data (double confirmation)
+      content.querySelector('#btn-load-all-data').addEventListener('click', function() {
+        if (window.ConfirmModal) {
+          window.ConfirmModal.show({
+            title: 'Load All Stored Data',
+            message: 'Warning: This will load ALL stored messages, images, and files from the database into memory. This may temporarily increase memory usage and cause the app to become less responsive while loading. Are you sure you want to continue?',
+            confirmText: 'Continue',
+            danger: true,
+            onConfirm: function() {
+              window.ConfirmModal.show({
+                title: 'Final Confirmation',
+                message: 'This action will fully load all historical data from the database, making everything available for search and gallery views. This cannot be undone unless you restart the app. Proceed?',
+                confirmText: 'Yes, Load Everything',
+                danger: true,
+                onConfirm: function() {
+                  var statusEl = content.querySelector('#load-all-msg');
+                  statusEl.style.display = 'inline';
+                  statusEl.textContent = 'Loading...';
+                  statusEl.style.color = 'var(--text-muted)';
+                  window.store.loadAllMessages();
+                  statusEl.textContent = 'Loaded!';
+                  statusEl.style.color = 'var(--accent-success)';
+                  setTimeout(function() { statusEl.style.display = 'none'; }, 3000);
+                  if (window.Toast) window.Toast.show('Data Loaded', 'All stored messages are now available in memory');
+                }
+              });
+            }
+          });
+        }
+      });
+
       // Clear all attachments
       content.querySelector('#btn-clear-attachments').addEventListener('click', function() {
         if (window.ConfirmModal) {
@@ -1535,7 +1581,7 @@ window.SettingsModal = {
       });
 
     } else if (tabName === 'about') {
-      var version = window.orbitAPI ? (window.orbitAPI.version || '0.0.9.3-beta') : '0.0.9.3-beta';
+      var version = window.orbitAPI ? (window.orbitAPI.version || '0.1.0-beta') : '0.1.0-beta';
       var friendCount = state.friends ? state.friends.length : 0;
       var groupCount = state.groups ? state.groups.length : 0;
       var chatCount = Object.keys(state.messages || {}).length;
