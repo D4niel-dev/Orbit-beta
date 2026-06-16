@@ -1,6 +1,6 @@
 # Orbit Changelog
 
-## v0.1.1-beta **Current Version**
+## v0.1.1-beta **(Current Version)**
 
 ### New Features
 - **Voice & Video Calls (P2P):** Full WebRTC call system — CallManager with peer-to-peer audio/video, incoming call notification, mute/speaker controls, call timer, ICE candidate exchange via P2P network layer
