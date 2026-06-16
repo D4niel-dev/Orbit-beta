@@ -75,6 +75,7 @@ class SocketManager extends EventEmitter {
       username: identity.username,
       usertag: identity.usertag,
       avatarHash: identity.avatar ? 'has_avatar' : null,
+      avatar: identity.avatar || null,
       status: identity.status || 'online',
       bio: identity.bio || '',
       publicKey: identity.publicKey || null,

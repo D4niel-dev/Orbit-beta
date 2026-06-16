@@ -125,6 +125,13 @@ const migrations = [
         timestamp TEXT
       );
     `);
+  },
+  // v9 - Add performance indexes
+  (db) => {
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_mentions_chatId ON mentions(chatId);
+      CREATE INDEX IF NOT EXISTS idx_messages_chatId_timestamp ON messages(chatId, timestamp DESC);
+    `);
   }
 ];
 

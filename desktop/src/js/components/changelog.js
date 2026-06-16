@@ -14,7 +14,24 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        changelogEntry('0.1.0-beta', 'Latest', [
+        changelogEntry('0.1.1-beta', 'Latest Stable', [
+          'Voice & Video Calls (P2P): Full WebRTC call system with incoming notification, mute/speaker controls, timer, ICE exchange',
+          'Group Calls (Mesh): Each participant gets their own RTCPeerConnection; video grid or avatar circles for audio-only',
+          'Camera Toggle: On/off during calls with deterministic HSL avatar placeholder when camera is off',
+          'Message Forwarding: Forward messages with attachments to any chat via chat picker modal (desktop + mobile)',
+          'Block User: Block/unblock from context menu and profile sidebar; P2P filter drops blocked packets',
+          'Search Within a Chat: Scoped search with chatId filter, sender filter, date inputs, context-aware placeholders',
+          'Export Chat History: JSON or TXT export with timestamped downloads via Data Manager',
+          'Save/Load Themes: Export current theme as JSON; import via file picker in Appearance tab',
+          'Message Translate Unlocked: Always-on translate button (no experimental gate), default enabled in Appearance tab',
+          'Mobile Reply fromName Fix: fromName now set on ALL outgoing MESSAGE packets — cross-platform reply consistency',
+          'Lucide Icon Null Fix: All querySelector(\'i\') changed to querySelector(\'svg\') — createIcons replaces i tags with svg',
+          'Online Status: lastSeen on BEACON, 30s interval checks for stale connections (120s timeout)',
+          'Camera Placeholder Refactored: Pre-rendered in HTML — no dynamic DOM creation; just toggles display:none',
+          'Call Modal UI: Proper centering, audio wave bars, hover button effects, local video as full grid tile in groups',
+          'Inline code/pre CSS styling for both platforms'
+        ]) +
+        changelogEntry('0.1.0-beta', '', [
           'Performance: Up to 5× faster startup and rendering — selective store subscriptions, setStateBatch microtask coalescing, insertAdjacentHTML, event delegation for all message actions',
           'Startup: ~40% faster (5s → 3s) — deferred init phases (setTimeout(0) + requestIdleCallback), batched store IPC (7+ calls → 1), lazy message loading (last 50 per chat, load on demand)',
           'freezeGifImages: Canvas cache via _frozenCache Map; expanded selectors (orbit-db://, .avatar img); global call on Reduce Motion toggle; mobile feed re-render on toggle',
@@ -117,7 +134,7 @@ window.Changelog = {
           'Orbit Echo always persisted in database for testing',
           'Toast notification types — info/success/warning/error icons'
         ]) +
-        changelogEntry('0.0.5-beta', '', [
+        changelogEntry('0.0.5-beta', 'Stable', [
           'Backup & Restore (.orzip / .zip) with database transaction safety',
           'Database Health Check with integrity verification',
           'Database Repair — VACUUM, REINDEX, orphan removal',

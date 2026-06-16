@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v010-beta-current-version">v0.1.0-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v011-beta-current-version">v0.1.1-beta</a>
 </p>
 
 <p align="center">
@@ -23,6 +23,16 @@
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License: MIT">
   <img src="https://img.shields.io/badge/status-beta-orange?style=flat-square" alt="Status: Beta">
 </p>
+
+## Release Status
+
+| Channel | Version | Status |
+|---------|---------|--------|
+| **Stable** | v0.1.1-beta | Recommended for most users |
+| Previous Stable | v0.0.5-beta | Legacy stable release |
+| Development | main branch | Active development |
+
+See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
 
 ## Preview
 
@@ -54,6 +64,16 @@
   <em>Group chat</em>
 </p>
 
+## Mobile Preview
+
+<p align="center">
+  <img src="desktop/src/icons/screenshots/preview-chat-dark-M.png" alt="Mobile chat screen" width="200">
+  <img src="desktop/src/icons/screenshots/preview-friends-dark-M.png" alt="Mobile friends screen" width="200">
+  <img src="desktop/src/icons/screenshots/preview-settings-dark-M.png" alt="Mobile settings screen" width="200">
+  <img src="desktop/src/icons/screenshots/preview-group-info-dark-M.png" alt="Mobile group info panel" width="200"><br>
+  <em>Android app — chat, friends, settings, group info</em>
+</p>
+
 ## Why Orbit?
 
 Orbit exists for people who want **real-time communication without handing their conversations to a cloud vendor**.
@@ -70,7 +90,21 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage desktop app** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
-## Features
+## Highlights (v0.1.1-beta)
+
+- Cross-platform Desktop ↔ Android P2P messaging
+- LAN peer discovery
+- File & image sharing
+- Group chats
+- End-to-end encryption (DMs)
+- SQLite-backed message storage
+- Backup & restore
+- Message reactions
+- Pinned messages
+- Search
+- Mobile support
+
+## Version History
 <details>
 <summary>v0.0.1-beta</summary>
 
@@ -161,6 +195,54 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Mobile DB Fix** — Critical fix: migration now runs after user data loads to prevent identity corruption on restart
 - **Add Friend on Android** — No more "P2P Preview" gating; `android:usesCleartextTraffic` flag; plugin retry mechanism for reliable friend addition
 </details>
+<details>
+<summary>v0.0.9.2-beta</summary>
+
+- **Mobile initP2P Logging** — Detailed debug logs throughout P2P initialization and lifecycle
+- **Dev Mode DevTools** — Toggling Developer Mode loads eruda on-device inspector panel
+- **Debug Log Buffer** — Scrollable log overlay when dev mode is active
+</details>
+<details>
+<summary>v0.0.9.3-beta</summary>
+
+- **Group Info Panel Overhaul** — Redesigned with Add Member (friend picker), Leave Group, Transfer Ownership, member search bar, created date, online/total count
+- **GROUP_MEMBER_ADDED / GROUP_OWNER_TRANSFER** — New protocol types with cross-platform handlers
+- **DM Context Menus** — Desktop right-click and mobile long-press: Pin/Unpin, Mute, View Profile, Copy ID, Close DM
+- **Pinned DMs** — Pinned state sorted first in sidebar with pin icon
+- **Close DM Removes Friend** — Full cleanup from DB; persists closedDMs; auto-reopens on new message
+- **P2P Diagnostics Panel** — Modal with P2P status, discovery, connected peers, log buffer
+- **Global Gallery Type Filters** — All/Images/Files toggle; non-image files render with Lucide icons
+- **Gallery Sidebar Files Tab Fix** — Format.bytes→fileSize; download button replaces window.open
+- **Create Group Modal Avatars** — Friend list shows actual avatars with profile frames
+- **Context Menu & P2P Fixes** — data-action rewrite, protocol type audit, TCP merge IP strip
+</details>
+<details>
+<summary>v0.1.0-beta</summary>
+
+- **Performance: Up to 5× Faster Startup & Rendering** — Selective store subscriptions, setStateBatch microtask coalescing, insertAdjacentHTML, event delegation for all message actions
+- **Startup: ~40% Faster (5s → 3s)** — Deferred init phases (setTimeout(0) + requestIdleCallback), batched store IPC (7+ calls → 1), lazy message loading (last 50 per chat, load on demand)
+- **freezeGifImages** — Canvas cache via _frozenCache Map; expanded selectors; global call on Reduce Motion toggle
+- **Data Manager "Load All Stored Data"** — Double-confirmation button loads all messages from DB into memory on demand
+- **Bug Fixes** — orbit-db://attachment/ 404, selective subscriber undefined changedState, message avatar click re-attached, loadFullChatMessages dropping existing messages
+</details>
+<details open>
+<summary>v0.1.1-beta (Latest Stable)</summary>
+
+- **Voice & Video Calls (P2P WebRTC)** — Full call system with incoming notification, mute/speaker controls, timer, ICE candidate exchange over P2P network layer
+- **Group Calls (Mesh)** — Each participant gets their own RTCPeerConnection; video grid or avatar circles for audio-only; start/join/leave group calls
+- **Camera Toggle** — On/off during calls with deterministic HSL avatar placeholder when camera is off
+- **Message Forwarding** — Forward messages with attachments to any chat via chat picker modal (desktop + mobile)
+- **Block User** — Block/unblock from context menu and profile sidebar; P2P filter drops blocked packets
+- **Search Within a Chat** — Scoped search with chatId filter, sender filter, date inputs, context-aware placeholders
+- **Export Chat History** — JSON or TXT export with timestamped downloads via Data Manager
+- **Save/Load Themes** — Export current theme as JSON; import via file picker in Appearance tab
+- **Message Translate Unlocked** — Always-on translate button (no experimental gate), default enabled in Appearance tab
+- **Mobile Reply fromName Fix** — fromName now set on ALL outgoing MESSAGE packets for cross-platform reply consistency
+- **Lucide Icon Null Fix** — All querySelector('i') changed to querySelector('svg') after createIcons replaces i tags with svg
+- **Online Status Improvements** — lastSeen on BEACON; 30s interval checks for stale connections (120s timeout)
+- **Inline Code Blocks** — CSS styling for code and pre elements (both platforms)
+- **Call Modal UI Polish** — Proper centering, audio wave bars, hover button effects, local video as full grid tile in groups
+</details>
 
 See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
@@ -223,6 +305,18 @@ Or let GitHub Actions build it automatically — push a `v*` tag or trigger the 
 | Mobile packaging | [Gradle](https://gradle.org/) (Android APK/AAB) |
 
 ## How it works
+
+```
+  Desktop Orbit           Android Orbit
+       │                       │
+       │      TCP P2P          │
+       ├───────────────────────┤
+       │                       │
+       │    UDP Discovery      │
+       │   (LAN multicast)     │
+       │                       │
+       └─────── Local Network ──┘
+```
 
 Orbit runs on two platforms with a shared cross-platform core:
 
@@ -306,55 +400,26 @@ Transparency matters in beta. Current constraints include:
 | **Group E2EE** | End-to-end encryption currently works for direct messages only. Group E2EE is planned. |
 | **Unsigned builds** | Installers are not code-signed; Windows SmartScreen warnings are expected. |
 
+## Known Issues
+
+- Large file transfers between Desktop and Android are under active development
+- Mobile UI redesign planned
+- Group E2EE not implemented yet
+- Discovery reliability depends on local network configuration
+
 ## Roadmap
 
-### Recently Shipped
+### Latest Milestones
 
-<details>
-<summary>Recently</summary>
-
-- **Android P2P Stability** — 8 Java plugin fixes + 4 JS bridge fixes for reliable LAN discovery and messaging
-- **Desktop P2P Stability** — 9 fixes including write queue, oversized frame guard, socket error handlers, self-beacon filter, transfer backpressure
-- **Mobile Group Info Panel** — Full group management: edit, avatar, invite, pin/mute, members with roles/join dates, promote/demote/remove, leave/delete
-- **Cross-Platform Group Sync** — GROUP_CREATE/GROUP_LEAVE broadcast compatible between mobile and desktop
-- **Pinned Messages** — Pin/unpin with cross-platform sync; pinned section in group info panel
-- **Message Search (Mobile)** — Real-time message filtering in chat header
-- **Enhanced Message FX** — Particle confetti on sent messages (both platforms); safe CSS for WebView
-- **Mobile Settings Added** — Font Size, Message Animation, Auto-Reconnect, Connection Timeout
-- **Mobile DB Fix** — Migration runs after user data load to prevent identity corruption
-- **Android Add Friend Fix** — No P2P Preview gate; cleartext traffic flag; plugin retry
-- **End-to-end encryption (E2EE)** — ECDH + AES-256-GCM for direct messages
+- **Android P2P stabilization** — Reliable LAN discovery and messaging with 9+ fixes for TCP/UDP packet handling
+- **Cross-platform messaging** — Desktop ↔ Android communication with unified protocol
+- **Group sync** — GROUP_CREATE/GROUP_LEAVE broadcast compatible between mobile and desktop
+- **Mobile group management** — Full group info panel, member roles, pinned messages
+- **Search improvements** — Real-time filtering on mobile, relevance ranking on desktop
+- **End-to-end encryption** — ECDH + AES-256-GCM for direct messages
 - **Backup & Restore** — Full database export/import (.orzip / .zip)
-- **Database Health & Repair** — Integrity checks, VACUUM, REINDEX
-- **Group Admin Roles** — Promote/demote members, admin-level controls
-- **Unread Badges & Mentions** — Per-chat unread counts, @mention badges
-- **Read Receipts** — See when your messages have been read
-- **Per-chat Mute** — Mute/unmute notifications per DM or group
-- **Edit Message Sync** — Message edits broadcast to all peers
-- **Message Search v2** — Relevance ranking, sender/date filters
-- **Network Dashboard** — Live peer stats in Settings
-- **Keyboard Shortcuts** — Ctrl+K search, Ctrl+Shift+M mute, / focus input
-- **Transfer Resilience** — Retry with backoff, cancellation, disk checks
-- **Data Manager** — Privacy mode, auto-delete, clear attachments
-- **Activity Center** — Unified recent messages modal with sender avatars and attachment icons
-- **Customizable Sidebar** — Show/hide sidebar buttons in Appearance settings
-- **Persistent Sidebar Width** — Saved sidebar width restored on startup
-- **macOS / Linux builds** — Cross-platform packaging via GitHub Actions CI/CD
-- **Custom Themes** — True Dark, Dark Purple, Midnight, Sunset, Nord, Seasonal auto-rotate
-- **Custom Colors** — Live preview color editor for all UI categories
-- **Profile Frames** — 12 decorative frame overlays on avatars (experimental)
-- **Animated Avatars** — Subtle pulse animation (experimental)
-- **Message Translate** — Translate messages via MyMemory API (experimental)
-- **Compact Spacing** — Tighter message layout option (experimental)
-- **App Zoom** — Slider with preview UI and restart notification
-- **Chat Settings** — Enter to Send, Show Avatars, Image Preview toggles
-- **Orbit Echo Bot** — Persistent echo bot account for testing messages
-- **Privacy Mode Fixes** — Thumbnails, gallery sidebar, and backup/restore now work in privacy mode
-- **Project Restructure** — `desktop/`, `mobile/`, `shared/` separation for multi-platform development
-- **Cross-Platform Abstraction** — `shared/` modules for database, network, protocol, crypto
-- **Mobile UI Shell** — Touch-friendly Android layout with bottom navigation
-- **Android Build Pipeline** — GitHub Actions builds `.apk` via Capacitor alongside desktop builds
-</details>
+- **Voice/Video Calls** — P2P WebRTC calls with group mesh support
+- **Camera Toggle, Forward, Block, Export, Save/Load Themes** — Latest stable additions
 
 ### Planned
 
@@ -437,5 +502,5 @@ Bug reports and feature ideas are welcome via [GitHub Issues](https://github.com
 
 <p align="center">
   <strong>Orbit Team</strong> · Lead developer <a href="https://github.com/D4niel-dev">D4niel-dev</a><br>
-  P2P chat without the cloud
+  Local-first communication for private networks
 </p>

@@ -423,8 +423,8 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     })();
 
-    window.store.subscribe((state) => {
-      applySettings(state.settings);
+    window.store.subscribe((state, changedState) => {
+      if (!changedState || 'settings' in changedState) applySettings(state.settings);
     });
 
     window.store.subscribe((state, changedState) => {
@@ -508,6 +508,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     accepted: true,
                     members: [...(myGroup.members || []), newMember]
                   });
+                  (myGroup.members || []).forEach(function(m) {
+                    if (m.userId !== currentState.currentUser.userId) {
+                      window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.GROUP_MEMBER_ADDED, {
+                        groupId: myGroup.groupId,
+                        user: { userId: newMember.userId, username: newMember.username, role: 'member', joinedAt: new Date().toISOString() }
+                      });
+                    }
+                  });
                 }
               },
               onCancel: function() {
@@ -531,10 +539,147 @@ document.addEventListener('DOMContentLoaded', () => {
                 accepted: true,
                 members: [...(myGroup.members || []), newMember]
               });
+              (myGroup.members || []).forEach(function(m) {
+                if (m.userId !== currentState.currentUser.userId) {
+                  window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.GROUP_MEMBER_ADDED, {
+                    groupId: myGroup.groupId,
+                    user: { userId: newMember.userId, username: newMember.username, role: 'member', joinedAt: new Date().toISOString() }
+                  });
+                }
+              });
             }
           }
           return;
         }
+        if (packet.type === window.Protocol.Types.BEACON) {
+          var bp = packet.payload || {};
+          var state = window.store.getState();
+          var friends = state.friends.map(function(f) {
+            if (f.userId === (packet.from || bp.userId)) {
+              return { ...f, lastSeen: Date.now(), status: bp.status || f.status };
+            }
+            return f;
+          });
+          window.store.setState({ friends: friends });
+          return;
+        }
+
+        if (packet.type === window.Protocol.Types.CALL_OFFER) {
+          var offerData = packet.payload;
+          var state = window.store.getState();
+          var caller = state.friends.find(function(f) { return f.userId === packet.from; }) || { username: packet.payload.callerName, avatar: packet.payload.callerAvatar };
+
+          // Group call offer
+          if (offerData.groupId) {
+            if (window.CallManager && window.CallManager.activeCall && window.CallManager.activeCall.isGroup && window.CallManager.groupCallId === offerData.groupId) {
+              // Already in this group call — this is another member connecting to us
+              window.CallManager._connectGroupParticipant(packet.from, offerData.callerName, offerData.callerAvatar, offerData.sdp, offerData.isVideo, offerData.groupId);
+              return;
+            }
+            if (window.CallManager && window.CallManager.activeCall) {
+              if (window.orbitAPI) {
+                window.orbitAPI.networkSend(packet.from, packet._fromIp || '', window.Protocol.Types.CALL_DECLINE, { reason: 'busy', groupId: offerData.groupId });
+              }
+              return;
+            }
+            // New incoming group call
+            window.CallManager.targetUserId = packet.from;
+            window.CallManager.targetPeerIp = packet._fromIp || (caller ? caller.ip : '');
+            window.CallManager.incomingCallData = {
+              callerId: packet.from, sdp: offerData.sdp, isVideo: offerData.isVideo,
+              callerName: offerData.callerName, callerAvatar: offerData.callerAvatar,
+              groupId: offerData.groupId
+            };
+            if (window.CallModal) {
+              window.CallModal.show({ username: offerData.callerName || caller.username, avatar: offerData.callerAvatar || caller.avatar }, offerData.isVideo, true);
+              var statusEl = window.CallModal.overlay && window.CallModal.overlay.querySelector('#call-status-text');
+              if (statusEl) statusEl.textContent = 'Group call from ' + (offerData.groupName || 'Group');
+            }
+            return;
+          }
+
+          // DM call
+          if (window.CallManager && window.CallManager.activeCall) {
+            if (window.orbitAPI) {
+              window.orbitAPI.networkSend(packet.from, packet._fromIp || '', window.Protocol.Types.CALL_DECLINE, { reason: 'busy' });
+            }
+            return;
+          }
+          window.CallManager.targetUserId = packet.from;
+          window.CallManager.targetPeerIp = packet._fromIp || (caller ? caller.ip : '');
+          window.CallManager.incomingCallData = {
+            callerId: packet.from, sdp: offerData.sdp, isVideo: offerData.isVideo,
+            callerName: offerData.callerName, callerAvatar: offerData.callerAvatar
+          };
+          if (window.CallModal) {
+            window.CallModal.show({ username: offerData.callerName || caller.username, avatar: offerData.callerAvatar || caller.avatar }, offerData.isVideo, true);
+          }
+          return;
+        }
+
+        if (packet.type === window.Protocol.Types.CALL_ANSWER) {
+          if (packet.payload.groupId && window.CallManager && window.CallManager.peerConnections) {
+            var answererId = packet.payload.answererId || packet.from;
+            var pc = window.CallManager.peerConnections[answererId];
+            if (pc) {
+              var answerDesc = new RTCSessionDescription({ type: 'answer', sdp: packet.payload.sdp });
+              pc.setRemoteDescription(answerDesc).catch(function(err) {
+                console.error('Set remote description (group answer) error:', err);
+              });
+            }
+          } else if (window.CallManager && window.CallManager.peerConnection) {
+            var answerDesc = new RTCSessionDescription({ type: 'answer', sdp: packet.payload.sdp });
+            window.CallManager.peerConnection.setRemoteDescription(answerDesc).catch(function(err) {
+              console.error('Set remote description (answer) error:', err);
+            });
+          }
+          return;
+        }
+
+        if (packet.type === window.Protocol.Types.CALL_ICE_CANDIDATE) {
+          if (packet.payload.groupId && window.CallManager) {
+            window.CallManager.addGroupIceCandidate(packet.from, packet.payload);
+          } else if (window.CallManager) {
+            window.CallManager.addIceCandidate(packet.payload);
+          }
+          return;
+        }
+
+        if (packet.type === window.Protocol.Types.CALL_END) {
+          if (window.CallManager && window.CallManager.activeCall && window.CallManager.activeCall.isGroup) {
+            var leftUserId = packet.payload.userId || packet.from;
+            if (window.CallManager.participants[leftUserId]) {
+              if (window.CallModal) window.CallModal.removeParticipant(leftUserId);
+              window.CallManager._removeGroupParticipant(leftUserId);
+            } else {
+              window.CallManager.cleanup();
+            }
+          } else {
+            if (window.Toast) window.Toast.show('Call Ended', 'The other party ended the call.', 'info');
+            if (window.CallManager) window.CallManager.cleanup();
+          }
+          return;
+        }
+
+        if (packet.type === window.Protocol.Types.CALL_DECLINE) {
+          if (window.CallManager && window.CallManager.activeCall && window.CallManager.activeCall.isGroup) {
+            var declUserId = packet.from;
+            if (window.CallModal) window.CallModal.removeParticipant(declUserId);
+            if (window.CallManager.peerConnections[declUserId]) {
+              try { window.CallManager.peerConnections[declUserId].close(); } catch(e) {}
+              delete window.CallManager.peerConnections[declUserId];
+            }
+            if (window.Toast) window.Toast.show('Declined', 'A participant declined the call.', 'warning');
+          } else {
+            if (window.Toast) window.Toast.show('Call Declined', 'The other party declined the call.', 'warning');
+            if (window.CallManager) {
+              if (window.CallModal) window.CallModal.updateStatus('Declined');
+              setTimeout(function() { if (window.CallManager) window.CallManager.cleanup(); }, 1000);
+            }
+          }
+          return;
+        }
+
         window.store.handleIncomingPacket(packet);
       });
 
@@ -589,6 +734,19 @@ document.addEventListener('DOMContentLoaded', () => {
     if (window.ChatPanel) window.ChatPanel.init();
 
     if (window.ContextMenu) window.ContextMenu.init();
+
+    // Periodic offline status check — marks friends offline if no beacon received for 120s
+    setInterval(function() {
+      var state = window.store.getState();
+      var now = Date.now();
+      var updated = state.friends.map(function(f) {
+        if (f.status === 'online' && f.lastSeen && (now - f.lastSeen) > 120000) {
+          return { ...f, status: 'offline' };
+        }
+        return f;
+      });
+      window.store.setState({ friends: updated });
+    }, 30000);
 
     console.log('Orbit Shell Ready.');
   }, 0);

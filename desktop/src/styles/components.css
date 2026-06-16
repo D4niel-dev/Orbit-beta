@@ -304,6 +304,69 @@ button:active,
   transform: translateY(-1px);
 }
 
+/* Message action bar */
+.message-bubble:hover .msg-actions-bar {
+  display: flex;
+}
+.msg-actions-bar {
+  display: none;
+  position: absolute;
+  top: -22px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 4px 8px;
+  box-shadow: var(--shadow-md);
+  z-index: 5;
+  gap: 6px;
+}
+.msg-actions-left {
+  left: -8px;
+}
+.msg-actions-right {
+  right: -8px;
+}
+.msg-action-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  color: var(--text-secondary);
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s ease;
+}
+.msg-action-btn:hover {
+  background: var(--bg-hover);
+}
+.msg-action-btn svg {
+  width: 16px;
+  height: 16px;
+}
+.msg-delete-btn {
+  color: var(--accent-danger);
+}
+
+/* Attachment delete button */
+.att-thumb .att-delete-btn {
+  display: none;
+}
+.att-thumb:hover .att-delete-btn {
+  display: flex !important;
+}
+
+/* Search result row hover */
+.search-result-row:hover {
+  background: var(--bg-hover);
+}
+
+/* Friend picker option hover */
+.friend-picker-option:hover {
+  background: var(--bg-hover);
+}
+
 /* Scrollbar subtle */
 ::-webkit-scrollbar {
   width: 6px;
@@ -730,4 +793,38 @@ button:active,
 .link-preview:active .link-preview-url,
 .link-preview.link-preview-mine:active .link-preview-url {
   color: #2d7a2d;
+}
+
+/* Inline code blocks */
+.msg-text code {
+  background: var(--bg-hover);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 0.85em;
+  color: var(--accent-primary);
+  word-break: break-word;
+}
+
+/* Multi-line code blocks */
+.msg-text pre {
+  background: var(--bg-base);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 8px 0;
+  overflow-x: auto;
+  font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 0.85em;
+  line-height: 1.5;
+  position: relative;
+}
+
+.msg-text pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+  color: var(--text-primary);
 }

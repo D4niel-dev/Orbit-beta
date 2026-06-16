@@ -11,8 +11,8 @@ window.ProfileCard = {
     this.attachEvents();
     var self = this;
     this.currentUserBeingViewed = null;
-    window.store.subscribe(function(state) {
-      if (self.isOpen && self.currentUserBeingViewed === state.currentUser.userId) self.render(state.currentUser);
+    window.store.subscribe(function(state, changedState) {
+      if (self.isOpen && self.currentUserBeingViewed === state.currentUser.userId && (!changedState || 'currentUser' in changedState)) self.render(state.currentUser);
     });
   },
 

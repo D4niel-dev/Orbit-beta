@@ -179,15 +179,6 @@ window.SidebarMiddle = {
     listContainer.innerHTML = html;
     lucide.createIcons({ root: listContainer });
 
-    // Click group to open chat
-    var rows = listContainer.querySelectorAll('.list-row');
-    rows.forEach(function(row) {
-      row.addEventListener('click', function(e) {
-        var id = row.getAttribute('data-id');
-        window.store.setState({ activeChatId: id });
-      });
-    });
-
     // Create group button - open friend picker modal
     listContainer.querySelector('#btn-create-group').addEventListener('click', function() {
       self.showCreateGroupModal();
@@ -214,7 +205,7 @@ window.SidebarMiddle = {
         var favatarContainer = fFrame
           ? '<div style="position:relative;display:inline-block;flex-shrink:0;">' + favatar + '<img src="icons/frames/pfp_frame_' + fFrame + '.png" style="position:absolute;top:-21%;left:-17%;width:133%;height:133%;pointer-events:none;object-fit:contain;" draggable="false" alt=""></div>'
           : favatar;
-        friendOptions += '<label style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background=\'var(--bg-hover)\'" onmouseout="this.style.background=\'transparent\'">' +
+        friendOptions += '<label class="friend-picker-option" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;cursor:pointer;">' +
           '<input type="checkbox" class="group-member-cb" value="' + window.Sanitize.escapeHtml(f.userId) + '" style="width:18px;height:18px;accent-color:var(--accent-primary);cursor:pointer;">' +
           favatarContainer +
           '<div><div style="font-weight:500;color:var(--text-primary);">' + window.Sanitize.escapeHtml(f.username) + '</div>' +
@@ -481,22 +472,6 @@ window.SidebarMiddle = {
     listContainer.innerHTML = html;
     lucide.createIcons({ root: listContainer });
     
-    // Reattach click events for list items
-    var rows = listContainer.querySelectorAll('.list-row');
-    rows.forEach(function(row) {
-      row.addEventListener('click', function(e) {
-        var id = row.getAttribute('data-id');
-        if (e.target.closest('.list-row-avatar')) {
-          e.stopPropagation();
-          var state = window.store.getState();
-          var friend = state.friends.find(function(f) { return f.userId === id; });
-          if (friend && window.ProfileSidebar) window.ProfileSidebar.open(friend);
-        } else {
-          window.store.setState({ activeChatId: id });
-        }
-      });
-    });
-
     var btnAddFriend = listContainer.querySelector('#btn-add-friend');
     if (btnAddFriend) {
       btnAddFriend.addEventListener('click', function(e) {
@@ -549,6 +524,22 @@ window.SidebarMiddle = {
 
   attachEvents() {
     var self = this;
+
+    // Delegated click for list rows
+    this.container.addEventListener('click', function(e) {
+      var row = e.target.closest('.list-row');
+      if (!row) return;
+      var id = row.getAttribute('data-id');
+      if (!id) return;
+      if (e.target.closest('.list-row-avatar')) {
+        var state = window.store.getState();
+        var friend = state.friends.find(function(f) { return f.userId === id; });
+        if (friend && window.ProfileSidebar) window.ProfileSidebar.open(friend);
+      } else {
+        window.store.setState({ activeChatId: id });
+      }
+    });
+
     var searchInput = this.container.querySelector('.search-input');
     if (searchInput) {
       searchInput.addEventListener('input', function(e) {

@@ -147,6 +147,14 @@ window.ChatPanel = {
         return;
       }
       
+      // Forward
+      var forwardBtn = e.target.closest('.msg-forward-btn');
+      if (forwardBtn) {
+        e.stopPropagation();
+        self.showForwardModal(forwardBtn.getAttribute('data-msg-id'));
+        return;
+      }
+
       // Pinned messages bar
       var btnUnpinAll = e.target.closest('#btn-unpin-all');
       if (btnUnpinAll) {
@@ -214,6 +222,16 @@ window.ChatPanel = {
         return;
       }
       
+      // File remove in preview area
+      var removeBtn = e.target.closest('.btn-remove-file');
+      if (removeBtn) {
+        const idx = parseInt(removeBtn.getAttribute('data-index'));
+        const removed = self.stagedFiles.splice(idx, 1)[0];
+        if (removed && removed.url) URL.revokeObjectURL(removed.url);
+        self.renderPreviewArea();
+        return;
+      }
+
       // Attachment delete
       var attDeleteBtn = e.target.closest('.att-delete-btn');
       if (attDeleteBtn) {
@@ -353,14 +371,13 @@ window.ChatPanel = {
       if (!msg) return;
       var isMine = msg.sender === state.currentUser.userId;
       var items = [
-        { label: 'Reply', action: 'reply', icon: 'corner-up-left', onClick: function() { 
+        { label: 'Reply', action: 'reply', icon: 'corner-up-left', onClick: function() {
+          var friendName = state.friends.find(function(f) { return f.userId === state.activeChatId; });
+          self.replyingTo = { id: msg.id, text: msg.text, senderName: msg.sender === state.currentUser.userId ? 'You' : (friendName ? friendName.username : 'User') };
+          self.editingMsg = null;
           var input = document.getElementById('chat-input');
-          if (input) {
-            var snippet = msg.text || 'Attachment';
-            if (snippet.length > 25) snippet = snippet.substring(0, 25) + '...';
-            input.value = '[Reply to: "' + snippet + '"] ' + input.value;
-            input.focus();
-          }
+          if (input) input.focus();
+          window.store.notify();
         } },
         { label: 'Copy Text', action: 'copy', icon: 'copy', onClick: function() {
           var text = msg.text || '';
@@ -369,6 +386,9 @@ window.ChatPanel = {
           } else {
             navigator.clipboard.writeText(text).catch(function(e) { console.warn('Clipboard write failed', e); });
           }
+        } },
+        { label: 'Forward', action: 'forward', icon: 'send', onClick: function() {
+          self.showForwardModal(msg.id);
         } },
       ];
       var pinnedMsgs = window.store.getPinnedMessages(state.activeChatId);
@@ -380,6 +400,17 @@ window.ChatPanel = {
       } else {
         items.push({ label: 'Pin Message', action: 'pin', icon: 'pin', onClick: function() {
           window.store.sendPinMessage(state.activeChatId, msg.id);
+        } });
+      }
+      if (!isMine) {
+        var isBlocked = window.store.isUserBlocked(msg.sender);
+        items.push('separator');
+        items.push({ label: isBlocked ? 'Unblock User' : 'Block User', action: isBlocked ? 'unblock' : 'block', icon: isBlocked ? 'user-check' : 'ban', color: isBlocked ? 'var(--accent-success)' : 'var(--accent-danger)', onClick: function() {
+          if (isBlocked) {
+            window.store.unblockUser(msg.sender);
+          } else {
+            window.store.blockUser(msg.sender);
+          }
         } });
       }
       if (isMine) {
@@ -547,15 +578,15 @@ window.ChatPanel = {
         let gridHtml = '';
         msg.attachments.forEach(att => {
           const safeAttId = window.Sanitize.escapeHtml(String(att.id || ''));
-          const deleteBtn = '<button class="att-delete-btn" data-att-id="' + safeAttId + '" data-msg-id="' + msg.id + '" style="position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,0.6);border:none;color:white;cursor:pointer;display:none;align-items:center;justify-content:center;font-size:14px;line-height:1;z-index:2;" title="Delete">×</button>';
+          const deleteBtn = '<button class="att-delete-btn" data-att-id="' + safeAttId + '" data-msg-id="' + msg.id + '" style="position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,0.6);border:none;color:white;cursor:pointer;align-items:center;justify-content:center;font-size:14px;line-height:1;z-index:2;" title="Delete">×</button>';
           if (att.type === 'image') {
             if (state.settings.showImagePreviews !== false) {
               const safeUrl = window.Sanitize.escapeHtml(att.url);
               const safeName = window.Sanitize.escapeHtml(String(att.name || 'Image'));
               const safeSize = window.Sanitize.escapeHtml(String(att.size || 0));
-              gridHtml += '<div style="position:relative;border-radius: 8px; overflow: hidden; ' + arStyle + ' border: 1px solid var(--border-subtle); cursor:pointer;" data-open-image="' + safeAttId + '" data-msg-id="' + msg.id + '" onmouseenter="var el=this.querySelector(\'.att-delete-btn\');if(el)el.style.display=\'flex\'" onmouseleave="var el=this.querySelector(\'.att-delete-btn\');if(el)el.style.display=\'none\'">' + deleteBtn + '<img src="' + safeUrl + '" style="width: 100%; height: 100%; object-fit: cover;" onerror="if(window.handleMediaError) window.handleMediaError(this, \'' + safeUrl + '\')"></div>';
+              gridHtml += '<div class="att-thumb" style="position:relative;border-radius: 8px; overflow: hidden; ' + arStyle + ' border: 1px solid var(--border-subtle); cursor:pointer;" data-open-image="' + safeAttId + '" data-msg-id="' + msg.id + '">' + deleteBtn + '<img src="' + safeUrl + '" style="width: 100%; height: 100%; object-fit: cover;" onerror="if(window.handleMediaError) window.handleMediaError(this, \'' + safeUrl + '\')"></div>';
             } else {
-              gridHtml += '<div style="position:relative;border-radius: 8px; height: 120px; border: 1px solid var(--border-subtle); display:flex; flex-direction:column; align-items:center; justify-content:center; background: rgba(0,0,0,0.1); padding: 8px; text-align:center;" onmouseenter="var el=this.querySelector(\'.att-delete-btn\');if(el)el.style.display=\'flex\'" onmouseleave="var el=this.querySelector(\'.att-delete-btn\');if(el)el.style.display=\'none\'">' +
+              gridHtml += '<div class="att-thumb" style="position:relative;border-radius: 8px; height: 120px; border: 1px solid var(--border-subtle); display:flex; flex-direction:column; align-items:center; justify-content:center; background: rgba(0,0,0,0.1); padding: 8px; text-align:center;">' +
                 deleteBtn +
                 '<i data-lucide="image" style="width:32px;height:32px;margin-bottom:8px;color:var(--text-muted);"></i>' +
                 '<div style="font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%;">' + window.Sanitize.escapeHtml(String(att.name || 'Image')) + '</div>' +
@@ -563,12 +594,12 @@ window.ChatPanel = {
             }
           } else if (att.type === 'audio' || (att.mimeType && att.mimeType.startsWith('audio/'))) {
             const safeUrl = window.Sanitize.escapeHtml(att.url);
-            gridHtml += '<div style="position:relative;border-radius: 8px; border: 1px solid var(--border-subtle); background: var(--bg-hover); padding: 8px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;" onmouseenter="var el=this.querySelector(\'.att-delete-btn\');if(el)el.style.display=\'flex\'" onmouseleave="var el=this.querySelector(\'.att-delete-btn\');if(el)el.style.display=\'none\'">' +
+            gridHtml += '<div class="att-thumb" style="position:relative;border-radius: 8px; border: 1px solid var(--border-subtle); background: var(--bg-hover); padding: 8px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;">' +
               deleteBtn +
               '<audio controls src="' + safeUrl + '" style="height:32px;width:100%;outline:none;border-radius:16px;" controlsList="nodownload"></audio>' +
             '</div>';
           } else {
-            gridHtml += '<div style="position:relative;border-radius: 8px; height: 120px; border: 1px solid var(--border-subtle); display:flex; flex-direction:column; align-items:center; justify-content:center; background: rgba(0,0,0,0.1); padding: 8px; text-align:center;" onmouseenter="var el=this.querySelector(\'.att-delete-btn\');if(el)el.style.display=\'flex\'" onmouseleave="var el=this.querySelector(\'.att-delete-btn\');if(el)el.style.display=\'none\'">' +
+            gridHtml += '<div class="att-thumb" style="position:relative;border-radius: 8px; height: 120px; border: 1px solid var(--border-subtle); display:flex; flex-direction:column; align-items:center; justify-content:center; background: rgba(0,0,0,0.1); padding: 8px; text-align:center;">' +
               deleteBtn +
               '<i data-lucide="file" style="width:32px;height:32px;margin-bottom:8px;color:var(--text-muted);"></i>' +
               '<div style="font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%;">' + window.Sanitize.escapeHtml(String(att.name || 'File')) + '</div>' +
@@ -580,13 +611,14 @@ window.ChatPanel = {
 
       // Hover action bar
       const actionBtns =
-        '<button class="msg-action-btn msg-reply-btn" data-msg-id="' + msg.id + '" title="Reply" style="background:none;border:none;cursor:pointer;padding:4px;color:var(--text-secondary);"><i data-lucide="reply" style="width:14px;height:14px;"></i></button>' +
-        '<button class="msg-action-btn msg-react-btn" data-msg-id="' + msg.id + '" data-msg-text="' + window.Sanitize.escapeHtml(msg.text || '').replace(/"/g, '&quot;') + '" title="React" style="background:none;border:none;cursor:pointer;padding:4px;color:var(--text-secondary);"><i data-lucide="smile-plus" style="width:14px;height:14px;"></i></button>' +
-        (isMine ? '<button class="msg-action-btn msg-edit-btn" data-msg-id="' + msg.id + '" title="Edit" style="background:none;border:none;cursor:pointer;padding:4px;color:var(--text-secondary);"><i data-lucide="pencil" style="width:14px;height:14px;"></i></button>' : '') +
-        (window.store.getState().settings.experimentalMessageTranslate ? '<button class="msg-action-btn msg-translate-btn" data-msg-id="' + msg.id + '" title="Translate" style="background:none;border:none;cursor:pointer;padding:4px;color:var(--text-secondary);"><i data-lucide="languages" style="width:14px;height:14px;"></i></button>' : '') +
-        '<button class="msg-action-btn msg-delete-btn" data-msg-id="' + msg.id + '" data-is-mine="' + (isMine ? '1' : '0') + '" title="Delete" style="background:none;border:none;cursor:pointer;padding:4px;color:var(--accent-danger);"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button>';
+        '<button class="msg-action-btn msg-reply-btn" data-msg-id="' + msg.id + '" title="Reply"><i data-lucide="reply" style="width:16px;height:16px;"></i></button>' +
+        '<button class="msg-action-btn msg-react-btn" data-msg-id="' + msg.id + '" data-msg-text="' + window.Sanitize.escapeHtml(msg.text || '').replace(/"/g, '&quot;') + '" title="React"><i data-lucide="smile-plus" style="width:16px;height:16px;"></i></button>' +
+        '<button class="msg-action-btn msg-forward-btn" data-msg-id="' + msg.id + '" title="Forward"><i data-lucide="send" style="width:16px;height:16px;"></i></button>' +
+        (isMine ? '<button class="msg-action-btn msg-edit-btn" data-msg-id="' + msg.id + '" title="Edit"><i data-lucide="pencil" style="width:16px;height:16px;"></i></button>' : '') +
+        '<button class="msg-action-btn msg-translate-btn" data-msg-id="' + msg.id + '" title="Translate"><i data-lucide="languages" style="width:16px;height:16px;"></i></button>' +
+        '<button class="msg-action-btn msg-delete-btn" data-msg-id="' + msg.id + '" data-is-mine="' + (isMine ? '1' : '0') + '" title="Delete"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></button>';
 
-      const actionsBar = '<div class="msg-actions-bar" style="display:none;position:absolute;' + (isMine ? 'left:-8px;' : 'right:-8px;') + 'top:-16px;background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:8px;padding:2px 4px;box-shadow:var(--shadow-md);z-index:5;gap:2px;">' + actionBtns + '</div>';
+      const actionsBar = '<div class="msg-actions-bar' + (isMine ? ' msg-actions-left' : ' msg-actions-right') + '">' + actionBtns + '</div>';
 
       const bubblePadding = (sanitizedText || attachmentsHtml) ? 'padding: 10px 14px;' : 'padding: 0;';
       const bubbleBgMine = (sanitizedText || attachmentsHtml) ? 'background-color: var(--accent-primary); color: white; box-shadow: var(--shadow-sm);' : 'background: transparent;';
@@ -634,7 +666,7 @@ window.ChatPanel = {
           '</div>' +
           '<div style="max-width: 65%; display:flex; flex-direction:column; align-items:flex-end;">' +
             senderName +
-            '<div class="message-bubble" data-msg-id="' + msg.id + '" data-debug="Bubble: ' + msg.id + '" style="position:relative;' + bubbleBgMine + ' ' + bubblePadding + ' border-radius: 16px 16px 0 16px; line-height: 1.4; font-size: 14px; cursor:context-menu; max-width: 100%;" onmouseenter="var el=this.querySelector(\'.msg-actions-bar\');if(el)el.style.display=\'flex\'" onmouseleave="var el=this.querySelector(\'.msg-actions-bar\');if(el)el.style.display=\'none\'">' +
+            '<div class="message-bubble" data-msg-id="' + msg.id + '" data-debug="Bubble: ' + msg.id + '" style="position:relative;' + bubbleBgMine + ' ' + bubblePadding + ' border-radius: 16px 16px 0 16px; line-height: 1.4; font-size: 14px; cursor:context-menu; max-width: 100%;">' +
               '<div class="message-id" style="display:none;font-size:9px;font-family:monospace;color:rgba(255,255,255,0.4);margin-bottom:2px;">#' + String(msg.id).substring(0, 8) + '</div>' +
             actionsBar + replyHtml + attachmentsHtml + '<div class="msg-text">' + sanitizedText + '</div>' + linkPreviewHtml + editedBadge +
             (reactionsHtml ? '<div style="border-top:1px solid rgba(255,255,255,0.15);margin-top:8px;padding-top:6px;">' + reactionsHtml + '</div>' : '') +
@@ -672,7 +704,7 @@ window.ChatPanel = {
           '<div class="avatar avatar-sm msg-avatar" data-user-id="' + msg.sender + '" style="margin-right: var(--spacing-sm); margin-top: 4px; flex-shrink: 0; cursor:pointer;' + (showAvatars ? '' : 'display:none;') + '">' + otherAvatarContainer + '</div>' +
           '<div style="max-width: 65%; display:flex; flex-direction:column; align-items:flex-start;">' +
             '<div style="font-size: 11px; color: var(--text-secondary); font-weight: 500; margin-bottom: 2px; margin-left: 4px;">' + senderName + '</div>' +
-            '<div class="message-bubble" data-msg-id="' + msg.id + '" data-debug="Bubble: ' + msg.id + '" style="position:relative;' + bubbleBgOther + ' ' + bubblePadding + ' border-radius: 0 16px 16px 16px; line-height: 1.4; font-size: 14px; cursor:context-menu; max-width: 100%;" onmouseenter="var el=this.querySelector(\'.msg-actions-bar\');if(el)el.style.display=\'flex\'" onmouseleave="var el=this.querySelector(\'.msg-actions-bar\');if(el)el.style.display=\'none\'">' +
+            '<div class="message-bubble" data-msg-id="' + msg.id + '" data-debug="Bubble: ' + msg.id + '" style="position:relative;' + bubbleBgOther + ' ' + bubblePadding + ' border-radius: 0 16px 16px 16px; line-height: 1.4; font-size: 14px; cursor:context-menu; max-width: 100%;">' +
               '<div class="message-id" style="display:none;font-size:9px;font-family:monospace;color:var(--text-muted);margin-bottom:2px;">#' + String(msg.id).substring(0, 8) + '</div>' +
               actionsBar + replyHtml + attachmentsHtml + '<div class="msg-text">' + sanitizedText + '</div>' + linkPreviewHtml + editedBadgeOther +
               (reactionsHtml ? '<div style="border-top:1px solid var(--border-subtle);margin-top:8px;padding-top:6px;">' + reactionsHtml + '</div>' : '') +
@@ -863,7 +895,7 @@ window.ChatPanel = {
         '</div>' +
       '</div>');
 
-    lucide.createIcons({ root: this.container.querySelector('.chat-input-area') });
+    lucide.createIcons({ root: this.container });
 
     if (window.freezeGifImages) window.freezeGifImages(this.container);
 
@@ -1172,11 +1204,21 @@ window.ChatPanel = {
         e.stopPropagation();
         if (!window.ContextMenu) return;
         var rect = btnChatMore.getBoundingClientRect();
-        window.ContextMenu.show(rect.left - 150, rect.bottom + 8, [
-          { label: 'Voice Call', action: 'voice-call', icon: 'phone', onClick: function() { console.log('Voice Call'); } },
-          { label: 'Video Call', action: 'video-call', icon: 'video', onClick: function() { console.log('Video Call'); } },
-          { label: 'Search', action: 'search', icon: 'search', onClick: function() { self.showSearchModal(); } }
-        ]);
+        window.ContextMenu.show(rect.left - 150, rect.bottom + 8, (function() {
+          var s = window.store.getState();
+          var isGroup = s.groups.some(function(g) { return g.groupId === s.activeChatId; });
+          var items = [];
+          if (isGroup) {
+            items.push({ label: 'Voice Call', action: 'voice-call', icon: 'phone', onClick: function() { if (window.CallManager) window.CallManager.startGroupCall(false, window.store.getState().activeChatId); } });
+            items.push({ label: 'Video Call', action: 'video-call', icon: 'video', onClick: function() { if (window.CallManager) window.CallManager.startGroupCall(true, window.store.getState().activeChatId); } });
+          } else {
+            items.push({ label: 'Voice Call', action: 'voice-call', icon: 'phone', onClick: function() { var s2 = window.store.getState(); var f = s2.friends.find(function(fr) { return fr.userId === s2.activeChatId; }); if (f && window.CallManager) window.CallManager.startCall(false, f.userId, f.ip); } });
+            items.push({ label: 'Video Call', action: 'video-call', icon: 'video', onClick: function() { var s2 = window.store.getState(); var f = s2.friends.find(function(fr) { return fr.userId === s2.activeChatId; }); if (f && window.CallManager) window.CallManager.startCall(true, f.userId, f.ip); } });
+          }
+          items.push({ label: 'Search in Chat', action: 'search-chat', icon: 'message-square', onClick: function() { self.showSearchModal(null, window.store.getState().activeChatId); } });
+          items.push({ label: 'Search', action: 'search', icon: 'search', onClick: function() { self.showSearchModal(); } });
+          return items;
+        })());
       });
     }
 
@@ -1318,16 +1360,6 @@ window.ChatPanel = {
     
     area.innerHTML = html;
     lucide.createIcons({ root: area });
-    
-    var self = this;
-    area.querySelectorAll('.btn-remove-file').forEach(btn => {
-      btn.addEventListener('click', function(e) {
-        const idx = parseInt(e.currentTarget.getAttribute('data-index'));
-        const removed = self.stagedFiles.splice(idx, 1)[0];
-        if (removed && removed.url) URL.revokeObjectURL(removed.url);
-        self.renderPreviewArea();
-      });
-    });
   },
 
   showReactionPicker(x, y, msgId) {
@@ -1372,11 +1404,21 @@ window.ChatPanel = {
     }, 10);
   },
 
-  showSearchModal(initialQuery) {
+  showSearchModal(initialQuery, chatId) {
     var existing = document.querySelector('.search-modal-overlay');
     if (existing) { existing.remove(); }
 
     var self = this;
+    var isChatSearch = !!chatId;
+    var state = window.store.getState();
+    var chatName = '';
+    if (isChatSearch) {
+      var friend = state.friends.find(function(f) { return f.userId === chatId; });
+      var group = state.groups.find(function(g) { return g.groupId === chatId; });
+      if (friend) chatName = friend.username;
+      else if (group) chatName = group.groupName;
+    }
+
     var overlay = document.createElement('div');
     overlay.className = 'search-modal-overlay';
     overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding-top:80px;';
@@ -1384,18 +1426,24 @@ window.ChatPanel = {
     var panel = document.createElement('div');
     panel.style.cssText = 'width:560px;max-height:75vh;background:var(--bg-surface);border-radius:16px;border:1px solid var(--border-subtle);box-shadow:var(--shadow-xl);display:flex;flex-direction:column;overflow:hidden;';
 
+    var modalTitle = isChatSearch ? 'Search in Chat' : 'Search';
+    var placeholder = isChatSearch ? 'Search this chat...' : 'Search messages, people, files...';
+
     panel.innerHTML =
       '<div class="search-modal-header" style="padding:16px 20px;border-bottom:1px solid var(--border-subtle);">' +
         '<div style="display:flex;align-items:center;gap:12px;">' +
           '<i data-lucide="search" style="width:18px;height:18px;color:var(--text-muted);flex-shrink:0;"></i>' +
-          '<input id="search-modal-input" class="search-modal-input" type="text" placeholder="Search messages, people, files..." autofocus style="flex:1;border:none;background:transparent;color:var(--text-primary);font-size:15px;outline:none;">' +
-          '<button id="search-modal-close" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:18px;height:18px;"></i></button>' +
+          '<div style="flex:1;display:flex;flex-direction:column;">' +
+            '<span style="font-size:11px;font-weight:600;color:var(--text-muted);">' + modalTitle + '</span>' +
+            '<input id="search-modal-input" class="search-modal-input" type="text" placeholder="' + placeholder + '" autofocus style="flex:1;border:none;background:transparent;color:var(--text-primary);font-size:15px;outline:none;">' +
+          '</div>' +
+          '<button id="search-modal-close" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;border-radius:6px;transition:background 0.15s;" onmouseover="this.style.background=\'var(--bg-hover)\'" onmouseout="this.style.background=\'transparent\'"><i data-lucide="x" style="width:18px;height:18px;"></i></button>' +
         '</div>' +
         '<div id="search-modal-filters" style="display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap;">' +
-          '<input id="search-filter-from" type="text" placeholder="From: username" style="flex:1;min-width:120px;padding:6px 10px;border-radius:6px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);font-size:12px;outline:none;">' +
-          '<input id="search-filter-date-from" type="date" style="padding:5px 8px;border-radius:6px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);font-size:11px;outline:none;">' +
+          '<input id="search-filter-from" type="text" placeholder="Filter by sender" style="flex:1;min-width:100px;padding:6px 10px;border-radius:6px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);font-size:12px;outline:none;">' +
+          '<input id="search-filter-date-from" type="date" style="padding:5px 8px;border-radius:6px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);font-size:11px;outline:none;color-scheme:dark;">' +
           '<span style="font-size:11px;color:var(--text-muted);">to</span>' +
-          '<input id="search-filter-date-to" type="date" style="padding:5px 8px;border-radius:6px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);font-size:11px;outline:none;">' +
+          '<input id="search-filter-date-to" type="date" style="padding:5px 8px;border-radius:6px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);font-size:11px;outline:none;color-scheme:dark;">' +
         '</div>' +
       '</div>' +
       '<div id="search-modal-results" style="flex:1;overflow-y:auto;padding:8px 0;"></div>';
@@ -1406,6 +1454,31 @@ window.ChatPanel = {
 
     var input = document.getElementById('search-modal-input');
     var results = document.getElementById('search-modal-results');
+
+    // Pre-fill the chat filter if searching within a chat
+    if (isChatSearch) {
+      var filterFrom = document.getElementById('search-filter-from');
+      if (filterFrom) filterFrom.placeholder = 'Filter by sender';
+    }
+
+    // Delegated click on search results
+    results.addEventListener('click', function(e) {
+      var row = e.target.closest('.search-result-row');
+      if (!row) return;
+      var chatId = row.getAttribute('data-chat-id');
+      var msgId = row.getAttribute('data-msg-id');
+      var state = window.store.getState();
+      if (state.activeChatId !== chatId) {
+        window.store.setState({ activeChatId: chatId });
+      }
+      overlay.remove();
+      if (msgId) {
+        setTimeout(function() {
+          var el = document.querySelector('[data-msg-id="' + msgId + '"]');
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
+      }
+    });
 
     if (input) {
       input.focus();
@@ -1422,7 +1495,7 @@ window.ChatPanel = {
         var dateTo = document.getElementById('search-filter-date-to') ? document.getElementById('search-filter-date-to').value : '';
 
         if (!query) {
-          results.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px;">Type to search messages, people, and files</div>';
+          results.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px;">' + (isChatSearch ? 'Type to search messages in this chat' : 'Type to search messages, people, and files') + '</div>';
           return;
         }
 
@@ -1430,14 +1503,15 @@ window.ChatPanel = {
         var hits = [];
         var myId = state.currentUser.userId;
 
-        Object.keys(state.messages).forEach(function(chatId) {
-          var msgs = state.messages[chatId] || [];
-          var chatName = chatId;
-          var friend = state.friends.find(function(f) { return f.userId === chatId; });
-          var group = state.groups.find(function(g) { return g.groupId === chatId; });
+        var chatIds = isChatSearch ? [chatId] : Object.keys(state.messages);
+        chatIds.forEach(function(cId) {
+          var msgs = state.messages[cId] || [];
+          var chatName = cId;
+          var friend = state.friends.find(function(f) { return f.userId === cId; });
+          var group = state.groups.find(function(g) { return g.groupId === cId; });
           if (friend) chatName = friend.username;
           else if (group) chatName = group.groupName;
-          else if (chatId === 'local-echo') chatName = 'Orbit Echo';
+          else if (cId === 'local-echo') chatName = 'Orbit Echo';
 
           msgs.forEach(function(msg) {
             var match = false;
@@ -1482,12 +1556,13 @@ window.ChatPanel = {
               });
             }
             if (match) {
-              hits.push({ chatId: chatId, chatName: chatName, msg: msg, matchType: matchType, score: score, timestamp: msg.timestamp || '' });
+              hits.push({ chatId: cId, chatName: chatName, msg: msg, matchType: matchType, score: score, timestamp: msg.timestamp || '' });
             }
           });
         });
 
-        // Search friends/usernames
+        // Search friends/usernames (skip in chat-specific search)
+        if (!isChatSearch) {
         state.friends.forEach(function(f) {
           if (f.username && f.username.toLowerCase().includes(query) && f.userId !== myId) {
             if (!hits.some(function(h) { return h.chatId === f.userId; })) {
@@ -1495,6 +1570,7 @@ window.ChatPanel = {
             }
           }
         });
+        }
 
         // Sort: by score desc, then by timestamp desc
         hits.sort(function(a, b) {
@@ -1503,7 +1579,7 @@ window.ChatPanel = {
         });
 
         if (hits.length === 0) {
-          results.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px;">No results found for "<b>' + window.Sanitize.escapeHtml(query) + '"</b></div>';
+          results.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px;line-height:1.6;">No results for <b style="color:var(--text-secondary);">' + window.Sanitize.escapeHtml(query) + '</b></div>';
           return;
         }
 
@@ -1531,37 +1607,17 @@ window.ChatPanel = {
           }
           var time = hit.msg ? window.Format.relativeTime(hit.msg.timestamp) : '';
 
-          html += '<div class="search-result-row" data-chat-id="' + window.Sanitize.escapeHtml(hit.chatId) + '" data-msg-id="' + (hit.msg ? hit.msg.id : '') + '" style="display:flex;align-items:center;gap:12px;padding:10px 20px;cursor:pointer;transition:background 0.1s;" onmouseover="this.style.background=\'var(--bg-hover)\'" onmouseout="this.style.background=\'transparent\'">' +
+          var nameHtml = isChatSearch ? '' : '<span>' + window.Sanitize.escapeHtml(hit.chatName) + '</span>';
+          html += '<div class="search-result-row" data-chat-id="' + window.Sanitize.escapeHtml(hit.chatId) + '" data-msg-id="' + (hit.msg ? hit.msg.id : '') + '" style="display:flex;align-items:center;gap:12px;padding:10px 20px;cursor:pointer;">' +
             '<i data-lucide="' + icon + '" style="width:18px;height:18px;color:var(--text-muted);flex-shrink:0;"></i>' +
             '<div style="flex:1;min-width:0;">' +
-              '<div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-primary);font-weight:500;"><span>' + window.Sanitize.escapeHtml(hit.chatName) + '</span><span style="font-size:11px;color:var(--text-muted);font-weight:400;">' + time + '</span></div>' +
+              '<div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-primary);font-weight:500;">' + nameHtml + '<span style="font-size:11px;color:var(--text-muted);font-weight:400;">' + time + '</span></div>' +
               '<div style="font-size:12px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + preview + '</div>' +
             '</div>' +
           '</div>';
         });
         results.innerHTML = html;
         if (window.lucide) window.lucide.createIcons({ root: results });
-
-        results.querySelectorAll('.search-result-row').forEach(function(row) {
-          row.addEventListener('click', function() {
-            var chatId = row.getAttribute('data-chat-id');
-            var msgId = row.getAttribute('data-msg-id');
-            var state = window.store.getState();
-
-            if (state.activeChatId !== chatId) {
-              window.store.setState({ activeChatId: chatId });
-            }
-
-            overlay.remove();
-
-            if (msgId) {
-              setTimeout(function() {
-                var el = document.querySelector('[data-msg-id="' + msgId + '"]');
-                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              }, 100);
-            }
-          });
-        });
       } catch(err) {
         console.error('[Search] performSearch error:', err);
         if (results) {
@@ -1603,6 +1659,160 @@ window.ChatPanel = {
       var ev = new Event('input', { bubbles: true });
       input.dispatchEvent(ev);
     }
+  },
+
+  showForwardModal(msgId) {
+    var existing = document.querySelector('.forward-modal-overlay');
+    if (existing) { existing.remove(); }
+
+    var self = this;
+    var state = window.store.getState();
+    var msgList = state.messages[state.activeChatId] || [];
+    var msg = msgList.find(function(m) { return m.id == msgId; });
+    if (!msg) return;
+
+    function getSenderName(originalMsg) {
+      if (originalMsg.sender === state.currentUser.userId) return 'You';
+      var friend = state.friends.find(function(f) { return f.userId === state.activeChatId; });
+      var group = state.groups.find(function(g) { return g.groupId === state.activeChatId; });
+      if (group) {
+        var member = group.members.find(function(m) { return m.userId === originalMsg.sender; });
+        if (member) return member.username;
+        var fromFriend = state.friends.find(function(f) { return f.userId === originalMsg.sender; });
+        if (fromFriend) return fromFriend.username;
+      }
+      if (friend) return friend.username;
+      return 'Unknown';
+    }
+
+    var senderName = getSenderName(msg);
+    var forwardedText = 'Forwarded from ' + senderName + ': ' + (msg.text || '');
+
+    var overlay = document.createElement('div');
+    overlay.className = 'forward-modal-overlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding-top:80px;';
+
+    var panel = document.createElement('div');
+    panel.style.cssText = 'width:460px;max-height:75vh;background:var(--bg-surface);border-radius:16px;border:1px solid var(--border-subtle);box-shadow:var(--shadow-xl);display:flex;flex-direction:column;overflow:hidden;';
+
+    var allContacts = [];
+
+    state.friends.forEach(function(f) {
+      if (f.userId !== state.activeChatId && f.userId !== 'local-echo') {
+        allContacts.push({ id: f.userId, name: f.username, avatar: f.avatar, type: 'friend' });
+      }
+    });
+
+    state.groups.forEach(function(g) {
+      if (g.groupId !== state.activeChatId) {
+        allContacts.push({ id: g.groupId, name: g.groupName, avatar: g.avatarPath || '', type: 'group' });
+      }
+    });
+
+    var contactListHtml = '';
+    allContacts.forEach(function(c) {
+      var initial = c.name.charAt(0).toUpperCase();
+      var avatarHtml = c.avatar
+        ? '<img src="' + window.Sanitize.escapeHtml(c.avatar) + '" style="width:36px;height:36px;border-radius:' + (c.type === 'group' ? '10px' : '50%') + ';object-fit:cover;">'
+        : '<div style="width:36px;height:36px;border-radius:' + (c.type === 'group' ? '10px' : '50%') + ';background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-weight:700;color:white;font-size:14px;">' + initial + '</div>';
+      var typeIcon = c.type === 'group' ? '<i data-lucide="users" style="width:12px;height:12px;"></i>' : '<i data-lucide="user" style="width:12px;height:12px;"></i>';
+      contactListHtml += '<div class="forward-contact-row" data-contact-id="' + window.Sanitize.escapeHtml(c.id) + '" data-contact-type="' + c.type + '" style="display:flex;align-items:center;gap:12px;padding:10px 16px;cursor:pointer;border-radius:8px;transition:background 0.15s;">' +
+        avatarHtml +
+        '<div style="flex:1;min-width:0;">' +
+          '<div style="font-size:14px;font-weight:500;color:var(--text-primary);">' + window.Sanitize.escapeHtml(c.name) + '</div>' +
+          '<div style="font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:4px;">' + typeIcon + ' ' + (c.type === 'group' ? 'Group' : 'Direct Message') + '</div>' +
+        '</div>' +
+      '</div>';
+    });
+
+    panel.innerHTML =
+      '<div style="padding:16px 20px;border-bottom:1px solid var(--border-subtle);">' +
+        '<div style="display:flex;align-items:center;gap:12px;">' +
+          '<span style="font-weight:600;font-size:16px;flex:1;">Forward Message</span>' +
+          '<button id="forward-modal-close" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:18px;height:18px;"></i></button>' +
+        '</div>' +
+        '<div style="margin-top:10px;">' +
+          '<input id="forward-search-input" type="text" placeholder="Search chats..." autofocus style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);font-size:13px;outline:none;box-sizing:border-box;">' +
+        '</div>' +
+        '<div style="font-size:11px;color:var(--text-muted);margin-top:6px;">Forwarding: ' + window.Sanitize.escapeHtml(forwardedText.substring(0, 60)) + (forwardedText.length > 60 ? '...' : '') + '</div>' +
+      '</div>' +
+      '<div id="forward-contact-list" style="flex:1;overflow-y:auto;padding:8px;">' +
+        contactListHtml +
+      '</div>';
+
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+    if (window.lucide) window.lucide.createIcons({ root: overlay });
+
+    function doForward(targetId) {
+      var targetContact = allContacts.find(function(c) { return c.id === targetId; });
+      if (!targetContact) return;
+
+      var myId = state.currentUser.userId;
+      var newMsg = {
+        id: Date.now() + Math.random().toString(36).slice(2, 8),
+        sender: myId,
+        text: forwardedText,
+        timestamp: new Date().toISOString(),
+        forwardedFrom: senderName
+      };
+      if (msg.attachments && msg.attachments.length > 0) {
+        newMsg.attachments = msg.attachments.map(function(a) { return { ...a }; });
+      }
+
+      window.store.addMessage(targetId, newMsg);
+
+      var payload = {
+        text: forwardedText,
+        msgId: newMsg.id,
+        forwardedFrom: senderName
+      };
+      if (newMsg.attachments) payload.attachments = newMsg.attachments;
+
+      var s = window.store.getState();
+      var g = s.groups.find(function(g) { return g.groupId === targetId; });
+      if (g) {
+        (g.members || []).forEach(function(m) {
+          if (m.userId !== s.currentUser.userId) {
+            window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.MESSAGE, payload);
+          }
+        });
+      } else {
+        var friend = s.friends.find(function(f) { return f.userId === targetId; });
+        if (friend) {
+          window.orbitAPI.networkSend(targetId, friend.ip || '', window.Protocol.Types.MESSAGE, payload);
+        }
+      }
+
+      if (window.Toast) window.Toast.show('Forwarded', 'Message sent to ' + targetContact.name);
+      overlay.remove();
+    }
+
+    document.getElementById('forward-modal-close').addEventListener('click', function() { overlay.remove(); });
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+
+    var searchInput = document.getElementById('forward-search-input');
+    if (searchInput) {
+      searchInput.focus();
+      searchInput.addEventListener('input', function() {
+        var q = this.value.trim().toLowerCase();
+        var rows = panel.querySelectorAll('.forward-contact-row');
+        rows.forEach(function(row) {
+          var name = row.querySelector('div > div:first-child').textContent.toLowerCase();
+          row.style.display = name.indexOf(q) !== -1 ? 'flex' : 'none';
+        });
+      });
+
+      searchInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') overlay.remove();
+      });
+    }
+
+    panel.querySelectorAll('.forward-contact-row').forEach(function(row) {
+      row.addEventListener('click', function() {
+        doForward(this.getAttribute('data-contact-id'));
+      });
+    });
   },
 
   async sendMessage(text) {
@@ -1746,9 +1956,11 @@ window.ChatPanel = {
         text: text || '',
         msgId: msgId
       };
+      var state = window.store.getState();
       if (isGroup) {
         payload.chatId = activeChatId;
       }
+      if (state.currentUser) payload.fromName = state.currentUser.name;
       if (this.replyingTo) {
         payload.replyTo = this.replyingTo.id;
       }
@@ -1909,7 +2121,7 @@ function applyOgData(el, og) {
   if (og.title && titleEl) titleEl.textContent = og.title.substring(0, 120);
   if (og.description && urlEl) urlEl.textContent = og.description.substring(0, 200);
   if (og.image && imgEl) {
-    imgEl.innerHTML = '<img src="' + window.Sanitize.escapeHtml(og.image) + '" alt="" loading="lazy" onerror="this.style.display=\'none\';this.parentNode.innerHTML=\'<i data-lucide=\\\'link-2\\\' style=\\\'width:20px;height:20px;\\\'></i>\';if(window.lucide)lucide.createIcons({root:this.parentNode});">';
+    imgEl.innerHTML = '<img src="' + window.Sanitize.escapeHtml(og.image) + '" alt="" loading="lazy" onerror="var p=this.parentNode;this.style.display=\'none\';p.innerHTML=\'<i data-lucide=\\\'link-2\\\' style=\\\'width:20px;height:20px;\\\'></i>\';if(window.lucide)lucide.createIcons({root:p});">';
     if (window.lucide) lucide.createIcons({ root: imgEl });
   }
   if (og.domain && !og.title && titleEl) titleEl.textContent = og.domain;

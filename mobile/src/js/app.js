@@ -79,6 +79,7 @@ var MStore = {
   chats: [],
   groups: [],
   messages: {},
+  blockedUsers: [],
   user: null,
   settings: {
     theme: 'dark',
@@ -126,6 +127,7 @@ var MStore = {
     this.chats = this.get('chats', []);
     this.groups = this.get('groups', []);
     this.messages = this.get('messages', {});
+    this.blockedUsers = this.get('blockedUsers', []);
     this.settings = Object.assign(this.settings, this.get('settings', {}));
     this.user = this.get('user', null);
     this._migrateGroups(); // must be after user is loaded
@@ -188,6 +190,7 @@ var MStore = {
     this.set('chats', this.chats);
     this.set('groups', this.groups);
     this.set('messages', this.messages);
+    this.set('blockedUsers', this.blockedUsers);
     this.set('settings', this.settings);
     this.set('user', this.user);
   },
@@ -616,9 +619,12 @@ document.addEventListener('DOMContentLoaded', function() {
       var inviteCode = Array.from(codeArr, function(b) { return b.toString(16).padStart(2, '0'); }).join('');
       var memberList = [];
       var myId = MStore.user ? MStore.user.id : '';
-      if (myId) memberList.push({ userId: myId, role: 'owner', joinedAt: new Date().toISOString() });
+      if (myId) memberList.push({ userId: myId, role: 'owner', joinedAt: new Date().toISOString(), name: MStore.user ? (MStore.user.name || MStore.user.username || '') : '', avatar: MStore.user ? (MStore.user.avatar || null) : null });
       selectedMembers.forEach(function(id) {
-        if (id !== myId) memberList.push({ userId: id, role: 'member', joinedAt: new Date().toISOString() });
+        if (id !== myId) {
+          var friendData = MStore.friends.find(function(f) { return f.id === id; });
+          memberList.push({ userId: id, role: 'member', joinedAt: new Date().toISOString(), name: friendData ? friendData.name : '', avatar: friendData ? (friendData.avatar || null) : null });
+        }
       });
       var newGroup = {
         id: groupId, name: name, avatar: groupAvatar,
@@ -755,11 +761,190 @@ document.addEventListener('DOMContentLoaded', function() {
     if (inp) inp.value = '';
   }
 
+  function translateMessage(msgId) {
+    var msgs = MStore.messages[activeChatId] || [];
+    var msg = msgs.find(function(m) { return m.id === msgId; });
+    if (!msg || !msg.text) return;
+    var bubble = document.querySelector('.message-row[data-msg-id="' + msgId + '"] .message-bubble');
+    if (!bubble) return;
+    var existing = bubble.querySelector('.translated-text');
+    if (existing) { existing.remove(); return; }
+    var targetLang = (navigator.language || 'en').split('-')[0] || 'en';
+    var url = 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(msg.text) + '&langpair=en|' + targetLang;
+    var div = document.createElement('div');
+    div.className = 'translated-text';
+    div.textContent = 'Translating...';
+    bubble.appendChild(div);
+    fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+      if (data && data.responseData && data.responseData.translatedText) {
+        div.textContent = '🌐 ' + data.responseData.translatedText;
+      } else {
+        div.textContent = 'Translation unavailable';
+      }
+    }).catch(function() {
+      div.textContent = 'Translation failed';
+    });
+  }
+
   function confirmDeleteMessage(msgId) {
     if (!confirm('Delete this message? This cannot be undone.')) return;
     MStore.deleteMessage(activeChatId, msgId);
     renderMessages(activeChatId);
     renderChatList();
+  }
+
+  function showForwardModal(msgId) {
+    var msgs = MStore.messages[activeChatId] || [];
+    var msg = msgs.find(function(m) { return m.id === msgId; });
+    if (!msg) return;
+
+    var senderName = 'Unknown';
+    if (msg.from === 'me') {
+      senderName = MStore.user ? MStore.user.name : 'You';
+    } else if (msg.from === 'echo') {
+      senderName = 'Orbit Echo';
+    } else {
+      var friend = MStore.friends.find(function(f) { return f.id === msg.from; });
+      if (friend) {
+        senderName = friend.name;
+      } else {
+        var group = MStore.groups.find(function(g) { return g.id === activeChatId; });
+        if (group) {
+          var member = group.members.find(function(m) {
+            var mid = typeof m === 'string' ? m : m.userId;
+            return mid === msg.from;
+          });
+          senderName = member ? (typeof member === 'string' ? member : (member.username || member.name || member.userId)) : msg.from;
+        }
+      }
+    }
+
+    var forwardedText = 'Forwarded from ' + senderName + ': ' + (msg.text || '');
+
+    var existing = document.querySelector('.forward-modal-overlay');
+    if (existing) existing.remove();
+
+    var overlay = document.createElement('div');
+    overlay.className = 'forward-modal-overlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.6);z-index:9999;display:flex;flex-direction:column;';
+
+    var allContacts = [];
+    MStore.chats.forEach(function(c) {
+      if (c.id !== activeChatId) {
+        var isGroup = MStore.groups.some(function(g) { return g.id === c.id; });
+        allContacts.push({ id: c.id, name: c.name, avatar: c.avatar, type: isGroup ? 'group' : 'friend' });
+      }
+    });
+
+    var contactListHtml = '';
+    allContacts.forEach(function(c) {
+      var initial = c.name ? c.name.charAt(0).toUpperCase() : '?';
+      var avatarHtml = c.avatar
+        ? '<img src="' + escapeHtml(c.avatar) + '" style="width:44px;height:44px;border-radius:' + (c.type === 'group' ? '12px' : '50%') + ';object-fit:cover;">'
+        : '<div style="width:44px;height:44px;border-radius:' + (c.type === 'group' ? '12px' : '50%') + ';background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-weight:700;color:white;font-size:18px;">' + initial + '</div>';
+      var typeLabel = c.type === 'group' ? 'Group' : 'Direct Message';
+      contactListHtml += '<div class="forward-contact-row" data-contact-id="' + escapeHtml(c.id) + '" style="display:flex;align-items:center;gap:14px;padding:12px 16px;cursor:pointer;border-bottom:1px solid var(--border-subtle);">' +
+        avatarHtml +
+        '<div style="flex:1;min-width:0;">' +
+          '<div style="font-size:16px;font-weight:600;color:var(--text-primary);">' + escapeHtml(c.name) + '</div>' +
+          '<div style="font-size:12px;color:var(--text-muted);">' + typeLabel + '</div>' +
+        '</div>' +
+      '</div>';
+    });
+
+    var preview = forwardedText.substring(0, 50) + (forwardedText.length > 50 ? '...' : '');
+
+    overlay.innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border-subtle);background:var(--bg-surface);flex-shrink:0;">' +
+        '<span style="font-size:17px;font-weight:700;color:var(--text-primary);">Forward Message</span>' +
+        '<button id="forward-modal-close" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:22px;height:22px;"></i></button>' +
+      '</div>' +
+      '<div style="padding:10px 16px;background:var(--bg-hover);border-bottom:1px solid var(--border-subtle);flex-shrink:0;">' +
+        '<input id="forward-search-input" type="text" placeholder="Search chats..." autofocus style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border-subtle);background:var(--bg-surface);color:var(--text-primary);font-size:15px;outline:none;box-sizing:border-box;">' +
+        '<div style="font-size:12px;color:var(--text-muted);margin-top:6px;padding:0 2px;">Forwarding: ' + escapeHtml(preview) + '</div>' +
+      '</div>' +
+      '<div id="forward-contact-list" style="flex:1;overflow-y:auto;background:var(--bg-surface);">' +
+        contactListHtml +
+      '</div>';
+
+    document.body.appendChild(overlay);
+    renderLucide({ root: overlay });
+
+    document.getElementById('forward-modal-close').addEventListener('click', function() { overlay.remove(); });
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+
+    var searchInput = document.getElementById('forward-search-input');
+    if (searchInput) {
+      searchInput.focus();
+      searchInput.addEventListener('input', function() {
+        var q = this.value.trim().toLowerCase();
+        var rows = overlay.querySelectorAll('.forward-contact-row');
+        rows.forEach(function(row) {
+          var nameEl = row.querySelector('div > div:first-child');
+          if (nameEl) {
+            var name = nameEl.textContent.toLowerCase();
+            row.style.display = name.indexOf(q) !== -1 ? 'flex' : 'none';
+          }
+        });
+      });
+    }
+
+    overlay.querySelectorAll('.forward-contact-row').forEach(function(row) {
+      row.addEventListener('click', function() {
+        var targetId = this.getAttribute('data-contact-id');
+        if (!targetId) return;
+
+        var newMsg = {
+          id: 'm' + Date.now() + Math.random().toString(36).slice(2, 6),
+          from: 'me',
+          text: forwardedText,
+          time: new Date().toISOString(),
+          forwardedFrom: senderName
+        };
+        if (msg.attachments && msg.attachments.length > 0) {
+          newMsg.attachments = msg.attachments.map(function(a) { return Object.assign({}, a); });
+        }
+        if (MStore.user) newMsg.fromName = MStore.user.name;
+
+        MStore.addMessage(targetId, newMsg);
+
+        // Send over P2P if available
+        if (window.Orbit && window.Orbit.P2P && Orbit.P2P.isAvailable()) {
+          var isGroup = MStore.groups.some(function(g) { return g.id === targetId; });
+          var myId = MStore.user ? MStore.user.id : 'mobile';
+          var targetName = '';
+          var contact = allContacts.find(function(c) { return c.id === targetId; });
+          if (contact) targetName = contact.name;
+
+          var payload = {
+            text: forwardedText,
+            msgId: newMsg.id,
+            forwardedFrom: senderName
+          };
+          if (newMsg.attachments) payload.attachments = newMsg.attachments;
+
+          if (isGroup) {
+            var grp = MStore.groups.find(function(g) { return g.id === targetId; });
+            if (grp) {
+              (grp.members || []).forEach(function(m) {
+                var mid = typeof m === 'string' ? m : m.userId;
+                if (mid !== myId) {
+                  pkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.MESSAGE, payload, myId);
+                  Orbit.P2P.send(mid, pkt);
+                }
+              });
+            }
+          } else {
+            var pkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.MESSAGE, payload, myId);
+            Orbit.P2P.send(targetId, pkt);
+          }
+        }
+
+        renderChatList();
+        showToast('Forwarded to ' + targetName, 'info');
+        overlay.remove();
+      });
+    });
   }
 
   function injectMessageParticles(container) {
@@ -850,18 +1035,21 @@ document.addEventListener('DOMContentLoaded', function() {
       var msgPinned = isPinned && isPinned.some(function(p) { return String(p.msgId) === String(m.id); });
       var pinBtn = isGroup
         ? '<button class="msg-action-btn msg-pin-btn" data-msg-id="' + m.id + '" title="' + (msgPinned ? 'Unpin' : 'Pin') + '" style="color:' + (msgPinned ? 'var(--accent-primary)' : '') + ';">' +
-          '<i data-lucide="pin" style="width:13px;height:13px;' + (msgPinned ? '' : 'transform:rotate(45deg);') + '"></i></button>'
+          '<i data-lucide="pin" style="width:15px;height:15px;' + (msgPinned ? '' : 'transform:rotate(45deg);') + '"></i></button>'
         : '';
       var actionBtns = pinBtn +
         '<button class="msg-action-btn msg-reply-btn" data-msg-id="' + m.id + '" title="Reply">' +
-          '<i data-lucide="reply" style="width:13px;height:13px;"></i></button>' +
+          '<i data-lucide="reply" style="width:15px;height:15px;"></i></button>' +
+        '<button class="msg-action-btn msg-forward-btn" data-msg-id="' + m.id + '" title="Forward">' +
+          '<i data-lucide="send" style="width:15px;height:15px;"></i></button>' +
+        '<button class="msg-action-btn msg-translate-btn" data-msg-id="' + m.id + '" title="Translate"><i data-lucide="languages" style="width:15px;height:15px;"></i></button>' +
         (isMine
           ? '<button class="msg-action-btn msg-edit-btn" data-msg-id="' + m.id + '" title="Edit">' +
-            '<i data-lucide="pencil" style="width:13px;height:13px;"></i></button>' +
+            '<i data-lucide="pencil" style="width:15px;height:15px;"></i></button>' +
             '<button class="msg-action-btn msg-delete-btn" data-msg-id="' + m.id + '" title="Delete" style="color:var(--accent-danger);">' +
-            '<i data-lucide="trash-2" style="width:13px;height:13px;"></i></button>'
+            '<i data-lucide="trash-2" style="width:15px;height:15px;"></i></button>'
           : '<button class="msg-action-btn msg-delete-btn" data-msg-id="' + m.id + '" title="Delete" style="color:var(--accent-danger);">' +
-            '<i data-lucide="trash-2" style="width:13px;height:13px;"></i></button>');
+            '<i data-lucide="trash-2" style="width:15px;height:15px;"></i></button>');
       var actionsHtml = '<div class="msg-actions-bar">' + actionBtns + '</div>';
       // Edited badge
       var editedBadge = m.edited ? '<span style="font-size:10px;color:var(--text-muted);margin-left:4px;">(edited)</span>' : '';
@@ -944,11 +1132,17 @@ document.addEventListener('DOMContentLoaded', function() {
     feed.querySelectorAll('.msg-reply-btn').forEach(function(btn) {
       btn.addEventListener('click', function(e) { e.stopPropagation(); startReply(this.getAttribute('data-msg-id')); });
     });
+    feed.querySelectorAll('.msg-forward-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) { e.stopPropagation(); showForwardModal(this.getAttribute('data-msg-id')); });
+    });
     feed.querySelectorAll('.msg-edit-btn').forEach(function(btn) {
       btn.addEventListener('click', function(e) { e.stopPropagation(); startEdit(this.getAttribute('data-msg-id')); });
     });
     feed.querySelectorAll('.msg-delete-btn').forEach(function(btn) {
       btn.addEventListener('click', function(e) { e.stopPropagation(); confirmDeleteMessage(this.getAttribute('data-msg-id')); });
+    });
+    feed.querySelectorAll('.msg-translate-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) { e.stopPropagation(); var msgId = this.getAttribute('data-msg-id'); if (MStore.settings.experimentalMessageTranslate) translateMessage(msgId); });
     });
     feed.querySelectorAll('.msg-pin-btn').forEach(function(btn) {
       btn.addEventListener('click', function(e) {
@@ -1149,7 +1343,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (encrypted) {
               var e2eePkt = Orbit.Protocol.createPacket(
                 Orbit.Protocol.Types.MESSAGE,
-                { e2ee: true, ciphertext: encrypted.ciphertext, nonce: encrypted.nonce, groupId: groupId, msgId: newMsg.id, replyTo: newMsg.replyTo, attachments: newMsg.attachments },
+                { e2ee: true, ciphertext: encrypted.ciphertext, nonce: encrypted.nonce, groupId: groupId, msgId: newMsg.id, replyTo: newMsg.replyTo, attachments: newMsg.attachments, fromName: newMsg.fromName },
                 MStore.user.id
               );
               Orbit.P2P.send(memberId, e2eePkt);
@@ -1159,7 +1353,7 @@ document.addEventListener('DOMContentLoaded', function() {
         } else if (!isE2EE) {
           var pkt = Orbit.Protocol.createPacket(
             Orbit.Protocol.Types.MESSAGE,
-            { text: textToSend, groupId: groupId, msgId: newMsg.id, replyTo: newMsg.replyTo, attachments: newMsg.attachments },
+            { text: textToSend, groupId: groupId, msgId: newMsg.id, replyTo: newMsg.replyTo, attachments: newMsg.attachments, fromName: newMsg.fromName },
             MStore.user ? MStore.user.id : 'mobile'
           );
           Orbit.P2P.send(memberId, pkt);
@@ -1187,7 +1381,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (encrypted) {
               var e2eePacket = Orbit.Protocol.createPacket(
                 Orbit.Protocol.Types.MESSAGE,
-                { e2ee: true, ciphertext: encrypted.ciphertext, nonce: encrypted.nonce, msgId: newMsg.id, replyTo: newMsg.replyTo, attachments: newMsg.attachments },
+                { e2ee: true, ciphertext: encrypted.ciphertext, nonce: encrypted.nonce, msgId: newMsg.id, replyTo: newMsg.replyTo, attachments: newMsg.attachments, fromName: newMsg.fromName },
                 myId
               );
               Orbit.P2P.send(activeChatId, e2eePacket);
@@ -1200,7 +1394,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
       var packet = Orbit.Protocol.createPacket(
         Orbit.Protocol.Types.MESSAGE,
-        { text: text, msgId: newMsg.id, replyTo: newMsg.replyTo, attachments: newMsg.attachments },
+        { text: text, msgId: newMsg.id, replyTo: newMsg.replyTo, attachments: newMsg.attachments, fromName: newMsg.fromName },
         myId
       );
       Orbit.P2P.send(activeChatId, packet);
@@ -1693,7 +1887,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var friendsCount = MStore.friends.length;
         var chatsCount = MStore.chats.length;
         return '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.1.0-beta · Capacitor Android</div></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.1.1-beta · Capacitor Android</div></div>' +
         '</div>' +
         '<div class="settings-row">' +
           '<div class="settings-row-content"><span class="settings-row-title">Statistics</span><div class="settings-row-desc">' + friendsCount + ' friends · ' + chatsCount + ' chats</div></div>' +
@@ -2263,12 +2457,18 @@ document.addEventListener('DOMContentLoaded', function() {
       var mid = typeof m === 'string' ? m : m.userId;
       var role = (typeof m === 'string') ? 'member' : (m.role || 'member');
       var friend = MStore.friends.find(function(f) { return f.id === mid; });
-      var name = friend ? friend.name : mid;
+      var memberName = m.name || m.username || '';
+      var uName = mid === myId && MStore.user ? (MStore.user.name || MStore.user.username) : '';
+      var name = friend ? friend.name : (memberName || uName || mid);
       var tag = friend ? (friend.tag || '') : '';
       var initial = name.charAt(0).toUpperCase();
+      var memberAvatar = m.avatar || '';
+      var selfAvatar = mid === myId && MStore.user ? (MStore.user.avatar || null) : null;
       var mAvatar = friend && friend.avatar
         ? '<img src="' + escapeHtml(friend.avatar) + '" alt="">'
-        : initial;
+        : (memberAvatar ? '<img src="' + escapeHtml(memberAvatar) + '" alt="">'
+        : (selfAvatar ? '<img src="' + escapeHtml(selfAvatar) + '" alt="">'
+        : initial));
       var statusColor = friend
         ? ({ online: 'var(--accent-success)', away: 'var(--accent-warning)', busy: 'var(--accent-danger)', offline: 'var(--text-muted)' }[friend.status] || 'var(--text-muted)')
         : 'var(--text-muted)';
@@ -3025,20 +3225,39 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!grp.members) grp.members = [];
         var exists = grp.members.some(function(m) { return (typeof m === 'string' ? m : m.userId) === friend.id; });
         if (!exists) {
-          grp.members.push({ userId: friend.id, role: 'member', joinedAt: new Date().toISOString() });
+          grp.members.push({ userId: friend.id, role: 'member', joinedAt: new Date().toISOString(), name: friend.name, avatar: friend.avatar || null });
           MStore.save();
           // Send group data to the new member
           if (window.Orbit && window.Orbit.P2P && Orbit.P2P.isAvailable()) {
+            var enrichedMembers = (grp.members || []).map(function(m) {
+              var uid = typeof m === 'string' ? m : m.userId;
+              var mf = MStore.friends.find(function(f) { return f.id === uid; });
+              if (mf) { m.name = m.name || mf.name; m.avatar = m.avatar || mf.avatar || null; }
+              return m;
+            });
             var invitePkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.GROUP_CREATE, {
               groupId: activeChatId,
               groupName: grp.name,
               groupAvatar: grp.avatar || null,
               ownerId: grp.ownerId,
-              members: grp.members,
+              members: enrichedMembers,
               inviteCode: grp.inviteCode,
               description: grp.description || ''
             }, MStore.user ? MStore.user.id : '');
             Orbit.P2P.send(friend.id, invitePkt);
+          }
+          // Notify existing members about the new member
+          if (window.Orbit && window.Orbit.P2P && Orbit.P2P.isAvailable()) {
+            (grp.members || []).forEach(function(m) {
+              var mid = typeof m === 'string' ? m : m.userId;
+              if (mid !== friend.id && mid !== (MStore.user ? MStore.user.id : '')) {
+                var memberAddPkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.GROUP_MEMBER_ADDED, {
+                  groupId: activeChatId,
+                  user: { userId: friend.id, name: friend.name, username: friend.name, avatar: friend.avatar || null, role: 'member', joinedAt: new Date().toISOString() }
+                }, MStore.user ? MStore.user.id : '');
+                Orbit.P2P.send(mid, memberAddPkt);
+              }
+            });
           }
           showToast(friend.name + ' added to group', 'info');
           renderGroupInfo();
@@ -3478,6 +3697,18 @@ document.addEventListener('DOMContentLoaded', function() {
       showToast(friend.name + ' — DM closed', 'info');
     });
 
+    var isBlocked = MStore.blockedUsers && MStore.blockedUsers.indexOf(friend.id) !== -1;
+    addMenuItem(isBlocked ? 'Unblock User' : 'Block User', isBlocked ? 'user-check' : 'ban', function() {
+      if (isBlocked) {
+        MStore.blockedUsers = MStore.blockedUsers.filter(function(id) { return id !== friend.id; });
+        showToast(friend.name + ' unblocked', 'info');
+      } else {
+        MStore.blockedUsers = MStore.blockedUsers.concat([friend.id]);
+        showToast(friend.name + ' blocked', 'info');
+      }
+      MStore.save();
+    });
+
     var cancel = document.createElement('div');
     cancel.style.cssText = 'display:flex;align-items:center;justify-content:center;padding:14px 16px;margin-top:4px;border-top:1px solid var(--border-subtle);color:var(--text-muted);font-size:15px;cursor:pointer;';
     cancel.textContent = 'Cancel';
@@ -3547,6 +3778,7 @@ document.addEventListener('DOMContentLoaded', function() {
         username: u.name,
         usertag: u.tag,
         avatarHash: u.avatar ? 'has_avatar' : null,
+        avatar: u.avatar || null,
         status: u.status || 'online',
         bio: u.bio || '',
         publicKey: u.publicKey || null,
@@ -3662,6 +3894,7 @@ document.addEventListener('DOMContentLoaded', function() {
           username: u.name,
           usertag: u.tag,
           avatarHash: u.avatar ? 'has_avatar' : null,
+          avatar: u.avatar || null,
           status: u.status || 'online',
           bio: u.bio || '',
           publicKey: u.publicKey || null,
@@ -3706,7 +3939,10 @@ document.addEventListener('DOMContentLoaded', function() {
             var oldChatId = connFriend.id;
             if (oldChatId !== peerId) {
               if (MStore.messages[oldChatId]) {
-                MStore.messages[peerId] = (MStore.messages[peerId] || []).concat(MStore.messages[oldChatId]);
+                MStore.messages[peerId] = (MStore.messages[oldChatId] || []).map(function(m) {
+                  if (m.from === oldChatId) m.from = peerId;
+                  return m;
+                });
                 delete MStore.messages[oldChatId];
               }
               MStore.chats = MStore.chats.filter(function(c) { return c.id !== oldChatId; });
@@ -3729,10 +3965,12 @@ document.addEventListener('DOMContentLoaded', function() {
             avatar: bp.avatar || null,
             bio: bp.bio || '',
             ip: null,
-            publicKey: bp.publicKey || null
+            publicKey: bp.publicKey || null,
+            lastSeen: Date.now()
           });
         } else {
           existing.status = bp.status || 'online';
+          existing.lastSeen = Date.now();
           existing.name = peerName;
           if (bp.avatar) existing.avatar = bp.avatar;
         }
@@ -3757,10 +3995,19 @@ document.addEventListener('DOMContentLoaded', function() {
       }
 
       var msgFrom = packet.from || packet.senderId || data.connectionId;
+
+      // Blocked user check
+      if (MStore.blockedUsers && MStore.blockedUsers.indexOf(msgFrom) !== -1) {
+        debugLog('P2P', 'Ignored message from blocked user ' + msgFrom);
+        return;
+      }
+
       var chatId = msgFrom;
       // Group messages carry the group ID in payload
       if (packet.payload && packet.payload.groupId) {
         chatId = packet.payload.groupId;
+      } else if (packet.payload && packet.payload.chatId) {
+        chatId = packet.payload.chatId;
       }
 
       var chat = MStore.chats.find(function(c) { return c.id === chatId; });
@@ -3774,6 +4021,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var msgAttachments = packet.payload.attachments || undefined;
         var msgReplyTo = packet.payload.replyTo || undefined;
 
+        var senderName = packet.payload.fromName || (function() { var sf = MStore.friends.find(function(f) { return f.id === msgFrom; }); return sf ? sf.name : null; })();
         if (packet.payload.e2ee && window.Orbit.E2EE) {
           var senderFriend = MStore.friends.find(function(f) { return f.id === msgFrom; });
           if (senderFriend && senderFriend.publicKey) {
@@ -3786,6 +4034,7 @@ document.addEventListener('DOMContentLoaded', function() {
               MStore.addMessage(chatId, {
                 id: packet.payload.msgId || ('p2p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)),
                 from: msgFrom,
+                fromName: senderName,
                 text: msgText,
                 time: new Date().toISOString(),
                 replyTo: msgReplyTo,
@@ -3803,6 +4052,7 @@ document.addEventListener('DOMContentLoaded', function() {
         MStore.addMessage(chatId, {
           id: packet.payload.msgId || ('p2p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)),
           from: msgFrom,
+          fromName: senderName,
           text: msgText,
           time: new Date().toISOString(),
           replyTo: msgReplyTo,
@@ -3957,7 +4207,12 @@ document.addEventListener('DOMContentLoaded', function() {
           notificationMuted: false,
           pinnedMessages: [],
           ownerId: gc.ownerId || msgFrom,
-          members: gc.members || [{ userId: msgFrom, role: 'owner', joinedAt: new Date().toISOString() }],
+          members: (gc.members || [{ userId: msgFrom, role: 'owner', joinedAt: new Date().toISOString() }]).map(function(m) {
+            var muid = typeof m === 'string' ? m : m.userId;
+            var mf = MStore.friends.find(function(f) { return f.id === muid; });
+            if (mf) { m.name = m.name || mf.name; m.avatar = m.avatar || mf.avatar || null; }
+            return m;
+          }),
           createdAt: gc.createdAt || new Date().toISOString()
         });
         var gcChatExists = MStore.chats.find(function(c) { return c.id === gc.groupId; });
@@ -4054,9 +4309,12 @@ document.addEventListener('DOMContentLoaded', function() {
           var alreadyMember = (gmGrp.members || []).find(function(m) { return (typeof m === 'string' ? m : m.userId) === newMember.userId; });
           if (!alreadyMember) {
             gmGrp.members = gmGrp.members || [];
-            gmGrp.members.push(newMember);
+            var enrichedNewMember = JSON.parse(JSON.stringify(newMember));
+            var nmf = MStore.friends.find(function(f) { return f.id === (newMember.userId || newMember.id); });
+            if (nmf) { enrichedNewMember.name = enrichedNewMember.name || nmf.name; enrichedNewMember.avatar = enrichedNewMember.avatar || nmf.avatar || null; }
+            gmGrp.members.push(enrichedNewMember);
             MStore.save();
-            showToast(newMember.name || newMember.username || 'Someone' + ' was added to ' + gmGrp.name || 'group', 'info');
+            showToast(enrichedNewMember.name || enrichedNewMember.username || 'Someone' + ' was added to ' + gmGrp.name || 'group', 'info');
             if (activeChatId === gmGroupId) {
               var hi = document.getElementById('chat-header-info');
               if (hi) {
@@ -4116,6 +4374,19 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Listen for peers found via discovery
+    // Periodic offline status check
+    setInterval(function() {
+      var now = Date.now();
+      MStore.friends.forEach(function(f) {
+        if (f.status === 'online' && f.lastSeen && (now - f.lastSeen) > 120000) {
+          f.status = 'offline';
+        }
+      });
+      MStore.save();
+      renderFriends();
+      renderChatList();
+    }, 30000);
+
     Orbit.P2P.onPeerFound(function(data) {
       if (!data || !data.host) {
         debugLog('P2P', 'onPeerFound called with invalid data', data);

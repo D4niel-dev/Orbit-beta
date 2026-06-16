@@ -654,24 +654,29 @@ html, body {
 /* Message action bar */
 .msg-actions-bar {
   display: flex;
-  gap: 2px;
-  margin-bottom: 4px;
-  opacity: 0.7;
+  gap: 6px;
+  margin-bottom: 6px;
+  opacity: 0.8;
 }
 .msg-action-btn {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 6px 8px;
   color: var(--text-secondary);
-  border-radius: 4px;
+  border-radius: 6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition: background 0.12s ease;
 }
 .msg-action-btn:active {
   background: var(--bg-hover);
   opacity: 1;
+}
+.msg-action-btn svg {
+  width: 15px;
+  height: 15px;
 }
 /* Reply quote */
 .reply-quote {
@@ -723,6 +728,14 @@ html, body {
 .reaction-pill.mine {
   background: var(--accent-soft);
   border-color: var(--accent-primary);
+}
+
+.translated-text {
+  font-size: 11px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 6px;
+  padding-top: 6px;
 }
 
 .reaction-pill-count {
@@ -2747,4 +2760,36 @@ html, body {
 }
 .settings-item:last-child {
   border-bottom: none;
+}
+
+/* Inline code blocks (mobile) */
+.message-bubble code {
+  background: var(--bg-hover);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 0.85em;
+  color: var(--accent-primary);
+  word-break: break-word;
+}
+
+.message-bubble pre {
+  background: var(--bg-base);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 8px 0;
+  overflow-x: auto;
+  font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 0.85em;
+  line-height: 1.5;
+}
+
+.message-bubble pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+  color: var(--text-primary);
 }

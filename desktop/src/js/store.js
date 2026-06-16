@@ -1,7 +1,7 @@
 // src/js/store.js
 class Store {
   constructor(initialState = {}) {
-    var data, savedSettings, savedNetwork, dbFriends, dbMessages, dbGroups, uiState, savedMutedChats, lastReadIds;
+    var data, savedSettings, savedNetwork, dbFriends, dbMessages, dbGroups, uiState, savedMutedChats, lastReadIds, savedBlockedUsers;
 
     // Batch all DB reads into a single IPC call
     if (window.orbitAPI && window.orbitAPI.dbGetAllStartupData) {
@@ -14,6 +14,7 @@ class Store {
       uiState = data.uiState || { activeTab: 'dms', activeChatId: 'local-echo' };
       savedMutedChats = data.mutedChats || {};
       lastReadIds = data.readStates || {};
+      savedBlockedUsers = data.blockedUsers || [];
     } else {
       savedSettings = window.Storage ? window.Storage.get('settings', {}) : {};
       savedNetwork = window.Storage ? window.Storage.get('networkSettings', {}) : {};
@@ -23,6 +24,7 @@ class Store {
       uiState = { activeTab: 'dms', activeChatId: 'local-echo' };
       savedMutedChats = {};
       lastReadIds = {};
+      savedBlockedUsers = window.Storage ? window.Storage.get('blockedUsers', []) : [];
     }
 
     // Ensure Orbit Echo is always in the friends list
@@ -76,7 +78,8 @@ class Store {
         showConnectionStats: false,
         enableExperimental: false,
         experimentalProfileFrames: false,
-        experimentalMessageTranslate: false,
+        experimentalMessageTranslate: true,
+        messageTranslate: true,
         experimentalCompactSpacing: false,
         profileFrame: 0,
         enableCustomColors: false,
@@ -121,6 +124,7 @@ class Store {
       pinnedDMs: {},
       readReceipts: {},
       peerPublicKeys: {},
+      blockedUsers: savedBlockedUsers,
       ...initialState
     };
     this.listeners = [];
@@ -136,6 +140,7 @@ class Store {
       this._messagesFullyLoaded[chatId] = true;
       return;
     }
+    if (allMsgs.length > 500) allMsgs = allMsgs.slice(-500);
     this.state.messages[chatId] = allMsgs;
     this.setState({ messages: { ...this.state.messages } });
     this._messagesFullyLoaded[chatId] = true;
@@ -395,6 +400,11 @@ class Store {
 
   handleIncomingPacket(packet) {
     if (!packet || !packet.payload) return;
+
+    // Block messages from blocked users
+    if (packet.from && this.state.blockedUsers && this.state.blockedUsers.indexOf(packet.from) !== -1) {
+      return;
+    }
     if (packet.type === 'GROUP_CREATE') {
       const { groupId, groupName, ownerId, members } = packet.payload;
       const existingGroup = this.state.groups.find(g => g.groupId === groupId);
@@ -489,8 +499,8 @@ class Store {
     }
 
     if (packet.type === 'REACTION') {
-      const { msgId, emoji, action, userId } = packet.payload;
-      const chatId = packet.to || packet.from;
+      const { msgId, emoji, action, userId, chatId: payloadChatId } = packet.payload;
+      const chatId = payloadChatId || packet.to || packet.from;
       const msgs = { ...this.state.messages };
       if (msgs[chatId]) {
         msgs[chatId] = msgs[chatId].map(m => {
@@ -653,9 +663,11 @@ class Store {
   }
 
   addMessage(chatId, messageObj) {
+    const MAX_MSGS = 500;
     const msgs = { ...this.state.messages };
     if (!msgs[chatId]) msgs[chatId] = [];
     msgs[chatId] = [...msgs[chatId], messageObj];
+    if (msgs[chatId].length > MAX_MSGS) msgs[chatId] = msgs[chatId].slice(-MAX_MSGS);
 
     if (window.orbitAPI) window.orbitAPI.dbAddMessage(chatId, messageObj);
 
@@ -764,13 +776,13 @@ class Store {
       if (members.length > 0) {
         members.forEach(m => {
           if (m.userId !== state.currentUser.userId) {
-            window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.REACTION, { msgId, emoji, action, userId: state.currentUser.userId });
+            window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.REACTION, { msgId, emoji, action, userId: state.currentUser.userId, chatId });
           }
         });
       } else {
         const friend = state.friends.find(f => f.userId === chatId);
         if (friend) {
-          window.orbitAPI.networkSend(chatId, friend.ip || '', window.Protocol.Types.REACTION, { msgId, emoji, action, userId: state.currentUser.userId });
+          window.orbitAPI.networkSend(chatId, friend.ip || '', window.Protocol.Types.REACTION, { msgId, emoji, action, userId: state.currentUser.userId, chatId });
         }
       }
     }
@@ -961,6 +973,26 @@ class Store {
         window.orbitAPI.networkSend(chatId, friend.ip || '', window.Protocol.Types.READ, { chatId, lastReadMsgId: lastId });
       }
     }
+  }
+
+  blockUser(userId) {
+    var blockedUsers = this.state.blockedUsers || [];
+    if (blockedUsers.indexOf(userId) !== -1) return;
+    blockedUsers = blockedUsers.concat([userId]);
+    this.setState({ blockedUsers });
+    if (window.Storage) window.Storage.set('blockedUsers', blockedUsers);
+    if (window.Toast) window.Toast.show('User Blocked', 'Messages from this user will be ignored');
+  }
+
+  unblockUser(userId) {
+    var blockedUsers = (this.state.blockedUsers || []).filter(function(id) { return id !== userId; });
+    this.setState({ blockedUsers });
+    if (window.Storage) window.Storage.set('blockedUsers', blockedUsers);
+    if (window.Toast) window.Toast.show('User Unblocked', 'Messages from this user will now be received');
+  }
+
+  isUserBlocked(userId) {
+    return (this.state.blockedUsers || []).indexOf(userId) !== -1;
   }
 
   subscribe(listener) {

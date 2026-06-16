@@ -415,6 +415,10 @@ window.SettingsModal = {
               '<input id="set-24h" type="checkbox" '+(s.timeFormat24?'checked':'')+'>' +
               '<div><div>24-hour Time</div><div style="font-size:12px;color:var(--text-muted);font-weight:400;">Show timestamps in 24-hour format</div></div>' +
             '</label>' +
+            '<label style="display:flex;align-items:center;gap:12px;font-size:14px;color:var(--text-primary);cursor:pointer;margin-top:12px;padding-top:12px;border-top:1px solid var(--border-subtle);">' +
+              '<input id="set-translate" type="checkbox" '+(s.messageTranslate||s.experimentalMessageTranslate?'checked':'')+'>' +
+              '<div><div>Message Translation</div><div style="font-size:12px;color:var(--text-muted);font-weight:400;">Show a translate button on messages via MyMemory API</div></div>' +
+            '</label>' +
           '</div>' +
         '</div>' +
 
@@ -526,6 +530,21 @@ window.SettingsModal = {
                    '<div><div>Reduce Motion</div><div style="font-size:12px;color:var(--text-muted);font-weight:400;">Disable animations, freeze GIF previews, and stop avatar effects</div></div>' +
                 '</label>' +
               '</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+
+        // Section: Save/Load Themes
+        '<div class="settings-collapsible" style="margin-bottom:12px;border-radius:10px;border:1px solid var(--border-subtle);overflow:hidden;">' +
+          '<div class="collapsible-header" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--bg-base);cursor:pointer;user-select:none;" onclick="var b=this.nextElementSibling;var i=this.querySelector(\'.collapse-icon\');if(b.style.display===\'none\'){b.style.display=\'block\';i.style.transform=\'rotate(0deg)\'}else{b.style.display=\'none\';i.style.transform=\'rotate(-90deg)\'}">' +
+            '<div style="display:flex;align-items:center;gap:8px;"><i data-lucide="download" style="width:16px;height:16px;color:var(--text-muted);"></i><span style="font-size:13px;font-weight:600;color:var(--text-primary);">Save/Load Themes</span></div>' +
+            '<i data-lucide="chevron-down" class="collapse-icon" style="width:16px;height:16px;color:var(--text-muted);transition:transform 0.2s;"></i>' +
+          '</div>' +
+          '<div class="collapsible-body" style="padding:16px;display:none;">' +
+            '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;line-height:1.4;">Export your current theme settings to a file or import a previously saved theme.</div>' +
+            '<div id="save-load-theme-buttons" style="display:flex;align-items:center;gap:8px;margin-top:8px;">' +
+              '<button id="btn-export-theme" style="padding:10px 20px;border-radius:10px;background:var(--accent-primary);color:white;border:none;cursor:pointer;font-weight:600;font-size:13px;">Export Theme</button>' +
+              '<button id="btn-import-theme" style="padding:10px 20px;border-radius:10px;border:1px solid var(--border-subtle);background:transparent;color:var(--text-secondary);cursor:pointer;font-weight:500;font-size:13px;">Import Theme</button>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -652,6 +671,10 @@ window.SettingsModal = {
       content.querySelector('#set-reduce-motion').addEventListener('change', function(e) { updateSettings('reduceMotion', e.target.checked); });
       content.querySelector('#set-msg-anim').addEventListener('change', function(e) { updateSettings('messageAnim', e.target.value); });
       content.querySelector('#set-24h').addEventListener('change', function(e) { updateSettings('timeFormat24', e.target.checked); });
+      content.querySelector('#set-translate').addEventListener('change', function(e) {
+        updateSettings('messageTranslate', e.target.checked);
+        updateSettings('experimentalMessageTranslate', e.target.checked);
+      });
       var uploadBtn = content.querySelector('#btn-upload-wallpaper');
       if (uploadBtn) {
         uploadBtn.addEventListener('click', function() {
@@ -691,6 +714,64 @@ window.SettingsModal = {
           updateSettings('sidebarButtons', btns);
           if (window.SidebarLeft) { window.SidebarLeft.render(); window.SidebarLeft.attachEvents(); window.SidebarLeft.renderAvatar(window.store.getState().currentUser); }
         });
+      });
+
+      // Export Theme
+      content.querySelector('#btn-export-theme').addEventListener('click', function() {
+        var s = window.store.getState().settings || {};
+        var themeData = {
+          theme: s.theme || 'auto',
+          messageBubbles: s.messageBubbles || 'Modern',
+          fontSize: s.fontSize || 'Medium',
+          animations: s.animations !== false,
+          animSpeed: s.animSpeed || 'normal',
+          reduceMotion: s.reduceMotion || false,
+          timeFormat24: s.timeFormat24 || false,
+          messageAnim: s.messageAnim || 'slide',
+          bgPattern: s.bgPattern || 'None',
+          appZoom: s.appZoom || 100,
+          chatWallpaper: s.chatWallpaper || null,
+          sidebarButtons: s.sidebarButtons || null,
+          customColors: s.customColors || null
+        };
+        var blob = new Blob([JSON.stringify(themeData, null, 2)], { type: 'application/json' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'orbit-theme.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      });
+
+      // Import Theme
+      content.querySelector('#btn-import-theme').addEventListener('click', function() {
+        var input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        input.onchange = function(e) {
+          var file = e.target.files[0];
+          if (!file) return;
+          var reader = new FileReader();
+          reader.onload = function(evt) {
+            try {
+              var themeData = JSON.parse(evt.target.result);
+              var validKeys = ['theme', 'messageBubbles', 'fontSize', 'animations', 'animSpeed', 'reduceMotion', 'timeFormat24', 'messageAnim', 'bgPattern', 'appZoom', 'chatWallpaper', 'sidebarButtons', 'customColors'];
+              validKeys.forEach(function(key) {
+                if (key in themeData) {
+                  updateSettings(key, themeData[key]);
+                }
+              });
+              if (window.Toast) window.Toast.show('Theme Imported', 'Theme settings applied successfully.');
+              if (window.SettingsModal) window.SettingsModal.renderTab('appearance');
+            } catch(err) {
+              if (window.Toast) window.Toast.show('Import Error', 'Invalid theme file: ' + err.message);
+            }
+          };
+          reader.readAsText(file);
+        };
+        input.click();
       });
       
     } else if (tabName === 'network') {
@@ -1105,8 +1186,6 @@ window.SettingsModal = {
                     '<div style="border-top:1px solid var(--border-subtle);"></div>' +
                     gatedToggleRow('adv-message-fx', 'Enhanced Message FX' + experimentalBadge, 'Sparkle effect on newly sent messages.', s.experimentalMessageFx, true) +
                     '<div style="border-top:1px solid var(--border-subtle);"></div>' +
-                    gatedToggleRow('adv-message-translate', 'Message Translate' + experimentalBadge, 'Translate messages to your language.', s.experimentalMessageTranslate, true) +
-                    '<div style="border-top:1px solid var(--border-subtle);"></div>' +
                     gatedToggleRow('adv-compact-spacing', 'Compact Spacing' + experimentalBadge, 'Tighter message layout with reduced padding.', s.experimentalCompactSpacing, true) +
                   '</div>'
                 : '') +
@@ -1151,7 +1230,6 @@ window.SettingsModal = {
           s.enableCustomColors = false;
           s.experimentalAnimatedAvatars = false;
           s.experimentalMessageFx = false;
-          s.experimentalMessageTranslate = false;
           s.experimentalCompactSpacing = false;
           s.debugDisplay = false;
           s.showMessageIds = false;
@@ -1209,7 +1287,6 @@ window.SettingsModal = {
       expToggle('adv-animated-avatars', 'experimentalAnimatedAvatars');
       expToggle('adv-message-fx', 'experimentalMessageFx');
       expToggle('adv-profile-frames', 'experimentalProfileFrames');
-      expToggle('adv-message-translate', 'experimentalMessageTranslate');
       expToggle('adv-compact-spacing', 'experimentalCompactSpacing');
 
     } else if (tabName === 'data') {
@@ -1317,6 +1394,24 @@ window.SettingsModal = {
               '<div style="margin-top:14px;">' +
                 '<button id="btn-load-all-data" style="padding:10px 20px;border-radius:10px;border:1px solid var(--border-subtle);background:transparent;color:var(--text-secondary);cursor:pointer;font-weight:500;">Load All Data</button>' +
                 '<span id="load-all-msg" style="margin-left:12px;font-size:13px;color:var(--text-muted);display:none;"></span>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+           '<div id="export-chat-section" style="padding:20px;background:var(--bg-hover);border-radius:12px;border:1px solid var(--border-subtle);">' +
+            '<div style="display:flex;align-items:flex-start;gap:16px;">' +
+              '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>' +
+              '<div style="flex:1;">' +
+                '<div style="font-weight:600;color:var(--text-primary);font-size:15px;">Export Chat History</div>' +
+                '<div style="font-size:13px;color:var(--text-secondary);margin-top:4px;line-height:1.4;">Export the complete message history of a single chat as a JSON or text file.</div>' +
+                '<div style="margin-top:14px;">' +
+                  '<select id="export-chat-select" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);outline:none;font-size:13px;margin-bottom:10px;">' +
+                    '<option value="">Select a chat...</option>' +
+                  '</select>' +
+                  '<div style="display:flex;gap:10px;">' +
+                    '<button id="btn-export-json" class="btn btn-primary" style="padding:10px 20px;border-radius:10px;background:var(--accent-primary);color:white;border:none;cursor:pointer;font-weight:600;">Export as JSON</button>' +
+                    '<button id="btn-export-txt" class="btn btn-secondary" style="padding:10px 20px;border-radius:10px;border:1px solid var(--border-subtle);background:transparent;color:var(--text-secondary);cursor:pointer;font-weight:500;">Export as TXT</button>' +
+                  '</div>' +
+                '</div>' +
               '</div>' +
             '</div>' +
           '</div>' +
@@ -1558,6 +1653,101 @@ window.SettingsModal = {
         }
       });
 
+      // Populate export chat select
+      var exportSelect = content.querySelector('#export-chat-select');
+      if (exportSelect) {
+        var state = window.store.getState();
+        var chatIds = Object.keys(state.messages || {});
+        var seen = {};
+        chatIds.forEach(function(cId) {
+          if (cId === 'local-echo') return;
+          var label = cId;
+          var friend = state.friends.find(function(f) { return f.userId === cId; });
+          var group = state.groups.find(function(g) { return g.groupId === cId; });
+          if (friend) label = friend.username;
+          else if (group) label = group.groupName;
+          if (seen[label]) return;
+          seen[label] = true;
+          var opt = document.createElement('option');
+          opt.value = cId;
+          opt.textContent = label;
+          exportSelect.appendChild(opt);
+        });
+      }
+
+      function doExportChat(format) {
+        var select = content.querySelector('#export-chat-select');
+        var chatId = select ? select.value : '';
+        if (!chatId) {
+          if (window.Toast) window.Toast.show('Export Error', 'Please select a chat first.');
+          return;
+        }
+        var state = window.store.getState();
+        var msgs = state.messages[chatId] || [];
+        var chatName = chatId;
+        var friend = state.friends.find(function(f) { return f.userId === chatId; });
+        var group = state.groups.find(function(g) { return g.groupId === chatId; });
+        if (friend) chatName = friend.username;
+        else if (group) chatName = group.groupName;
+
+        function getSenderName(senderId) {
+          if (senderId === state.currentUser.userId) return 'You';
+          var f = state.friends.find(function(fr) { return fr.userId === senderId; });
+          if (f) return f.username;
+          if (group) {
+            var m = group.members.find(function(mem) { return mem.userId === senderId; });
+            if (m) return m.username;
+          }
+          return senderId;
+        }
+
+        if (format === 'json') {
+          var data = {
+            chatId: chatId,
+            chatName: chatName,
+            exportedAt: new Date().toISOString(),
+            messages: msgs.map(function(m) {
+              return {
+                id: m.id,
+                sender: m.sender,
+                senderName: getSenderName(m.sender),
+                text: m.text || '',
+                timestamp: m.timestamp,
+                attachments: m.attachments || []
+              };
+            })
+          };
+          var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          a.href = url;
+          a.download = 'chat-' + chatName.replace(/[^a-zA-Z0-9]/g, '_') + '.json';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        } else {
+          var lines = msgs.map(function(m) {
+            var date = m.timestamp ? new Date(m.timestamp).toLocaleString() : 'Unknown date';
+            return '[' + date + '] ' + getSenderName(m.sender) + ': ' + (m.text || '');
+          });
+          var text = lines.join('\n');
+          var blob = new Blob([text], { type: 'text/plain' });
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          a.href = url;
+          a.download = 'chat-' + chatName.replace(/[^a-zA-Z0-9]/g, '_') + '.txt';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }
+        if (window.Toast) window.Toast.show('Chat Exported', chatName + ' history exported successfully.');
+      }
+
+      content.querySelector('#btn-export-json').addEventListener('click', function() { doExportChat('json'); });
+      content.querySelector('#btn-export-txt').addEventListener('click', function() { doExportChat('txt'); });
+
       // Clear all attachments
       content.querySelector('#btn-clear-attachments').addEventListener('click', function() {
         if (window.ConfirmModal) {
@@ -1581,7 +1771,7 @@ window.SettingsModal = {
       });
 
     } else if (tabName === 'about') {
-      var version = window.orbitAPI ? (window.orbitAPI.version || '0.1.0-beta') : '0.1.0-beta';
+      var version = window.orbitAPI ? (window.orbitAPI.version || '0.1.1-beta') : '0.1.1-beta';
       var friendCount = state.friends ? state.friends.length : 0;
       var groupCount = state.groups ? state.groups.length : 0;
       var chatCount = Object.keys(state.messages || {}).length;

@@ -105,6 +105,12 @@ window.ProfileSidebar = {
             '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;font-weight:600;margin-bottom:4px;">User ID</div>' +
             '<div style="font-size:12px;color:var(--text-secondary);font-family:var(--font-mono);word-break:break-all;padding:8px;background:var(--bg-base);border-radius:4px;">' + window.Sanitize.escapeHtml(user.userId) + '</div>' +
           '</div>' +
+
+          // Block/Unblock button
+          '<div id="profile-block-row" style="margin-top:16px;display:flex;align-items:center;justify-content:center;padding:12px;background:var(--bg-base);border-radius:8px;border:1px solid var(--border-subtle);cursor:pointer;">' +
+            '<i data-lucide="ban" id="profile-block-icon" style="width:18px;height:18px;color:var(--accent-danger);flex-shrink:0;"></i>' +
+            '<span id="profile-block-label" style="font-size:13px;font-weight:500;color:var(--accent-danger);margin-left:8px;">Block User</span>' +
+          '</div>' +
         '</div>' +
       '</div>';
 
@@ -130,6 +136,42 @@ window.ProfileSidebar = {
         self._updateMuteUI(nowMuted);
       });
     }
+
+    // Block/Unblock button
+    var blockRow = this.contentArea.querySelector('#profile-block-row');
+    if (blockRow) {
+      var isBlocked = window.store.isUserBlocked(user.userId);
+      self._updateBlockUI(isBlocked);
+
+      blockRow.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var nowBlocked = window.store.isUserBlocked(user.userId);
+        if (nowBlocked) {
+          window.store.unblockUser(user.userId);
+        } else {
+          window.store.blockUser(user.userId);
+        }
+        self._updateBlockUI(window.store.isUserBlocked(user.userId));
+      });
+    }
+  },
+
+  _updateBlockUI(isBlocked) {
+    var icon = this.contentArea.querySelector('#profile-block-icon');
+    var label = this.contentArea.querySelector('#profile-block-label');
+    if (!icon || !label) return;
+    if (isBlocked) {
+      icon.setAttribute('data-lucide', 'user-check');
+      icon.style.color = 'var(--accent-success)';
+      label.textContent = 'Unblock User';
+      label.style.color = 'var(--accent-success)';
+    } else {
+      icon.setAttribute('data-lucide', 'ban');
+      icon.style.color = 'var(--accent-danger)';
+      label.textContent = 'Block User';
+      label.style.color = 'var(--accent-danger)';
+    }
+    if (window.lucide) window.lucide.createIcons({ root: this.contentArea });
   },
 
   _updateMuteUI(isMuted) {

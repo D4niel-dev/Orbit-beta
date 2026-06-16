@@ -6,7 +6,7 @@ contextBridge.exposeInMainWorld('orbitAPI', {
   on:       (channel, cb)     => ipcRenderer.on(channel, (e, data) => cb(data)),
   invoke:   (channel, data)   => ipcRenderer.invoke(channel, data),
   platform: process.platform,
-  version:  process.env.npm_package_version ?? '0.1.0-beta',
+  version:  process.env.npm_package_version ?? '0.1.1-beta',
   electronVersion: process.versions.electron,
   nodeVersion: process.versions.node,
   

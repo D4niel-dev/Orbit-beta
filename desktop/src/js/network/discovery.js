@@ -98,6 +98,7 @@ class Discovery {
       username: identity.username,
       usertag: identity.usertag,
       avatarHash: identity.avatar ? 'has_avatar' : null,
+      avatar: identity.avatar || null,
       status: broadcastStatus,
       bio: identity.bio,
       publicKey: identity.publicKey || null,

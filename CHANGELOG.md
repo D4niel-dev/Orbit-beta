@@ -1,6 +1,36 @@
 # Orbit Changelog
 
-## v0.1.0-beta **Current Version**
+## v0.1.1-beta **Current Version**
+
+### New Features
+- **Voice & Video Calls (P2P):** Full WebRTC call system — CallManager with peer-to-peer audio/video, incoming call notification, mute/speaker controls, call timer, ICE candidate exchange via P2P network layer
+- **Group Calls (Mesh):** Mesh-topology group calls — each participant gets their own RTCPeerConnection; start/join/leave group calls; participant grid with video tiles or avatar circles for audio-only
+- **Camera Toggle:** On/off switch during calls with deterministic HSL avatar placeholder when camera is off
+- **Message Forwarding:** Forward messages (with attachments) to any chat via chat picker modal — desktop action bar + context menu, mobile long-press
+- **Block User:** Block/unblock from context menu (desktop) and profile sidebar; P2P packet filter drops blocked senders; mobile friend context menu toggle
+- **Search Within a Chat:** Scoped search with chatId filter, context-aware placeholders, sender filter, date inputs with color-scheme:dark
+- **Export Chat History:** JSON or TXT export with timestamped downloads via Data Manager card
+- **Save/Load Themes:** Export current theme as `orbit-theme.json`; import via file picker — collapsible section in Appearance tab
+- **Message Translate Unlocked:** Removed experimental gate; always-on translate button moved to Appearance tab (default on); mobile integration via MyMemory API
+
+### Bug Fixes
+- **Mobile Reply `fromName` Fix (Critical):** Root cause — `fromName` not set on incoming P2P messages; peer ID merge didn't update `from` fields in existing messages. `fromName` now sent in ALL outgoing MESSAGE packets (E2EE and plaintext, DM and group) on both platforms
+- **Lucide Icon Null Reference:** All `this.querySelector('i')` calls in button handlers changed to `this.querySelector('svg')` — `lucide.createIcons()` replaces `<i>` with `<svg>`, causing `setAttribute` on null
+- **Camera Toggle Placeholder Refactored:** Removed dynamic DOM creation — placeholder pre-rendered in HTML; toggle simply switches `display:none` between video and placeholder
+- **Search Modal Text Polish:** Removed `text-transform:uppercase` from header; cleaner filter placeholder; `color-scheme:dark` on date inputs; context-aware empty-state text
+
+### Performance & Polish
+- **Online Status Improvements:** `lastSeen` timestamp stored on BEACON receive; 30-second interval checks for stale connections (120s timeout) and marks offline
+- **Inline Code Blocks:** CSS styling for `code` and `pre` elements (both platforms)
+- **Call Modal UI Fixes:** Proper centering, min-height video area, audio wave bars with `align-items:flex-end`, correctly sized buttons with hover effects, local video as full grid tile in group calls (no PIP)
+
+### Technical
+- **WebRTC:** 6 new Protocol types (`CALL_OFFER`, `CALL_ANSWER`, `CALL_ICE_CANDIDATE`, `CALL_END`, `CALL_DECLINE`); `CallManager` with `peerConnections {}` for group mesh; group-aware routing in `app.js` via `packet.payload.groupId` and `packet.from`
+- **Camera Placeholder:** Deterministic HSL color from username hash (`_callAvatarColor()`); pre-rendered `#local-placeholder` in both DM PIP and group grid tile
+- **Store:** `blockedUsers` array with `blockUser()`/`unblockUser()`/`isUserBlocked()` methods; `messageTranslate` defaults
+- **Version:** Bumped to `v0.1.1-beta` across all manifests, About tabs, and changelog
+
+## v0.1.0-beta
 
 ### Performance — Up to 5× Faster Startup & Rendering
 - **Selective Store Subscriptions (P0):** 8 subscribers (chat-panel, sidebar-middle, sidebar-left, gallery-sidebar, global-gallery, app.js) now check which state keys actually changed before re-rendering. Eliminates cascading renders — e.g., a transfer progress update no longer triggers a full chat re-render.
