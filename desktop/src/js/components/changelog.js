@@ -14,13 +14,13 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        changelogEntry('0.1.2-beta', 'Latest Stable', [
+        changelogEntry('0.1.2-beta', 'Latest', [
           'Manual Connect Bug Fixed: "Add a Friend" IP connect no longer creates duplicate TCP connections — socket remapping now works when peerId is "manual"',
           'Protocol Type Unification: All 47 types unified across shared/ and desktop/ protocol.js — cross-platform call/file-transfer/group compatibility guaranteed',
           'Build Pipeline Overhaul: Android assembleRelease, SHA256 checksums, artifact verification, build metadata (version/commit/date), asset size table in release notes',
           'Hardcoded type strings eliminated: store.js (16) and mobile/app.js (5) now use Protocol.Types constants — no more silent failures on unknown type strings'
         ]) +
-        changelogEntry('0.1.1-beta', '', [
+        changelogEntry('0.1.1-beta', 'Latest Stable', [
           'Voice & Video Calls (P2P): Full WebRTC call system with incoming notification, mute/speaker controls, timer, ICE exchange',
           'Group Calls (Mesh): Each participant gets their own RTCPeerConnection; video grid or avatar circles for audio-only',
           'Camera Toggle: On/off during calls with deterministic HSL avatar placeholder when camera is off',
