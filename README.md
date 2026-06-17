@@ -28,8 +28,7 @@
 
 | Channel | Version | Status |
 |---------|---------|--------|
-| **Stable** | v0.1.2-beta | Recommended for most users |
-| Previous Stable | v0.1.1-beta | Stable release |
+| **Stable** | v0.1.1-beta | Stable release |
 | Older Stable | v0.0.5-beta | Legacy stable release |
 | Development | main branch | Active development |
 
