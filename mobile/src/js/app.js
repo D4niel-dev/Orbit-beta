@@ -1887,7 +1887,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var friendsCount = MStore.friends.length;
         var chatsCount = MStore.chats.length;
         return '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.1.1-beta · Capacitor Android</div></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.1.2-beta · Capacitor Android</div></div>' +
         '</div>' +
         '<div class="settings-row">' +
           '<div class="settings-row-content"><span class="settings-row-title">Statistics</span><div class="settings-row-desc">' + friendsCount + ' friends · ' + chatsCount + ' chats</div></div>' +
@@ -3889,7 +3889,7 @@ document.addEventListener('DOMContentLoaded', function() {
       debugLog('P2P', 'Incoming connection', { connectionId: data.connectionId, host: data.host });
       // Send our beacon over TCP so the peer can discover us
       if (u && data.connectionId) {
-        var beaconPacket = Orbit.Protocol.createPacket('BEACON', {
+        var beaconPacket = Orbit.Protocol.createPacket(Orbit.Protocol.Types.BEACON, {
           userId: u.id,
           username: u.name,
           usertag: u.tag,
@@ -4092,7 +4092,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
 
       // File transfers (Receive from Desktop)
-      if (packet.type === 'FILE_TRANSFER_START') {
+      if (packet.type === Orbit.Protocol.Types.FILE_TRANSFER_START) {
         window.activeTransfers = window.activeTransfers || {};
         window.activeTransfers[packet.payload.fileId] = {
           chunks: new Array(packet.payload.totalChunks),
@@ -4105,7 +4105,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
       
-      if (packet.type === 'FILE_CHUNK') {
+      if (packet.type === Orbit.Protocol.Types.FILE_CHUNK) {
         window.activeTransfers = window.activeTransfers || {};
         var tx = window.activeTransfers[packet.payload.fileId];
         if (tx) {
@@ -4115,7 +4115,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
       
-      if (packet.type === 'FILE_TRANSFER_END') {
+      if (packet.type === Orbit.Protocol.Types.FILE_TRANSFER_END) {
         window.activeTransfers = window.activeTransfers || {};
         var txEnd = window.activeTransfers[packet.payload.fileId];
         if (txEnd) {
@@ -4147,7 +4147,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
 
-      if (packet.type === 'FILE_TRANSFER_CANCEL' || packet.type === 'FILE_TRANSFER_REJECT') {
+      if (packet.type === Orbit.Protocol.Types.FILE_TRANSFER_CANCEL || packet.type === Orbit.Protocol.Types.FILE_TRANSFER_REJECT) {
         if (packet.payload && packet.payload.fileId && window.activeTransfers) {
           delete window.activeTransfers[packet.payload.fileId];
         }

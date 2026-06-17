@@ -1,6 +1,16 @@
 # Orbit Changelog
 
-## v0.1.1-beta **(Current Version)**
+## v0.1.2-beta **(Current Version)**
+
+### Bug Fixes
+- **Manual Connect Bug Fix (Critical):** Manual "Add a Friend" IP connect now works — `socket.js` socket remapping no longer blocked by a stale `'manual'` peerId key. `sendMessage()` finds the existing TCP connection instead of creating a new one on every message.
+- **Protocol Type Unification:** All hardcoded protocol type strings (`'MESSAGE'`, `'BEACON'`, `'FILE_TRANSFER_START'`, etc.) replaced with `window.Protocol.Types.*` / `Orbit.Protocol.Types.*` constants across both platforms (store.js, mobile/app.js). Prevents silent failures when new types are added.
+
+### Technical
+- **Build Pipeline Overhaul (v0.1.2-beta plan):** Android now builds `assembleRelease` instead of `assembleDebug`. SHA256SUMS.txt generated per platform and consolidated at release. Artifact verification step fails the build if any required artifact (`.exe`, `.dmg`, `.AppImage`, `.deb`, `.apk`) is missing. Build metadata (version, commit hash, date) auto-injected into release notes. Asset size table generated dynamically.
+- **Protocol Definitions Unified:** `shared/network/protocol.js` and `desktop/src/js/network/protocol.js` now both contain all 47 protocol types (CALL_*, FILE_TRANSFER_*/CHUNK/END/OFFER/ACCEPT, DISCOVERY, E2EE_KEY_EXCHANGE, etc.) — cross-platform type compatibility guaranteed.
+
+## v0.1.1-beta
 
 ### New Features
 - **Voice & Video Calls (P2P):** Full WebRTC call system — CallManager with peer-to-peer audio/video, incoming call notification, mute/speaker controls, call timer, ICE candidate exchange via P2P network layer

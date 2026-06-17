@@ -152,7 +152,8 @@ class SocketManager extends EventEmitter {
 
             // If we didn't know the peerId (incoming conn), register it now
             var senderId = packet.from || packet.senderId;
-            if (!currentPeerId && senderId) {
+            if ((!currentPeerId || currentPeerId === 'manual') && senderId) {
+              if (currentPeerId) this.connections.delete(currentPeerId);
               currentPeerId = senderId;
               this.connections.set(currentPeerId, socket);
               // Track socket for write queue cleanup

@@ -1771,7 +1771,7 @@ window.SettingsModal = {
       });
 
     } else if (tabName === 'about') {
-      var version = window.orbitAPI ? (window.orbitAPI.version || '0.1.1-beta') : '0.1.1-beta';
+      var version = window.orbitAPI ? (window.orbitAPI.version || '0.1.2-beta') : '0.1.2-beta';
       var friendCount = state.friends ? state.friends.length : 0;
       var groupCount = state.groups ? state.groups.length : 0;
       var chatCount = Object.keys(state.messages || {}).length;

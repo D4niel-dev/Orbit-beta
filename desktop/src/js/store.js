@@ -405,7 +405,7 @@ class Store {
     if (packet.from && this.state.blockedUsers && this.state.blockedUsers.indexOf(packet.from) !== -1) {
       return;
     }
-    if (packet.type === 'GROUP_CREATE') {
+    if (packet.type === window.Protocol.Types.GROUP_CREATE) {
       const { groupId, groupName, ownerId, members } = packet.payload;
       const existingGroup = this.state.groups.find(g => g.groupId === groupId);
       if (!existingGroup) {
@@ -425,7 +425,7 @@ class Store {
       return;
     }
 
-    if (packet.type === 'GROUP_INVITE') {
+    if (packet.type === window.Protocol.Types.GROUP_INVITE) {
       const { groupId, groupName, inviter } = packet.payload;
       if (window.Toast) window.Toast.show('Group Invite', inviter + ' invited you to ' + groupName);
       if (document.hidden && window.orbitAPI && window.orbitAPI.showNotification) {
@@ -434,11 +434,11 @@ class Store {
       return;
     }
 
-    if (packet.type === 'GROUP_JOIN_REQUEST') {
+    if (packet.type === window.Protocol.Types.GROUP_JOIN_REQUEST) {
       return;
     }
 
-    if (packet.type === 'GROUP_JOIN_RESPONSE') {
+    if (packet.type === window.Protocol.Types.GROUP_JOIN_RESPONSE) {
       const { groupId, groupName, accepted, members } = packet.payload;
       if (accepted && groupId) {
         var existing = this.state.groups.find(function(g) { return g.groupId === groupId; });
@@ -462,7 +462,7 @@ class Store {
       return;
     }
 
-    if (packet.type === 'GROUP_LEAVE') {
+    if (packet.type === window.Protocol.Types.GROUP_LEAVE) {
       const { groupId, userId } = packet.payload;
       var leaverGroup = this.state.groups.find(function(g) { return g.groupId === groupId; });
       if (leaverGroup) {
@@ -475,7 +475,7 @@ class Store {
       return;
     }
 
-    if (packet.type === 'GROUP_MEMBER_ADDED') {
+    if (packet.type === window.Protocol.Types.GROUP_MEMBER_ADDED) {
       const { groupId, user } = packet.payload;
       if (groupId && user && user.userId) {
         this.addMemberToGroup(groupId, user);
@@ -485,7 +485,7 @@ class Store {
       return;
     }
 
-    if (packet.type === 'GROUP_OWNER_TRANSFER') {
+    if (packet.type === window.Protocol.Types.GROUP_OWNER_TRANSFER) {
       const { groupId, newOwnerId } = packet.payload;
       if (groupId && newOwnerId) {
         this.updateGroupField(groupId, 'ownerId', newOwnerId);
@@ -498,7 +498,7 @@ class Store {
       return;
     }
 
-    if (packet.type === 'REACTION') {
+    if (packet.type === window.Protocol.Types.REACTION) {
       const { msgId, emoji, action, userId, chatId: payloadChatId } = packet.payload;
       const chatId = payloadChatId || packet.to || packet.from;
       const msgs = { ...this.state.messages };
@@ -522,12 +522,12 @@ class Store {
     }
 
     // Typing indicator — handled via direct listener in app.js
-    if (packet.type === 'TYPING') {
+    if (packet.type === window.Protocol.Types.TYPING) {
       return;
     }
 
     // Basic message handling logic
-    if (packet.type === 'MESSAGE') {
+    if (packet.type === window.Protocol.Types.MESSAGE) {
       const fromId = packet.payload.chatId || packet.from;
       var text = packet.payload.text || (typeof packet.payload === 'string' ? packet.payload : '');
 
@@ -595,27 +595,27 @@ class Store {
            window.Toast.show(title, preview, senderAvatar);
         }
       }
-    } else if (packet.type === 'SYSTEM') {
+    } else if (packet.type === window.Protocol.Types.SYSTEM) {
       // Handle edit/delete sync
       const payload = packet.payload;
       if (payload && payload.action === 'delete' && payload.msgId) {
         this.deleteMessage(packet.from, payload.msgId);
       }
-    } else if (packet.type === 'PIN_MESSAGE') {
+    } else if (packet.type === window.Protocol.Types.PIN_MESSAGE) {
       const { msgId } = packet.payload;
       this.pinMessage(packet.from, msgId);
       return;
-    } else if (packet.type === 'UNPIN_MESSAGE') {
+    } else if (packet.type === window.Protocol.Types.UNPIN_MESSAGE) {
       const { msgId } = packet.payload;
       this.unpinMessage(packet.from, msgId);
       return;
-    } else if (packet.type === 'MESSAGE_EDIT') {
+    } else if (packet.type === window.Protocol.Types.MESSAGE_EDIT) {
       const { msgId, newText } = packet.payload;
       this.editMessage(packet.from, msgId, newText);
-    } else if (packet.type === 'MESSAGE_DELETE') {
+    } else if (packet.type === window.Protocol.Types.MESSAGE_DELETE) {
       const { msgId } = packet.payload;
       this.deleteMessage(packet.from, msgId);
-    } else if (packet.type === 'READ') {
+    } else if (packet.type === window.Protocol.Types.READ) {
       const { chatId, lastReadMsgId } = packet.payload;
       if (chatId && lastReadMsgId) {
         const readReceipts = { ...this.state.readReceipts };

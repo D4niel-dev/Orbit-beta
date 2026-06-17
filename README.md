@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v011-beta-current-version">v0.1.1-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v012-beta-current-version">v0.1.2-beta</a>
 </p>
 
 <p align="center">
@@ -28,8 +28,9 @@
 
 | Channel | Version | Status |
 |---------|---------|--------|
-| **Stable** | v0.1.1-beta | Recommended for most users |
-| Previous Stable | v0.0.5-beta | Legacy stable release |
+| **Stable** | v0.1.2-beta | Recommended for most users |
+| Previous Stable | v0.1.1-beta | Stable release |
+| Older Stable | v0.0.5-beta | Legacy stable release |
 | Development | main branch | Active development |
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
@@ -90,19 +91,18 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage desktop app** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
-## Highlights (v0.1.1-beta)
+## Highlights (v0.1.2-beta)
 
 - Cross-platform Desktop ↔ Android P2P messaging
 - LAN peer discovery
 - File & image sharing
 - Group chats
+- Voice & Video Calls (P2P WebRTC)
 - End-to-end encryption (DMs)
 - SQLite-backed message storage
 - Backup & restore
-- Message reactions
-- Pinned messages
-- Search
-- Mobile support
+- Message reactions, pinned messages, search
+- Release integrity (SHA256, verified artifacts, build metadata)
 
 ## Version History
 <details>
@@ -226,7 +226,14 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Bug Fixes** — orbit-db://attachment/ 404, selective subscriber undefined changedState, message avatar click re-attached, loadFullChatMessages dropping existing messages
 </details>
 <details open>
-<summary>v0.1.1-beta (Latest Stable)</summary>
+<summary>v0.1.2-beta (Latest Stable)</summary>
+
+- **Manual Connect Bug Fixed** — Manual "Add a Friend" IP connect now correctly remaps the TCP socket to the peer's real userId; messages reuse the existing connection instead of creating a new one
+- **Protocol Type Unification** — All 47 protocol types unified between `shared/` and `desktop/` protocol.js; cross-platform call, file transfer, and group compatibility guaranteed
+- **Build Pipeline Overhaul** — Android `assembleRelease` replaces `assembleDebug`; `SHA256SUMS.txt` per platform; artifact verification fails on missing builds; build metadata (version, commit, date) and asset size table auto-injected into release notes
+</details>
+<details>
+<summary>v0.1.1-beta</summary>
 
 - **Voice & Video Calls (P2P WebRTC)** — Full call system with incoming notification, mute/speaker controls, timer, ICE candidate exchange over P2P network layer
 - **Group Calls (Mesh)** — Each participant gets their own RTCPeerConnection; video grid or avatar circles for audio-only; start/join/leave group calls
@@ -419,6 +426,9 @@ Transparency matters in beta. Current constraints include:
 - **End-to-end encryption** — ECDH + AES-256-GCM for direct messages
 - **Backup & Restore** — Full database export/import (.orzip / .zip)
 - **Voice/Video Calls** — P2P WebRTC calls with group mesh support
+- **Manual Connect Fix** — "Add a Friend" IP connect works reliably
+- **Protocol Unification** — Cross-platform type compatibility
+- **Build Pipeline** — SHA256, artifact verification, release metadata
 - **Camera Toggle, Forward, Block, Export, Save/Load Themes** — Latest stable additions
 
 ### Planned

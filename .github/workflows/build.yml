@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version tag (e.g. v0.0.7-beta)"
+        description: "Version tag (e.g. v0.1.2-beta)"
         required: false
 
 permissions:
@@ -38,12 +38,21 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Generate SHA256 (Windows)
+        shell: pwsh
+        run: |
+          Get-ChildItem dist/*.exe | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($_.Name)" | Out-File -Encoding utf8 -Append dist/SHA256SUMS_Windows.txt
+          }
+
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
           name: windows-build
           path: |
             desktop/dist/*.exe
+            desktop/dist/SHA256SUMS_Windows.txt
           retention-days: 5
 
   # ─── macOS ───
@@ -70,12 +79,19 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Generate SHA256 (macOS)
+        run: |
+          for f in dist/*.dmg; do
+            [ -f "$f" ] && shasum -a 256 "$f" >> dist/SHA256SUMS_macOS.txt
+          done
+
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
         with:
           name: macos-build
           path: |
             desktop/dist/*.dmg
+            desktop/dist/SHA256SUMS_macOS.txt
           retention-days: 5
 
   # ─── Linux ───
@@ -102,6 +118,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Generate SHA256 (Linux)
+        run: |
+          for f in dist/*.AppImage dist/*.deb; do
+            [ -f "$f" ] && shasum -a 256 "$f" >> dist/SHA256SUMS_Linux.txt
+          done
+
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -109,6 +131,7 @@ jobs:
           path: |
             desktop/dist/*.AppImage
             desktop/dist/*.deb
+            desktop/dist/SHA256SUMS_Linux.txt
           retention-days: 5
 
   # ─── Android ───
@@ -145,22 +168,44 @@ jobs:
       - name: Sync Capacitor Android
         run: npx cap sync android
 
-      - name: Build debug APK
+      - name: Build release APK
         env:
           APP_VERSION: ${{ github.event.inputs.version || github.ref_name }}
-        run: chmod +x android/gradlew && cd android && ./gradlew assembleDebug
+        run: chmod +x android/gradlew && cd android && ./gradlew assembleRelease
 
       - name: Rename APK
         run: |
           VERSION="${{ github.event.inputs.version || github.ref_name }}"
-          mv android/app/build/outputs/apk/debug/app-debug.apk android/app/build/outputs/apk/debug/Orbit-${VERSION}.apk
+          APK_SRC="android/app/build/outputs/apk/release/app-release-unsigned.apk"
+          APK_DST="android/app/build/outputs/apk/release/Orbit-${VERSION}.apk"
+          if [ -f "$APK_SRC" ]; then
+            mv "$APK_SRC" "$APK_DST"
+          else
+            # Fallback: signed release APK
+            APK_SIGNED="android/app/build/outputs/apk/release/app-release.apk"
+            if [ -f "$APK_SIGNED" ]; then
+              mv "$APK_SIGNED" "$APK_DST"
+            else
+              echo "No release APK found!" >&2
+              ls android/app/build/outputs/apk/release/ || true
+              exit 1
+            fi
+          fi
+
+      - name: Generate SHA256 (Android)
+        run: |
+          cd android/app/build/outputs/apk/release
+          for f in Orbit-*.apk; do
+            [ -f "$f" ] && shasum -a 256 "$f" > SHA256SUMS_Android.txt
+          done
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: android-build
           path: |
-            mobile/android/app/build/outputs/apk/debug/Orbit-*.apk
+            mobile/android/app/build/outputs/apk/release/Orbit-*.apk
+            mobile/android/app/build/outputs/apk/release/SHA256SUMS_Android.txt
           retention-days: 5
 
   # ─── Release ───
@@ -176,33 +221,112 @@ jobs:
         with:
           path: release-artifacts/
 
+      - name: Build metadata
+        id: meta
+        run: |
+          VERSION="${{ github.event.inputs.version || github.ref_name }}"
+          COMMIT="${GITHUB_SHA::7}"
+          DATE="$(date -u +%Y-%m-%d)"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "commit=${COMMIT}" >> $GITHUB_OUTPUT
+          echo "date=${DATE}" >> $GITHUB_OUTPUT
+
+      - name: Verify artifacts exist
+        id: verify
+        run: |
+          MISSING=""
+          echo "=== Checking required artifacts ==="
+          find release-artifacts -type f -name "*.exe" | grep -q . || MISSING="$MISSING Windows .exe"
+          find release-artifacts -type f -name "*.dmg" | grep -q . || MISSING="$MISSING macOS .dmg"
+          find release-artifacts -type f -name "*.AppImage" | grep -q . || MISSING="$MISSING Linux .AppImage"
+          find release-artifacts -type f -name "*.deb" | grep -q . || MISSING="$MISSING Linux .deb"
+          find release-artifacts -type f -name "*.apk" | grep -q . || MISSING="$MISSING Android .apk"
+          if [ -n "$MISSING" ]; then
+            echo "Missing artifacts:$MISSING"
+            echo "All found files:"; find release-artifacts -type f
+            exit 1
+          fi
+          echo "All required artifacts present."
+
+      - name: Generate asset size table
+        id: assets
+        run: |
+          TABLE="| Artifact | Size |"
+          TABLE+=$'\n|----------|------|'
+          for f in $(find release-artifacts -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.apk" \) | sort); do
+            NAME=$(basename "$f")
+            SIZE=$(ls -lh "$f" | awk '{print $5}')
+            TABLE+=$'\n| '"$NAME"' | '"$SIZE"' |'
+          done
+          echo "table<<EOF" >> $GITHUB_OUTPUT
+          echo "$TABLE" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Consolidate SHA256 checksums
+        run: |
+          PER_PLATFORM=$(find release-artifacts -name "SHA256SUMS_*.txt" -type f)
+          if [ -n "$PER_PLATFORM" ]; then
+            cat $PER_PLATFORM > release-artifacts/SHA256SUMS.txt
+          else
+            for f in $(find release-artifacts -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.apk" \) | sort); do
+              shasum -a 256 "$f" >> release-artifacts/SHA256SUMS.txt
+            done
+          fi
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: "Orbit ${{ github.event.inputs.version || github.ref_name }}"
           body: |
-            ## Orbit ${{ github.event.inputs.version || github.ref_name }}
+            ## Orbit ${{ steps.meta.outputs.version }}
 
-            See [CHANGELOG.md](CHANGELOG.md) for details.
+            **Version:** ${{ steps.meta.outputs.version }}
+            **Commit:** `${{ steps.meta.outputs.commit }}`
+            **Built:** ${{ steps.meta.outputs.date }}
 
             ### Downloads
 
-            | Platform | File |
-            |----------|------|
-            | Windows | `.exe` installer |
-            | macOS (Intel) | `.dmg` (x64) |
-            | macOS (Apple Silicon) | `.dmg` (arm64) |
-            | Linux | `.AppImage` (universal) |
-            | Linux (Debian/Ubuntu) | `.deb` package |
-            | Android | `.apk` (WIP) |
+            ${{ steps.assets.outputs.table }}
 
-            > **Note:** Desktop builds are unsigned. macOS users may need to right-click → Open on first launch. Windows users may see SmartScreen — choose "More info → Run anyway".
+            ### Installation Notes
+
+            > **Desktop builds are currently unsigned.**
+
+            - **Windows:** Microsoft SmartScreen may appear. Select **More info → Run anyway** if you trust the source.
+            - **macOS:** You may need to right-click the application and choose **Open** on first launch.
+            - **Android:** Because Orbit is distributed outside the Google Play Store, Android or Google Play Protect may display a warning before installation. Continue only if you trust the release source.
+
+            ### Verify Your Download
+
+            A `SHA256SUMS.txt` file is included with this release.  
+            Use it to verify the integrity of any downloaded artifact:
+
+            ```sh
+            # Linux / macOS
+            shasum -a 256 --check SHA256SUMS.txt
+
+            # Windows (PowerShell)
+            Get-FileHash Orbit-Setup.exe -Algorithm SHA256
+            ```
+
+            ### Security
+
+            **Orbit** is designed for trusted private networks and local-first communication.
+
+            Official releases are published exclusively through this GitHub repository.
+
+            ### Links
+
+            - Repository [**Orbit-beta**](https://github.com/D4niel-dev/Orbit-beta)
+            - View the [**changelog**](https://github.com/D4niel-dev/Orbit-beta/blob/main/CHANGELOG.md) for the latest changes!
+            - Having *issues* with the app ? Click [**here**](https://github.com/D4niel-dev/Orbit-beta/issues) to report it!
           files: |
             release-artifacts/**/*.exe
             release-artifacts/**/*.dmg
             release-artifacts/**/*.AppImage
             release-artifacts/**/*.deb
             release-artifacts/**/*.apk
+            release-artifacts/SHA256SUMS.txt
           draft: ${{ github.event_name == 'workflow_dispatch' }}
           prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.event.inputs.version, 'beta') }}
         env:
