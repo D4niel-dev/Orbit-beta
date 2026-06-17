@@ -180,7 +180,7 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Chat Background Patterns** — Diagonal Stripes, Crosshatch, Circles
 - **Desktop Bug Fixes** — MIME mapping, cache headers, media retry, attachment URLs
 </details>
-<details open>
+<details>
 <summary>v0.0.9-beta</summary>
 
 - **Android P2P Stability** — 8 Java plugin fixes (multicast lock, beacon gating, TCP buffer, connection tracking) + 4 JS bridge fixes for reliable Android discovery and messaging
@@ -225,14 +225,7 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Bug Fixes** — orbit-db://attachment/ 404, selective subscriber undefined changedState, message avatar click re-attached, loadFullChatMessages dropping existing messages
 </details>
 <details open>
-<summary>v0.1.2-beta (Latest Stable)</summary>
-
-- **Manual Connect Bug Fixed** — Manual "Add a Friend" IP connect now correctly remaps the TCP socket to the peer's real userId; messages reuse the existing connection instead of creating a new one
-- **Protocol Type Unification** — All 47 protocol types unified between `shared/` and `desktop/` protocol.js; cross-platform call, file transfer, and group compatibility guaranteed
-- **Build Pipeline Overhaul** — Android `assembleRelease` replaces `assembleDebug`; `SHA256SUMS.txt` per platform; artifact verification fails on missing builds; build metadata (version, commit, date) and asset size table auto-injected into release notes
-</details>
-<details>
-<summary>v0.1.1-beta</summary>
+<summary>v0.1.1-beta (Latest Stable)</summary>
 
 - **Voice & Video Calls (P2P WebRTC)** — Full call system with incoming notification, mute/speaker controls, timer, ICE candidate exchange over P2P network layer
 - **Group Calls (Mesh)** — Each participant gets their own RTCPeerConnection; video grid or avatar circles for audio-only; start/join/leave group calls
@@ -248,6 +241,13 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Online Status Improvements** — lastSeen on BEACON; 30s interval checks for stale connections (120s timeout)
 - **Inline Code Blocks** — CSS styling for code and pre elements (both platforms)
 - **Call Modal UI Polish** — Proper centering, audio wave bars, hover button effects, local video as full grid tile in groups
+</details>
+<details>
+<summary>v0.1.2-beta</summary>
+
+- **Manual Connect Bug Fixed** — Manual "Add a Friend" IP connect now correctly remaps the TCP socket to the peer's real userId; messages reuse the existing connection instead of creating a new one
+- **Protocol Type Unification** — All 47 protocol types unified between `shared/` and `desktop/` protocol.js; cross-platform call, file transfer, and group compatibility guaranteed
+- **Build Pipeline Overhaul** — Android `assembleRelease` replaces `assembleDebug`; `SHA256SUMS.txt` per platform; artifact verification fails on missing builds; build metadata (version, commit, date) and asset size table auto-injected into release notes
 </details>
 
 See [CHANGELOG.md](CHANGELOG.md) for the full version history.
