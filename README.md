@@ -28,8 +28,8 @@
 
 | Channel | Version | Status |
 |---------|---------|--------|
-| Latest Stable | v0.1.1-beta | Stable release |
-| Previous Stable | v0.0.5-beta | Legacy stable release |
+| **Stable** | v0.1.1-beta | Stable release |
+| Older Stable | v0.0.5-beta | Legacy stable release |
 | Development | main branch | Active development |
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
@@ -184,7 +184,7 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Chat Background Patterns** — Diagonal Stripes, Crosshatch, Circles
 - **Desktop Bug Fixes** — MIME mapping, cache headers, media retry, attachment URLs
 </details>
-<details open>
+<details>
 <summary>v0.0.9-beta</summary>
 
 - **Android P2P Stability** — 8 Java plugin fixes (multicast lock, beacon gating, TCP buffer, connection tracking) + 4 JS bridge fixes for reliable Android discovery and messaging
@@ -404,15 +404,6 @@ Notable settings (in-app **Settings**):
 | **Clear saved attachments** | Remove attachment BLOBs from the database |
 | **Theme / profile** | Display name, avatar, light or dark theme |
 | **Sidebar buttons** | Choose which buttons appear in the left sidebar (Appearance → Text & Layout) |
-
-## Security
-
-Orbit is designed for **trusted private networks** — home LANs, lab environments, or small teams on the same subnet.
-
-- **Not for public internet exposure** — There is no hardened perimeter model for routing Orbit across the open internet yet. Do not port-forward or expose Orbit directly to untrusted networks.
-- **Evolving hardening** — Context isolation, protocol handlers, transfer checksums, and E2EE (ECDH + AES-256-GCM) are in place; broader security work is ongoing.
-
-Use Orbit where you would trust other devices on the same network.
 
 ## Known Limitations
 
