@@ -85,6 +85,29 @@ window.handleMediaError = function(el, url) {
   if (window.lucide) window.lucide.createIcons({ root: container });
 };
 
+// Two-stage img fallback: thumbnail -> full attachment URL -> handleMediaError
+window.mediaImgOnError = function(el) {
+  var fallback = el.getAttribute('data-fallback-src');
+  if (fallback && el.getAttribute('data-using-fallback') !== '1') {
+    el.setAttribute('data-using-fallback', '1');
+    el.removeAttribute('data-retried');
+    el.src = fallback + (fallback.indexOf('?') > -1 ? '&' : '?') + 't=' + Date.now();
+    return;
+  }
+  var url = fallback || el.currentSrc || el.src || '';
+  if (window.handleMediaError) window.handleMediaError(el, url);
+};
+
+// Video/audio: retry full URL before giving up
+window.mediaSrcOnError = function(el) {
+  var fallback = el.getAttribute('data-fallback-src');
+  if (fallback && el.getAttribute('data-using-fallback') !== '1') {
+    el.setAttribute('data-using-fallback', '1');
+    el.src = fallback + (fallback.indexOf('?') > -1 ? '&' : '?') + 't=' + Date.now();
+    if (el.load) el.load();
+  }
+};
+
 // Lightweight typing indicator state (not in store to avoid full re-renders)
 window.TypingState = {
   _data: {}, // { chatId: [{ userId, username, timeout }] }
@@ -282,19 +305,54 @@ document.addEventListener('DOMContentLoaded', () => {
     document.documentElement.classList.toggle('experimental-animated-avatars', !!settings.experimentalAnimatedAvatars);
     document.documentElement.classList.toggle('experimental-message-fx', !!settings.experimentalMessageFx);
     document.documentElement.classList.toggle('experimental-compact-spacing', !!settings.experimentalCompactSpacing);
+    document.documentElement.classList.toggle('experimental-fps-monitor', !!settings.experimentalFpsMonitor);
+    document.documentElement.classList.toggle('experimental-dev-overlay', !!settings.experimentalDevOverlay);
+    var perfMode = !!settings.experimentalPerformanceMode;
+    document.documentElement.classList.toggle('performance-mode', perfMode);
+    window._performanceMode = perfMode;
+
+    // GIF freezing — bypass reduceMotion check when perf mode is on
+    if (perfMode && window.freezeGifImages) {
+      window.freezeGifImages(document, true);
+    }
+
+    // Link previews — disable background OG fetching
+    if (perfMode) {
+      window._linkPreviewCache = {};
+    }
+
+    // Connection stats overlay — stop the 2s interval
+    if (perfMode && window._connStatsInterval) {
+      clearInterval(window._connStatsInterval);
+      window._connStatsInterval = null;
+    }
+
+    // Offline check interval — slow to 60s in perf mode, restore to 15s otherwise
+    if (window._offlineCheckInterval) {
+      clearInterval(window._offlineCheckInterval);
+    }
+    window._offlineCheckInterval = setInterval(function() {
+      var state = window.store.getState();
+      var now = Date.now();
+      var updated = state.friends.map(function(f) {
+        if (f.status === 'online' && f.lastSeen && (now - f.lastSeen) > 180000) {
+          return { ...f, status: 'offline' };
+        }
+        return f;
+      });
+      window.store.setState({ friends: updated });
+    }, perfMode ? 60000 : 30000);
   };
 
-  applySettings(window.store.getState().settings);
-
-  document.body.style.zoom = (window.store.getState().settings.appZoom || 100) + '%';
-
-  // Freeze GIF images when reduce-motion is enabled
+  // Freeze GIF images when reduce-motion or performance mode is enabled
   window._frozenCache = new Map();
-  window.freezeGifImages = function(root) {
+  window.freezeGifImages = function(root, force) {
     if (!root) root = document;
     if (!root.querySelectorAll) return;
-    var reduceMotion = window.store && window.store.getState && window.store.getState().settings && window.store.getState().settings.reduceMotion;
-    if (!reduceMotion) return;
+    if (!force) {
+      var reduceMotion = window.store && window.store.getState && window.store.getState().settings && window.store.getState().settings.reduceMotion;
+      if (!reduceMotion && !window._performanceMode) return;
+    }
     function freezeOne(img) {
       img.setAttribute('data-frozen', 'true');
       var src = img.currentSrc || img.src;
@@ -322,8 +380,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       }
     }
-    root.querySelectorAll('img[src*=".gif"]:not([data-frozen]), img[src*="data:image/gif"]:not([data-frozen]), img[src*="orbit-db://"]:not([data-frozen]), .avatar img:not([data-frozen])').forEach(freezeOne);
+    root.querySelectorAll('img[src*=".gif"]:not([data-frozen]), img[src*="data:image/gif"]:not([data-frozen]), .avatar img:not([data-frozen])').forEach(freezeOne);
   };
+
+  applySettings(window.store.getState().settings);
+
+  document.body.style.zoom = (window.store.getState().settings.appZoom || 100) + '%';
 
   darkModeMedia.addEventListener('change', () => {
     var state = window.store.getState();
@@ -465,6 +527,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (window.Identity) window.Identity.init();
 
+    // P2P stats tracking
+    window._p2pStartTime = Date.now();
+    window._p2pSentCount = 0;
+    window._p2pRecvCount = 0;
+
     if (window.orbitAPI) {
       window.orbitAPI.networkStart(window.store.getState().currentUser);
 
@@ -499,7 +566,7 @@ document.addEventListener('DOMContentLoaded', () => {
               cancelText: 'Deny',
               danger: false,
               onConfirm: function() {
-                var newMember = { userId: joinPayload.userId, username: joinPayload.username, status: 'online', ip: null, role: 'member' };
+                var newMember = { userId: joinPayload.userId, username: joinPayload.username, publicKey: joinPayload.publicKey || null, status: 'online', ip: null, role: 'member' };
                 window.store.addMemberToGroup(myGroup.groupId, newMember);
                 if (window.orbitAPI && requester) {
                   window.orbitAPI.networkSend(joinPayload.userId, requester.ip || '', window.Protocol.Types.GROUP_JOIN_RESPONSE, {
@@ -512,7 +579,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (m.userId !== currentState.currentUser.userId) {
                       window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.GROUP_MEMBER_ADDED, {
                         groupId: myGroup.groupId,
-                        user: { userId: newMember.userId, username: newMember.username, role: 'member', joinedAt: new Date().toISOString() }
+                        user: { userId: newMember.userId, username: newMember.username, role: 'member', joinedAt: new Date().toISOString(), publicKey: newMember.publicKey }
                       });
                     }
                   });
@@ -529,7 +596,7 @@ document.addEventListener('DOMContentLoaded', () => {
               }
             });
           } else if (myGroup) {
-            var newMember = { userId: joinPayload.userId, username: joinPayload.username, status: 'online', ip: null, role: 'member' };
+            var newMember = { userId: joinPayload.userId, username: joinPayload.username, publicKey: joinPayload.publicKey || null, status: 'online', ip: null, role: 'member' };
             window.store.addMemberToGroup(myGroup.groupId, newMember);
             var requester = currentState.friends.find(function(f) { return f.userId === joinPayload.userId; });
             if (window.orbitAPI && requester) {
@@ -543,7 +610,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (m.userId !== currentState.currentUser.userId) {
                   window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.GROUP_MEMBER_ADDED, {
                     groupId: myGroup.groupId,
-                    user: { userId: newMember.userId, username: newMember.username, role: 'member', joinedAt: new Date().toISOString() }
+                    user: { userId: newMember.userId, username: newMember.username, role: 'member', joinedAt: new Date().toISOString(), publicKey: newMember.publicKey }
                   });
                 }
               });
@@ -691,9 +758,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if ((document.hidden || window.store.getState().activeChatId !== data.sender) && window.orbitAPI && window.orbitAPI.showNotification) {
           var senderName = 'Someone';
+          var senderAvatar = null;
           var friend = window.store.getState().friends.find(function(f) { return f.userId === data.sender; });
-          if (friend) senderName = friend.username;
-          window.orbitAPI.showNotification('File from ' + senderName, data.name);
+          if (friend) { senderName = friend.username; senderAvatar = friend.avatar; }
+          window.orbitAPI.showNotification('File from ' + senderName, data.name, senderAvatar);
         }
         const isImage = data.name.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) != null;
         const attId = data.fileId || (window.orbitAPI ? window.orbitAPI.getUuid() : Date.now().toString());
@@ -735,18 +803,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (window.ContextMenu) window.ContextMenu.init();
 
-    // Periodic offline status check — marks friends offline if no beacon received for 120s
-    setInterval(function() {
-      var state = window.store.getState();
-      var now = Date.now();
-      var updated = state.friends.map(function(f) {
-        if (f.status === 'online' && f.lastSeen && (now - f.lastSeen) > 120000) {
-          return { ...f, status: 'offline' };
-        }
-        return f;
-      });
-      window.store.setState({ friends: updated });
-    }, 30000);
+    // Offline check is created in applySettings() — not duplicated here
 
     console.log('Orbit Shell Ready.');
   }, 0);

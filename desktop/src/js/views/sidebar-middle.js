@@ -43,11 +43,11 @@ window.SidebarMiddle = {
           '<i data-lucide="grip-vertical" style="width:14px;height:14px;color:var(--text-muted);"></i>' +
         '</div>' +
         '<div style="padding:12px;display:flex;flex-direction:column;gap:5px;">' +
-          '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Status:</span><span id="conn-status" style="color:#22c55e;">Disconnected</span></div>' +
-          '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Peers:</span><span id="conn-peers" style="color:#22c55e;">0</span></div>' +
-          '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Uptime:</span><span id="conn-uptime" style="color:#22c55e;">--</span></div>' +
-          '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Sent:</span><span id="conn-sent" style="color:#22c55e;">0</span></div>' +
-          '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Recv:</span><span id="conn-recv" style="color:#22c55e;">0</span></div>' +
+          '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Status:</span><span id="conn-status" style="color:var(--accent-success);">Disconnected</span></div>' +
+          '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Peers:</span><span id="conn-peers" style="color:var(--accent-success);">0</span></div>' +
+          '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Uptime:</span><span id="conn-uptime" style="color:var(--accent-success);">--</span></div>' +
+          '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Sent:</span><span id="conn-sent" style="color:var(--accent-success);">0</span></div>' +
+          '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Recv:</span><span id="conn-recv" style="color:var(--accent-success);">0</span></div>' +
           '<div style="margin-top:8px;border-top:1px solid rgba(255,255,255,0.1);padding-top:8px;text-align:center;">' +
             '<button id="btn-p2p-diag" style="background:transparent;border:1px solid var(--border-subtle);color:var(--text-secondary);border-radius:6px;padding:4px 10px;font-size:10px;cursor:pointer;width:100%;">P2P Diagnostics</button>' +
           '</div>' +
@@ -362,7 +362,8 @@ window.SidebarMiddle = {
               window.orbitAPI.networkSend(f.userId, f.ip || '', window.Protocol.Types.GROUP_JOIN_REQUEST, {
                 inviteCode: code,
                 userId: state.currentUser.userId,
-                username: state.currentUser.username
+                username: state.currentUser.username,
+                publicKey: state.currentUser.publicKey || null
               });
             }
           });
@@ -640,6 +641,32 @@ window.SidebarMiddle = {
           self.showP2PDiagnostics();
         });
       }
+
+      // Live connection stats updater
+      if (!window._connStatsInterval) {
+        window._connStatsInterval = setInterval(function() {
+          var st = document.getElementById('conn-status');
+          var sp = document.getElementById('conn-peers');
+          var su = document.getElementById('conn-uptime');
+          var ss = document.getElementById('conn-sent');
+          var sr = document.getElementById('conn-recv');
+          if (!st) return;
+          var state = window.store ? window.store.getState() : null;
+          var online = state && state.friends ? state.friends.filter(function(f) { return f.status === 'online'; }).length : 0;
+          st.textContent = online > 0 ? 'Connected' : 'Disconnected';
+          st.style.color = online > 0 ? '#30D158' : '#ef4444';
+          sp.textContent = String(online);
+          if (window._p2pStartTime) {
+            var elapsed = Math.floor((Date.now() - window._p2pStartTime) / 1000);
+            var h = Math.floor(elapsed / 3600);
+            var m = Math.floor((elapsed % 3600) / 60);
+            var s = elapsed % 60;
+            su.textContent = h + 'h ' + m + 'm ' + s + 's';
+          }
+          ss.textContent = String(window._p2pSentCount || 0);
+          sr.textContent = String(window._p2pRecvCount || 0);
+        }, 2000);
+      }
     }
 
     // Right-click context menu for DMs and groups
@@ -766,13 +793,13 @@ window.SidebarMiddle = {
         '<button id="p2p-diag-close" style="background:none;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;padding:4px 8px;border-radius:8px;">&times;</button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:8px;">' +
-        '<div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--bg-base);border-radius:6px;"><span style="color:var(--text-muted);">Status</span><span id="diag-status" style="color:#22c55e;">' + (window.SocketManager && window.SocketManager._server ? 'Running' : 'Stopped') + '</span></div>' +
-        '<div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--bg-base);border-radius:6px;"><span style="color:var(--text-muted);">Discovery</span><span id="diag-discovery" style="color:#22c55e;">' + (window.Discovery && window.Discovery._started ? 'Active' : 'Inactive') + '</span></div>' +
-        '<div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--bg-base);border-radius:6px;"><span style="color:var(--text-muted);">Peers</span><span id="diag-peers" style="color:#22c55e;">' + (state.friends ? state.friends.length : 0) + '</span></div>' +
-        '<div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--bg-base);border-radius:6px;"><span style="color:var(--text-muted);">Connections</span><span id="diag-connections" style="color:#22c55e;">' + (window.SocketManager && window.SocketManager.connections ? window.SocketManager.connections.size : 0) + '</span></div>' +
-        '<div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--bg-base);border-radius:6px;"><span style="color:var(--text-muted);">Muted Chats</span><span style="color:#22c55e;">' + Object.keys(state.mutedChats || {}).length + '</span></div>' +
-        '<div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--bg-base);border-radius:6px;"><span style="color:var(--text-muted);">Closed DMs</span><span style="color:#22c55e;">' + Object.keys(state.closedDMs || {}).length + '</span></div>' +
-        '<div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--bg-base);border-radius:6px;"><span style="color:var(--text-muted);">Pinned DMs</span><span style="color:#22c55e;">' + Object.keys(state.pinnedDMs || {}).length + '</span></div>' +
+        '<div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--bg-base);border-radius:6px;"><span style="color:var(--text-muted);">Status</span><span id="diag-status" style="color:var(--accent-success);">' + (window.SocketManager && window.SocketManager._server ? 'Running' : 'Stopped') + '</span></div>' +
+        '<div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--bg-base);border-radius:6px;"><span style="color:var(--text-muted);">Discovery</span><span id="diag-discovery" style="color:var(--accent-success);">' + (window.Discovery && window.Discovery._started ? 'Active' : 'Inactive') + '</span></div>' +
+        '<div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--bg-base);border-radius:6px;"><span style="color:var(--text-muted);">Peers</span><span id="diag-peers" style="color:var(--accent-success);">' + (state.friends ? state.friends.length : 0) + '</span></div>' +
+        '<div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--bg-base);border-radius:6px;"><span style="color:var(--text-muted);">Connections</span><span id="diag-connections" style="color:var(--accent-success);">' + (window.SocketManager && window.SocketManager.connections ? window.SocketManager.connections.size : 0) + '</span></div>' +
+        '<div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--bg-base);border-radius:6px;"><span style="color:var(--text-muted);">Muted Chats</span><span style="color:var(--accent-success);">' + Object.keys(state.mutedChats || {}).length + '</span></div>' +
+        '<div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--bg-base);border-radius:6px;"><span style="color:var(--text-muted);">Closed DMs</span><span style="color:var(--accent-success);">' + Object.keys(state.closedDMs || {}).length + '</span></div>' +
+        '<div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--bg-base);border-radius:6px;"><span style="color:var(--text-muted);">Pinned DMs</span><span style="color:var(--accent-success);">' + Object.keys(state.pinnedDMs || {}).length + '</span></div>' +
       '</div>' +
       '<div style="margin-top:16px;padding:8px;background:var(--bg-base);border-radius:6px;max-height:200px;overflow-y:auto;" id="diag-log">' +
         '<div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">Recent Logs</div>' +
@@ -827,8 +854,8 @@ window.SidebarMiddle = {
       filtered.forEach(function(m) {
         var isOnline = m.status === 'online';
         var onlineDot = isOnline
-          ? '<span style="width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block;margin-right:8px;"></span>'
-          : '<span style="width:8px;height:8px;border-radius:50%;background:#6b7280;display:inline-block;margin-right:8px;"></span>';
+          ? '<span style="width:8px;height:8px;border-radius:50%;background:var(--accent-success);display:inline-block;margin-right:8px;"></span>'
+          : '<span style="width:8px;height:8px;border-radius:50%;background:var(--text-muted);display:inline-block;margin-right:8px;"></span>';
         var mFrame = window.Frames.getFrameForUser(m.userId);
         var mAvatar = m.avatar
           ? '<img src="' + window.Sanitize.escapeHtml(m.avatar) + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover;">'
@@ -1005,10 +1032,10 @@ window.SidebarMiddle = {
           window.store.addMemberToGroup(groupId, userObj);
           if (window.orbitAPI) {
             group.members.forEach(function(m) {
-              window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.GROUP_MEMBER_ADDED, { groupId: groupId, user: { userId: friend.userId, username: friend.username || friend.name, usertag: friend.usertag, avatar: friend.avatar, status: friend.status || 'offline', role: 'member' } });
+              window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.GROUP_MEMBER_ADDED, { groupId: groupId, user: { userId: friend.userId, username: friend.username || friend.name, usertag: friend.usertag, avatar: friend.avatar, status: friend.status || 'offline', role: 'member', publicKey: friend.publicKey || null } });
             });
-            var membersForNew = group.members.map(function(m) { return { userId: m.userId, username: m.username, usertag: m.usertag, avatar: m.avatar, status: m.status, role: m.role }; });
-            membersForNew.push({ userId: myId, username: state2.currentUser.username, usertag: state2.currentUser.usertag || state2.currentUser.userTag || '', avatar: state2.currentUser.avatar || '', status: 'online', role: isOwner ? 'owner' : 'admin' });
+            var membersForNew = group.members.map(function(m) { return { userId: m.userId, username: m.username, usertag: m.usertag, avatar: m.avatar, status: m.status, role: m.role, publicKey: m.publicKey || null }; });
+            membersForNew.push({ userId: myId, username: state2.currentUser.username, usertag: state2.currentUser.usertag || state2.currentUser.userTag || '', avatar: state2.currentUser.avatar || '', status: 'online', role: isOwner ? 'owner' : 'admin', publicKey: state2.currentUser.publicKey || null });
             window.orbitAPI.networkSend(friend.userId, friend.ip || '', window.Protocol.Types.GROUP_JOIN_RESPONSE, { groupId: groupId, groupName: group.groupName, accepted: true, members: membersForNew });
           }
           scopeEl.remove();
@@ -1019,80 +1046,113 @@ window.SidebarMiddle = {
     }
 
     var avatarSection = group.avatarPath
-      ? '<img src="orbit-avatar://' + window.Sanitize.escapeHtml(groupId) + '?t=' + (group.avatarUpdatedAt || 0) + '" id="group-info-avatar-img" style="width:80px;height:80px;border-radius:16px;object-fit:cover;cursor:pointer;">'
-      : '<div id="group-info-avatar-img" style="width:80px;height:80px;border-radius:16px;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:28px;color:white;font-weight:600;cursor:pointer;">' + (group.groupName || 'G').charAt(0).toUpperCase() + '</div>';
+      ? '<img src="orbit-avatar://' + window.Sanitize.escapeHtml(groupId) + '?t=' + (group.avatarUpdatedAt || 0) + '" id="group-info-avatar-img" style="width:86px;height:86px;border-radius:18px;object-fit:cover;cursor:pointer;border:1px solid var(--border-subtle);box-shadow:var(--shadow-sm);">'
+      : '<div id="group-info-avatar-img" style="width:86px;height:86px;border-radius:18px;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:30px;color:white;font-weight:700;cursor:pointer;border:1px solid var(--border-subtle);box-shadow:var(--shadow-sm);">' + (group.groupName || 'G').charAt(0).toUpperCase() + '</div>';
+
+    var previewAvatarSection = group.avatarPath
+      ? '<img src="orbit-avatar://' + window.Sanitize.escapeHtml(groupId) + '?t=' + (group.avatarUpdatedAt || 0) + '" id="group-info-preview-avatar-img" style="position:absolute;left:24px;bottom:-38px;width:76px;height:76px;border-radius:18px;object-fit:cover;border:4px solid var(--bg-surface);">'
+      : '<div style="position:absolute;left:24px;bottom:-38px;width:76px;height:76px;border-radius:18px;background:var(--bg-surface);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:var(--text-primary);border:4px solid var(--bg-surface);">' + groupInitial + '</div>';
 
     var createdDate = group.createdAt ? new Date(group.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'Unknown';
+    var groupInitial = (group.groupName || 'G').charAt(0).toUpperCase();
+    var collapsibleClick = "var b=this.nextElementSibling;var i=this.querySelector('.collapse-icon');if(b.style.display==='none'){b.style.display='block';i.style.transform='rotate(0deg)'}else{b.style.display='none';i.style.transform='rotate(-90deg)'}";
+    var sectionStart = function(icon, title, open) {
+      return '<div class="settings-collapsible" style="margin-bottom:12px;border-radius:10px;border:1px solid var(--border-subtle);overflow:hidden;">' +
+        '<div class="collapsible-header" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--bg-base);cursor:pointer;user-select:none;" onclick="' + collapsibleClick + '">' +
+          '<div style="display:flex;align-items:center;gap:8px;"><i data-lucide="' + icon + '" style="width:16px;height:16px;color:var(--text-muted);"></i><span style="font-size:13px;font-weight:600;color:var(--text-primary);">' + title + '</span></div>' +
+          '<i data-lucide="chevron-down" class="collapse-icon" style="width:16px;height:16px;color:var(--text-muted);transition:transform 0.2s;' + (open ? '' : 'transform:rotate(-90deg);') + '"></i>' +
+        '</div>' +
+        '<div class="collapsible-body" style="padding:16px;display:' + (open ? 'block' : 'none') + ';">';
+    };
+    var sectionEnd = '</div></div>';
+    var fieldStyle = 'width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);font-size:14px;outline:none;';
+    var ghostBtnStyle = 'padding:8px 12px;border-radius:8px;border:1px solid var(--border-subtle);background:transparent;color:var(--text-secondary);cursor:pointer;font-size:12px;font-weight:600;';
 
     var overlay = document.createElement('div');
     overlay.id = 'group-info-overlay';
-    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:9999;display:flex;align-items:center;justify-content:center;';
 
     var panel = document.createElement('div');
-    panel.style.cssText = 'background:var(--bg-surface);border:1px solid var(--border-color);border-radius:16px;width:500px;max-height:85vh;overflow-y:auto;padding:24px;';
+    panel.style.cssText = 'width:800px;height:600px;background:var(--bg-surface);border-radius:12px;display:flex;overflow:hidden;box-shadow:var(--shadow-xl);border:1px solid var(--border-subtle);';
     panel.innerHTML =
-      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">' +
-        '<h2 style="font-size:18px;font-weight:600;color:var(--text-primary);margin:0;">Group Info</h2>' +
-        '<button class="btn-ghost" id="group-info-close" style="background:none;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;padding:4px 8px;border-radius:8px;">&times;</button>' +
-      '</div>' +
-      '<div style="text-align:center;margin-bottom:16px;">' +
-        avatarSection +
-        (isOwner ? '<div style="font-size:11px;color:var(--text-muted);margin-top:6px;cursor:pointer;" id="group-info-upload-avatar">Change Avatar</div>' : '') +
-      '</div>' +
-      '<div style="margin-bottom:16px;">' +
-        '<label style="font-size:12px;font-weight:500;color:var(--text-muted);display:block;margin-bottom:4px;">Group Name</label>' +
-        '<input id="group-info-name" type="text" value="' + window.Sanitize.escapeHtml(group.groupName || '') + '" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-base);color:var(--text-primary);font-size:14px;' + (isOwner ? '' : 'opacity:0.7;') + '" ' + (isOwner ? '' : 'disabled') + '>' +
-      '</div>' +
-      '<div style="margin-bottom:16px;">' +
-        '<label style="font-size:12px;font-weight:500;color:var(--text-muted);display:block;margin-bottom:4px;">Description</label>' +
-        '<textarea id="group-info-desc" rows="2" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-base);color:var(--text-primary);font-size:13px;resize:none;' + (isOwner ? '' : 'opacity:0.7;') + '" ' + (isOwner ? '' : 'disabled') + '>' + window.Sanitize.escapeHtml(group.description || '') + '</textarea>' +
-      '</div>' +
-      '<div style="margin-bottom:12px;display:flex;align-items:center;color:var(--text-muted);font-size:11px;gap:16px;">' +
-        '<span>Created ' + createdDate + '</span>' +
-        '<span>' + onlineCount + '/' + members.length + ' online</span>' +
-      '</div>' +
-      '<div style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;">' +
-        '<div>' +
-          '<div style="font-size:12px;font-weight:500;color:var(--text-muted);">Invite Code</div>' +
-          '<div style="font-size:13px;color:var(--accent-primary);font-family:monospace;">' + window.Sanitize.escapeHtml(group.inviteCode || '') + '</div>' +
+      '<div style="width:240px;background:var(--bg-base);padding:24px;border-right:1px solid var(--border-subtle);display:flex;flex-direction:column;">' +
+        '<h2 style="font-family:var(--font-display);font-size:20px;margin:0 0 24px;color:var(--text-primary);font-weight:bold;">Group Info</h2>' +
+        '<div style="display:flex;flex-direction:column;align-items:center;text-align:center;margin-bottom:20px;">' +
+          avatarSection +
+          (isOwner ? '<button id="group-info-upload-avatar" style="margin-top:10px;padding:7px 10px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-surface);color:var(--text-secondary);cursor:pointer;font-size:12px;font-weight:600;">Change Avatar</button>' : '') +
+          '<div style="font-size:17px;font-weight:700;color:var(--text-primary);margin-top:12px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window.Sanitize.escapeHtml(group.groupName || 'Group') + '</div>' +
+          '<div style="font-size:12px;color:var(--text-muted);margin-top:2px;">' + onlineCount + ' online, ' + members.length + ' members</div>' +
         '</div>' +
-        '<div style="display:flex;gap:6px;">' +
-          '<button class="btn-ghost" id="group-info-copy-invite" style="padding:6px 12px;border-radius:8px;border:1px solid var(--border-color);background:transparent;color:var(--text-secondary);cursor:pointer;font-size:12px;">Copy</button>' +
-          '<button class="btn-ghost" id="group-info-share-invite" style="padding:6px 12px;border-radius:8px;border:1px solid var(--border-color);background:transparent;color:var(--accent-primary);cursor:pointer;font-size:12px;">Share</button>' +
+        '<div style="display:flex;flex-direction:column;gap:8px;margin-top:4px;">' +
+          '<div style="padding:10px 12px;border-radius:8px;background:var(--bg-hover);color:var(--text-primary);font-size:13px;font-weight:600;">Overview</div>' +
+          '<div style="padding:10px 12px;border-radius:8px;color:var(--text-secondary);font-size:13px;">Created ' + createdDate + '</div>' +
+          '<div style="padding:10px 12px;border-radius:8px;color:var(--text-secondary);font-size:13px;">Role: ' + (isOwner ? 'Owner' : (isAdmin ? 'Admin' : 'Member')) + '</div>' +
         '</div>' +
+        '<div style="flex:1;"></div>' +
+        '<button class="btn-ghost" id="group-info-close" style="padding:10px;border:1px solid var(--border-subtle);border-radius:8px;color:var(--text-secondary);background:transparent;cursor:pointer;">Close</button>' +
       '</div>' +
-      '<div style="display:flex;gap:8px;margin-bottom:12px;">' +
-        '<label style="display:flex;align-items:center;gap:8px;padding:8px 0;flex:1;cursor:pointer;">' +
-          '<span style="position:relative;display:inline-block;width:36px;height:20px;border-radius:10px;transition:0.2s;flex-shrink:0;background:' + (group.pinned ? 'var(--accent-primary)' : '#555') + ';" id="group-info-pin-track">' +
-            '<input type="checkbox" id="group-info-pin"' + (group.pinned ? ' checked' : '') + ' style="opacity:0;width:0;height:0;position:absolute;">' +
-            '<span id="group-info-pin-knob" style="position:absolute;left:' + (group.pinned ? '18px' : '2px') + ';top:2px;width:16px;height:16px;border-radius:50%;background:white;transition:0.2s;pointer-events:none;"></span>' +
-          '</span>' +
-          '<span style="font-size:13px;color:var(--text-primary);">Pin</span>' +
-        '</label>' +
-        '<label style="display:flex;align-items:center;gap:8px;padding:8px 0;flex:1;cursor:pointer;">' +
-          '<span style="position:relative;display:inline-block;width:36px;height:20px;border-radius:10px;transition:0.2s;flex-shrink:0;background:' + (group.notificationMuted ? 'var(--accent-primary)' : '#555') + ';" id="group-info-mute-track">' +
-            '<input type="checkbox" id="group-info-mute"' + (group.notificationMuted ? ' checked' : '') + ' style="opacity:0;width:0;height:0;position:absolute;">' +
-            '<span id="group-info-mute-knob" style="position:absolute;left:' + (group.notificationMuted ? '18px' : '2px') + ';top:2px;width:16px;height:16px;border-radius:50%;background:white;transition:0.2s;pointer-events:none;"></span>' +
-          '</span>' +
-          '<span style="font-size:13px;color:var(--text-primary);">Mute</span>' +
-        '</label>' +
-      '</div>' +
-      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">' +
-        '<div style="font-size:12px;font-weight:500;color:var(--text-muted);">Members (' + members.length + ')</div>' +
-        '<div style="display:flex;gap:6px;">' +
-          '<input id="group-info-member-search" type="text" placeholder="Search members..." style="padding:4px 8px;border-radius:6px;border:1px solid var(--border-color);background:var(--bg-base);color:var(--text-primary);font-size:11px;width:140px;">' +
-          '<button id="group-info-add-member-btn" style="padding:4px 10px;border-radius:6px;border:1px solid var(--border-color);background:transparent;color:var(--accent-primary);cursor:pointer;font-size:11px;">+ Add</button>' +
+      '<div style="flex:1;padding:32px;overflow-y:auto;background:var(--bg-surface);">' +
+        '<h3 style="font-family:var(--font-display);font-size:24px;margin:0 0 24px;color:var(--text-primary);">Manage Group</h3>' +
+        '<div style="margin-bottom:24px;border-radius:12px;overflow:hidden;border:1px solid var(--border-subtle);">' +
+          '<div style="height:96px;background:linear-gradient(135deg,var(--accent-primary),#6C5CE7);position:relative;">' +
+            previewAvatarSection +
+          '</div>' +
+          '<div style="padding:46px 24px 20px;background:var(--bg-surface);">' +
+            '<div style="font-size:18px;font-weight:700;color:var(--text-primary);">' + window.Sanitize.escapeHtml(group.groupName || 'Group') + '</div>' +
+            '<div style="font-size:13px;color:var(--text-muted);margin-top:4px;line-height:1.4;">' + window.Sanitize.escapeHtml(group.description || 'No description yet') + '</div>' +
+          '</div>' +
         '</div>' +
-      '</div>' +
-      '<div id="group-info-add-member-section" style="display:none;margin-bottom:8px;padding:8px;background:var(--bg-base);border-radius:8px;">' +
-        '<div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">Select a friend to add:</div>' +
-        '<div id="group-info-friend-picker">' + buildFriendPickerHtml() + '</div>' +
-      '</div>' +
-      '<div id="group-info-members-list">' + buildMemberListHtml('') + '</div>' +
-      (!isOwner ? '<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border-color);"><button id="group-info-leave-group" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--accent-danger);background:transparent;color:var(--accent-danger);cursor:pointer;font-size:13px;">Leave Group</button></div>' : '');
+        sectionStart('users', 'Profile', true) +
+          '<div style="margin-bottom:16px;"><label style="display:block;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;margin-bottom:6px;">Group Name</label>' +
+          '<input id="group-info-name" type="text" value="' + window.Sanitize.escapeHtml(group.groupName || '') + '" style="' + fieldStyle + (isOwner ? '' : 'opacity:0.7;') + '" ' + (isOwner ? '' : 'disabled') + '></div>' +
+          '<div><label style="display:block;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;margin-bottom:6px;">Description</label>' +
+          '<textarea id="group-info-desc" rows="3" style="' + fieldStyle + 'resize:none;' + (isOwner ? '' : 'opacity:0.7;') + '" ' + (isOwner ? '' : 'disabled') + '>' + window.Sanitize.escapeHtml(group.description || '') + '</textarea></div>' +
+        sectionEnd +
+        sectionStart('key-round', 'Invite', false) +
+          '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">' +
+            '<div style="min-width:0;">' +
+              '<div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;margin-bottom:6px;">Invite Code</div>' +
+              '<div style="font-size:13px;color:var(--accent-primary);font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window.Sanitize.escapeHtml(group.inviteCode || '') + '</div>' +
+            '</div>' +
+            '<div style="display:flex;gap:8px;flex-shrink:0;">' +
+              '<button class="btn-ghost" id="group-info-copy-invite" style="' + ghostBtnStyle + '">Copy</button>' +
+              '<button class="btn-ghost" id="group-info-share-invite" style="' + ghostBtnStyle + 'color:var(--accent-primary);">Share</button>' +
+            '</div>' +
+          '</div>' +
+        sectionEnd +
+        sectionStart('sliders-horizontal', 'Preferences', false) +
+          '<label style="display:flex;align-items:center;gap:12px;font-size:13px;color:var(--text-primary);cursor:pointer;padding:8px 0;">' +
+            '<span style="position:relative;display:inline-block;width:36px;height:20px;border-radius:10px;transition:0.2s;flex-shrink:0;background:' + (group.pinned ? 'var(--accent-primary)' : '#323236') + ';" id="group-info-pin-track">' +
+              '<input type="checkbox" id="group-info-pin"' + (group.pinned ? ' checked' : '') + ' style="opacity:0;width:0;height:0;position:absolute;">' +
+              '<span id="group-info-pin-knob" style="position:absolute;left:' + (group.pinned ? '18px' : '2px') + ';top:2px;width:16px;height:16px;border-radius:50%;background:white;transition:0.2s;pointer-events:none;"></span>' +
+            '</span><div><div>Pin Group</div><div style="font-size:11px;color:var(--text-muted);font-weight:400;">Keep this group near the top of your chat list</div></div>' +
+          '</label>' +
+          '<label style="display:flex;align-items:center;gap:12px;font-size:13px;color:var(--text-primary);cursor:pointer;padding:8px 0;border-top:1px solid var(--border-subtle);">' +
+            '<span style="position:relative;display:inline-block;width:36px;height:20px;border-radius:10px;transition:0.2s;flex-shrink:0;background:' + (group.notificationMuted ? 'var(--accent-primary)' : '#323236') + ';" id="group-info-mute-track">' +
+              '<input type="checkbox" id="group-info-mute"' + (group.notificationMuted ? ' checked' : '') + ' style="opacity:0;width:0;height:0;position:absolute;">' +
+              '<span id="group-info-mute-knob" style="position:absolute;left:' + (group.notificationMuted ? '18px' : '2px') + ';top:2px;width:16px;height:16px;border-radius:50%;background:white;transition:0.2s;pointer-events:none;"></span>' +
+            '</span><div><div>Mute Notifications</div><div style="font-size:11px;color:var(--text-muted);font-weight:400;">Stop notification alerts from this group</div></div>' +
+          '</label>' +
+        sectionEnd +
+        sectionStart('user-plus', 'Members (' + members.length + ')', true) +
+          '<div style="display:flex;gap:8px;margin-bottom:12px;">' +
+            '<input id="group-info-member-search" type="text" placeholder="Search members..." style="flex:1;padding:10px 12px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);font-size:13px;outline:none;">' +
+            '<button id="group-info-add-member-btn" style="' + ghostBtnStyle + 'color:var(--accent-primary);">Add</button>' +
+          '</div>' +
+          '<div id="group-info-add-member-section" style="display:none;margin-bottom:12px;padding:12px;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:10px;">' +
+            '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;font-weight:600;">Select a friend to add</div>' +
+            '<div id="group-info-friend-picker">' + buildFriendPickerHtml() + '</div>' +
+          '</div>' +
+          '<div id="group-info-members-list">' + buildMemberListHtml('') + '</div>' +
+        sectionEnd +
+        (!isOwner ? sectionStart('log-out', 'Danger Zone', false) +
+          '<button id="group-info-leave-group" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--accent-danger);background:transparent;color:var(--accent-danger);cursor:pointer;font-size:13px;font-weight:600;">Leave Group</button>' +
+        sectionEnd : '') +
+      '</div>';
 
     overlay.appendChild(panel);
     document.body.appendChild(overlay);
+    if (window.lucide) window.lucide.createIcons({ root: panel });
 
     // Close button
     document.getElementById('group-info-close').addEventListener('click', function() {
@@ -1175,10 +1235,10 @@ window.SidebarMiddle = {
     var pinTrack = document.getElementById('group-info-pin-track');
     var pinKnob = document.getElementById('group-info-pin-knob');
     if (pinCheck) {
-      if (pinTrack) pinTrack.style.background = pinCheck.checked ? 'var(--accent-primary)' : '#555';
+      if (pinTrack) pinTrack.style.background = pinCheck.checked ? 'var(--accent-primary)' : '#323236';
       pinCheck.addEventListener('change', function() {
         window.store.updateGroupField(groupId, 'pinned', pinCheck.checked ? 1 : 0);
-        if (pinTrack) pinTrack.style.background = pinCheck.checked ? 'var(--accent-primary)' : '#555';
+        if (pinTrack) pinTrack.style.background = pinCheck.checked ? 'var(--accent-primary)' : '#323236';
         if (pinKnob) pinKnob.style.left = pinCheck.checked ? '18px' : '2px';
       });
     }
@@ -1188,10 +1248,10 @@ window.SidebarMiddle = {
     var muteTrack = document.getElementById('group-info-mute-track');
     var muteKnob = document.getElementById('group-info-mute-knob');
     if (muteCheck) {
-      if (muteTrack) muteTrack.style.background = muteCheck.checked ? 'var(--accent-primary)' : '#555';
+      if (muteTrack) muteTrack.style.background = muteCheck.checked ? 'var(--accent-primary)' : '#323236';
       muteCheck.addEventListener('change', function() {
         window.store.updateGroupField(groupId, 'notificationMuted', muteCheck.checked ? 1 : 0);
-        if (muteTrack) muteTrack.style.background = muteCheck.checked ? 'var(--accent-primary)' : '#555';
+        if (muteTrack) muteTrack.style.background = muteCheck.checked ? 'var(--accent-primary)' : '#323236';
         if (muteKnob) muteKnob.style.left = muteCheck.checked ? '18px' : '2px';
       });
     }
@@ -1264,8 +1324,11 @@ window.SidebarMiddle = {
           window.orbitAPI.saveAvatar(groupId, dataParts[1]).then(function(path) {
             window.store.updateGroupField(groupId, 'avatarPath', path);
             window.store.updateGroupField(groupId, 'avatarUpdatedAt', ts);
+            var newSrc = 'orbit-avatar://' + groupId + '?t=' + ts;
             var img = document.getElementById('group-info-avatar-img');
-            if (img) img.src = 'orbit-avatar://' + groupId + '?t=' + ts;
+            var previewImg = document.getElementById('group-info-preview-avatar-img');
+            if (img) img.src = newSrc;
+            if (previewImg) previewImg.src = newSrc;
           }).catch(function(err) {
             if (window.Toast) window.Toast.show('Error', 'Failed to save avatar');
             console.error('Avatar save failed:', err);

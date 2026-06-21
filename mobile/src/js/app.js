@@ -19,27 +19,31 @@ var MStore = {
           showToast('Storage full! Clear some chat history or use smaller images.', 'error');
         }
         
-        // Emergency cleanup: if saving messages failed, trim old messages
+        // Emergency cleanup: if saving messages failed, progressively trim old messages
         if (key === 'messages') {
-          var trimmed = {};
-          var didTrim = false;
-          for (var c in val) {
-            if (val[c] && val[c].length > 50) {
-              trimmed[c] = val[c].slice(-50);
-              didTrim = true;
-            } else {
-              trimmed[c] = val[c];
+          var limits = [50, 30, 15, 5];
+          for (var li = 0; li < limits.length; li++) {
+            var limit = limits[li];
+            var trimmed = {};
+            for (var c in val) {
+              if (val[c] && val[c].length > limit) {
+                trimmed[c] = val[c].slice(-limit);
+              } else {
+                trimmed[c] = val[c];
+              }
             }
-          }
-          if (didTrim) {
             try {
               localStorage.setItem('orbit_' + key, JSON.stringify(trimmed));
-              this.messages = trimmed; // update active reference
-              return; // Successfully saved trimmed version
+              this.messages = trimmed;
+              if (typeof showToast === 'function') {
+                showToast('Storage trimmed: kept last ' + limit + ' messages per chat.', 'warning');
+              }
+              return;
             } catch(e2) {
-              console.error('Still exceeded after trimming', e2);
+              // Still exceeded, try with a lower limit
             }
           }
+          console.error('Failed to save messages even after aggressive trimming');
         }
       }
     }
@@ -84,6 +88,7 @@ var MStore = {
   settings: {
     theme: 'dark',
     enterToSend: true,
+    swipeToReply: true,
     privacyMode: false,
     e2eeEnabled: false,
     timeFormat24: true,
@@ -104,9 +109,10 @@ var MStore = {
     experimentalProfileFrames: false,
     experimentalAnimatedAvatars: false,
     experimentalMessageFx: false,
-    experimentalMessageTranslate: false,
+    messageTranslate: true,
     experimentalCompactSpacing: false,
     enableCustomColors: false,
+    experimentalPerformanceMode: false,
     notifyPreview: true,
     notifySound: true,
     notifyDnd: false,
@@ -146,6 +152,9 @@ var MStore = {
       };
       this.save();
     }
+
+    // Ensure default profile frame setting
+    if (this.settings.profileFrame === undefined) this.settings.profileFrame = 0;
 
     // Ensure echo bot exists and update avatar
     var echoFriend = this.friends.find(function(f) { return f.id === 'echo'; });
@@ -268,7 +277,7 @@ var MStore = {
     var msgs = this.messages[chatId];
     if (!msgs) return;
     for (var i = 0; i < msgs.length; i++) {
-      if (msgs[i].id === msgId) {
+      if (String(msgs[i].id) === String(msgId)) {
         msgs[i].text = newText;
         msgs[i].edited = true;
         break;
@@ -280,7 +289,7 @@ var MStore = {
   deleteMessage(chatId, msgId) {
     var msgs = this.messages[chatId];
     if (!msgs) return;
-    this.messages[chatId] = msgs.filter(function(m) { return m.id !== msgId; });
+    this.messages[chatId] = msgs.filter(function(m) { return String(m.id) !== String(msgId); });
     this.save();
   }
 };
@@ -388,6 +397,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var timeStr = c.lastTime ? formatTime(c.lastTime) : '';
       var avatarHtml = '';
       var statusDot = '';
+      var chatFrameHtml = '';
       if (MStore.settings.showChatAvatars !== false) {
         var initial = c.name ? c.name.charAt(0).toUpperCase() : '?';
         avatarHtml = c.avatar
@@ -402,6 +412,14 @@ document.addEventListener('DOMContentLoaded', function() {
           statusDot = statusClass ? '<div class="chat-row-status-dot ' + statusClass + '"></div>' : '';
           if (statusClass) {
             avatarHtml = '<div class="avatar-glow-' + statusClass + '" style="border-radius:50%;width:100%;height:100%;overflow:hidden;display:flex;align-items:center;justify-content:center;">' + avatarHtml + '</div>';
+          }
+          // Profile frame for DM avatars
+          if (MStore.settings.experimentalProfileFrames) {
+            var cf = MStore.friends.find(function(f) { return f.id === c.id; });
+            var cfNum = cf && cf.profileFrame ? cf.profileFrame : 0;
+            if (cfNum > 0) {
+              chatFrameHtml = '<img src="icons/frames/pfp_frame_' + cfNum + '.png" class="pfp-frame" style="position:absolute;top:-15%;left:-17%;pointer-events:none;" draggable="false" alt="">';
+            }
           }
         }
       }
@@ -423,6 +441,7 @@ document.addEventListener('DOMContentLoaded', function() {
         (MStore.settings.showChatAvatars !== false
           ? '<div class="chat-row-avatar-wrapper">' +
             '<div class="chat-row-avatar"' + (isGroup ? ' style="border-radius:12px;"' : '') + '>' + avatarHtml + '</div>' +
+            chatFrameHtml +
             statusDot +
           '</div>'
           : '') +
@@ -721,7 +740,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function startReply(msgId) {
     var msgs = MStore.messages[activeChatId] || [];
-    var msg = msgs.find(function(m) { return m.id === msgId; });
+    var msg = msgs.find(function(m) { return String(m.id) === String(msgId); });
     if (!msg) return;
     var senderName = 'Unknown';
     if (msg.from === 'me') {
@@ -741,7 +760,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function startEdit(msgId) {
     var msgs = MStore.messages[activeChatId] || [];
-    var msg = msgs.find(function(m) { return m.id === msgId; });
+    var msg = msgs.find(function(m) { return String(m.id) === String(msgId); });
     if (!msg) return;
     editingMsg = { id: msg.id, chatId: activeChatId, text: msg.text };
     replyingTo = null;
@@ -763,7 +782,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function translateMessage(msgId) {
     var msgs = MStore.messages[activeChatId] || [];
-    var msg = msgs.find(function(m) { return m.id === msgId; });
+    var msg = msgs.find(function(m) { return String(m.id) === String(msgId); });
     if (!msg || !msg.text) return;
     var bubble = document.querySelector('.message-row[data-msg-id="' + msgId + '"] .message-bubble');
     if (!bubble) return;
@@ -795,7 +814,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function showForwardModal(msgId) {
     var msgs = MStore.messages[activeChatId] || [];
-    var msg = msgs.find(function(m) { return m.id === msgId; });
+    var msg = msgs.find(function(m) { return String(m.id) === String(msgId); });
     if (!msg) return;
 
     var senderName = 'Unknown';
@@ -1067,6 +1086,11 @@ document.addEventListener('DOMContentLoaded', function() {
             gridHtml += '<div class="att-grid-cell" data-open-image="' + safeAttId + '" data-msg-id="' + m.id + '">' +
               '<img src="' + escapeHtml(a.url) + '" style="width:100%;height:100%;object-fit:cover;" loading="lazy">' +
             '</div>';
+          } else if (a.type === 'video' && a.url) {
+            gridHtml += '<div class="att-grid-cell" data-open-video="' + safeAttId + '" data-msg-id="' + m.id + '" style="position:relative;">' +
+              '<video src="' + escapeHtml(a.url) + '" style="width:100%;height:100%;object-fit:cover;display:block;" preload="metadata"></video>' +
+              '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:40px;height:40px;border-radius:50%;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;pointer-events:none;"><svg viewBox="0 0 24 24" width="20" height="20" fill="white"><polygon points="8,5 19,12 8,19"/></svg></div>' +
+            '</div>';
           } else {
             gridHtml += '<div class="att-grid-cell att-file-cell">' +
               '<i data-lucide="file" style="width:28px;height:28px;margin-bottom:6px;color:var(--text-muted);"></i>' +
@@ -1126,8 +1150,10 @@ document.addEventListener('DOMContentLoaded', function() {
         '</div>' +
       '</div>';
     });
+    feed.setAttribute('data-refreshing', 'true');
     feed.innerHTML = html;
     freezeGifImages(feed);
+    requestAnimationFrame(function() { feed.removeAttribute('data-refreshing'); });
     // Bind action buttons
     feed.querySelectorAll('.msg-reply-btn').forEach(function(btn) {
       btn.addEventListener('click', function(e) { e.stopPropagation(); startReply(this.getAttribute('data-msg-id')); });
@@ -1142,7 +1168,7 @@ document.addEventListener('DOMContentLoaded', function() {
       btn.addEventListener('click', function(e) { e.stopPropagation(); confirmDeleteMessage(this.getAttribute('data-msg-id')); });
     });
     feed.querySelectorAll('.msg-translate-btn').forEach(function(btn) {
-      btn.addEventListener('click', function(e) { e.stopPropagation(); var msgId = this.getAttribute('data-msg-id'); if (MStore.settings.experimentalMessageTranslate) translateMessage(msgId); });
+      btn.addEventListener('click', function(e) { e.stopPropagation(); var msgId = this.getAttribute('data-msg-id'); if (MStore.settings.messageTranslate) translateMessage(msgId); });
     });
     feed.querySelectorAll('.msg-pin-btn').forEach(function(btn) {
       btn.addEventListener('click', function(e) {
@@ -1157,7 +1183,7 @@ document.addEventListener('DOMContentLoaded', function() {
           group.pinnedMessages.splice(idx, 1);
         } else {
           var msgs = MStore.messages[activeChatId] || [];
-          var msg = msgs.find(function(m) { return m.id === msgId; });
+          var msg = msgs.find(function(m) { return String(m.id) === String(msgId); });
           group.pinnedMessages.push({
             msgId: msgId,
             text: msg ? (msg.text || '(attachment)').substring(0, 100) : '',
@@ -1216,7 +1242,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var msgId = this.getAttribute('data-msg-id');
         var attId = this.getAttribute('data-open-image');
         var msgs = MStore.messages[activeChatId] || [];
-        var msg = msgs.find(function(m) { return m.id === msgId; });
+        var msg = msgs.find(function(m) { return String(m.id) === String(msgId); });
         if (msg && msg.attachments) {
           var att = msg.attachments.find(function(a) { return String(a.id) === attId; });
           if (att && att.url) {
@@ -1226,16 +1252,181 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       });
     });
+    // Click video to open full-size player
+    feed.querySelectorAll('[data-open-video]').forEach(function(el) {
+      el.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var msgId = this.getAttribute('data-msg-id');
+        var attId = this.getAttribute('data-open-video');
+        var msgs = MStore.messages[activeChatId] || [];
+        var msg = msgs.find(function(m) { return String(m.id) === String(msgId); });
+        if (msg && msg.attachments) {
+          var att = msg.attachments.find(function(a) { return String(a.id) === attId; });
+          if (att && att.url) {
+            var player = document.getElementById('video-preview-player');
+            player.src = att.url;
+            player.load();
+            document.getElementById('video-preview-overlay').classList.add('open');
+          }
+        }
+      });
+    });
     feed.scrollTop = feed.scrollHeight;
     renderLucide({ root: feed });
     injectMessageParticles(feed);
   }
 
+  function setupMessageSwipe() {
+    var feed = document.getElementById('message-feed');
+    if (!feed || feed.dataset.swipeReplyBound) return;
+    feed.dataset.swipeReplyBound = 'true';
+    var swipe = null;
+    var DRAG_MAX = 80;
+    var TRIGGER_THRESHOLD = 55;
+    var _hapticFired = false;
+
+    function getRow(id) {
+      return feed.querySelector('.message-row[data-msg-id="' + id + '"]');
+    }
+
+    function ensureIndicator(row) {
+      var ind = row.querySelector('.swipe-reply-indicator');
+      if (!ind) {
+        ind = document.createElement('div');
+        ind.className = 'swipe-reply-indicator';
+        ind.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"></polyline><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path></svg>';
+        row.style.position = 'relative';
+        row.appendChild(ind);
+      }
+      return ind;
+    }
+
+    function getSwipeTargets(row) {
+      var targets = [];
+      Array.prototype.forEach.call(row.children, function(child) {
+        if (!child.classList || !child.classList.contains('swipe-reply-indicator')) {
+          targets.push(child);
+        }
+      });
+      var bubble = row.querySelector('.message-bubble');
+      return targets.length ? targets : (bubble ? [bubble] : []);
+    }
+
+    function applyDrag(row, dx) {
+      var clampedDx = Math.max(-DRAG_MAX, Math.min(0, dx));
+      getSwipeTargets(row).forEach(function(target) {
+        target.style.transition = 'none';
+        target.style.transform = 'translateX(' + clampedDx + 'px)';
+      });
+      var ind = ensureIndicator(row);
+      var progress = Math.min(1, Math.abs(clampedDx) / TRIGGER_THRESHOLD);
+      var scale = 0.4 + progress * 0.6;
+      var opacity = progress;
+      ind.style.opacity = opacity;
+      ind.style.transform = 'translateY(-50%) scale(' + scale + ')';
+      if (progress >= 1) {
+        ind.style.color = 'var(--accent-primary, #3b82f6)';
+      } else {
+        ind.style.color = 'var(--text-muted)';
+      }
+    }
+
+    function resetRow(row, triggered) {
+      getSwipeTargets(row).forEach(function(target) {
+        target.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+        target.style.transform = 'translateX(0)';
+        target.addEventListener('transitionend', function handler() {
+          target.style.transition = '';
+          target.style.transform = '';
+          target.removeEventListener('transitionend', handler);
+        });
+        setTimeout(function() {
+          target.style.transition = '';
+          target.style.transform = '';
+        }, 350);
+      });
+      var ind = row.querySelector('.swipe-reply-indicator');
+      if (ind) {
+        ind.style.transition = 'opacity 0.2s ease';
+        ind.style.opacity = '0';
+        setTimeout(function() { if (ind.parentNode) ind.remove(); }, 250);
+      }
+    }
+
+    feed.addEventListener('touchstart', function(e) {
+      if (MStore.settings.swipeToReply === false || e.touches.length !== 1) return;
+      var row = e.target.closest('.message-row');
+      if (!row || e.target.closest('button, input, textarea, select, a, label, .reaction-pill, .reply-quote, .msg-action-btn')) return;
+      var t = e.touches[0];
+      swipe = { id: row.getAttribute('data-msg-id'), x: t.clientX, y: t.clientY, locked: false };
+      _hapticFired = false;
+    }, { passive: true });
+
+    feed.addEventListener('touchmove', function(e) {
+      if (!swipe || e.touches.length !== 1) return;
+      var t = e.touches[0];
+      var dx = t.clientX - swipe.x;
+      var dy = t.clientY - swipe.y;
+
+      // Determine drag direction lock
+      if (!swipe.locked && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+        swipe.locked = true;
+        swipe.horizontal = Math.abs(dx) > Math.abs(dy);
+      }
+      if (!swipe.locked || !swipe.horizontal) return;
+
+      // Only allow dragging LEFT
+      if (dx >= 0) {
+        var row = getRow(swipe.id);
+        if (row) applyDrag(row, 0);
+        return;
+      }
+
+      e.preventDefault();
+      var row = getRow(swipe.id);
+      if (row) {
+        applyDrag(row, dx);
+        // Haptic feedback when crossing threshold
+        if (!_hapticFired && Math.abs(dx) >= TRIGGER_THRESHOLD) {
+          _hapticFired = true;
+          if (navigator.vibrate) navigator.vibrate(15);
+        }
+      }
+    }, { passive: false });
+
+    feed.addEventListener('touchend', function(e) {
+      if (!swipe) return;
+      var sid = swipe.id;
+      var row = getRow(sid);
+      if (!row) { swipe = null; return; }
+
+      var triggered = false;
+      if (e.changedTouches.length === 1) {
+        var t = e.changedTouches[0];
+        var dx = t.clientX - swipe.x;
+        var dy = t.clientY - swipe.y;
+        if (dx < -TRIGGER_THRESHOLD && Math.abs(dy) < 70) triggered = true;
+      }
+
+      resetRow(row, triggered);
+      if (triggered) startReply(sid);
+      swipe = null;
+    }, { passive: true });
+
+    feed.addEventListener('touchcancel', function() {
+      if (swipe) {
+        var row = getRow(swipe.id);
+        if (row) resetRow(row, false);
+      }
+      swipe = null;
+    }, { passive: true });
+  }
+
   /* -- Send Message -- */
   var _frozenCache = new Map();
-  function freezeGifImages(root) {
+  function freezeGifImages(root, force) {
     if (!root || !root.querySelectorAll) return;
-    if (!MStore.settings || !MStore.settings.reduceMotion) return;
+    if (!force && (!MStore.settings || (!MStore.settings.reduceMotion && !MStore.settings.experimentalPerformanceMode))) return;
     function freezeOne(img) {
       img.setAttribute('data-frozen', 'true');
       var src = img.currentSrc || img.src;
@@ -1338,8 +1529,9 @@ document.addEventListener('DOMContentLoaded', function() {
         var memberId = typeof m === 'string' ? m : m.userId;
         if (memberId === (MStore.user ? MStore.user.id : '')) return; // skip self
         var memberFriend = MStore.friends.find(function(f) { return f.id === memberId; });
-        if (isE2EE && memberFriend && memberFriend.publicKey) {
-          Orbit.E2EE.encrypt(textToSend, memberFriend.publicKey).then(function(encrypted) {
+        var memberKey = memberFriend ? memberFriend.publicKey : (typeof m !== 'string' ? m.publicKey : null);
+        if (isE2EE && memberKey) {
+          Orbit.E2EE.encrypt(textToSend, memberKey).then(function(encrypted) {
             if (encrypted) {
               var e2eePkt = Orbit.Protocol.createPacket(
                 Orbit.Protocol.Types.MESSAGE,
@@ -1350,7 +1542,7 @@ document.addEventListener('DOMContentLoaded', function() {
               if (MStore.settings.logNetworkPackets) console.log('[NET] P2P send (e2ee group) ->', memberId, e2eePkt);
             }
           });
-        } else if (!isE2EE) {
+        } else {
           var pkt = Orbit.Protocol.createPacket(
             Orbit.Protocol.Types.MESSAGE,
             { text: textToSend, groupId: groupId, msgId: newMsg.id, replyTo: newMsg.replyTo, attachments: newMsg.attachments, fromName: newMsg.fromName },
@@ -1457,10 +1649,11 @@ document.addEventListener('DOMContentLoaded', function() {
           return;
         }
         var isImage = file.type.startsWith('image/');
+        var isVideo = file.type.startsWith('video/');
         if (isImage) {
           var reader = new FileReader();
           reader.onload = function(ev) {
-            MStore.compressImage(ev.target.result, 1200, 1200, 0.7, function(compressedUrl) {
+            MStore.compressImage(ev.target.result, 800, 800, 0.5, function(compressedUrl) {
               stagedFiles.push({
                 name: file.name,
                 size: file.size,
@@ -1470,6 +1663,33 @@ document.addEventListener('DOMContentLoaded', function() {
               done++;
               if (done === total) renderFilePreview();
             });
+          };
+          reader.readAsDataURL(file);
+        } else if (isVideo) {
+          var reader = new FileReader();
+          reader.onload = function(ev) {
+            var videoUrl = ev.target.result;
+            if (file.size > 5 * 1024 * 1024) {
+              compressVideoMobile(videoUrl, 1280, function(compressedUrl) {
+                stagedFiles.push({
+                  name: file.name,
+                  size: compressedUrl.length,
+                  type: 'video',
+                  url: compressedUrl
+                });
+                done++;
+                if (done === total) renderFilePreview();
+              });
+            } else {
+              stagedFiles.push({
+                name: file.name,
+                size: file.size,
+                type: 'video',
+                url: videoUrl
+              });
+              done++;
+              if (done === total) renderFilePreview();
+            }
           };
           reader.readAsDataURL(file);
         } else {
@@ -1592,9 +1812,12 @@ document.addEventListener('DOMContentLoaded', function() {
     filtered.forEach(function(f) {
       var color = statusColors[f.status] || 'var(--text-muted)';
       var initial = f.name ? f.name.charAt(0).toUpperCase() : '?';
+      var fPfNum = MStore.settings.experimentalProfileFrames ? (f.profileFrame || 0) : 0;
+      var fPfHtml = fPfNum > 0 ? '<img src="icons/frames/pfp_frame_' + fPfNum + '.png" class="pfp-frame" style="position:absolute;top:-15%;left:-17%;pointer-events:none;" draggable="false" alt="">' : '';
       html += '<div class="list-row friend-row" data-friend="' + f.id + '">' +
         '<div class="chat-row-avatar-wrapper" style="width:44px;height:44px;">' +
           '<div class="chat-row-avatar" style="width:44px;height:44px;font-size:16px;">' + (f.avatar ? '<img src="' + escapeHtml(f.avatar) + '">' : initial) + '</div>' +
+          fPfHtml +
           '<div class="friend-status-dot" style="background:' + color + ';position:absolute;bottom:0;right:0;width:12px;height:12px;border-radius:50%;border:2px solid var(--bg-surface);"></div>' +
         '</div>' +
         '<div style="flex:1;min-width:0;margin-left:14px;">' +
@@ -1622,11 +1845,26 @@ document.addEventListener('DOMContentLoaded', function() {
     var navEl = document.getElementById('nav-user-avatar');
     if (navEl) {
       navEl.innerHTML = u && u.avatar ? '<img src="' + escapeHtml(u.avatar) + '" alt="">' : initial;
+      var navPf = MStore.settings.experimentalProfileFrames ? (MStore.settings.profileFrame || 0) : 0;
+      var navFrame = navEl.parentNode.querySelector('.pfp-frame');
+      if (navPf > 0) {
+        if (!navFrame) {
+          navFrame = document.createElement('img');
+          navFrame.className = 'pfp-frame';
+          navFrame.draggable = false;
+          navFrame.alt = '';
+          navFrame.style.cssText = 'position:absolute;top:-1px;left:-1px;pointer-events:none;';
+          navEl.parentNode.appendChild(navFrame);
+        }
+        navFrame.src = 'icons/frames/pfp_frame_' + navPf + '.png';
+      } else if (navFrame) {
+        navFrame.remove();
+      }
     }
 
     var headerEl = document.getElementById('panel-header-avatar');
     if (headerEl) {
-      headerEl.innerHTML = u && u.avatar ? '<img src="' + escapeHtml(u.avatar) + '" alt="">' : initial;
+      headerEl.innerHTML = u && u.avatar ? '<img src="' + escapeHtml(u.avatar) + '">' : initial;
     }
   }
 
@@ -1637,9 +1875,14 @@ document.addEventListener('DOMContentLoaded', function() {
     var u = MStore.user;
     var initial = u && u.name ? u.name.charAt(0).toUpperCase() : '?';
 
+    var sPfNum = MStore.settings.experimentalProfileFrames ? (MStore.settings.profileFrame || 0) : 0;
+    var sPfHtml = sPfNum > 0 ? '<img src="icons/frames/pfp_frame_' + sPfNum + '.png" class="pfp-frame" style="position:absolute;top:-15%;left:-17%;pointer-events:none;" draggable="false" alt="">' : '';
     container.innerHTML =
       '<div class="settings-profile-card" id="settings-profile-card">' +
-        '<div class="settings-profile-avatar">' + (u && u.avatar ? '<img src="' + escapeHtml(u.avatar) + '">' : initial) + '</div>' +
+        '<div style="position:relative;display:inline-flex;">' +
+          '<div class="settings-profile-avatar">' + (u && u.avatar ? '<img src="' + escapeHtml(u.avatar) + '">' : initial) + '</div>' +
+          sPfHtml +
+        '</div>' +
         '<div class="settings-profile-info">' +
           '<div class="settings-profile-name">' + escapeHtml(u ? u.name : 'User') + '</div>' +
           '<div class="settings-profile-tag">#' + escapeHtml(u ? u.tag : '0000') + '</div>' +
@@ -1769,45 +2012,57 @@ document.addEventListener('DOMContentLoaded', function() {
     switch (key) {
       case 'appearance':
         return '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Theme</span></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Theme</span><div class="settings-row-desc">Dark, light, or colorful presets</div></div>' +
           sel(themeOptions, 'set-theme', s.theme || 'dark') +
         '</div>' +
         '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Message Bubbles</span></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Message Bubbles</span><div class="settings-row-desc">Modern rounded or compact bubbles</div></div>' +
           sel([{v:'Modern',l:'Modern'},{v:'Compact',l:'Compact'}], 'set-bubbles', s.messageBubbles || 'Modern') +
         '</div>' +
         '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">24-Hour Time</span></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">24-Hour Time</span><div class="settings-row-desc">Show times in 24-hour format</div></div>' +
           '<button class="settings-toggle ' + (s.timeFormat24 ? 'on' : '') + '" id="set-24h"></button>' +
         '</div>' +
         '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Animations</span></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Animations</span><div class="settings-row-desc">Enable UI animations and transitions</div></div>' +
           '<button class="settings-toggle ' + (s.animations !== false ? 'on' : '') + '" id="set-animations"></button>' +
         '</div>' +
         '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Animation Speed</span></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Animation Speed</span><div class="settings-row-desc">How fast animations play</div></div>' +
           sel([{v:'normal',l:'Normal'},{v:'fast',l:'Fast'},{v:'instant',l:'Instant'}], 'set-anim-speed', s.animSpeed || 'normal') +
         '</div>' +
         '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Font Size</span></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Font Size</span><div class="settings-row-desc">Adjust chat text size</div></div>' +
           sel([{v:'Small',l:'Small'},{v:'Medium',l:'Medium'},{v:'Large',l:'Large'}], 'set-font-size', s.fontSize || 'Medium') +
         '</div>' +
         '<div class="settings-row">' +
           '<div class="settings-row-content"><span class="settings-row-title">Reduce Motion</span><div class="settings-row-desc">Disable animations, freeze GIF previews, and stop avatar effects</div></div>' +
           '<button class="settings-toggle ' + (s.reduceMotion ? 'on' : '') + '" id="set-reduce-motion"></button>' +
+        '</div>' +
+        '<div class="settings-row">' +
+          '<div class="settings-row-content"><span class="settings-row-title">Message Translation</span><div class="settings-row-desc">Translate button on messages</div></div>' +
+          '<button class="settings-toggle ' + (s.messageTranslate ? 'on' : '') + '" id="set-message-translate"></button>' +
         '</div>';
       case 'chat':
         return '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Enter to Send</span></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Enter to Send</span><div class="settings-row-desc">Press Enter to send messages</div></div>' +
           '<button class="settings-toggle ' + (s.enterToSend ? 'on' : '') + '" id="set-enter-send"></button>' +
         '</div>' +
         '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Show Avatars</span></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Swipe to Reply</span><div class="settings-row-desc">Swipe left on a message to reply</div></div>' +
+          '<button class="settings-toggle ' + (s.swipeToReply !== false ? 'on' : '') + '" id="set-swipe-reply"></button>' +
+        '</div>' +
+        '<div class="settings-row">' +
+          '<div class="settings-row-content"><span class="settings-row-title">Show Avatars</span><div class="settings-row-desc">Show profile pictures in chats</div></div>' +
           '<button class="settings-toggle ' + (s.showChatAvatars !== false ? 'on' : '') + '" id="set-chat-avatars"></button>' +
         '</div>' +
         '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Message Animation</span></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Message Animation</span><div class="settings-row-desc">How new messages appear</div></div>' +
           sel([{v:'slide',l:'Slide'},{v:'fade',l:'Fade'}], 'set-msg-anim', s.messageAnim || 'slide') +
+        '</div>' +
+        '<div class="settings-row">' +
+          '<div class="settings-row-content"><span class="settings-row-title">Compact Spacing</span><div class="settings-row-desc">Tighter message layout</div></div>' +
+          '<button class="settings-toggle ' + (s.experimentalCompactSpacing ? 'on' : '') + '" id="set-compact-spacing"></button>' +
         '</div>' +
         '<div class="settings-row">' +
           '<div class="settings-row-content"><span class="settings-row-title">Background Pattern</span><div class="settings-row-desc">Dots or Grid on chat background</div></div>' +
@@ -1822,16 +2077,12 @@ document.addEventListener('DOMContentLoaded', function() {
           '<button class="settings-toggle ' + (s.showLinkPreviews !== false ? 'on' : '') + '" id="set-link-previews"></button>' +
         '</div>';
       case 'notifications':
-        return '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Message Previews</span></div>' +
+        return         '<div class="settings-row">' +
+          '<div class="settings-row-content"><span class="settings-row-title">Message Previews</span><div class="settings-row-desc">Show message content in notifications</div></div>' +
           '<button class="settings-toggle ' + (s.notifyPreview !== false ? 'on' : '') + '" id="notify-preview"></button>' +
         '</div>' +
         '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Play Sound</span></div>' +
-          '<button class="settings-toggle ' + (s.notifySound ? 'on' : '') + '" id="notify-sound"></button>' +
-        '</div>' +
-        '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Do Not Disturb</span></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Do Not Disturb</span><div class="settings-row-desc">Mute all notifications</div></div>' +
           '<button class="settings-toggle ' + (s.notifyDnd ? 'on' : '') + '" id="notify-dnd"></button>' +
         '</div>' +
         '<div class="settings-row">' +
@@ -1848,7 +2099,7 @@ document.addEventListener('DOMContentLoaded', function() {
           '<button class="settings-toggle ' + (s.e2eeEnabled ? 'on' : '') + '" id="set-e2ee"></button>' +
         '</div>' +
         '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Auto-Delete Attachments</span></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Auto-Delete Attachments</span><div class="settings-row-desc">Auto-remove sent attachments after time</div></div>' +
           sel([
             {v:'0',l:'Never'},{v:'1',l:'1 min'},{v:'5',l:'5 min'},
             {v:'10',l:'10 min'},{v:'25',l:'25 min'},{v:'60',l:'60 min'}
@@ -1856,15 +2107,15 @@ document.addEventListener('DOMContentLoaded', function() {
         '</div>';
       case 'network':
         return '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Network Mode</span></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Network Mode</span><div class="settings-row-desc">Connection discovery method</div></div>' +
           sel([{v:'LAN Auto-Discovery',l:'LAN Auto-Discovery'},{v:'Custom IP',l:'Custom IP'}], 'net-mode', s.networkMode || 'LAN Auto-Discovery') +
         '</div>' +
         '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">UDP Discovery Port</span></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">UDP Discovery Port</span><div class="settings-row-desc">Port for peer discovery</div></div>' +
           '<input type="number" class="settings-input" id="net-udp" value="' + (s.udpPort || 45678) + '">' +
         '</div>' +
         '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">TCP Connection Port</span></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">TCP Connection Port</span><div class="settings-row-desc">Port for direct connections</div></div>' +
           '<input type="number" class="settings-input" id="net-tcp" value="' + (s.tcpPort || 46000) + '">' +
         '</div>' +
         '<div class="settings-row">' +
@@ -1887,30 +2138,30 @@ document.addEventListener('DOMContentLoaded', function() {
         var friendsCount = MStore.friends.length;
         var chatsCount = MStore.chats.length;
         return '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.1.2-beta · Capacitor Android</div></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.1.3-beta · Capacitor Android</div></div>' +
         '</div>' +
         '<div class="settings-row">' +
           '<div class="settings-row-content"><span class="settings-row-title">Statistics</span><div class="settings-row-desc">' + friendsCount + ' friends · ' + chatsCount + ' chats</div></div>' +
         '</div>';
       case 'advanced':
         return '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Developer Mode</span></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Developer Mode</span><div class="settings-row-desc">Enable developer tools</div></div>' +
           '<button class="settings-toggle ' + (s.devMode ? 'on' : '') + '" id="set-dev-mode"></button>' +
         '</div>' +
         '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Debug Display</span></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Debug Display</span><div class="settings-row-desc">Show debug overlay info</div></div>' +
           '<button class="settings-toggle ' + (s.debugDisplay ? 'on' : '') + '" id="set-debug-display"></button>' +
         '</div>' +
         '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Show Message IDs</span></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Show Message IDs</span><div class="settings-row-desc">Display message IDs in chat</div></div>' +
           '<button class="settings-toggle ' + (s.showMessageIds ? 'on' : '') + '" id="set-msg-ids"></button>' +
         '</div>' +
         '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Log Network Packets</span></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Log Network Packets</span><div class="settings-row-desc">Log P2P network traffic</div></div>' +
           '<button class="settings-toggle ' + (s.logNetworkPackets ? 'on' : '') + '" id="set-log-packets"></button>' +
         '</div>' +
         '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Show Connection Stats</span></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Show Connection Stats</span><div class="settings-row-desc">Show connection info overlay</div></div>' +
           '<button class="settings-toggle ' + (s.showConnectionStats ? 'on' : '') + '" id="set-conn-stats"></button>' +
         '</div>' +
         '<div class="settings-row">' +
@@ -1919,28 +2170,33 @@ document.addEventListener('DOMContentLoaded', function() {
         '</div>' +
         (s.enableExperimental ? (
           '<div class="settings-row">' +
-            '<div class="settings-row-content"><span class="settings-row-title">Animated Avatars</span></div>' +
+            '<div class="settings-row-content"><span class="settings-row-title">Animated Avatars</span><div class="settings-row-desc">Animate avatar borders with pulse effect</div></div>' +
             '<button class="settings-toggle ' + (s.experimentalAnimatedAvatars ? 'on' : '') + '" id="set-exp-avatars"></button>' +
           '</div>' +
           '<div class="settings-row">' +
-            '<div class="settings-row-content"><span class="settings-row-title">Message Effects</span></div>' +
+            '<div class="settings-row-content"><span class="settings-row-title">Message Effects</span><div class="settings-row-desc">Show sparkle animations on new messages</div></div>' +
             '<button class="settings-toggle ' + (s.experimentalMessageFx ? 'on' : '') + '" id="set-exp-fx"></button>' +
           '</div>' +
           '<div class="settings-row">' +
-            '<div class="settings-row-content"><span class="settings-row-title">Message Translation</span></div>' +
-            '<button class="settings-toggle ' + (s.experimentalMessageTranslate ? 'on' : '') + '" id="set-exp-translate"></button>' +
-          '</div>' +
-          '<div class="settings-row">' +
-            '<div class="settings-row-content"><span class="settings-row-title">Compact Spacing</span></div>' +
-            '<button class="settings-toggle ' + (s.experimentalCompactSpacing ? 'on' : '') + '" id="set-exp-spacing"></button>' +
-          '</div>' +
-          '<div class="settings-row">' +
-            '<div class="settings-row-content"><span class="settings-row-title">Custom Colors</span></div>' +
+            '<div class="settings-row-content"><span class="settings-row-title">Custom Colors</span><div class="settings-row-desc">Pick custom accent color</div></div>' +
             '<button class="settings-toggle ' + (s.enableCustomColors ? 'on' : '') + '" id="set-exp-colors"></button>' +
           '</div>' +
           '<div class="settings-row">' +
-            '<div class="settings-row-content"><span class="settings-row-title">Profile Frames</span></div>' +
+            '<div class="settings-row-content"><span class="settings-row-title">Profile Frames</span><div class="settings-row-desc">Overlay decorative frames on avatars</div></div>' +
             '<button class="settings-toggle ' + (s.experimentalProfileFrames ? 'on' : '') + '" id="set-exp-frames"></button>' +
+          '</div>' +
+
+          '<div class="settings-row">' +
+            '<div class="settings-row-content"><span class="settings-row-title">FPS Monitor</span><div class="settings-row-desc">Display real-time frame rate</div></div>' +
+            '<button class="settings-toggle ' + (s.experimentalFpsMonitor ? 'on' : '') + '" id="set-exp-fps"></button>' +
+          '</div>' +
+          '<div class="settings-row">' +
+            '<div class="settings-row-content"><span class="settings-row-title">Developer Overlay</span><div class="settings-row-desc">Connection stats and debug info</div></div>' +
+            '<button class="settings-toggle ' + (s.experimentalDevOverlay ? 'on' : '') + '" id="set-exp-dev-overlay"></button>' +
+          '</div>' +
+          '<div class="settings-row">' +
+            '<div class="settings-row-content"><span class="settings-row-title">Performance Mode</span><div class="settings-row-desc">Kill animations, reduce CPU usage</div></div>' +
+            '<button class="settings-toggle ' + (s.experimentalPerformanceMode ? 'on' : '') + '" id="set-exp-perf"></button>' +
           '</div>'
         ) : '');
       default:
@@ -1958,11 +2214,14 @@ document.addEventListener('DOMContentLoaded', function() {
         bindSelect('set-anim-speed', function(v) { s.animSpeed = v; MStore.save(); applyAnimationSettings(); });
         bindToggle('set-reduce-motion', function(on) { s.reduceMotion = on; MStore.save(); applyAnimationSettings(); if (activeChatId) renderMessages(activeChatId); }, s.reduceMotion);
         bindSelect('set-font-size', function(v) { s.fontSize = v; MStore.save(); applyFontSize(); });
+        bindToggle('set-message-translate', function(on) { s.messageTranslate = on; MStore.save(); if (activeChatId) renderMessages(activeChatId); }, s.messageTranslate);
         break;
       case 'chat':
         bindToggle('set-enter-send', function(on) { s.enterToSend = on; MStore.save(); }, s.enterToSend);
+        bindToggle('set-swipe-reply', function(on) { s.swipeToReply = on; MStore.save(); }, s.swipeToReply !== false);
         bindToggle('set-chat-avatars', function(on) { s.showChatAvatars = on; MStore.save(); renderChatList(); }, s.showChatAvatars !== false);
         bindSelect('set-msg-anim', function(v) { s.messageAnim = v; MStore.save(); if (activeChatId) renderMessages(activeChatId); });
+        bindToggle('set-compact-spacing', function(on) { s.experimentalCompactSpacing = on; MStore.save(); document.documentElement.setAttribute('data-compact-spacing', on ? 'true' : ''); if (activeChatId) renderMessages(activeChatId); }, s.experimentalCompactSpacing);
         bindSelect('set-pattern', function(v) { s.bgPattern = v; MStore.save(); applyBgPattern(); });
         bindToggle('set-image-previews', function(on) { s.showImagePreviews = on; MStore.save(); if (activeChatId) renderMessages(activeChatId); }, s.showImagePreviews !== false);
         bindToggle('set-link-previews', function(on) { s.showLinkPreviews = on; MStore.save(); if (activeChatId) renderMessages(activeChatId); }, s.showLinkPreviews !== false);
@@ -2043,11 +2302,99 @@ document.addEventListener('DOMContentLoaded', function() {
         }, s.enableExperimental);
         bindToggle('set-exp-avatars', function(on) { s.experimentalAnimatedAvatars = on; MStore.save(); document.documentElement.setAttribute('data-exp-avatars', on ? 'true' : ''); }, s.experimentalAnimatedAvatars);
         bindToggle('set-exp-fx', function(on) { s.experimentalMessageFx = on; MStore.save(); document.documentElement.setAttribute('data-exp-fx', on ? 'true' : ''); }, s.experimentalMessageFx);
-        bindToggle('set-exp-translate', function(on) { s.experimentalMessageTranslate = on; MStore.save(); document.documentElement.setAttribute('data-exp-translate', on ? 'true' : ''); }, s.experimentalMessageTranslate);
-        bindToggle('set-exp-spacing', function(on) { s.experimentalCompactSpacing = on; MStore.save(); document.documentElement.setAttribute('data-compact-spacing', on ? 'true' : ''); if (activeChatId) renderMessages(activeChatId); }, s.experimentalCompactSpacing);
         bindToggle('set-exp-colors', function(on) { s.enableCustomColors = on; MStore.save(); document.documentElement.setAttribute('data-exp-colors', on ? 'true' : ''); }, s.enableCustomColors);
-        bindToggle('set-exp-frames', function(on) { s.experimentalProfileFrames = on; MStore.save(); document.documentElement.setAttribute('data-exp-frames', on ? 'true' : ''); }, s.experimentalProfileFrames);
+        bindToggle('set-exp-frames', function(on) { s.experimentalProfileFrames = on; MStore.save(); document.documentElement.setAttribute('data-exp-frames', on ? 'true' : ''); renderSettings(); }, s.experimentalProfileFrames);
+        bindToggle('set-exp-fps', function(on) { s.experimentalFpsMonitor = on; MStore.save(); toggleFpsMonitor(on); }, s.experimentalFpsMonitor);
+        bindToggle('set-exp-dev-overlay', function(on) { s.experimentalDevOverlay = on; MStore.save(); toggleDevOverlay(on); }, s.experimentalDevOverlay);
+        bindToggle('set-exp-perf', function(on) {
+          s.experimentalPerformanceMode = on; MStore.save();
+          document.documentElement.setAttribute('data-perf-mode', on ? 'true' : '');
+          if (on) {
+            freezeGifImages(document, true);
+            // Slow offline check to 60s
+            if (window._offlineCheckInterval) { clearInterval(window._offlineCheckInterval); }
+            window._offlineCheckInterval = setInterval(function() {
+              var now = Date.now();
+              MStore.friends.forEach(function(f) {
+                if (f.status === 'online' && f.lastSeen && (now - f.lastSeen) > 180000) { f.status = 'offline'; }
+              });
+              MStore.save();
+              renderFriends();
+              renderChatList();
+            }, 60000);
+            // Stop dev overlay polling
+            if (window._stopDevOverlay) window._stopDevOverlay = true;
+          } else {
+            // Restore offline check to 30s
+            if (window._offlineCheckInterval) { clearInterval(window._offlineCheckInterval); }
+            window._offlineCheckInterval = setInterval(function() {
+              var now = Date.now();
+              MStore.friends.forEach(function(f) {
+                if (f.status === 'online' && f.lastSeen && (now - f.lastSeen) > 180000) { f.status = 'offline'; }
+              });
+              MStore.save();
+              renderFriends();
+              renderChatList();
+            }, 30000);
+            // Restore dev overlay polling
+            if (window._stopDevOverlay) window._stopDevOverlay = false;
+          }
+        }, s.experimentalPerformanceMode);
         break;
+    }
+  }
+
+  var _fpsMonitorInterval = null;
+  var _devOverlayEl = null;
+
+  function toggleFpsMonitor(on) {
+    if (on) {
+      if (!document.getElementById('fps-monitor')) {
+        var el = document.createElement('div');
+        el.id = 'fps-monitor';
+        el.style.cssText = 'position:fixed;top:4px;right:4px;z-index:99997;background:rgba(0,0,0,0.7);color:#0f0;font-family:monospace;font-size:11px;padding:4px 8px;border-radius:4px;pointer-events:none;';
+        document.body.appendChild(el);
+      }
+      var frames = 0;
+      var lastTime = performance.now();
+      if (_fpsMonitorInterval) clearInterval(_fpsMonitorInterval);
+      _fpsMonitorInterval = setInterval(function() {
+        var now = performance.now();
+        var fps = Math.round(frames * 1000 / (now - lastTime));
+        var el = document.getElementById('fps-monitor');
+        if (el) el.textContent = fps + ' FPS';
+        frames = 0;
+        lastTime = now;
+      }, 1000);
+      var rafLoop = function() { frames++; requestAnimationFrame(rafLoop); };
+      requestAnimationFrame(rafLoop);
+    } else {
+      if (_fpsMonitorInterval) { clearInterval(_fpsMonitorInterval); _fpsMonitorInterval = null; }
+      var el = document.getElementById('fps-monitor');
+      if (el) el.remove();
+    }
+  }
+
+  function toggleDevOverlay(on) {
+    if (on) {
+      if (_devOverlayEl) { _devOverlayEl.style.display = 'block'; return; }
+      _devOverlayEl = document.createElement('div');
+      _devOverlayEl.id = 'dev-overlay';
+      _devOverlayEl.style.cssText = 'position:fixed;top:4px;left:4px;z-index:99997;background:rgba(0,0,0,0.7);color:#0af;font-family:monospace;font-size:10px;padding:6px 10px;border-radius:4px;pointer-events:none;line-height:1.6;max-width:200px;';
+      document.body.appendChild(_devOverlayEl);
+      var update = function() {
+        if (!_devOverlayEl) return;
+        var conns = (window.Orbit && Orbit.P2P ? Orbit.P2P.getConnections().length : 0);
+        var friends = MStore.friends.length;
+        var chats = MStore.chats.length;
+        var msgs = 0;
+        for (var k in MStore.messages) { if (MStore.messages.hasOwnProperty(k)) msgs += MStore.messages[k].length; }
+        _devOverlayEl.innerHTML = 'Friends: ' + friends + '<br>Chats: ' + chats + '<br>Messages: ' + msgs + '<br>P2P Conns: ' + conns;
+        if (MStore.settings.experimentalDevOverlay && !window._stopDevOverlay) requestAnimationFrame(update);
+      };
+      update();
+    } else {
+      if (_devOverlayEl) { _devOverlayEl.remove(); _devOverlayEl = null; }
     }
   }
 
@@ -2182,11 +2529,14 @@ document.addEventListener('DOMContentLoaded', function() {
       ? 'background-image:url(' + escapeHtml(u.banner) + ');background-size:cover;background-position:center;'
       : '';
 
+    var pfNum = MStore.settings.experimentalProfileFrames ? (MStore.settings.profileFrame || 0) : 0;
+    var selfFrameHtml = pfNum > 0 ? '<img src="icons/frames/pfp_frame_' + pfNum + '.png" class="pfp-frame" style="position:absolute;top:-15%;left:-17%;pointer-events:none;" draggable="false" alt="">' : '';
+
     container.innerHTML =
       '<div class="profile-hero" style="' + bannerStyle + '">' +
         '<div class="profile-hero-bg"></div>' +
         '<div class="profile-hero-content">' +
-          '<div class="profile-avatar-wrapper">' + (u.avatar ? '<img src="' + escapeHtml(u.avatar) + '">' : '<div class="avatar-placeholder">' + initial + '</div>') + '</div>' +
+          '<div class="profile-avatar-wrapper" style="position:relative;">' + (u.avatar ? '<img src="' + escapeHtml(u.avatar) + '">' : '<div class="avatar-placeholder">' + initial + '</div>') + selfFrameHtml + '</div>' +
           '<div class="profile-name">' + escapeHtml(u ? u.name : 'User') + '</div>' +
           '<div class="profile-id">#' + escapeHtml(u ? u.tag : '0000') + '</div>' +
         '</div>' +
@@ -2217,6 +2567,22 @@ document.addEventListener('DOMContentLoaded', function() {
           '</div>' +
         '</div>' +
       '</div>' +
+      (MStore.settings.experimentalProfileFrames ? (
+      '<div class="settings-section">' +
+        '<div class="settings-item" style="border:none;">' +
+          '<div style="color:var(--text-secondary);font-size:14px;flex-shrink:0;">Frame</div>' +
+          '<select id="profile-frame-select" style="background:var(--bg-hover);color:var(--text-primary);border:1px solid var(--border-subtle);border-radius:8px;padding:6px 10px;font-size:13px;outline:none;margin-left:auto;">' +
+            (function() {
+              var opts = '';
+              for (var fi = 0; fi <= 42; fi++) {
+                opts += '<option value="' + fi + '"' + (MStore.settings.profileFrame == fi ? ' selected' : '') + '>' + (fi === 0 ? 'None' : '#' + fi) + '</option>';
+              }
+              return opts;
+            })() +
+          '</select>' +
+        '</div>' +
+      '</div>'
+      ) : '') +
       '<div class="settings-section">' +
         '<div class="settings-item" style="border:none;">' +
           '<div style="color:var(--text-secondary);font-size:14px;flex-shrink:0;">User ID</div>' +
@@ -2245,6 +2611,20 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('edit-bio').addEventListener('input', checkChanges);
     document.getElementById('edit-avatar').addEventListener('input', checkChanges);
     document.getElementById('edit-banner').addEventListener('input', checkChanges);
+
+    // Profile frame selector
+    var frameSelect = document.getElementById('profile-frame-select');
+    if (frameSelect) {
+      frameSelect.addEventListener('change', function() {
+        MStore.settings.profileFrame = parseInt(this.value, 10) || 0;
+        MStore.save();
+        renderProfile();
+        updateNavAvatar();
+        renderChatList();
+        renderFriends();
+        renderSettings();
+      });
+    }
 
     // File upload handlers for avatar/banner
     function setupProfileUpload(btnId, inputId) {
@@ -2311,6 +2691,77 @@ document.addEventListener('DOMContentLoaded', function() {
       
       newBtn.style.display = 'none';
     });
+  }
+
+  function showProfileOverlay(chatId) {
+    var friend = MStore.friends.find(function(f) { return f.id === chatId; });
+    if (!friend) { showToast('Friend not found', 'info'); return; }
+
+    var initial = friend.name ? friend.name.charAt(0).toUpperCase() : '?';
+    var statusLabels = { online: 'Online', away: 'Away', busy: 'Busy', offline: 'Offline' };
+    var statusColor = getStatusColor(friend.status);
+    var showFrames = MStore.settings.experimentalProfileFrames;
+    var frameNum = showFrames ? (friend.profileFrame || 0) : 0;
+
+    var backdrop = document.createElement('div');
+    backdrop.id = 'profile-view-overlay';
+    backdrop.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:99999;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;animation:fadeIn 0.15s;';
+    backdrop.addEventListener('click', function(e) { if (e.target === backdrop) backdrop.remove(); });
+
+    var card = document.createElement('div');
+    card.style.cssText = 'background:var(--bg-surface);border-radius:16px;width:88%;max-width:340px;overflow:hidden;animation:scaleIn 0.2s cubic-bezier(0.16,1,0.3,1);box-shadow:0 8px 40px rgba(0,0,0,0.3);';
+    card.addEventListener('click', function(e) { e.stopPropagation(); });
+
+    var bannerUrl = friend.banner;
+    var bannerStyle = bannerUrl
+      ? 'background-image:url(' + escapeHtml(bannerUrl) + ');background-size:cover;background-position:center;'
+      : 'background:linear-gradient(135deg,var(--accent-primary),#EC4899);';
+
+    var avatarSize = 80;
+    var avatarOverlap = 40;
+    var avatarHtml = friend.avatar
+      ? '<img src="' + escapeHtml(friend.avatar) + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">'
+      : '<div style="width:100%;height:100%;border-radius:50%;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:#fff;">' + initial + '</div>';
+
+    var frameHtml = '';
+    if (frameNum > 0) {
+      var frameSrc = 'icons/frames/pfp_frame_' + frameNum + '.png';
+      frameHtml = '<img src="' + frameSrc + '" class="pfp-frame" style="position:absolute;top:-15%;left:-17%;pointer-events:none;" draggable="false" alt="">';
+    }
+
+    card.innerHTML =
+      '<div style="height:100px;' + bannerStyle + 'position:relative;"></div>' +
+      '<div style="padding:0 16px 16px;margin-top:-' + (avatarOverlap + 4) + 'px;">' +
+        '<div style="position:relative;width:' + avatarSize + 'px;height:' + avatarSize + 'px;margin-bottom:8px;">' +
+          '<div style="width:' + avatarSize + 'px;height:' + avatarSize + 'px;border-radius:50%;border:4px solid var(--bg-surface);overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.15);background:var(--bg-hover);">' +
+            avatarHtml +
+          '</div>' +
+          frameHtml +
+          '<div style="position:absolute;bottom:2px;right:2px;width:18px;height:18px;border-radius:50%;background:' + statusColor + ';border:3px solid var(--bg-surface);box-sizing:content-box;"></div>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
+          '<span style="font-size:20px;font-weight:700;color:var(--text-primary);">' + escapeHtml(friend.name) + '</span>' +
+          (friend.tag ? '<span style="font-size:14px;color:var(--text-muted);font-weight:500;">#' + escapeHtml(friend.tag) + '</span>' : '') +
+        '</div>' +
+        (friend.status ? '<div style="font-size:13px;color:var(--text-muted);margin-top:4px;">' + (statusLabels[friend.status] || friend.status) + '</div>' : '') +
+      '</div>' +
+      (friend.bio ? '<div style="padding:0 16px 12px;">' +
+        '<div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">About Me</div>' +
+        '<div style="font-size:14px;color:var(--text-secondary);line-height:1.4;">' + escapeHtml(friend.bio) + '</div>' +
+      '</div>' : '') +
+      '<div style="padding:0 16px 12px;">' +
+        '<div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Mutual</div>' +
+        '<div style="font-size:13px;color:var(--text-muted);">' + MStore.groups.filter(function(g) { return g.members && g.members.find(function(m) { return m.userId === friend.id; }); }).length + ' groups in common</div>' +
+      '</div>' +
+      (MStore.settings.devMode && friend.id ? '<div style="padding:0 16px 4px;"><div style="font-size:10px;color:var(--text-muted);word-break:break-all;font-family:monospace;">ID: ' + escapeHtml(friend.id) + '</div></div>' : '') +
+      '<div style="padding:12px 16px 16px;">' +
+        '<button id="btn-profile-close-view" style="width:100%;padding:11px;background:var(--bg-hover);border:none;border-radius:10px;color:var(--text-primary);font-size:15px;font-weight:600;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background=\'var(--bg-surface-hover)\'" onmouseout="this.style.background=\'var(--bg-hover)\'">Close</button>' +
+      '</div>';
+
+    backdrop.appendChild(card);
+    document.body.appendChild(backdrop);
+    document.getElementById('btn-profile-close-view').addEventListener('click', function() { backdrop.remove(); });
+    renderLucide({ root: card });
   }
 
   function showProfile() {
@@ -2472,6 +2923,12 @@ document.addEventListener('DOMContentLoaded', function() {
       var statusColor = friend
         ? ({ online: 'var(--accent-success)', away: 'var(--accent-warning)', busy: 'var(--accent-danger)', offline: 'var(--text-muted)' }[friend.status] || 'var(--text-muted)')
         : 'var(--text-muted)';
+      var mPfNum = 0;
+      if (MStore.settings.experimentalProfileFrames) {
+        if (mid === myId) mPfNum = MStore.settings.profileFrame || 0;
+        else if (friend) mPfNum = friend.profileFrame || 0;
+      }
+      var mPfHtml = mPfNum > 0 ? '<img src="icons/frames/pfp_frame_' + mPfNum + '.png" class="pfp-frame" style="position:absolute;top:-15%;left:-17%;pointer-events:none;" draggable="false" alt="">' : '';
 
       var canManage = isOwner || _isGroupAdmin(group, myId);
       var isSelf = mid === myId;
@@ -2496,6 +2953,7 @@ document.addEventListener('DOMContentLoaded', function() {
       membersHtml += '<div class="group-member-row">' +
         '<div class="group-member-avatar-wrap">' +
           '<div class="group-member-avatar">' + mAvatar + '</div>' +
+          mPfHtml +
           '<span class="group-member-status" style="background:' + statusColor + ';"></span>' +
         '</div>' +
         '<div class="group-member-info">' +
@@ -2854,6 +3312,35 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   /* -- Toast -- */
+  function showNativeNotification(title, body, data) {
+    try {
+      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications) {
+        window.Capacitor.Plugins.LocalNotifications.schedule({
+          notifications: [{
+            id: Date.now(),
+            title: title,
+            body: body,
+            channelId: 'orbit_messages',
+            smallIcon: 'ic_stat_icon',
+            data: data || {}
+          }]
+        });
+      }
+    } catch(e) {
+      console.log('[Notifications] Native notification error:', e);
+    }
+  }
+
+  function requestNotificationPermission() {
+    try {
+      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications) {
+        window.Capacitor.Plugins.LocalNotifications.requestPermissions();
+      }
+    } catch(e) {
+      console.log('[Notifications] Permission request error:', e);
+    }
+  }
+
   function showIncomingNotification(chatId, fromId, text) {
     if (activeChatId === chatId) return;
     if (MStore.settings.notifyDnd) return;
@@ -2868,6 +3355,10 @@ document.addEventListener('DOMContentLoaded', function() {
     var preview = MStore.settings.notifyPreview !== false ? text : 'New message';
     showToast(name + ': ' + preview, 'info');
     if (MStore.settings.notifySound) playNotificationSound();
+    // Show native system notification when app is in background
+    if (document.hidden) {
+      showNativeNotification(name, preview, { chatId: chatId, fromId: fromId });
+    }
   }
 
   function playNotificationSound() {
@@ -2906,6 +3397,59 @@ document.addEventListener('DOMContentLoaded', function() {
       el.style.transition = 'opacity 0.3s, transform 0.3s';
       setTimeout(function() { el.remove(); }, 300);
     }, duration);
+  }
+
+  function compressVideoMobile(dataUrl, maxW, callback) {
+    try {
+      var video = document.createElement('video');
+      video.muted = true;
+      video.playsinline = true;
+      video.preload = 'metadata';
+      video.src = dataUrl;
+      video.onloadedmetadata = function() {
+        var scale = Math.min(1, maxW / video.videoWidth);
+        var w = Math.round(video.videoWidth * scale);
+        var h = Math.round(video.videoHeight * scale);
+        if (w % 2 !== 0) w++;
+        if (h % 2 !== 0) h++;
+        var canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        var ctx = canvas.getContext('2d');
+        var stream = canvas.captureStream(15);
+        var chunks = [];
+        var recorder = new MediaRecorder(stream, {
+          mimeType: 'video/webm;codecs=vp9',
+          videoBitsPerSecond: 500000
+        });
+        recorder.ondataavailable = function(e) {
+          if (e.data && e.data.size > 0) chunks.push(e.data);
+        };
+        recorder.onstop = function() {
+          var reader = new FileReader();
+          reader.onload = function() { callback(reader.result || dataUrl); };
+          reader.readAsDataURL(new Blob(chunks, { type: 'video/webm' }));
+        };
+        recorder.start(1000);
+        var drawTimer = setInterval(function() {
+          if (video.paused || video.ended) {
+            clearInterval(drawTimer);
+            if (recorder.state !== 'inactive') recorder.stop();
+            return;
+          }
+          ctx.drawImage(video, 0, 0, w, h);
+        }, 66);
+        video.play().catch(function() {
+          clearInterval(drawTimer);
+          if (recorder.state !== 'inactive') recorder.stop();
+          callback(dataUrl);
+        });
+      };
+      video.onerror = function() { callback(dataUrl); };
+    } catch(e) {
+      console.error('[Compress] Error:', e);
+      callback(dataUrl);
+    }
   }
 
   /* -- Helpers -- */
@@ -3056,7 +3600,7 @@ document.addEventListener('DOMContentLoaded', function() {
       document.getElementById('action-view-info').addEventListener('click', function() {
         sheet.remove();
         if (isGroup) showGroupInfo();
-        else showToast('Profile view coming soon', 'info');
+        else showProfileOverlay(activeChatId);
       });
       
       document.getElementById('action-mute').addEventListener('click', function() {
@@ -3106,6 +3650,20 @@ document.addEventListener('DOMContentLoaded', function() {
   });
   document.getElementById('image-preview-overlay').addEventListener('click', function(e) {
     if (e.target === this) this.classList.remove('open');
+  });
+  document.getElementById('btn-close-video-preview').addEventListener('click', function() {
+    var player = document.getElementById('video-preview-player');
+    player.pause();
+    player.removeAttribute('src');
+    document.getElementById('video-preview-overlay').classList.remove('open');
+  });
+  document.getElementById('video-preview-overlay').addEventListener('click', function(e) {
+    if (e.target === this) {
+      var player = document.getElementById('video-preview-player');
+      player.pause();
+      player.removeAttribute('src');
+      this.classList.remove('open');
+    }
   });
   document.getElementById('members-overlay-backdrop').addEventListener('click', hideGroupInfo);
   document.getElementById('members-content').addEventListener('click', function(e) {
@@ -3512,6 +4070,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (type === 'images') {
           fileInput.accept = 'image/*';
           fileInput.removeAttribute('webkitdirectory');
+        } else if (type === 'videos') {
+          fileInput.accept = 'video/*';
+          fileInput.removeAttribute('webkitdirectory');
         } else if (type === 'files') {
           fileInput.removeAttribute('accept');
           fileInput.removeAttribute('webkitdirectory');
@@ -3725,15 +4286,200 @@ document.addEventListener('DOMContentLoaded', function() {
     if (el) el.remove();
   }
 
+  function hideOverlay(id) {
+    var el = document.getElementById(id);
+    if (el) { el.remove(); return true; }
+    return false;
+  }
+
+  function showMessageContextMenu(msg, chatId, x, y) {
+    var backdrop = document.createElement('div');
+    backdrop.id = 'msg-context-overlay';
+    backdrop.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:99999;background:rgba(0,0,0,0.3);';
+    backdrop.addEventListener('click', function() { hideOverlay('msg-context-overlay'); });
+    backdrop.addEventListener('touchmove', function(e) { e.preventDefault(); }, { passive: false });
+
+    var menu = document.createElement('div');
+    menu.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:100000;background:var(--bg-surface);border-radius:16px 16px 0 0;padding:16px 0;box-shadow:0 -4px 20px rgba(0,0,0,0.3);';
+    menu.addEventListener('click', function(e) { e.stopPropagation(); });
+
+    var previewText = msg.text ? msg.text.substring(0, 50) + (msg.text.length > 50 ? '...' : '') : 'Message';
+    var header = document.createElement('div');
+    header.style.cssText = 'padding:0 16px 12px;border-bottom:1px solid var(--border-subtle);margin-bottom:4px;';
+    header.innerHTML = '<div style="font-size:15px;font-weight:600;color:var(--text-primary);">Message</div><div style="font-size:12px;color:var(--text-muted);">' + escapeHtml(previewText) + '</div>';
+    menu.appendChild(header);
+
+    function addItem(label, icon, onClick) {
+      var item = document.createElement('div');
+      item.style.cssText = 'display:flex;align-items:center;gap:12px;padding:14px 16px;color:var(--text-primary);font-size:15px;cursor:pointer;';
+      item.addEventListener('click', function(e) { e.stopPropagation(); onClick(); hideOverlay('msg-context-overlay'); });
+      item.innerHTML = '<i data-lucide="' + icon + '" style="width:20px;height:20px;color:var(--text-muted);flex-shrink:0;"></i><span>' + label + '</span>';
+      menu.appendChild(item);
+    }
+
+    addItem('Reply', 'reply', function() { startReply(msg.id); });
+
+    if (msg.text) {
+      addItem('Copy Text', 'copy', function() {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(msg.text).then(function() {
+            showToast('Text copied', 'info');
+          }).catch(function() {
+            showToast('Failed to copy', 'error');
+          });
+        } else {
+          var ta = document.createElement('textarea');
+          ta.value = msg.text;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          showToast('Text copied', 'info');
+        }
+      });
+    }
+
+    if (msg.from === 'me') {
+      addItem('Edit', 'pencil', function() { startEdit(msg.id); });
+    }
+    addItem('Delete', 'trash-2', function() { confirmDeleteMessage(msg.id); });
+
+    var chatGroup = MStore.groups.find(function(g) { return g.id === chatId; });
+    if (chatGroup) {
+      var isPinned = chatGroup.pinnedMessages && chatGroup.pinnedMessages.some(function(p) { return String(p.msgId) === String(msg.id); });
+      addItem(isPinned ? 'Unpin' : 'Pin', isPinned ? 'pin-off' : 'pin', function() {
+        if (window.Orbit && window.Orbit.P2P && Orbit.P2P.isAvailable()) {
+          if (isPinned) {
+            var upkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.UNPIN_MESSAGE, { groupId: chatId, msgId: msg.id }, MStore.user ? MStore.user.id : 'mobile');
+            Orbit.P2P.send(chatId, upkt);
+          } else {
+            var ppkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.PIN_MESSAGE, { groupId: chatId, msgId: msg.id, text: msg.text || '', pinnedAt: new Date().toISOString() }, MStore.user ? MStore.user.id : 'mobile');
+            Orbit.P2P.send(chatId, ppkt);
+          }
+        }
+        if (chatGroup) {
+          if (isPinned) {
+            chatGroup.pinnedMessages = (chatGroup.pinnedMessages || []).filter(function(p) { return String(p.msgId) !== String(msg.id); });
+          } else {
+            if (!chatGroup.pinnedMessages) chatGroup.pinnedMessages = [];
+            chatGroup.pinnedMessages.push({ msgId: msg.id, text: msg.text || '', pinnedBy: MStore.user ? MStore.user.id : 'mobile', pinnedAt: new Date().toISOString() });
+          }
+          MStore.save();
+          if (activeChatId === chatId) renderMessages(chatId);
+        }
+      });
+    }
+
+    var cancel = document.createElement('div');
+    cancel.style.cssText = 'display:flex;align-items:center;justify-content:center;padding:14px 16px;margin-top:4px;border-top:1px solid var(--border-subtle);color:var(--text-muted);font-size:15px;cursor:pointer;';
+    cancel.textContent = 'Cancel';
+    cancel.addEventListener('click', function(e) { e.stopPropagation(); hideOverlay('msg-context-overlay'); });
+    menu.appendChild(cancel);
+
+    backdrop.appendChild(menu);
+    document.body.appendChild(backdrop);
+    renderLucide({ root: menu });
+  }
+
+  function showChatContextMenu(chat, x, y) {
+    var backdrop = document.createElement('div');
+    backdrop.id = 'chat-context-overlay';
+    backdrop.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:99999;background:rgba(0,0,0,0.3);';
+    backdrop.addEventListener('click', function() { hideOverlay('chat-context-overlay'); });
+    backdrop.addEventListener('touchmove', function(e) { e.preventDefault(); }, { passive: false });
+
+    var menu = document.createElement('div');
+    menu.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:100000;background:var(--bg-surface);border-radius:16px 16px 0 0;padding:16px 0;box-shadow:0 -4px 20px rgba(0,0,0,0.3);';
+    menu.addEventListener('click', function(e) { e.stopPropagation(); });
+
+    var header = document.createElement('div');
+    header.style.cssText = 'padding:0 16px 12px;border-bottom:1px solid var(--border-subtle);margin-bottom:4px;';
+    header.innerHTML = '<div style="font-size:15px;font-weight:600;color:var(--text-primary);">' + escapeHtml(chat.name) + '</div><div style="font-size:12px;color:var(--text-muted);">Chat</div>';
+    menu.appendChild(header);
+
+    function addItem(label, icon, onClick) {
+      var item = document.createElement('div');
+      item.style.cssText = 'display:flex;align-items:center;gap:12px;padding:14px 16px;color:var(--text-primary);font-size:15px;cursor:pointer;';
+      item.addEventListener('click', function(e) { e.stopPropagation(); onClick(); hideOverlay('chat-context-overlay'); });
+      item.innerHTML = '<i data-lucide="' + icon + '" style="width:20px;height:20px;color:var(--text-muted);flex-shrink:0;"></i><span>' + label + '</span>';
+      menu.appendChild(item);
+    }
+
+    if (chat.unread > 0) {
+      addItem('Mark Read', 'eye', function() {
+        chat.unread = 0;
+        MStore.save();
+        renderChatList();
+      });
+    }
+
+    var isMuted = MStore.settings.mutedChats && MStore.settings.mutedChats[chat.id];
+    addItem(isMuted ? 'Unmute' : 'Mute', isMuted ? 'bell' : 'bell-off', function() {
+      if (!MStore.settings.mutedChats) MStore.settings.mutedChats = {};
+      if (isMuted) {
+        delete MStore.settings.mutedChats[chat.id];
+      } else {
+        MStore.settings.mutedChats[chat.id] = true;
+      }
+      MStore.save();
+      showToast(isMuted ? 'Unmuted' : 'Muted', 'info');
+    });
+
+    addItem('Delete Chat', 'trash-2', function() {
+      if (activeChatId === chat.id) closeChat();
+      MStore.chats = MStore.chats.filter(function(c) { return c.id !== chat.id; });
+      delete MStore.messages[chat.id];
+      MStore.save();
+      renderChatList();
+      showToast('Chat deleted', 'info');
+    });
+
+    var isGroup = MStore.groups.some(function(g) { return g.id === chat.id; });
+    if (!isGroup) {
+      addItem('View Profile', 'user', function() {
+        var friend = MStore.friends.find(function(f) { return f.id === chat.id; });
+        if (friend) {
+          showToast(friend.name + ' — ' + (friend.status || 'offline'), 'info');
+        } else {
+          showToast('Friend info not available', 'info');
+        }
+      });
+    }
+
+    var cancel = document.createElement('div');
+    cancel.style.cssText = 'display:flex;align-items:center;justify-content:center;padding:14px 16px;margin-top:4px;border-top:1px solid var(--border-subtle);color:var(--text-muted);font-size:15px;cursor:pointer;';
+    cancel.textContent = 'Cancel';
+    cancel.addEventListener('click', function(e) { e.stopPropagation(); hideOverlay('chat-context-overlay'); });
+    menu.appendChild(cancel);
+
+    backdrop.appendChild(menu);
+    document.body.appendChild(backdrop);
+    renderLucide({ root: menu });
+  }
+
   document.addEventListener('touchstart', function(e) {
-    var friendRow = e.target.closest('.friend-row');
-    if (!friendRow) return;
-    _lpTarget = friendRow.getAttribute('data-friend');
+    var row = e.target.closest('.friend-row, .message-row, .chat-row');
+    if (!row) return;
+    var type, id;
+    if (row.classList.contains('friend-row')) { type = 'friend'; id = row.getAttribute('data-friend'); }
+    else if (row.classList.contains('message-row')) { type = 'message'; id = row.getAttribute('data-msg-id'); }
+    else if (row.classList.contains('chat-row')) { type = 'chat'; id = row.getAttribute('data-chat'); }
+    if (!id) return;
+    _lpTarget = id;
     _lpTimer = setTimeout(function() {
       _lpTimer = null;
-      var friend = MStore.friends.find(function(f) { return f.id === _lpTarget; });
-      if (!friend) return;
-      showFriendContextMenu(friend, e.touches ? e.touches[0].clientX : 0, e.touches ? e.touches[0].clientY : 0);
+      if (type === 'friend') {
+        var friend = MStore.friends.find(function(f) { return f.id === id; });
+        if (friend) showFriendContextMenu(friend, e.touches ? e.touches[0].clientX : 0, e.touches ? e.touches[0].clientY : 0);
+      } else if (type === 'message') {
+        if (!activeChatId) return;
+        var msgs = MStore.messages[activeChatId] || [];
+        var msg = msgs.find(function(m) { return String(m.id) === String(id); });
+        if (msg) showMessageContextMenu(msg, activeChatId, e.touches ? e.touches[0].clientX : 0, e.touches ? e.touches[0].clientY : 0);
+      } else if (type === 'chat') {
+        var chat = MStore.chats.find(function(c) { return c.id === id; });
+        if (chat) showChatContextMenu(chat, e.touches ? e.touches[0].clientX : 0, e.touches ? e.touches[0].clientY : 0);
+      }
     }, 500);
   }, { passive: true });
 
@@ -3782,7 +4528,8 @@ document.addEventListener('DOMContentLoaded', function() {
         status: u.status || 'online',
         bio: u.bio || '',
         publicKey: u.publicKey || null,
-        profileFrame: null,
+        profileFrame: MStore.settings.profileFrame || null,
+        banner: u.banner || null,
         tcpPort: 46000,
         device: 'android'
       }
@@ -4375,10 +5122,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Listen for peers found via discovery
     // Periodic offline status check
-    setInterval(function() {
+    window._offlineCheckInterval = setInterval(function() {
       var now = Date.now();
       MStore.friends.forEach(function(f) {
-        if (f.status === 'online' && f.lastSeen && (now - f.lastSeen) > 120000) {
+        if (f.status === 'online' && f.lastSeen && (now - f.lastSeen) > 180000) {
           f.status = 'offline';
         }
       });
@@ -4463,7 +5210,9 @@ document.addEventListener('DOMContentLoaded', function() {
           avatar: pPayload.avatar || null,
           bio: pPayload.bio || '',
           ip: data.host,
-          publicKey: pPayload.publicKey || null
+          publicKey: pPayload.publicKey || null,
+          profileFrame: pPayload.profileFrame !== undefined ? pPayload.profileFrame : null,
+          banner: pPayload.banner || null
         });
         MStore.save();
         renderFriends();
@@ -4472,6 +5221,9 @@ document.addEventListener('DOMContentLoaded', function() {
         existing.status = 'online';
         existing.ip = data.host;
         if (pPayload.avatar) existing.avatar = pPayload.avatar;
+        if (pPayload.publicKey) existing.publicKey = pPayload.publicKey;
+        if (pPayload.profileFrame !== undefined) existing.profileFrame = pPayload.profileFrame;
+        if (pPayload.banner) existing.banner = pPayload.banner;
         MStore.save();
         renderFriends();
       }
@@ -4632,6 +5384,7 @@ document.addEventListener('DOMContentLoaded', function() {
   renderFriends();
   renderSettings();
   renderActivity();
+  setupMessageSwipe();
 
   // Init debug overlay
   updateDebugOverlay();
@@ -4648,9 +5401,11 @@ document.addEventListener('DOMContentLoaded', function() {
   var expAttrs = {
     'experimentalAnimatedAvatars': 'data-exp-avatars',
     'experimentalMessageFx': 'data-exp-fx',
-    'experimentalMessageTranslate': 'data-exp-translate',
     'enableCustomColors': 'data-exp-colors',
-    'experimentalProfileFrames': 'data-exp-frames'
+    'experimentalProfileFrames': 'data-exp-frames',
+    'experimentalFpsMonitor': 'data-exp-fps',
+    'experimentalDevOverlay': 'data-exp-dev-overlay',
+    'experimentalPerformanceMode': 'data-perf-mode'
   };
   Object.keys(expAttrs).forEach(function(key) {
     if (MStore.settings[key]) document.documentElement.setAttribute(expAttrs[key], 'true');
@@ -4691,6 +5446,9 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     } catch(e) {}
   }
+
+  // Request notification permissions
+  try { requestNotificationPermission(); } catch(e) {}
 
   console.log('[Orbit Mobile] Started');
 

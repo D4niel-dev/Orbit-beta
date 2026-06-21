@@ -81,6 +81,20 @@
   /* The dashed border animation would be applied via SVG or complex background, using simple border for now */
 }
 
+/* Performance Mode — kills all animations, transitions, effects */
+[data-perf-mode] *,
+[data-perf-mode] *::before,
+[data-perf-mode] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+[data-perf-mode] .message-row {
+  animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+
 /* Reduce Motion — disables decorative animations */
 .reduce-motion *,
 .reduce-motion *::before,

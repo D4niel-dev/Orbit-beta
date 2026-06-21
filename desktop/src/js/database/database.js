@@ -436,7 +436,11 @@ class OrbitDatabase {
               try {
                 const commaIdx = att.url.indexOf(';base64,');
                 if (commaIdx > -1) {
-                  bufferData = Buffer.from(att.url.substring(commaIdx + 8), 'base64');
+                  const base64Str = att.url.substring(commaIdx + 8);
+                  bufferData = Buffer.from(base64Str, 'base64');
+                  if (bufferData.length === 0) {
+                    console.warn('Decoded data URL is empty for attachment ' + attId + ' (name=' + att.name + ', url length=' + att.url.length + ')');
+                  }
                 } else {
                   const rawIdx = att.url.indexOf(',');
                   if (rawIdx > -1) {
@@ -444,9 +448,15 @@ class OrbitDatabase {
                   }
                 }
               } catch(e) {
-                console.error('Failed to decode data URL for attachment ' + attId + ':', e.message);
+                console.error('Failed to decode data URL for attachment ' + attId + ' (name=' + att.name + ', url length=' + (att.url ? att.url.length : 0) + '):', e.message);
               }
             }
+          }
+
+          // Skip saving if no data source was found (would create a broken attachment)
+          if (bufferData.length === 0 && !localPath) {
+            console.warn('Skipping attachment "' + att.name + '" (id=' + attId + '): no data available');
+            return;
           }
 
           try {
@@ -537,8 +547,31 @@ class OrbitDatabase {
     const isPrivacyMode = settings.privacyMode === true;
     
     if (!isPrivacyMode) {
-      if (attachment.data) bufferData = attachment.data;
-      else if (attachment.path && fs.existsSync(attachment.path)) bufferData = fs.readFileSync(attachment.path);
+      if (attachment.data) {
+        if (Buffer.isBuffer(attachment.data) && attachment.data.length > 0) {
+          bufferData = attachment.data;
+        } else if (attachment.data instanceof ArrayBuffer && attachment.data.byteLength > 0) {
+          bufferData = Buffer.from(attachment.data);
+        } else if (typeof attachment.data === 'object' && attachment.data !== null && typeof attachment.data.length === 'number' && attachment.data.length > 0) {
+          try { bufferData = Buffer.from(attachment.data); } catch(e) {}
+        }
+      }
+      if (bufferData.length === 0 && attachment.path && fs.existsSync(attachment.path)) {
+        try { bufferData = fs.readFileSync(attachment.path); } catch(e) {}
+      }
+      if (bufferData.length === 0 && attachment.url && attachment.url.startsWith('data:')) {
+        try {
+          const commaIdx = attachment.url.indexOf(';base64,');
+          if (commaIdx > -1) {
+            bufferData = Buffer.from(attachment.url.substring(commaIdx + 8), 'base64');
+          }
+        } catch(e) {}
+      }
+    }
+
+    if (bufferData.length === 0 && !localPath) {
+      console.warn('Skipping attachment "' + attachment.name + '": no data available');
+      return null;
     }
 
     this.stmts.saveAttachment.run({
@@ -689,6 +722,43 @@ class OrbitDatabase {
       this.setSetting('migrated_from_electron_store', true);
     })();
     console.log('Migration from electron-store complete.');
+  }
+
+  // --- Attachment Integrity Check ---
+  checkAttachmentIntegrity() {
+    const result = { ok: true, warnings: [] };
+    try {
+      // Find attachments with zero-length data and no localPath (orphaned data)
+      const orphaned = this.db.prepare(`
+        SELECT a.id, a.messageId, a.name, a.type FROM attachments a
+        WHERE length(a.data) = 0 AND (a.localPath IS NULL OR a.localPath = '')
+      `).all();
+      if (orphaned.length > 0) {
+        result.ok = false;
+        orphaned.forEach(a => {
+          result.warnings.push('Attachment "' + a.name + '" (id=' + a.id + ', msg=' + a.messageId + ') has empty data');
+        });
+      }
+    } catch(e) {
+      result.ok = false;
+      result.warnings.push('Attachment integrity check failed: ' + e.message);
+    }
+    return result;
+  }
+
+  cleanupBrokenAttachments() {
+    try {
+      const result = this.db.prepare(`
+        DELETE FROM attachments WHERE length(data) = 0 AND (localPath IS NULL OR localPath = '')
+      `).run();
+      if (result.changes > 0) {
+        console.log('Cleaned up ' + result.changes + ' broken attachment(s) with empty data');
+      }
+      return { ok: true, removed: result.changes };
+    } catch(e) {
+      console.error('Failed to clean up broken attachments:', e.message);
+      return { ok: false, error: e.message };
+    }
   }
 
   // --- Database Health Check ---

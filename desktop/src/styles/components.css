@@ -304,6 +304,10 @@ button:active,
   transform: translateY(-1px);
 }
 
+.message-feed {
+  overflow-x: hidden;
+}
+
 /* Message action bar */
 .message-bubble:hover .msg-actions-bar {
   display: flex;
@@ -321,10 +325,39 @@ button:active,
   gap: 6px;
 }
 .msg-actions-left {
-  left: -8px;
+  top: auto;
+  bottom: 100%;
+  margin-bottom: 8px;
+  left: auto;
+  transform: none;
+}
+.msg-actions-left.msg-actions-compact {
+  right: 0;
+}
+.msg-actions-left.msg-actions-wide {
+  left: 0;
+  right: auto;
 }
 .msg-actions-right {
   right: -8px;
+  top: -22px;
+  left: auto;
+  bottom: auto;
+  margin-bottom: 0;
+}
+.msg-actions-right.msg-actions-compact,
+.msg-actions-right.msg-actions-wide {
+  top: auto;
+  bottom: 100%;
+  margin-bottom: 8px;
+}
+.msg-actions-right.msg-actions-compact {
+  left: 0;
+  right: auto;
+}
+.msg-actions-right.msg-actions-wide {
+  right: 0;
+  left: auto;
 }
 .msg-action-btn {
   background: none;
@@ -731,13 +764,17 @@ button:active,
 }
 .link-preview-img {
   width: 100%;
-  height: 90px;
   background: var(--bg-base);
+  overflow: hidden;
+  line-height: 0;
+}
+.link-preview-img:not(:has(img[src])) {
+  min-height: 72px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
-  overflow: hidden;
+  line-height: normal;
 }
 .link-preview-mine .link-preview-img {
   background: rgba(0,0,0,0.25);
@@ -745,8 +782,7 @@ button:active,
 }
 .link-preview-img img {
   width: 100%;
-  height: 100%;
-  object-fit: cover;
+  height: auto;
   display: block;
 }
 .link-preview-body {

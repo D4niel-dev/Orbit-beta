@@ -12,6 +12,7 @@ plans/
 graphify/
 graphify-out/
 *.AGENTS.md
+.mimocode/
 
 # Android
 mobile/.android/

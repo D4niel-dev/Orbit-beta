@@ -21,7 +21,7 @@ window.ChatPanel = {
     
     // Subscribe to store
     this.unsubscribe = window.store.subscribe((state, changedState) => {
-      var relevant = ['messages', 'activeChatId', 'activeTab', 'friends', 'groups', 'currentUser', 'settings', 'transferProgress', 'transferErrors'];
+      var relevant = ['messages', 'activeChatId', 'activeTab', 'groups', 'currentUser', 'settings', 'transferProgress', 'transferErrors'];
       if (!changedState || relevant.some(function(k) { return k in changedState; })) {
         if (changedState && 'activeChatId' in changedState && state.activeChatId) {
           window.store.loadFullChatMessages(state.activeChatId);
@@ -283,6 +283,16 @@ window.ChatPanel = {
       
       // Image attachment click — open in viewer
       var imageDiv = e.target.closest('[data-open-image]');
+      if (!imageDiv) {
+        var imgs = document.querySelectorAll('[data-open-image]');
+        for (var i = 0; i < imgs.length; i++) {
+          var r = imgs[i].getBoundingClientRect();
+          if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) {
+            imageDiv = imgs[i];
+            break;
+          }
+        }
+      }
       if (imageDiv) {
         e.stopPropagation();
         var attId = imageDiv.getAttribute('data-open-image');
@@ -974,8 +984,59 @@ window.ChatPanel = {
       }
     }
 
+    // Set up ResizeObserver once to re-position on feed resize
+    if (!this._messageActionsResizeObserver && typeof ResizeObserver !== 'undefined') {
+      var self = this;
+      this._messageActionsResizeObserver = new ResizeObserver(function() {
+        if (window._performanceMode) return;
+        var now = Date.now();
+        if (self._lastMessageActionsRun && now - self._lastMessageActionsRun < 1000) return;
+        if (self._messageActionsResizeTimer) clearTimeout(self._messageActionsResizeTimer);
+        self._messageActionsResizeTimer = setTimeout(function() {
+          self._positionMessageActions();
+        }, 80);
+      });
+    }
+    if (this._messageActionsResizeObserver) {
+      var msgFeed = document.getElementById('chat-message-feed');
+      if (msgFeed) this._messageActionsResizeObserver.observe(msgFeed);
+    }
+
+    if (!window._performanceMode) {
+      requestAnimationFrame(function() {
+        window.ChatPanel._positionMessageActions();
+      });
+    }
+
     // Attach local input events
     this.attachEvents();
+  },
+
+  _positionMessageActions() {
+    if (window._performanceMode) return;
+    var feed = document.getElementById('chat-message-feed');
+    if (!feed) return;
+    var bubbles = feed.querySelectorAll('.message-bubble');
+    if (this._messageActionsResizeObserver) {
+      try { this._messageActionsResizeObserver.disconnect(); } catch(e) {}
+    }
+    for (var i = 0; i < bubbles.length; i++) {
+      var bubble = bubbles[i];
+      var bar = bubble.querySelector('.msg-actions-bar');
+      if (!bar) continue;
+      var bubbleW = bubble.offsetWidth;
+      var barW = bar.offsetWidth;
+      var isCompact = barW > bubbleW - 4 || (bubbleW < 160 && !bubble.querySelector('.att-thumb'));
+      bar.classList.remove('msg-actions-compact', 'msg-actions-wide');
+      bar.classList.add(isCompact ? 'msg-actions-compact' : 'msg-actions-wide');
+    }
+    this._lastMessageActionsRun = Date.now();
+    if (this._messageActionsResizeObserver && feed) {
+      var f = feed;
+      setTimeout(function() {
+        try { window.ChatPanel._messageActionsResizeObserver.observe(f); } catch(e) {}
+      }, 0);
+    }
   },
 
   jumpToFirstUnread() {

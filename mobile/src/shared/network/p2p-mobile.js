@@ -10,6 +10,8 @@ Orbit.P2P = (function() {
   var discoveryActive = false;
   var lastConnectAttempt = {};
   var _pluginChecked = false;
+  var _pendingMessages = [];
+  var _maxPendingAge = 30000; // drop pending older than 30s
 
   function getPlugin() {
     if (plugin) return plugin;
@@ -27,6 +29,24 @@ Orbit.P2P = (function() {
     return plugin;
   }
 
+  function flushPending(connectionId) {
+    var remaining = [];
+    _pendingMessages.forEach(function(q) {
+      if (q.connectionId === connectionId || q.connectionId.indexOf(connectionId) >= 0 || connectionId.indexOf(q.connectionId) >= 0) {
+        console.log('[P2P-Bridge] flushing pending message to ' + connectionId);
+        (async function() {
+          try {
+            var p = getPlugin();
+            if (p) await p.send({ connectionId: connectionId, data: q.data });
+          } catch(e) { console.log('[P2P-Bridge] flush failed for ' + connectionId, e.message); }
+        })();
+      } else {
+        remaining.push(q);
+      }
+    });
+    _pendingMessages = remaining;
+  }
+
   function addListener(eventName, callback) {
     var p = getPlugin();
     if (!p) return null;
@@ -35,6 +55,7 @@ Orbit.P2P = (function() {
       if (callback) callback(data);
       if (eventName === 'onConnection') {
         connections[data.connectionId] = { status: 'connected' };
+        flushPending(data.connectionId);
       }
       if (eventName === 'onDisconnect') {
         delete connections[data.connectionId];
@@ -111,6 +132,7 @@ Orbit.P2P = (function() {
         if (result.connectionId) {
           connections[result.connectionId] = { status: 'connected' };
           console.log('[P2P-Bridge] tracked connection ' + result.connectionId);
+          flushPending(result.connectionId);
         }
         return { success: true, connectionId: result.connectionId };
       } catch(e) {
@@ -133,12 +155,16 @@ Orbit.P2P = (function() {
       var p = getPlugin();
       if (!p) { console.log('[P2P-Bridge] send: plugin not available'); return { success: false, error: 'Plugin not available' }; }
       console.log('[P2P-Bridge] send to ' + connectionId + ' (' + (data ? data.length : 0) + ' bytes)');
+      // Purge stale pending messages
+      var cutoff = Date.now() - _maxPendingAge;
+      _pendingMessages = _pendingMessages.filter(function(q) { return q.time > cutoff; });
       try {
         await p.send({ connectionId: connectionId, data: data });
         return { success: true };
       } catch(e) {
-        console.log('[P2P-Bridge] send error: ' + (e.message || String(e)));
-        return { success: false, error: e.message || String(e) };
+        console.log('[P2P-Bridge] send error: ' + (e.message || String(e)) + ' — queuing for retry');
+        _pendingMessages.push({ connectionId: connectionId, data: data, time: Date.now() });
+        return { success: false, queued: true, error: e.message || String(e) };
       }
     },
 
@@ -210,6 +236,7 @@ Orbit.P2P = (function() {
       removeAllListeners();
       connections = {};
       lastConnectAttempt = {};
+      _pendingMessages = [];
     }
   };
 })();

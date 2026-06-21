@@ -192,7 +192,7 @@ window.GallerySidebar = {
           const safeSender = window.Sanitize.escapeHtml(img.senderName);
 
           html += '<div class="gallery-item group" style="position:relative;border-radius:12px;overflow:hidden;aspect-ratio:1/1;cursor:pointer;border:1px solid var(--border-subtle);" onclick="if(window.ImageViewer) window.ImageViewer.open({url:\'' + safeUrl + '\', name:\'' + safeName + '\', size:\'' + safeSize + '\'})">' +
-            '<img src="' + thumbUrl + '" style="width:100%;height:100%;object-fit:cover;transition:transform 0.3s;" onerror="this.src=\'' + safeUrl + '\'; if(window.handleMediaError) window.handleMediaError(this, \'' + safeUrl + '\')">' +
+            '<img src="' + thumbUrl + '" data-fallback-src="' + safeUrl + '" style="width:100%;height:100%;object-fit:cover;transition:transform 0.3s;" onerror="if(window.mediaImgOnError) window.mediaImgOnError(this)">' +
             '<div class="gallery-hover-overlay" style="position:absolute;inset:0;background:rgba(0,0,0,0.6);display:flex;flex-direction:column;justify-content:space-between;padding:8px;opacity:0;transition:opacity 0.2s;">' +
               '<div style="align-self:flex-end;"><button style="background:rgba(255,255,255,0.2);border:none;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:white;cursor:pointer;"><i data-lucide="zoom-in" style="width:14px;height:14px;"></i></button></div>' +
               '<div style="font-size:11px;color:white;font-weight:500;">Sent by ' + safeSender + '</div>' +

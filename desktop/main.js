@@ -150,6 +150,12 @@ app.whenReady().then(() => {
               }));
               return;
             }
+            // Debug: log why attachment failed to load
+            if (att) {
+              console.warn('[orbit-db] Attachment "' + att.name + '" (id=' + id + ') has no data: data=' + (att.data ? att.data.length : 'null') + ', localPath=' + att.localPath);
+            } else {
+              console.warn('[orbit-db] Attachment not found for id=' + id);
+            }
           }
           resolve(new Response(null, { status: 404 }));
         });
@@ -182,6 +188,19 @@ app.whenReady().then(() => {
   // Init DB
   globalDb = new OrbitDatabase(app.getPath('userData'));
   tempDirPath = path.join(app.getPath('userData'), 'temp');
+
+  // Check attachment integrity on startup
+  try {
+    const attCheck = globalDb.checkAttachmentIntegrity();
+    if (!attCheck.ok) {
+      console.warn('[Startup] Attachment integrity issues found:', attCheck.warnings);
+      // Auto-clean broken attachments with empty data
+      const cleanup = globalDb.cleanupBrokenAttachments();
+      if (cleanup.ok && cleanup.removed > 0) {
+        console.log('[Startup] Removed ' + cleanup.removed + ' broken attachment(s)');
+      }
+    }
+  } catch(e) { /* ignore */ }
 
   // Ensure avatars directory exists
   const avatarDirPath = path.join(app.getPath('userData'), 'avatars');
@@ -283,9 +302,17 @@ app.whenReady().then(() => {
   });
 
   // Notification Handler
-  ipcMain.on('show-notification', (event, title, body) => {
+  ipcMain.on('show-notification', (event, title, body, iconData) => {
     if (Notification.isSupported()) {
-      const notif = new Notification({ title, body, icon });
+      let notifIcon = icon;
+      if (iconData && typeof iconData === 'string') {
+        try {
+          notifIcon = nativeImage.createFromDataURL(iconData);
+        } catch(e) {
+          notifIcon = icon;
+        }
+      }
+      const notif = new Notification({ title, body, icon: notifIcon });
       notif.on('click', () => {
         if (mainWindow) {
            if (mainWindow.isMinimized()) mainWindow.restore();
@@ -494,6 +521,12 @@ app.whenReady().then(() => {
   ipcMain.on('db-repair', (event) => {
     if (!globalDb) { event.returnValue = { ok: false, repaired: [], warnings: ['Database not initialized'] }; return; }
     event.returnValue = globalDb.repairDatabase();
+  });
+
+  // Attachment Integrity Check
+  ipcMain.on('db-check-attachment-integrity', (event) => {
+    if (!globalDb) { event.returnValue = { ok: false, warnings: ['Database not initialized'] }; return; }
+    event.returnValue = globalDb.checkAttachmentIntegrity();
   });
 
   // Backup dialog
@@ -722,13 +755,18 @@ app.on('before-quit', () => {
   if (transferInstance) transferInstance.destroy();
   if (discoveryInstance) discoveryInstance.stop();
   if (socketInstance) socketInstance.stop();
-  // Clean up privacy mode temp directory
-  if (tempDirPath && fs.existsSync(tempDirPath)) {
-    try {
-      fs.rmSync(tempDirPath, { recursive: true, force: true });
-    } catch(e) {
-      console.error('Failed to clean up temp directory:', e.message);
+  // Only clean up temp directory when privacy mode is enabled
+  if (globalDb) {
+    const settings = globalDb.getSetting('settings', {});
+    if (settings.privacyMode === true && tempDirPath && fs.existsSync(tempDirPath)) {
+      try {
+        fs.rmSync(tempDirPath, { recursive: true, force: true });
+      } catch(e) {
+        console.error('Failed to clean up temp directory:', e.message);
+      }
     }
+    // Ensure WAL is checkpointed before exit to prevent data loss
+    try { globalDb.db.pragma('wal_checkpoint(TRUNCATE)'); } catch(e) {}
   }
 });
 

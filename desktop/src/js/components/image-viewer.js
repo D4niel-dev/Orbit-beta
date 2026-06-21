@@ -146,22 +146,40 @@ window.ImageViewer = {
     this.container.style.display = 'flex';
   },
 
-  openFromMessage(msgId, attId) {
+  openFromMessage(msgId, attId, fallbackImg) {
     if (!this.container) return;
-    var state = window.store.getState();
+    var state = window.store ? window.store.getState() : null;
+    if (!state || !state.messages) {
+      if (fallbackImg && fallbackImg.url) {
+        this.open(fallbackImg);
+      } else {
+        console.warn('[ImageViewer] No store or messages available, no fallback URL');
+      }
+      return;
+    }
     var msgList = state.messages[state.activeChatId] || [];
     var msg = msgList.find(function(m) { return String(m.id) === String(msgId); });
+    if (!msg) {
+      Object.keys(state.messages).some(function(chatId) {
+        msg = (state.messages[chatId] || []).find(function(m) { return String(m.id) === String(msgId); });
+        return !!msg;
+      });
+    }
     
     if (msg && msg.attachments) {
-      // Filter only images for the gallery
       this.galleryImages = msg.attachments.filter(function(a) { return a.type === 'image'; });
-      if (this.galleryImages.length === 0) return;
-      
-      var index = this.galleryImages.findIndex(function(a) { return String(a.id) === String(attId); });
-      this.currentIndex = index !== -1 ? index : 0;
-      
-      this.showImage(this.galleryImages[this.currentIndex]);
-      this.container.style.display = 'flex';
+      if (this.galleryImages.length > 0) {
+        var index = this.galleryImages.findIndex(function(a) { return String(a.id) === String(attId); });
+        this.currentIndex = index !== -1 ? index : 0;
+        this.showImage(this.galleryImages[this.currentIndex]);
+        this.container.style.display = 'flex';
+        return;
+      }
+      // gallery empty — fall through to fallback
+    }
+    
+    if (fallbackImg && fallbackImg.url) {
+      this.open(fallbackImg);
     }
   },
 
@@ -170,6 +188,22 @@ window.ImageViewer = {
     this.zoomLevel = 1;
     
     var ivImg = document.getElementById('iv-image');
+    if (!ivImg) {
+      this.render();
+      this.attachEvents();
+      ivImg = document.getElementById('iv-image');
+    }
+    if (!ivImg) return;
+    ivImg.removeAttribute('data-retried');
+    ivImg.onerror = function() {
+      if (!ivImg.hasAttribute('data-retried') && imgObj.url) {
+        ivImg.setAttribute('data-retried', '1');
+        ivImg.src = imgObj.url + (imgObj.url.indexOf('?') > -1 ? '&' : '?') + 't=' + Date.now();
+        return;
+      }
+      var title = document.getElementById('iv-title');
+      if (title) title.innerText = 'Image failed to load';
+    };
     ivImg.src = imgObj.url;
     if (window.freezeGifImages && imgObj.url && (imgObj.url.indexOf('.gif') > -1 || imgObj.url.indexOf('image/gif') > -1)) {
       ivImg.onload = function() {
@@ -198,9 +232,65 @@ window.ImageViewer = {
     if (!this.container) return;
     this.container.style.display = 'none';
     this.currentImg = null;
+    try {
+      var canvasArea = document.getElementById('iv-canvas-area');
+      var vidEl = canvasArea ? canvasArea.querySelector('video') : null;
+      if (vidEl) {
+        vidEl.pause();
+        vidEl.remove();
+        var imgEl = document.createElement('img');
+        imgEl.id = 'iv-image';
+        imgEl.src = '';
+        imgEl.style.cssText = 'max-width: 90%; max-height: 90%; object-fit: contain; transition: transform 0.2s ease;';
+        if (canvasArea) canvasArea.insertBefore(imgEl, canvasArea.querySelector('#iv-btn-prev').nextSibling);
+      }
+      var zi = document.getElementById('iv-btn-zoom-in');
+      if (zi) zi.style.display = '';
+      var zo = document.getElementById('iv-btn-zoom-out');
+      if (zo) zo.style.display = '';
+      var pp = document.getElementById('iv-btn-prev');
+      if (pp) pp.style.display = '';
+      var nn = document.getElementById('iv-btn-next');
+      if (nn) nn.style.display = '';
+    } catch(e) {
+      console.warn('[ImageViewer] close error:', e);
+    }
+  },
+
+  openVideo(src, msgId) {
+    if (!this.container) return;
+    this.container.style.display = 'flex';
+    try {
+      var titleEl = document.getElementById('iv-title');
+      if (titleEl) titleEl.innerText = 'Video';
+      var zi = document.getElementById('iv-btn-zoom-in');
+      if (zi) zi.style.display = 'none';
+      var zo = document.getElementById('iv-btn-zoom-out');
+      if (zo) zo.style.display = 'none';
+      var pp = document.getElementById('iv-btn-prev');
+      if (pp) pp.style.display = 'none';
+      var nn = document.getElementById('iv-btn-next');
+      if (nn) nn.style.display = 'none';
+      var canvasArea = document.getElementById('iv-canvas-area');
+      if (!canvasArea) return;
+      var imgEl = document.getElementById('iv-image');
+      if (imgEl) imgEl.style.display = 'none';
+      var existingVid = canvasArea.querySelector('video');
+      if (existingVid) existingVid.remove();
+      var vid = document.createElement('video');
+      vid.src = src;
+      vid.controls = true;
+      vid.autoplay = true;
+      vid.style.cssText = 'max-width: 90%; max-height: 90%; border-radius: 8px;';
+      canvasArea.insertBefore(vid, canvasArea.querySelector('#iv-btn-prev').nextSibling);
+    } catch(e) {
+      console.warn('[ImageViewer] openVideo error:', e);
+    }
   }
 };
 
-document.addEventListener('DOMContentLoaded', function() {
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function() { window.ImageViewer.init(); });
+} else {
   window.ImageViewer.init();
-});
+}

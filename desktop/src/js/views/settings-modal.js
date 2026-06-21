@@ -586,6 +586,14 @@ window.SettingsModal = {
               '<input id="set-link-previews" type="checkbox" '+(s.showLinkPreviews!==false?'checked':'')+' style="accent-color:var(--accent-primary);">' +
               '<div><div>Link Previews</div><div style="font-size:11px;color:var(--text-muted);font-weight:400;">Show rich previews for shared links</div></div>' +
             '</label>' +
+            '<label style="display:flex;align-items:center;gap:12px;font-size:13px;color:var(--text-primary);cursor:pointer;padding:8px 0;border-top:1px solid var(--border-subtle);">' +
+              '<input id="set-compact-spacing" type="checkbox" '+(s.experimentalCompactSpacing?'checked':'')+' style="accent-color:var(--accent-primary);">' +
+              '<div><div>Compact Spacing</div><div style="font-size:11px;color:var(--text-muted);font-weight:400;">Tighter message layout with reduced padding</div></div>' +
+            '</label>' +
+            '<label style="display:flex;align-items:center;gap:12px;font-size:13px;color:var(--text-primary);cursor:pointer;padding:8px 0;border-top:1px solid var(--border-subtle);">' +
+              '<input id="set-swipe-reply" type="checkbox" '+(s.swipeToReply!==false?'checked':'')+' style="accent-color:var(--accent-primary);">' +
+              '<div><div>Swipe to Reply</div><div style="font-size:11px;color:var(--text-muted);font-weight:400;">Swipe or drag left on a message to reply</div></div>' +
+            '</label>' +
           '</div>' +
         '</div>';
 
@@ -707,6 +715,8 @@ window.SettingsModal = {
       content.querySelector('#set-chat-avatars').addEventListener('change', function(e) { updateSettings('showChatAvatars', e.target.checked); });
       content.querySelector('#set-image-previews').addEventListener('change', function(e) { updateSettings('showImagePreviews', e.target.checked); });
       content.querySelector('#set-link-previews').addEventListener('change', function(e) { updateSettings('showLinkPreviews', e.target.checked); });
+      content.querySelector('#set-compact-spacing').addEventListener('change', function(e) { updateSettings('experimentalCompactSpacing', e.target.checked); });
+      content.querySelector('#set-swipe-reply').addEventListener('change', function(e) { updateSettings('swipeToReply', e.target.checked); });
       content.querySelectorAll('.sidebar-btn-toggle').forEach(function(cb) {
         cb.addEventListener('change', function(e) {
           var btns = Object.assign({}, window.store.getState().settings.sidebarButtons || {});
@@ -1186,7 +1196,11 @@ window.SettingsModal = {
                     '<div style="border-top:1px solid var(--border-subtle);"></div>' +
                     gatedToggleRow('adv-message-fx', 'Enhanced Message FX' + experimentalBadge, 'Sparkle effect on newly sent messages.', s.experimentalMessageFx, true) +
                     '<div style="border-top:1px solid var(--border-subtle);"></div>' +
-                    gatedToggleRow('adv-compact-spacing', 'Compact Spacing' + experimentalBadge, 'Tighter message layout with reduced padding.', s.experimentalCompactSpacing, true) +
+                    gatedToggleRow('adv-fps-monitor', 'FPS Monitor' + experimentalBadge, 'Display real-time frame rate counter.', s.experimentalFpsMonitor, true) +
+                    '<div style="border-top:1px solid var(--border-subtle);"></div>' +
+                    gatedToggleRow('adv-dev-overlay', 'Developer Overlay' + experimentalBadge, 'Show connection stats and debug info overlay.', s.experimentalDevOverlay, true) +
+                    '<div style="border-top:1px solid var(--border-subtle);"></div>' +
+                    gatedToggleRow('adv-perf-mode', 'Performance Mode' + experimentalBadge, 'Kill animations, disable link previews, reduce background CPU.', s.experimentalPerformanceMode, true) +
                   '</div>'
                 : '') +
             '</div>' +
@@ -1231,6 +1245,9 @@ window.SettingsModal = {
           s.experimentalAnimatedAvatars = false;
           s.experimentalMessageFx = false;
           s.experimentalCompactSpacing = false;
+          s.experimentalFpsMonitor = false;
+          s.experimentalDevOverlay = false;
+          s.experimentalPerformanceMode = false;
           s.debugDisplay = false;
           s.showMessageIds = false;
           s.logNetworkPackets = false;
@@ -1287,7 +1304,56 @@ window.SettingsModal = {
       expToggle('adv-animated-avatars', 'experimentalAnimatedAvatars');
       expToggle('adv-message-fx', 'experimentalMessageFx');
       expToggle('adv-profile-frames', 'experimentalProfileFrames');
-      expToggle('adv-compact-spacing', 'experimentalCompactSpacing');
+      expToggle('adv-fps-monitor', 'experimentalFpsMonitor');
+      expToggle('adv-dev-overlay', 'experimentalDevOverlay');
+      // Performance Mode — two-step confirmation on enable
+      (function() {
+        var el = content.querySelector('#adv-perf-mode');
+        if (el) {
+          el.addEventListener('change', function(e) {
+            if (!window.store.getState().settings.devMode || !window.store.getState().settings.enableExperimental) {
+              e.target.checked = false;
+              return;
+            }
+            if (!e.target.checked) {
+              // Turning off — just apply
+              updateSettings('experimentalPerformanceMode', false);
+              return;
+            }
+            // Step 1: Warning modal
+            if (window.ConfirmModal) {
+              window.ConfirmModal.show({
+                title: 'Performance Mode',
+                message: 'Performance Mode disables animations, link previews, GIFs, and background tasks to reduce CPU usage. Some visual feedback will stop working while this is active.',
+                confirmText: 'Continue',
+                cancelText: 'Cancel',
+                onConfirm: function() {
+                  // Step 2: Final confirmation
+                  window.ConfirmModal.show({
+                    title: 'Are you sure?',
+                    message: 'This will kill all CSS animations, freeze animated GIFs, disable link preview fetching, and reduce background task frequency. The app will feel less responsive visually but may use less CPU. You can turn this off at any time.',
+                    confirmText: 'Enable',
+                    cancelText: 'Cancel',
+                    danger: true,
+                    onConfirm: function() {
+                      updateSettings('experimentalPerformanceMode', true);
+                      window.Toast && window.Toast.show('Performance Mode', 'Performance Mode enabled. Some features are now disabled.', 'info');
+                    },
+                    onCancel: function() {
+                      e.target.checked = false;
+                    }
+                  });
+                },
+                onCancel: function() {
+                  e.target.checked = false;
+                }
+              });
+            } else {
+              updateSettings('experimentalPerformanceMode', true);
+            }
+          });
+        }
+      })();
 
     } else if (tabName === 'data') {
       var s = state.settings;
@@ -1771,7 +1837,7 @@ window.SettingsModal = {
       });
 
     } else if (tabName === 'about') {
-      var version = window.orbitAPI ? (window.orbitAPI.version || '0.1.2-beta') : '0.1.2-beta';
+      var version = window.orbitAPI ? (window.orbitAPI.version || '0.1.3-beta') : '0.1.3-beta';
       var friendCount = state.friends ? state.friends.length : 0;
       var groupCount = state.groups ? state.groups.length : 0;
       var chatCount = Object.keys(state.messages || {}).length;

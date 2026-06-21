@@ -47,7 +47,7 @@
       <button class="nav-btn active" data-view="chats"><i data-lucide="message-circle"></i><span>Chats</span></button>
       <button class="nav-btn" data-view="friends"><i data-lucide="users"></i><span>Friends</span></button>
       <button class="nav-btn" data-view="activity"><i data-lucide="bell"></i><span>Activity</span></button>
-      <button class="nav-btn" data-view="settings"><div id="nav-user-avatar" class="nav-avatar"></div><span>You</span></button>
+      <button class="nav-btn" data-view="settings"><div style="position:relative;display:flex;"><div id="nav-user-avatar" class="nav-avatar"></div></div><span>You</span></button>
     </nav>
 
     <!-- Chats Panel -->
@@ -117,8 +117,8 @@
         <div id="chat-header-info" style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;"></div>
         <button id="btn-privacy-badge" class="privacy-badge-btn" title="Privacy mode" style="display:none;"><i data-lucide="eye-off"></i></button>
         <button id="btn-gallery" title="Gallery"><i data-lucide="image"></i></button>
-        <button id="btn-chat-search" title="Search"><i data-lucide="search"></i></button>
-        <button id="btn-chat-more"><i data-lucide="more-vertical"></i></button>
+        <button id="btn-chat-search" title="Search" style="outline:none!important;-webkit-tap-highlight-color:transparent;"><i data-lucide="search"></i></button>
+        <button id="btn-chat-more" style="outline:none!important;-webkit-tap-highlight-color:transparent;"><i data-lucide="more-vertical"></i></button>
       </div>
       <div id="message-search-bar" style="display:none;padding:8px 12px;border-bottom:1px solid var(--border-subtle);">
         <div style="display:flex;align-items:center;gap:8px;background:var(--bg-surface);border-radius:8px;padding:4px 10px;">
@@ -141,6 +141,9 @@
           <div id="dropup-menu">
             <button class="dropup-item" data-upload="images">
               <i data-lucide="image"></i> Upload Images
+            </button>
+            <button class="dropup-item" data-upload="videos">
+              <i data-lucide="video"></i> Upload Videos
             </button>
             <button class="dropup-item" data-upload="files">
               <i data-lucide="file"></i> Upload Files
@@ -183,6 +186,10 @@
     <div id="image-preview-overlay">
       <button class="close-btn" id="btn-close-image-preview">&times;</button>
       <div class="preview-wrap"><img id="image-preview-img" src="" alt="Preview"></div>
+    </div>
+    <div id="video-preview-overlay">
+      <button class="close-btn" id="btn-close-video-preview">&times;</button>
+      <div class="preview-wrap"><video id="video-preview-player" controls style="max-width:100%;max-height:100%;border-radius:8px;"></video></div>
     </div>
     <aside id="panel-members-overlay" class="overlay-panel">
       <div class="overlay-panel-header">

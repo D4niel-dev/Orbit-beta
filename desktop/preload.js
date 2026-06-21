@@ -26,7 +26,7 @@ contextBridge.exposeInMainWorld('orbitAPI', {
   checkDiskSpace: () => ipcRenderer.invoke('check-disk-space'),
 
   // OS Integration
-  showNotification: (title, body) => ipcRenderer.send('show-notification', title, body),
+  showNotification: (title, body, icon) => ipcRenderer.send('show-notification', title, body, icon),
   toggleDevtools: () => ipcRenderer.send('toggle-devtools'),
   writeClipboard: (text) => ipcRenderer.sendSync('write-clipboard', text),
 
@@ -55,6 +55,7 @@ contextBridge.exposeInMainWorld('orbitAPI', {
   dbSetSetting: (key, val) => ipcRenderer.sendSync('db-set-setting', key, val),
   dbHealthCheck: () => ipcRenderer.sendSync('db-health-check'),
   dbRepair: () => ipcRenderer.sendSync('db-repair'),
+  dbCheckAttachmentIntegrity: () => ipcRenderer.sendSync('db-check-attachment-integrity'),
   backupCreate: (format) => ipcRenderer.invoke('backup-create', format),
   backupRestore: () => ipcRenderer.invoke('backup-restore'),
   backupValidate: (filePath) => ipcRenderer.invoke('backup-validate', filePath),

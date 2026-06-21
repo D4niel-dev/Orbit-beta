@@ -1,6 +1,43 @@
 # Orbit Changelog
 
-## v0.1.2-beta **(Current Version)**
+## v0.1.3-beta **(Current Version)**
+
+### New Features
+- **Native Android System Notifications:** Messages now show as real system notifications when app is backgrounded (requires POST_NOTIFICATIONS permission).
+- **Desktop Notification Avatars:** Sender/group avatar now shown as notification icon (previously static Orbit icon).
+- **Connection Stats Panel:** Live P2P status — online peers, uptime, sent/received message counters (refreshes every 2s).
+- **Video File Support:** Upload, render, and view video files in chat — `<video>` elements with play overlay in message bubbles.
+- **Video Preview Modal:** Full-screen video player on desktop and mobile (matching image preview UX).
+- **Video Compression:** Large videos (>5MB) auto-compressed to 720p/500kbps via MediaRecorder + captureStream before sending.
+- **Performance Mode Toggle:** Experimental setting with two-step confirmation — disables animations, link previews, GIF playback, and background CPU tasks.
+- **Group Info UI:** Hardcoded colors replaced with theme CSS variables for consistent dark/light mode appearance.
+
+### Bug Fixes
+- **Image Viewer Not Opening on Click:** Root cause — `'friends'` in chat-panel store subscription triggered full DOM re-render on every friend status beacon (10s). If a re-render occurred between mousedown and mouseup on an image thumbnail, the click event targeted the new `message-row` instead of the replaced `<img>`, and `closest('[data-open-image]')` missed. Fixed by removing `'friends'` from subscription and adding hit-test fallback in click handler.
+- **Mobile Notifications Overhaul:** Added native Android system notifications via `@capacitor/local-notifications` — shows notification with sender name and message preview when app is backgrounded. Includes POST_NOTIFICATIONS permission, `orbit_messages` and `orbit_general` notification channels, and permission request on startup.
+- **Desktop Notification Avatars:** Native Electron notifications now display the sender's avatar as the notification icon (previously used static Orbit app icon). Avatar data URLs are converted to `nativeImage` via `nativeImage.createFromDataURL()`.
+- **Sender Avatar in Desktop File Notifications:** File received notifications now include the sender's avatar icon.
+- **Working Status Panel:** The experimental "Connection Stats" overlay (Developer Overlay toggle) now shows live data — connection status (online/offline), peer count, uptime (since P2P start), and messages sent/received counters. Refreshes every 2 seconds.
+- **Group Info Overlay Polish:** Replaced hardcoded colors (`#22c55e`, `#6b7280`, `#555`) with CSS design tokens (`var(--accent-success)`, `var(--text-muted)`, `var(--bg-active)`). Toggle track backgrounds now use theme-consistent colors.
+- **Video File Support:** Added `video/*` file type detection in both file input and drag-and-drop handlers on desktop and mobile. Videos are classified as `type: 'video'` and rendered as `<video>` elements with play overlay icon in message bubbles.
+- **Video Preview Modal:** Desktop: `ImageViewer.openVideo()` — opens video in a full-screen player overlay with play/pause controls. Mobile: new `#video-preview-overlay` with `<video controls>` element, matching the image preview UX.
+- **Upload Videos Context Menu:** Added "Upload Videos" option to the `+` button context menu on desktop (sets `accept="video/*"`) and the drop-up menu on mobile.
+- **Video Compression (Desktop):** `compressVideoFile()` method re-encodes video files larger than 5MB at 720p max resolution via `MediaRecorder` with VP9 codec at 500kbps bitrate. Uses `canvas.captureStream()` at 15fps for frame capture. Compressed video replaces staged file for sending.
+- **Video Compression (Mobile):** `compressVideoMobile()` function mirrors the desktop approach for mobile WebView — compresses large videos client-side before sending via the P2P network.
+- **Leaked Offline Check Interval:** Removed duplicate `setInterval` at startup — `applySettings()` is now the single source for offline check timing.
+- **Mobile HTML Nesting Fixed:** Missing `'</div>' +` concatenation in Performance Mode toggle row caused broken DOM structure on Android.
+- **image-viewer.js Null-Safety:** `openFromMessage()` now guards against null store/messages with fallback URL; `close()` and `openVideo()` wrapped in try/catch for missing DOM elements; `init()` uses `readyState` guard.
+
+### Performance & Polish
+- **P2P Discovery Optimization:** Beacon broadcast interval reduced from 5s to 10s (desktop and mobile) — cuts network discovery chatter by 50%. Peer stale threshold increased from 120s to 180s to accommodate the slower beacon rate. Offline status check interval reduced from 30s to 15s for faster detection of stale peers.
+- **File Transfer Retry Backoff:** Changed from linear (`500ms × retry`) to exponential (`200ms × 2^retry`, capped at 5s) for more efficient retry behavior.
+- **Performance Mode:** New toggle in Experimental settings with two-step confirmation — kills all animations/transitions, freezes GIF playback, skips link preview OG fetch, slows offline check to 60s, stops connection stats polling and dev overlay rAF.
+- **Forced Reflow Cascade Eliminated:** ResizeObserver disconnected before every `innerHTML =` in `renderChat()`, reconnected after all DOM changes complete; throttled to 1s to prevent cascade from async image loads.
+- **`_positionMessageActions` Suppressed in Performance Mode:** Both `requestAnimationFrame` and `ResizeObserver` callbacks check `window._performanceMode` and return early, eliminating the 170-475ms forced reflow cascade entirely.
+- **data-refreshing Animation Guard:** CSS `[data-refreshing] .message-row { animation:none !important }` prevents message entrance animation from re-firing on DOM re-render.
+- **Compact Spacing & Swipe-to-Reply:** Moved from Experimental to general chat settings (always available).
+
+## v0.1.2-beta
 
 ### Bug Fixes
 - **Manual Connect Bug Fix (Critical):** Manual "Add a Friend" IP connect now works — `socket.js` socket remapping no longer blocked by a stale `'manual'` peerId key. `sendMessage()` finds the existing TCP connection instead of creating a new one on every message.

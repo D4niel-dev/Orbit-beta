@@ -49,7 +49,7 @@ class Discovery {
       }
       console.log(`Discovery listening on ${this.MULTICAST_ADDR}:${this.PORT}`);
 
-      this.beaconInterval = setInterval(() => this.broadcastBeacon(), 5000);
+      this.beaconInterval = setInterval(() => this.broadcastBeacon(), 10000);
       this.broadcastBeacon();
     });
 

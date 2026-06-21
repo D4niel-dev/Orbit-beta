@@ -61,6 +61,7 @@ class Store {
         timeFormat24: false,
         bgPattern: 'None',
         enterToSend: true,
+        swipeToReply: true,
         showChatAvatars: true,
         showImagePreviews: true,
         galleryViewMode: 'grid',
@@ -81,6 +82,9 @@ class Store {
         experimentalMessageTranslate: true,
         messageTranslate: true,
         experimentalCompactSpacing: false,
+        experimentalFpsMonitor: false,
+        experimentalDevOverlay: false,
+        experimentalPerformanceMode: false,
         profileFrame: 0,
         enableCustomColors: false,
         experimentalAnimatedAvatars: false,
@@ -409,6 +413,13 @@ class Store {
       const { groupId, groupName, ownerId, members } = packet.payload;
       const existingGroup = this.state.groups.find(g => g.groupId === groupId);
       if (!existingGroup) {
+        if (members) {
+          for (var mi = 0; mi < members.length; mi++) {
+            if (members[mi].publicKey) {
+              this.setPeerPublicKey(members[mi].userId, members[mi].publicKey);
+            }
+          }
+        }
         const group = {
           groupId,
           groupName,
@@ -443,6 +454,15 @@ class Store {
       if (accepted && groupId) {
         var existing = this.state.groups.find(function(g) { return g.groupId === groupId; });
         if (!existing) {
+          // Store group member public keys for E2EE
+          if (members) {
+            var self = this;
+            members.forEach(function(m) {
+              if (m.publicKey) {
+                self.setPeerPublicKey(m.userId, m.publicKey);
+              }
+            });
+          }
           var group = {
             groupId: groupId,
             groupName: groupName || 'Group',
@@ -479,6 +499,9 @@ class Store {
       const { groupId, user } = packet.payload;
       if (groupId && user && user.userId) {
         this.addMemberToGroup(groupId, user);
+        if (user.publicKey) {
+          this.setPeerPublicKey(user.userId, user.publicKey);
+        }
         var g = this.state.groups.find(function(gg) { return gg.groupId === groupId; });
         if (window.Toast) window.Toast.show('New Member', (user.username || 'Someone') + ' was added to ' + (g ? g.groupName : 'group'));
       }
@@ -528,6 +551,7 @@ class Store {
 
     // Basic message handling logic
     if (packet.type === window.Protocol.Types.MESSAGE) {
+      if (window._p2pRecvCount !== undefined) window._p2pRecvCount++;
       const fromId = packet.payload.chatId || packet.from;
       var text = packet.payload.text || (typeof packet.payload === 'string' ? packet.payload : '');
 
@@ -589,7 +613,7 @@ class Store {
         
         if (document.hidden) {
            if (window.orbitAPI && window.orbitAPI.showNotification) {
-             window.orbitAPI.showNotification('New message from ' + title, preview);
+             window.orbitAPI.showNotification('New message from ' + title, preview, senderAvatar);
            }
         } else if (window.Toast) {
            window.Toast.show(title, preview, senderAvatar);
@@ -634,6 +658,13 @@ class Store {
     if (friend && friend.publicKey) return friend.publicKey;
     var group = state.groups.find(function(g) { return g.groupId === peerId; });
     if (group && group.publicKey) return group.publicKey;
+    // Check all group members (for non-friend group members)
+    for (var gi = 0; gi < state.groups.length; gi++) {
+      var gMembers = state.groups[gi].members || [];
+      for (var mj = 0; mj < gMembers.length; mj++) {
+        if (gMembers[mj].userId === peerId && gMembers[mj].publicKey) return gMembers[mj].publicKey;
+      }
+    }
     return state.peerPublicKeys[peerId] || null;
   }
 

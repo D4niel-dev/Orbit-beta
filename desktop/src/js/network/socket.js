@@ -17,6 +17,10 @@ class SocketManager extends EventEmitter {
     // Per-socket write queues to prevent interleaving on shared sockets
     this._writeQueues = new Map();
     this._writing = new Set();
+
+    // Pending connections and message queues for fire-and-forget sends
+    this._pendingConnects = new Map();
+    this._pendingMessages = new Map();
   }
 
   // Serialize writes to a socket so concurrent sendMessage/Broadcast calls
@@ -98,7 +102,12 @@ class SocketManager extends EventEmitter {
       return Promise.resolve(existing);
     }
 
-    return new Promise((resolve, reject) => {
+    // Reuse in-progress connection promise to avoid duplicates
+    if (this._pendingConnects.has(peerId)) {
+      return this._pendingConnects.get(peerId);
+    }
+
+    const promise = new Promise((resolve, reject) => {
       const socket = new net.Socket();
       socket.__orbitKey = peerId;
 
@@ -106,18 +115,35 @@ class SocketManager extends EventEmitter {
         console.log(`Connected to peer ${peerId} at ${ip}:${port}`);
         this.connections.set(peerId, socket);
         this.setupSocket(socket, peerId);
+        this._pendingConnects.delete(peerId);
 
         // Send identity beacon over TCP so peer can discover us
         this.sendBeacon(socket);
+
+        // Flush any messages queued while connecting
+        this._flushPending(peerId, socket);
         resolve(socket);
       });
 
       socket.on('error', (err) => {
         console.error(`Connection error to ${ip}:`, err.message);
         this.connections.delete(peerId);
+        this._pendingConnects.delete(peerId);
         reject(err);
       });
     });
+
+    this._pendingConnects.set(peerId, promise);
+    return promise;
+  }
+
+  _flushPending(peerId, socket) {
+    if (!this._pendingMessages.has(peerId)) return;
+    const queue = this._pendingMessages.get(peerId);
+    queue.forEach((buffer) => {
+      this._enqueueWrite(socket, buffer);
+    });
+    this._pendingMessages.delete(peerId);
   }
 
   setupSocket(socket, knownPeerId) {
@@ -200,6 +226,16 @@ class SocketManager extends EventEmitter {
 
     let socket = this.connections.get(toPeerId);
     if (!socket && toIp) {
+      // Check if connection is already in progress
+      if (this._pendingConnects.has(toPeerId)) {
+        // Queue message for flush after connect completes
+        if (!this._pendingMessages.has(toPeerId)) {
+          this._pendingMessages.set(toPeerId, []);
+        }
+        this._pendingMessages.get(toPeerId).push(serialized);
+        return true;
+      }
+
       // Fire-and-forget connect — connection success/failure handled internally
       this.connectToPeer(toPeerId, toIp).then((s) => {
         this._enqueueWrite(s, serialized);
@@ -229,6 +265,14 @@ class SocketManager extends EventEmitter {
         const serialized = Protocol.serialize(packet);
         let socket = this.connections.get(m.userId);
         if (!socket) {
+          if (this._pendingConnects.has(m.userId)) {
+            if (!this._pendingMessages.has(m.userId)) {
+              this._pendingMessages.set(m.userId, []);
+            }
+            this._pendingMessages.get(m.userId).push(serialized);
+            sentCount++;
+            return;
+          }
           // Fire-and-forget connect
           this.connectToPeer(m.userId, m.ip).then((s) => {
             this._enqueueWrite(s, serialized);
@@ -253,6 +297,8 @@ class SocketManager extends EventEmitter {
     this.connections.clear();
     this._writeQueues.clear();
     this._writing.clear();
+    this._pendingConnects.clear();
+    this._pendingMessages.clear();
   }
 }
 

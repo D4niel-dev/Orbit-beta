@@ -35,7 +35,7 @@ public class OrbitP2PPlugin extends Plugin {
     private static final int TCP_BUFFER_SIZE = 4194304; // 4 MB — raised from 64 KB
     private static final String MULTICAST_ADDR = "224.0.0.251";
     private static final int DISCOVERY_PORT = 45678;
-    private static final int BEACON_INTERVAL_MS = 5000;
+    private static final int BEACON_INTERVAL_MS = 10000;
 
     private ServerSocket serverSocket;
     private volatile MulticastSocket multicastSocket;

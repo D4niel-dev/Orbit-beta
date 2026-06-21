@@ -116,7 +116,7 @@ class TransferManager {
       for (let retry = 0; retry < MAX_CHUNK_RETRIES; retry++) {
         sent = this.socketManager.sendMessage(toPeerId, toIp, Protocol.Types.FILE_CHUNK, payload);
         if (sent) break;
-        await new Promise(r => setTimeout(r, 500 * (retry + 1)));
+        await new Promise(r => setTimeout(r, Math.min(200 * Math.pow(2, retry), 5000)));
       }
       if (!sent) {
         readStream.destroy();

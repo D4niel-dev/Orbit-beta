@@ -489,9 +489,10 @@ button:active,
 }
 
 /* Experimental: Animated Avatars */
-.experimental-animated-avatars .sidebar-avatar-img,
-.experimental-animated-avatars .friend-avatar,
-.experimental-animated-avatars .chat-avatar {
+[data-exp-avatars] .chat-row-avatar,
+[data-exp-avatars] .group-member-avatar,
+[data-exp-avatars] .activity-group-avatar,
+[data-exp-avatars] .friend-row .chat-row-avatar {
   animation: avatar-pulse 3s ease-in-out infinite;
 }
 
@@ -500,9 +501,51 @@ button:active,
   50% { box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.05); }
 }
 
+/* pfp-frame overlay — resets inherited avatar img styles */
+img.pfp-frame {
+  border-radius: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  object-fit: contain !important;
+  width: 133% !important;
+  height: 133% !important;
+}
+/* smaller frame for tiny nav avatar */
+#nav-user-avatar ~ img.pfp-frame {
+  width: 26px !important;
+  height: 26px !important;
+  top: -2px !important;
+  left: -2px !important;
+}
+
+/* Experimental: Profile Frames */
+[data-exp-frames] .chat-row-avatar-wrapper {
+  position: relative;
+}
+[data-exp-frames] .group-member-avatar-wrap {
+  position: relative;
+}
+
 /* Experimental: Enhanced Message FX */
 [data-exp-fx="true"] .message-row.mine .message-bubble {
   animation: fx-bubble 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+[data-exp-fx="true"] .message-row.mine .message-bubble::after {
+  content: '✨';
+  position: absolute;
+  top: -14px;
+  right: -8px;
+  font-size: 18px;
+  line-height: 1;
+  pointer-events: none;
+  animation: fx-sparkle 0.8s ease-out forwards;
+}
+
+@keyframes fx-sparkle {
+  0% { opacity: 1; transform: translateY(0) scale(0); }
+  35% { opacity: 1; transform: translateY(-8px) scale(1.3); }
+  70% { opacity: 0.7; transform: translateY(-16px) scale(0.8); }
+  100% { opacity: 0; transform: translateY(-24px) scale(0.3); }
 }
 
 .fx-particle {

@@ -71,6 +71,7 @@
 
 .message-row {
   animation: messageEnter 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  touch-action: pan-y;
 }
 
 /* File Drag Overlay */
@@ -94,7 +95,28 @@
   transition-duration: 0.01ms !important;
 }
 
+/* Suppress message animations during re-render */
+[data-refreshing] .message-row {
+  animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+
 /* Drag active state on chat panel */
+/* Performance Mode — kills all animations, transitions, effects */
+.performance-mode *,
+.performance-mode *::before,
+.performance-mode *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+.performance-mode .message-row {
+  animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+
 .drag-active .message-feed,
 .drag-active .chat-input-area {
   opacity: 0.4;
