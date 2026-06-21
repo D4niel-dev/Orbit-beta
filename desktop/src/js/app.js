@@ -538,6 +538,11 @@ document.addEventListener('DOMContentLoaded', () => {
       window.orbitAPI.on('peer-found', (peer) => {
         console.log('Discovered peer:', peer.username);
         window.store.addOrUpdatePeer(peer);
+        var curState = window.store.getState();
+        var isFriend = curState.friends.some(function(f) { return f.userId === peer.userId; });
+        if (isFriend && peer.userId && peer.ip) {
+          window.orbitAPI.networkSend(peer.userId, peer.ip, window.Protocol.Types.PING, {});
+        }
       });
 
       window.orbitAPI.on('network-message', (packet) => {

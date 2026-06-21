@@ -62,9 +62,16 @@ window.ContextMenu = {
 
     this.container.style.left = x + 'px';
     this.container.style.top = y + 'px';
+
+    // Auto-dismiss after 1.5s so cursor doesn't block buttons
+    if (this._dismissTimer) clearTimeout(this._dismissTimer);
+    self._dismissTimer = setTimeout(function() {
+      self.close();
+    }, 1500);
   },
 
   close() {
+    if (this._dismissTimer) { clearTimeout(this._dismissTimer); this._dismissTimer = null; }
     if (this.container) this.container.style.display = 'none';
   }
 };

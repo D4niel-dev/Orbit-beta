@@ -309,7 +309,7 @@ button:active,
 }
 
 /* Message action bar */
-.message-bubble:hover .msg-actions-bar {
+.message-row:hover .msg-actions-bar {
   display: flex;
 }
 .msg-actions-bar {
@@ -864,3 +864,31 @@ button:active,
   font-size: inherit;
   color: var(--text-primary);
 }
+
+/* Swipe-to-Reply */
+.message-row {
+  touch-action: pan-y;
+  will-change: transform;
+  position: relative;
+  z-index: 1;
+}
+
+.swipe-reply-indicator {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%) scale(0.4);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--bg-surface);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  pointer-events: none;
+  z-index: 5;
+  opacity: 0;
+  color: var(--text-muted);
+}
+

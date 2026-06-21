@@ -46,7 +46,8 @@ window.ChatPanel = {
     this.container.addEventListener('click', function(e) {
       if (e.target.closest('#btn-cancel-reply')) {
         self.replyingTo = null;
-        window.store.notify();
+        var bar = document.getElementById('reply-edit-bar');
+        if (bar) bar.remove();
         return;
       }
       if (e.target.closest('#btn-cancel-edit')) {
@@ -856,7 +857,7 @@ window.ChatPanel = {
         '<button id="btn-unpin-all" style="background:none;border:none;cursor:pointer;color:var(--text-muted);padding:2px;font-size:18px;line-height:1;" title="Unpin all">×</button>' +
       '</div>' +
       '<!-- Message Feed -->' +
-      '<div class="message-feed" id="chat-message-feed" style="flex:1; overflow-y:auto; padding: var(--spacing-lg);">' +
+      '<div class="message-feed" id="chat-message-feed" style="flex:1; overflow-y:auto; overflow-x:visible; padding: var(--spacing-lg);">' +
         messagesHtml + progressHtml + errorsHtml +
         '<div id="jump-to-unread" class="jump-to-unread" style="' + (hasUnreadInFeed ? '' : 'display:none;') + 'position:sticky;bottom:8px;left:50%;transform:translateX(-50%);z-index:10;" title="Jump to first unread">' +
           '<button style="background:var(--accent-primary);color:#fff;border:none;border-radius:20px;padding:6px 16px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(0,0,0,0.3);" onclick="window.ChatPanel.jumpToFirstUnread()">' +
@@ -1309,6 +1310,8 @@ window.ChatPanel = {
         }
       });
     }
+
+    self.initSwipeToReply();
 
     // Cancel transfer buttons
     // Drag and drop file uploads
@@ -2170,6 +2173,231 @@ window.ChatPanel = {
         setTimeout(function(el) { if (el.parentNode) el.parentNode.removeChild(el); }, 1200, p);
       }
     }
+  },
+
+  initSwipeToReply() {
+    if (this._swipeInitialized) return;
+    var self = this;
+    var swipeState = null;
+    var DRAG_MAX = 80;
+    var TRIGGER_THRESHOLD = 55;
+
+    function getRow(id) {
+      return document.querySelector('.message-row[data-msg-id="' + id + '"]');
+    }
+
+    function ensureIndicator(row) {
+      var ind = row.querySelector('.swipe-reply-indicator');
+      if (!ind) {
+        ind = document.createElement('div');
+        ind.className = 'swipe-reply-indicator';
+        ind.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"></polyline><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path></svg>';
+        row.style.position = 'relative';
+        row.appendChild(ind);
+      }
+      return ind;
+    }
+
+    function getSwipeTargets(row) {
+      var targets = [];
+      Array.prototype.forEach.call(row.children, function(child) {
+        if (!child.classList || !child.classList.contains('swipe-reply-indicator')) {
+          targets.push(child);
+        }
+      });
+      var bubble = row.querySelector('.message-bubble');
+      return targets.length ? targets : (bubble ? [bubble] : []);
+    }
+
+    function applyDrag(row, dx) {
+      var clampedDx = Math.max(-DRAG_MAX, Math.min(0, dx));
+      getSwipeTargets(row).forEach(function(target) {
+        target.style.transition = 'none';
+        target.style.transform = 'translateX(' + clampedDx + 'px)';
+      });
+      var ind = ensureIndicator(row);
+      var progress = Math.min(1, Math.abs(clampedDx) / TRIGGER_THRESHOLD);
+      var scale = 0.4 + progress * 0.6;
+      ind.style.opacity = progress;
+      ind.style.transform = 'translateY(-50%) scale(' + scale + ')';
+      if (progress >= 1) {
+        ind.style.color = 'var(--accent-primary)';
+      } else {
+        ind.style.color = 'var(--text-muted)';
+      }
+    }
+
+    function resetRow(row, triggered) {
+      getSwipeTargets(row).forEach(function(target) {
+        target.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+        target.style.transform = 'translateX(0)';
+        target.addEventListener('transitionend', function handler() {
+          target.style.transition = '';
+          target.style.transform = '';
+          target.removeEventListener('transitionend', handler);
+        });
+        setTimeout(function() {
+          target.style.transition = '';
+          target.style.transform = '';
+        }, 350);
+      });
+      var ind = row.querySelector('.swipe-reply-indicator');
+      if (ind) {
+        ind.style.transition = 'opacity 0.2s ease';
+        ind.style.opacity = '0';
+        setTimeout(function() { if (ind.parentNode) ind.remove(); }, 250);
+      }
+    }
+
+    function triggerReply(row) {
+      var msgId = row.getAttribute('data-msg-id');
+      if (!msgId) return;
+      var state = window.store.getState();
+      var msgList = state.messages[state.activeChatId] || [];
+      var msg = msgList.find(function(m) { return String(m.id) === msgId; });
+      if (msg) {
+        var friendName = state.friends.find(function(f) { return f.userId === state.activeChatId; });
+        self.replyingTo = {
+          id: msg.id,
+          text: msg.text,
+          senderName: msg.sender === state.currentUser.userId ? 'You' : (friendName ? friendName.username : 'User')
+        };
+        self.editingMsg = null;
+        var existing = document.getElementById('reply-edit-bar');
+        if (existing) existing.remove();
+        if (!self.replyingTo) return;
+        var rText = (self.replyingTo.text || '').substring(0, 80);
+        var barHtml = '<div id="reply-edit-bar" style="display:flex;align-items:center;gap:8px;padding:8px 12px;margin-bottom:4px;border-radius:12px;background:var(--bg-hover);border:1px solid var(--border-subtle);font-size:13px;color:var(--text-secondary);">' +
+          '<i data-lucide="reply" style="width:14px;height:14px;flex-shrink:0;"></i>' +
+          '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Replying to <b>' + window.Sanitize.escapeHtml(self.replyingTo.senderName || 'message') + '</b>: ' + window.Sanitize.escapeHtml(rText) + '</span>' +
+          '<button id="btn-cancel-reply" style="background:none;border:none;cursor:pointer;color:var(--text-muted);padding:2px;">✕</button>' +
+        '</div>';
+        var previewArea = document.getElementById('file-preview-area');
+        if (previewArea) {
+          previewArea.insertAdjacentHTML('beforebegin', barHtml);
+        }
+        if (window.lucide) lucide.createIcons();
+        var inp = document.getElementById('chat-input');
+        if (inp) inp.focus();
+      }
+    }
+
+    // Use this.container for delegation — it persists across innerHTML replacement
+    // getRow() still finds rows via global querySelector
+    var el = this.container;
+
+    el.addEventListener('touchstart', function(e) {
+      if (!window.store.getState().settings.swipeToReply || e.touches.length !== 1) return;
+      var row = e.target.closest('.message-row');
+      if (!row || e.target.closest('button, input, textarea, select, a, label, .reaction-pill, .reply-quote, .msg-action-btn, .link-preview')) return;
+      var t = e.touches[0];
+      swipeState = { id: row.getAttribute('data-msg-id'), x: t.clientX, y: t.clientY, locked: false };
+    }, { passive: true });
+
+    el.addEventListener('touchmove', function(e) {
+      if (!swipeState || e.touches.length !== 1) return;
+      var t = e.touches[0];
+      var dx = t.clientX - swipeState.x;
+      var dy = t.clientY - swipeState.y;
+
+      if (!swipeState.locked && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+        swipeState.locked = true;
+        swipeState.horizontal = Math.abs(dx) > Math.abs(dy);
+      }
+      if (!swipeState.locked || !swipeState.horizontal) return;
+
+      if (dx >= 0) {
+        var row = getRow(swipeState.id);
+        if (row) applyDrag(row, 0);
+        return;
+      }
+
+      e.preventDefault();
+      var row = getRow(swipeState.id);
+      if (row) applyDrag(row, dx);
+    }, { passive: false });
+
+    el.addEventListener('touchend', function(e) {
+      if (!swipeState) return;
+      var sid = swipeState.id;
+      var row = getRow(sid);
+      if (!row) { swipeState = null; return; }
+
+      var triggered = false;
+      if (e.changedTouches && e.changedTouches.length === 1) {
+        var t = e.changedTouches[0];
+        var dx = t.clientX - swipeState.x;
+        var dy = t.clientY - swipeState.y;
+        if (dx < -TRIGGER_THRESHOLD && Math.abs(dy) < 70) triggered = true;
+      }
+      resetRow(row, triggered);
+      if (triggered) triggerReply(row);
+      swipeState = null;
+    }, { passive: true });
+
+    el.addEventListener('touchcancel', function() {
+      if (swipeState) {
+        var row = getRow(swipeState.id);
+        if (row) resetRow(row, false);
+      }
+      swipeState = null;
+    }, { passive: true });
+
+    // Desktop mouse drag (same logic, adapted)
+    el.addEventListener('mousedown', function(e) {
+      if (!window.store.getState().settings.swipeToReply) return;
+      if (e.button !== 0) return;
+      var row = e.target.closest('.message-row');
+      if (!row || e.target.closest('button, input, textarea, select, a, label, .reaction-pill, .reply-quote, .msg-action-btn, .link-preview, .msg-avatar, .att-thumb')) return;
+      swipeState = { id: row.getAttribute('data-msg-id'), x: e.clientX, y: e.clientY, locked: false };
+    });
+
+    el.addEventListener('mousemove', function(e) {
+      if (!swipeState) return;
+      var dx = e.clientX - swipeState.x;
+      var dy = e.clientY - swipeState.y;
+
+      if (!swipeState.locked && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+        swipeState.locked = true;
+        swipeState.horizontal = Math.abs(dx) > Math.abs(dy);
+      }
+      if (!swipeState.locked || !swipeState.horizontal) return;
+
+      if (dx >= 0) {
+        var row = getRow(swipeState.id);
+        if (row) applyDrag(row, 0);
+        return;
+      }
+
+      var row = getRow(swipeState.id);
+      if (row) applyDrag(row, dx);
+    });
+
+    el.addEventListener('mouseup', function(e) {
+      if (!swipeState) return;
+      var sid = swipeState.id;
+      var row = getRow(sid);
+      if (!row) { swipeState = null; return; }
+
+      var triggered = false;
+      var dx = e.clientX - swipeState.x;
+      var dy = e.clientY - swipeState.y;
+      if (dx < -TRIGGER_THRESHOLD && Math.abs(dy) < 70) triggered = true;
+
+      resetRow(row, triggered);
+      if (triggered) triggerReply(row);
+      swipeState = null;
+    });
+
+    el.addEventListener('mouseleave', function() {
+      if (swipeState) {
+        var row = getRow(swipeState.id);
+        if (row) resetRow(row, false);
+      }
+      swipeState = null;
+    });
+
+    this._swipeInitialized = true;
   }
 };
 
