@@ -382,17 +382,10 @@ button:active,
   color: var(--accent-danger);
 }
 
-/* Attachment thumbnail loading placeholder */
+/* Force GPU compositing to eliminate white subpixel edge at border-radius clip boundary */
 .att-thumb {
-  background: var(--bg-surface);
-  position: relative;
-}
-.att-thumb img {
-  opacity: 0;
-  animation: attThumbFadeIn 0.3s ease forwards;
-}
-@keyframes attThumbFadeIn {
-  to { opacity: 1; }
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
 }
 
 /* Attachment delete button */
