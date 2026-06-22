@@ -14,7 +14,38 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.1.3-beta', 'Latest', [
+        versionBlock('0.1.4-beta', 'Latest', [
+          ['New Features', [
+            'Desktop P2P Bugfix Audit (17 fixes): Socket 8s timeout disabled after connect, write-queue key precedence fix, reconnect .catch() + counter reset on data, preload reconnect args, PIN/UNPIN groupId routing, GROUP_MEMBER_ADDED field update, GROUP_CREATE publicKey enrichment, GROUP_JOIN_REQUEST usertag/avatar/status',
+            'P2P Auto-Connection Stabilization: PING/PONG keep-alive (15s heartbeat, 30s idle → close), 8s connection timeout, reconnect with exponential backoff (5 attempts max, 30s cap), stale peer pruning (180s), network change detection (10s IP polling → full restart), auto-connect duplicate protection',
+            'Translation Engine Rewrite: In-memory cache, request dedup, AbortController for in-flight requests, inline Retry link on failure',
+            'Voice Messages Stabilization: audio/webm content-type fix, onerror auto-retry, chunked transfer audio detection with MIME mapping',
+            'Image Viewer: Quick-save button (showSaveFilePicker + Blob fallback), keyboard nav (← → Escape), swipe (mouse drag + touch), download fix (fetch+blob for custom protocol URLs), loading placeholder CSS',
+            'Performance Mode: Two-step confirmation, .performance-mode CSS class on &lt;html&gt;, runtime guards in chat-panel and app.js',
+            'Mobile Protocol.js Synced: 15+ missing types (MESSAGE_EDIT, CALL_*, FILE_TRANSFER_*, PIN, SYSTEM, PING/PONG, etc.) — full 46-type parity with desktop',
+            'Desktop Settings Ported to Mobile: 11 new defaults (notifyVolume, notifySoundType, translateTargetLang, netReconnectInterval, netKeepAlive, logLevel, etc.)',
+            'Mobile Settings Wired: logLevel filters debugLog(), tcpPort/udpPort in beacon/P2P, netReconnectInterval in auto-reconnect, netKeepAlive in heartbeat, netBandwidthLimit throttles FILE_CHUNK, networkMode shows/hides UDP field',
+            'Mobile Notifications: Sound toggle, volume slider (0-100), sound type select (Chime/Pop/Gentle/Classic)',
+            'Mobile Translation: Target language select (30 languages), auto-detect toggle, moved to Chat section',
+            'Mobile Network Settings: Reconnect interval, keep-alive select, WebRTC fallback, log level, bandwidth limit',
+            'Mobile DB Migration Fixed: Runs before MStore.load() — old unprefixed localStorage keys now picked up correctly',
+            'Mobile What\'s New: Full changelog modal in About tab (v0.0.2 through v0.1.4)'
+          ]],
+          ['Bug Fixes', [
+            'Desktop blank window fixed — missing closing paren in app.js:777 ternary chain crashed entire renderer',
+            'Mobile GROUP_CREATE/GROUP_JOIN_RESPONSE exempted from chat-existence check (they create the chat)',
+            'Mobile group handlers check origin.username || origin.name for name/username mismatch',
+            'Mobile toast concatenation operator precedence fixed',
+            'Mobile auto-reconnect now reads netReconnectInterval from settings (was hardcoded 5s)',
+            'Mobile PING/PONG heartbeat uses netKeepAlive from settings (was not implemented)',
+            'Mobile TCP timeout + UDP port now passed from settings to native Java plugin',
+            'profileFrame value 0 stored correctly (TCP beacon was converting 0→null via ||)',
+            'Desktop group sync fixes: GROUP_OWNER_TRANSFER role, GROUP_LEAVE cleanup, GROUP_INVITE init, PIN/UNPIN routing',
+            'Desktop write-queue key collision fixed (key + "" → "" + key operator precedence)',
+            'Desktop reconnect .catch() added, counter resets on data, duplicate connection protection'
+          ]]
+        ]) +
+        versionBlock('0.1.3-beta', '', [
           ['New Features', [
             'Native Android System Notifications: Messages now show as real system notifications when app is backgrounded (requires POST_NOTIFICATIONS permission)',
             'Desktop Notification Avatars: Sender/group avatar now shown as notification icon (previously static Orbit icon)',

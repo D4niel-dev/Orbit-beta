@@ -89,11 +89,12 @@ public class OrbitP2PPlugin extends Plugin {
         String host = call.getString("host");
         int port = call.getInt("port", 46000);
         String peerId = call.getString("peerId", host + ":" + port);
+        int timeoutMs = call.getInt("timeout", 30000);
 
         executor.execute(() -> {
             try {
                 Socket socket = new Socket();
-                socket.connect(new InetSocketAddress(host, port), 5000);
+                socket.connect(new InetSocketAddress(host, port), timeoutMs);
                 PeerConnection conn = new PeerConnection(peerId, socket);
                 connections.put(peerId, conn);
                 notifyConnection(peerId);  // track outbound connections for JS
@@ -143,12 +144,13 @@ public class OrbitP2PPlugin extends Plugin {
     @PluginMethod
     public void startDiscovery(PluginCall call) {
         JSObject beacon = call.getObject("beacon", new JSObject());
+        int discoveryPort = call.getInt("discoveryPort", DISCOVERY_PORT);
 
         executor.execute(() -> {
             try {
                 acquireMulticastLock();
 
-                MulticastSocket ms = new MulticastSocket(DISCOVERY_PORT);
+                MulticastSocket ms = new MulticastSocket(discoveryPort);
                 multicastSocket = ms;
                 NetworkInterface ni = getWiFiNetworkInterface();
                 if (ni != null) {
@@ -161,7 +163,7 @@ public class OrbitP2PPlugin extends Plugin {
                 call.resolve();
 
                 byte[] beaconData = beacon.toString().getBytes("UTF-8");
-                DatagramPacket outPacket = new DatagramPacket(beaconData, beaconData.length, group, DISCOVERY_PORT);
+                DatagramPacket outPacket = new DatagramPacket(beaconData, beaconData.length, group, discoveryPort);
 
                 // Local IPs for self-filtering (BUG-6)
                 java.util.Set<String> localIps = getLocalIPAddresses();

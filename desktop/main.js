@@ -2,8 +2,152 @@ const { app, BrowserWindow, ipcMain, Tray, Menu, Notification, nativeImage, prot
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const tcpNet = require('net');
 const crypto = require('crypto');
+const { exec } = require('child_process');
 const uuidv4 = () => crypto.randomUUID();
+
+function tryAddFirewallRule() {
+  if (process.platform !== 'win32') return;
+  const ruleName = 'Orbit P2P Discovery (UDP 45678)';
+  exec('netsh advfirewall firewall show rule name="' + ruleName + '"', function(err, stdout) {
+    if (err || !stdout.includes(ruleName)) {
+      exec('netsh advfirewall firewall add rule name="' + ruleName + '" dir=in protocol=udp localport=45678 action=allow program="' + process.execPath.replace(/\\/g, '\\\\') + '"', function(addErr) {
+        if (addErr) {
+          console.log('[Firewall] Could not add rule (not running as admin). Run this to enable LAN discovery:');
+          console.log('[Firewall]   netsh advfirewall firewall add rule name="Orbit P2P Discovery" dir=in protocol=udp localport=45678 action=allow program="' + process.execPath + '"');
+        } else {
+          console.log('[Firewall] Added inbound rule for UDP 45678');
+        }
+      });
+    }
+  });
+}
+
+function getLocalIPv4() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    const iface = interfaces[name];
+    if (!iface) continue;
+    for (const addr of iface) {
+      if (addr.family === 'IPv4' && !addr.internal) {
+        return addr.address;
+      }
+    }
+  }
+  return null;
+}
+
+function scanBatch(socketMgr, subnet, localIp, start, end, onDone) {
+  var remaining = [];
+  for (var i = start; i <= end; i++) {
+    var ip = subnet + i;
+    if (ip !== localIp) remaining.push(ip);
+  }
+  if (remaining.length === 0) { if (onDone) onDone(); return; }
+
+  var completed = 0;
+  var total = remaining.length;
+
+  remaining.forEach(function(ip) {
+    var s = new tcpNet.Socket();
+    var settled = false;
+
+    function finish() {
+      if (settled) return;
+      settled = true;
+      completed++;
+      if (completed === total && onDone) onDone();
+    }
+
+    s.connect(46000, ip, function() {
+      // Dedup: skip if already connected to this IP
+      for (var entry of socketMgr.connections.values()) {
+        if (entry.remoteAddress === ip) {
+          s.destroy();
+          finish();
+          return;
+        }
+      }
+      console.log('[LAN-Scan] Found peer at ' + ip);
+      socketMgr.setupSocket(s, null);
+      socketMgr.sendBeacon(s);
+      finish();
+    });
+
+    s.on('error', function() {
+      s.destroy();
+      finish();
+    });
+
+    setTimeout(function() {
+      s.destroy();
+      finish();
+    }, 800);
+  });
+}
+
+function startLanScan(socketMgr) {
+  if (!socketMgr) return;
+  var localIp = getLocalIPv4();
+  if (!localIp) return;
+  var parts = localIp.split('.');
+  var subnet = parts[0] + '.' + parts[1] + '.' + parts[2] + '.';
+
+  function scanAll() {
+    scanBatch(socketMgr, subnet, localIp, 1, 254, function() {
+      console.log('[LAN-Scan] Full scan complete');
+    });
+  }
+
+  console.log('[LAN-Scan] Scanning ' + subnet + '1-254 for Orbit peers...');
+  scanAll();
+  if (_lanScanTimer) clearInterval(_lanScanTimer);
+  _lanScanTimer = setInterval(scanAll, 60000);
+}
+
+let _lanScanTimer = null;
+let _networkMonitorTimer = null;
+let _lastLocalIP = null;
+
+function startNetworkMonitor() {
+  _lastLocalIP = getLocalIPv4();
+  if (_networkMonitorTimer) clearInterval(_networkMonitorTimer);
+  _networkMonitorTimer = setInterval(() => {
+    var currentIP = getLocalIPv4();
+    if (currentIP && currentIP !== _lastLocalIP) {
+      console.log('[Network] IP changed from', _lastLocalIP, 'to', currentIP, '— restarting network');
+      _lastLocalIP = currentIP;
+      // Restart LAN scan with new subnet
+      if (_lanScanTimer) {
+        clearInterval(_lanScanTimer);
+        _lanScanTimer = null;
+      }
+      startLanScan(socketInstance);
+      // Restart discovery beacon interval by recreating discovery
+      if (discoveryInstance) {
+        var oldIdentity = currentIdentity;
+        discoveryInstance.stop();
+        discoveryInstance = new Discovery(() => currentIdentity, (peer) => {
+          // Re-register the same callback
+          console.log('[AutoConnect] Peer discovered:', peer.username, peer.userId, 'at IP', peer.ip);
+          if (mainWindow) mainWindow.webContents.send('peer-found', peer);
+          if (socketInstance && peer.userId && peer.ip) {
+            var alreadyConnected = socketInstance.connections.has(peer.userId) ||
+              socketInstance._pendingConnects.has(peer.userId);
+            if (alreadyConnected) return;
+            console.log('[AutoConnect] Initiating TCP connect to', peer.userId, peer.ip + ':46000');
+            socketInstance.connectToPeer(peer.userId, peer.ip, 46000).catch(function(err) {
+              console.error('[AutoConnect] Connection to', peer.userId, 'failed:', err && err.message);
+            });
+          }
+        });
+        discoveryInstance.start();
+      }
+    }
+  }, 10000);
+}
+
 const Store = require('electron-store');
 const Discovery = require('./src/js/network/discovery');
 const SocketManager = require('./src/js/network/socket');
@@ -88,6 +232,7 @@ app.whenReady().then(() => {
       var mimeMap = { jpeg: 'image/jpeg', jpg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml', bmp: 'image/bmp', ico: 'image/x-icon' };
       return mimeMap[ext] || 'image/png';
     }
+    if (att.type === 'audio') return 'audio/webm';
     return 'application/octet-stream';
   }
 
@@ -641,20 +786,61 @@ app.whenReady().then(() => {
     socketInstance.startServer();
   }
 
-  ipcMain.on('network-start', (event, identity) => {
+  ipcMain.on('network-start', (event, identity, reconnectEnabled, reconnectIntervalMs) => {
     currentIdentity = identity;
     setupNetworkInstances();
 
+    // Apply stored reconnect settings
+    if (socketInstance) {
+      socketInstance.setReconnect(reconnectEnabled !== false, reconnectIntervalMs || 10000);
+    }
+
     if (!discoveryInstance) {
       discoveryInstance = new Discovery(() => currentIdentity, (peer) => {
+        console.log('[AutoConnect] Peer discovered:', peer.username, peer.userId, 'at IP', peer.ip);
         mainWindow.webContents.send('peer-found', peer);
+        if (socketInstance && peer.userId && peer.ip) {
+          // Check if already connected before auto-connecting
+          var alreadyConnected = socketInstance.connections.has(peer.userId) ||
+            socketInstance._pendingConnects.has(peer.userId);
+          if (alreadyConnected) {
+            console.log('[AutoConnect] Already connected or connecting to', peer.userId);
+            return;
+          }
+          console.log('[AutoConnect] Initiating TCP connect to', peer.userId, peer.ip + ':46000');
+          socketInstance.connectToPeer(peer.userId, peer.ip, 46000).then(function() {
+            console.log('[AutoConnect] Connected to', peer.userId);
+          }).catch(function(err) {
+            console.error('[AutoConnect] Connection to', peer.userId, 'failed:', err && err.message);
+          });
+        } else {
+          console.log('[AutoConnect] Skipped — socket:', !!socketInstance, 'userId:', !!peer.userId, 'ip:', !!peer.ip);
+        }
       });
       discoveryInstance.start();
+      tryAddFirewallRule();
+      startLanScan(socketInstance);
+      startNetworkMonitor();
+    }
+    event.returnValue = true;
+  });
+
+  ipcMain.on('network-set-reconnect', (event, enabled, intervalMs) => {
+    if (socketInstance) {
+      socketInstance.setReconnect(enabled, intervalMs);
     }
     event.returnValue = true;
   });
 
   ipcMain.on('network-stop', () => {
+    if (_lanScanTimer) {
+      clearInterval(_lanScanTimer);
+      _lanScanTimer = null;
+    }
+    if (_networkMonitorTimer) {
+      clearInterval(_networkMonitorTimer);
+      _networkMonitorTimer = null;
+    }
     if (socketInstance) {
       socketInstance.stop();
       socketInstance = null;

@@ -18,12 +18,13 @@ contextBridge.exposeInMainWorld('orbitAPI', {
   getUuid: () => ipcRenderer.sendSync('get-uuid'),
   
   // Networking
-  networkStart: (identity) => ipcRenderer.sendSync('network-start', identity),
+  networkStart: (identity, reconnectEnabled, reconnectIntervalMs) => ipcRenderer.sendSync('network-start', identity, reconnectEnabled, reconnectIntervalMs),
   networkSend: (toPeerId, toIp, type, payload) => ipcRenderer.sendSync('network-send', toPeerId, toIp, type, payload),
   networkSendFile: (toPeerId, toIp, filePath, fileName) => ipcRenderer.invoke('network-send-file', toPeerId, toIp, filePath, fileName),
   connect: (ip) => ipcRenderer.send('network-connect', ip),
   cancelTransfer: (fileId) => ipcRenderer.send('cancel-transfer', fileId),
   checkDiskSpace: () => ipcRenderer.invoke('check-disk-space'),
+  networkSetReconnect: (enabled, intervalMs) => ipcRenderer.sendSync('network-set-reconnect', enabled, intervalMs),
 
   // OS Integration
   showNotification: (title, body, icon) => ipcRenderer.send('show-notification', title, body, icon),

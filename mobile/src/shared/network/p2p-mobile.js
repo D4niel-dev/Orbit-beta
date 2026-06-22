@@ -106,7 +106,7 @@ Orbit.P2P = (function() {
       } catch(e) { console.log('[P2P-Bridge] stopServer error: ' + (e.message || String(e))); }
     },
 
-    async connect(host, port, peerId) {
+    async connect(host, port, peerId, timeout) {
       var p = getPlugin();
       if (!p) { console.log('[P2P-Bridge] connect: plugin not available'); return { success: false, error: 'Plugin not available' }; }
 
@@ -120,12 +120,14 @@ Orbit.P2P = (function() {
       }
       lastConnectAttempt[key] = now;
 
-      console.log('[P2P-Bridge] connecting to ' + host + ':' + (port || 46000) + ' key=' + key);
+      var connectTimeout = timeout || (window.MStore && window.MStore.settings && (window.MStore.settings.netTimeout || 30) * 1000) || 30000;
+      console.log('[P2P-Bridge] connecting to ' + host + ':' + (port || 46000) + ' key=' + key + ' timeout=' + connectTimeout + 'ms');
       try {
         var result = await p.connect({
           host: host,
           port: port || 46000,
-          peerId: key
+          peerId: key,
+          timeout: connectTimeout
         });
         console.log('[P2P-Bridge] connect result', result);
         // Track outbound connections in JS map (BUG-JS-1/2)
@@ -168,14 +170,15 @@ Orbit.P2P = (function() {
       }
     },
 
-    async startDiscovery(beaconData) {
+    async startDiscovery(beaconData, discoveryPort) {
       var p = getPlugin();
       if (!p) { console.log('[P2P-Bridge] startDiscovery: plugin not available'); return { success: false, error: 'Plugin not available' }; }
       discoveryActive = true;
-      console.log('[P2P-Bridge] startDiscovery with beacon', beaconData);
+      var udpPort = discoveryPort || (window.MStore && window.MStore.settings && (window.MStore.settings.udpPort || 45678)) || 45678;
+      console.log('[P2P-Bridge] startDiscovery with beacon (udpPort=' + udpPort + ')', beaconData);
       try {
         // BUG-1: startDiscovery now resolves immediately on the Java side
-        await p.startDiscovery({ beacon: beaconData || {} });
+        await p.startDiscovery({ beacon: beaconData || {}, discoveryPort: udpPort });
         console.log('[P2P-Bridge] Discovery started');
         return { success: true };
       } catch(e) {

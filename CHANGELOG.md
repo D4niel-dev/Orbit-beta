@@ -1,8 +1,89 @@
 # Orbit Changelog
 
-## v0.1.3-beta **(Current Version)**
+## v0.1.4-beta **(Current Version)**
 
-### New Features
+### Stability & Core Infrastructure
+
+- **P2P Auto-Connection Stabilization:** PING/PONG keep-alive heartbeat (15s interval, 30s idle → close), 8s connection timeout (disabled after connect — heartbeat now solely manages health), reconnect with exponential backoff (max 5 attempts, capped at 30s), stale peer pruning (180s threshold, 60s check interval), network change detection (10s IP polling → full discovery restart + LAN scan), and auto-connect duplicate protection (checks `connections.has` + `_pendingConnects.has`). Desktop: `socket.js`, `discovery.js`, `main.js`, `preload.js`. Mobile: JS-level PING/PONG via `Orbit.P2P.send()` at `netKeepAlive` interval; inbound PING auto-responds with PONG; tracked consecutive missed pings.
+- **Desktop P2P Bugfix Audit (17 fixes):** Desktop socket 8s Node.js idle timeout disabled after connect (heartbeat manages health); write-queue key operator precedence bug (`key + ''` → `'' + key`); reconnect `.catch()` added + reconnect counter resets on data; preload.js forwards reconnect args (`reconnectEnabled`, `reconnectIntervalMs`); PIN/UNPIN use `payload.groupId` not `packet.from`; GROUP_MEMBER_ADDED updates existing member fields; SYSTEM delete uses `payload.chatId`; redundant bulk group persist removed from setState; GROUP_CREATE enriches `publicKey` from friends list; GROUP_CREATE payload includes owner `publicKey`; GROUP_JOIN_REQUEST includes `usertag`/`avatar`/`status`. Files: `socket.js`, `preload.js`, `store.js`, `sidebar-middle.js`.
+- **Desktop Syntax Fix:** Missing closing parenthesis in `app.js:777` ternary chain (`'image/jpeg'));` → `'image/jpeg')));`) — the single missing paren crashed the entire renderer, causing a blank window. Restored desktop app startup.
+- **Write-Queue Stability:** Per-connection write queue key operator precedence fixed — `key + ''` corrected to `'' + key` to prevent queue key collisions under concurrent writes.
+- **Translation Engine Rewrite:** In-memory cache (`window._translationCache` keyed by `text|lang|source`), request deduplication (`window._pendingTranslations` shares one Promise per active request), AbortController for cancelling in-flight requests, inline "Retry" link on failure. File: `chat-panel.js`.
+- **Voice Messages Stabilization:** `contentTypeFromAtt()` returns `'audio/webm'` for `type === 'audio'`; audio elements get `onerror="if(window.mediaSrcOnError) window.mediaSrcOnError(this)"` for auto-retry; chunked transfer audio detection in `app.js` sets proper `type: 'audio'` + MIME via `extMap` (webm/mp3/wav/ogg/flac/aac/m4a/wma). Files: `main.js`, `chat-panel.js`, `app.js`.
+
+### Media & Message Experience
+
+- **Image Viewer Quick-Save:** File System Access API `showSaveFilePicker` with `Blob` fallback download — saves images directly from the gallery without right-click.
+- **Keyboard Navigation:** ← → arrows for gallery navigation, Escape to close. Swipe between images (mouse drag + touch).
+- **Download Fix:** All `orbit-db://` and cross-origin image downloads now go through `fetch()` + `blob()` pipeline to bypass CSP restrictions.
+- **Loading Placeholder:** CSS `background: var(--bg-surface)` + `opacity` fade-in on image thumbnails — elimates blank flash on slow loads.
+
+### Performance Mode
+
+- **New Experimental Toggle:** `experimentalPerformanceMode` defaults `false`. Two-step confirmation in Advanced tab. Adds `.performance-mode` CSS class on `<html>` — kills animations, freezes GIFs, skips link preview OG fetch, slows offline checks to 60s, stops connection stats polling and dev overlay rAF.
+- **Runtime Guards:** `window._performanceMode` checked in chat-panel (skip reflow-heavy calls) and app.js (skip non-critical intervals). CSS `[data-refreshing] .message-row { animation:none !important }` prevents re-animation on DOM re-render.
+
+### Mobile Full Parity
+
+- **Protocol.js Synced:** 15+ missing types added to `mobile/src/shared/network/protocol.js` — MESSAGE_EDIT, MESSAGE_DELETE, READ, SYSTEM, PIN_MESSAGE, UNPIN_MESSAGE, GROUP_INVITE, CALL_*, PING, PONG, FIND, REQUEST, ACCEPT, FILE_TRANSFER_START/CHUNK/END. Matches canonical `shared/network/protocol.js` (46 types).
+- **Chat-Existence Check Fixed:** GROUP_CREATE and GROUP_JOIN_RESPONSE handlers exempted from `if (!chat) return;` guard — these types create the chat, so the check can't exist yet.
+- **`name` vs `username` Mismatch Fixed:** All 4 group handlers now check `origin.username || origin.name`. Store objects cloned instead of mutated to prevent reference corruption.
+- **Toast Concatenation Fixed:** Added parentheses for correct operator precedence in toast message assembly.
+- **Desktop Settings Ported (11 new defaults):** `notifyVolume: 80`, `notifySoundType: 'chime'`, `translateTargetLang: ''`, `autoDetectSource: true`, `netReconnectInterval: 10`, `netKeepAlive: 30`, `webrtcFallback: true`, `logLevel: 'None'`, `netBandwidthLimit: 0`, `experimentalFpsMonitor: false`, `experimentalDevOverlay: false`.
+- **Notifications UI Expanded:** `notify-sound` toggle (was missing HTML), volume slider (0-100), sound type select (Chime/Pop/Gentle/Classic) with distinct Web Audio oscillator patterns.
+- **Translation Settings Added:** Target language select (30 languages), auto-detect toggle, message translate moved from Appearance to Chat section.
+- **Network Settings UI:** Reconnect interval (number), keep-alive select (10/30/60/120s), WebRTC fallback toggle, log level select (None/Error/Info/Debug), bandwidth limit (number).
+- **Settings Wiring (Deep Integration):** `debugLog()` filters by `logLevel` (None→silent, Error/Info/Debug); `buildBeacon()`/`initP2P()`/TCP beacon all read `tcpPort` from settings; `initP2P()` passes `udpPort` to native `Orbit.P2P.startDiscovery()`; auto-reconnect reads `netReconnectInterval` + passes `netTimeout` to native Java `connect()`; PING/PONG heartbeat sends PING at `netKeepAlive` interval; `FILE_CHUNK` throttles via `netBandwidthLimit` (setTimeout pacing); `networkMode === 'Custom IP'` skips UDP discovery.
+- **`playNotificationSound()` Updated:** Uses `notifyVolume` (gain 0-100) and `notifySoundType` (4 oscillator patterns: chime, pop, gentle, classic).
+- **`translateMessage()` Updated:** Reads `translateTargetLang` (falls back to `navigator.language`) and `autoDetectSource` (`langpair=auto|target` or `langpair=en|target`).
+- **profileFrame Clean-Up:** TCP beacon new-friend path fixed (`bp.profileFrame !== undefined ? bp.profileFrame : null` so `0` stores as `0` not `null`). `getProfileFrame(source)` helper added — defends against null/undefined/NaN/off-switch. All 7 inline `(source.profileFrame || 0)` patterns replaced.
+- **Mobile DB Migration Fixed:** `migrateOldData()` moved to run BEFORE `MStore.load()` (was running after, causing old unprefixed localStorage keys to never be picked up). Added console.log visibility — now shows "Running old data migration..." / "Data migration already completed — skipping" / "Migrated N group(s) — added missing fields".
+- **What's New Added to Mobile About:** Full changelog modal covering v0.0.2-beta through v0.1.4-beta, matching desktop's changelog.js.
+
+### Desktop Enhancements
+
+- **Reconnect Settings Bridge:** `preload.js` forwards `reconnectEnabled` and `reconnectIntervalMs` through `networkStart` IPC. User settings now actually affect socket reconnect behavior.
+- **Native Java Plugin Changes (Mobile):** `OrbitP2PPlugin.java` — `connect()` uses JS-provided `timeout` (was hardcoded 5000ms); `startDiscovery()` uses JS-provided `discoveryPort` (was hardcoded `DISCOVERY_PORT`).
+
+### Group Sync (store.js)
+
+- GROUP_OWNER_TRANSFER: Updates role to 'owner' for transferred member.
+- GROUP_LEAVE: Self-cleanup via `removeGroup()` + clears `activeChatId`.
+- GROUP_INVITE: Adds group + initializes messages array.
+- GROUP_CREATE: Initializes messages array on group creation.
+- GROUP_MEMBER_ADDED: Updates existing member fields rather than inserting duplicate.
+- GROUP_CREATE: Enriches all members with `publicKey` from friends list.
+- GROUP_JOIN_REQUEST: Includes `usertag`/`avatar`/`status` in join payload.
+
+### Bug Fixes
+
+- **Desktop blank window — syntax error:** Missing `)` on line 777 of `app.js` in the MIME type ternary chain (`'image/jpeg'));` → `'image/jpeg')));`). Mismatched parenthesis caused the entire renderer JavaScript to fail silently.
+- **Mobile auto-reconnect now reads user settings** (was hardcoded 5s).
+- **Mobile PING/PONG heartbeat now uses `netKeepAlive` from settings** (was not implemented).
+- **Mobile TCP connection timeout now passed from settings to native Java** (was hardcoded 5000ms).
+- **Mobile UDP discovery port now passed from settings to native Java** (was hardcoded `DISCOVERY_PORT`).
+- **Mobile `FILE_CHUNK` bandwidth throttling implemented** via setTimeout pacing when `netBandwidthLimit > 0`.
+- **Mobile debugLog now respects logLevel** — None suppresses all output, Error only shows errors, etc.
+- **Mobile network tab now shows/hides UDP port field based on `networkMode`**.
+- **profileFrame value `0` now stored correctly** (TCP beacon was converting `0` → `null` via `||`).
+- **Desktop group sync fixes** — GROUP_OWNER_TRANSFER role, GROUP_LEAVE cleanup, GROUP_INVITE init, GROUP_CREATE init, PIN/UNPIN payload routing, SYSTEM delete routing.
+- **Desktop write-queue key collision** — fixed `key + ''` to `'' + key` operator precedence.
+- **Desktop reconnect promise chain** — added `.catch()` to `connectToPeer()` in _scheduleReconnect.
+- **Desktop reconnect counter reset on data** — prevents permanent exponential backoff on healthy connections.
+- **Desktop auto-connect duplicate protection** — checks both `connections.has` and `_pendingConnects.has` before initiating new connections.
+- **Exponential backoff fixed** — formula `(attempts + 1) * reconnectInterval` capped at 30s, not flat 30s.
+- **Network change detection** — IP polling every 10s triggers full discovery restart + LAN scan when IP changes.
+
+### Technical
+
+- **Protocol:** Mobile `protocol.js` synced with canonical — 46 types total, all CALL_*, FILE_TRANSFER_*, PIN, SYSTEM, READ types available on both platforms.
+- **P2P Heartbeat:** Desktop `_startHeartbeat`: 15s interval, 30s idle timeout → sends PING, expects PONG within 15s. Mobile: JS-level PING/PONG via `Orbit.P2P.send()` at `netKeepAlive` interval.
+- **Reconnect:** Desktop `_scheduleReconnect`: exponential backoff `(attempts+1) * _reconnectInterval` capped at 30s, max 5 attempts. Mobile: delay = `netReconnectInterval * 1000`, calls `Orbit.P2P.connect(ip, tcpPort, friendId, timeoutMs)`.
+- **profileFrame Helper:** `getProfileFrame(source)` — returns `Math.max(0, parseInt(val, 10) || 0)`. Returns `0` when experimental toggle is off or source is null/invalid. Used in all 7 render locations.
+- **Bandwidth Throttling:** `FILE_CHUNK` calculates minimum inter-chunk interval from `chunkSize / (bwLimit * 1024) * 1000` ms; uses `setTimeout` to pace. Only active when `netBandwidthLimit > 0`.
+- **Network Settings 3-Layer Chain:** JS settings → p2p-mobile.js bridge parameters → native Java plugin method args. Settings actually affect socket/discovery behavior.
+
+## v0.1.3-beta
 - **Native Android System Notifications:** Messages now show as real system notifications when app is backgrounded (requires POST_NOTIFICATIONS permission).
 - **Desktop Notification Avatars:** Sender/group avatar now shown as notification icon (previously static Orbit icon).
 - **Connection Stats Panel:** Live P2P status — online peers, uptime, sent/received message counters (refreshes every 2s).

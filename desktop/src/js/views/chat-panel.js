@@ -121,28 +121,89 @@ window.ChatPanel = {
               existing.remove();
               return;
             }
-            var origTextEl = bubble.querySelector('.msg-text');
-            if (!origTextEl) return;
-            var originalText = origTextEl.textContent;
-            var lang = navigator.language || 'en';
-            var targetLang = lang.split('-')[0] || 'en';
-            var url = 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(originalText) + '&langpair=en|' + targetLang;
-            var btn = translateBtn;
-            btn.style.opacity = '0.5';
-            fetch(url)
-              .then(function(r) { return r.json(); })
-              .then(function(data) {
-                btn.style.opacity = '1';
-                var translated = data && data.responseData && data.responseData.translatedText;
-                if (translated) {
-                  var div = document.createElement('div');
-                  div.className = 'translated-text';
-                  div.style.cssText = 'font-size:11px;color:var(--text-muted);border-top:1px solid var(--border-subtle);margin-top:6px;padding-top:6px;';
-                  div.textContent = '🌐 ' + translated;
-                  origTextEl.parentNode.insertBefore(div, origTextEl.nextSibling);
+            var targetLang = state.settings.translateTargetLang || (navigator.language || 'en').split('-')[0] || 'en';
+            var useAuto = state.settings.autoDetectSource;
+            var div = document.createElement('div');
+            div.className = 'translated-text';
+            div.style.cssText = 'font-size:11px;color:var(--text-muted);border-top:1px solid var(--border-subtle);margin-top:6px;padding-top:6px;';
+            div.textContent = 'Translating...';
+            bubble.appendChild(div);
+
+            // Check cache first
+            if (!window._translationCache) window._translationCache = new Map();
+            if (!window._pendingTranslations) window._pendingTranslations = new Map();
+            if (!window._translationAbort) window._translationAbort = new Map();
+
+            var cacheKey = msg.text + '|' + targetLang + '|' + (useAuto ? 'auto' : 'en');
+            var cached = window._translationCache.get(cacheKey);
+            if (cached) {
+              div.textContent = '🌐 ' + cached;
+              return;
+            }
+
+            // Check if a request for the same text+lang is already in flight
+            var pending = window._pendingTranslations.get(cacheKey);
+            if (pending) {
+              pending.then(function(result) {
+                if (div && div.parentNode) div.textContent = '🌐 ' + result;
+              }).catch(function() {
+                if (div && div.parentNode) div.textContent = 'Translation failed';
+              });
+              return;
+            }
+
+            var abortController = new AbortController();
+            window._translationAbort.set(cacheKey, abortController);
+
+            function showError(sourceUsed) {
+              if (!div || !div.parentNode) return;
+              div.innerHTML = '<span>Translation failed</span>' +
+                ' <span class="translate-retry" data-cachekey="' + cacheKey.replace(/"/g, '&quot;') + '" data-source="' + sourceUsed + '" data-msgid="' + msgId + '" style="cursor:pointer;text-decoration:underline;color:var(--accent-primary);margin-left:4px;">Retry</span>';
+              var retryEl = div.querySelector('.translate-retry');
+              if (retryEl) {
+                retryEl.addEventListener('click', function(ev) {
+                  ev.stopPropagation();
+                  var src = retryEl.getAttribute('data-source');
+                  var ckey = retryEl.getAttribute('data-cachekey');
+                  window._translationCache.delete(ckey);
+                  window._pendingTranslations.delete(ckey);
+                  if (div && div.parentNode) {
+                    div.textContent = 'Translating...';
+                    tryTranslate(src, true);
+                  }
+                });
+              }
+            }
+
+            function tryTranslate(source, isRetry) {
+              var url = 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(msg.text) + '&langpair=' + source + '|' + targetLang;
+              var signal = abortController.signal;
+              var fetchPromise = fetch(url, { signal: signal }).then(function(r) { return r.json(); }).then(function(data) {
+                if (data && data.responseStatus === 200 && data.responseData && data.responseData.translatedText) {
+                  window._translationCache.set(cacheKey, data.responseData.translatedText);
+                  if (div && div.parentNode) div.textContent = '🌐 ' + data.responseData.translatedText;
+                } else if (source === 'auto' && !isRetry) {
+                  return tryTranslate('en', false);
+                } else {
+                  showError(source);
                 }
-              })
-              .catch(function() { btn.style.opacity = '1'; });
+              }).catch(function(err) {
+                if (err && err.name === 'AbortError') return;
+                if (source === 'auto' && !isRetry) {
+                  return tryTranslate('en', false);
+                } else {
+                  showError(source);
+                }
+              });
+              window._pendingTranslations.set(cacheKey, fetchPromise);
+              fetchPromise.finally(function() {
+                window._pendingTranslations.delete(cacheKey);
+                window._translationAbort.delete(cacheKey);
+              });
+              return fetchPromise;
+            }
+
+            tryTranslate(useAuto ? 'auto' : 'en', false);
           }
         }
         return;
@@ -607,7 +668,7 @@ window.ChatPanel = {
             const safeUrl = window.Sanitize.escapeHtml(att.url);
             gridHtml += '<div class="att-thumb" style="position:relative;border-radius: 8px; border: 1px solid var(--border-subtle); background: var(--bg-hover); padding: 8px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;">' +
               deleteBtn +
-              '<audio controls src="' + safeUrl + '" style="height:32px;width:100%;outline:none;border-radius:16px;" controlsList="nodownload"></audio>' +
+              '<audio controls src="' + safeUrl + '" style="height:32px;width:100%;outline:none;border-radius:16px;" controlsList="nodownload" onerror="if(window.mediaSrcOnError) window.mediaSrcOnError(this)"></audio>' +
             '</div>';
           } else {
             gridHtml += '<div class="att-thumb" style="position:relative;border-radius: 8px; height: 120px; border: 1px solid var(--border-subtle); display:flex; flex-direction:column; align-items:center; justify-content:center; background: rgba(0,0,0,0.1); padding: 8px; text-align:center;">' +
@@ -626,7 +687,7 @@ window.ChatPanel = {
         '<button class="msg-action-btn msg-react-btn" data-msg-id="' + msg.id + '" data-msg-text="' + window.Sanitize.escapeHtml(msg.text || '').replace(/"/g, '&quot;') + '" title="React"><i data-lucide="smile-plus" style="width:16px;height:16px;"></i></button>' +
         '<button class="msg-action-btn msg-forward-btn" data-msg-id="' + msg.id + '" title="Forward"><i data-lucide="send" style="width:16px;height:16px;"></i></button>' +
         (isMine ? '<button class="msg-action-btn msg-edit-btn" data-msg-id="' + msg.id + '" title="Edit"><i data-lucide="pencil" style="width:16px;height:16px;"></i></button>' : '') +
-        '<button class="msg-action-btn msg-translate-btn" data-msg-id="' + msg.id + '" title="Translate"><i data-lucide="languages" style="width:16px;height:16px;"></i></button>' +
+        (state.settings.messageTranslate ? '<button class="msg-action-btn msg-translate-btn" data-msg-id="' + msg.id + '" title="Translate"><i data-lucide="languages" style="width:16px;height:16px;"></i></button>' : '') +
         '<button class="msg-action-btn msg-delete-btn" data-msg-id="' + msg.id + '" data-is-mine="' + (isMine ? '1' : '0') + '" title="Delete"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></button>';
 
       const actionsBar = '<div class="msg-actions-bar' + (isMine ? ' msg-actions-left' : ' msg-actions-right') + '">' + actionBtns + '</div>';

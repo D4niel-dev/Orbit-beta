@@ -1437,6 +1437,42 @@ html, body {
   border-color: var(--accent-primary);
 }
 
+.settings-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-subtle);
+  outline: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.settings-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.settings-section-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 4px 0;
+}
+
+.settings-section-header span {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+
 /* ─── Search Bar ─── */
 .header-search-wrapper {
   display: flex;

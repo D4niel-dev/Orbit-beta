@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v013-beta-current-version">v0.1.3-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v014-beta-current-version">v0.1.4-beta</a>
 </p>
 
 <p align="center">
@@ -28,9 +28,9 @@
 
 | Channel | Version | Status |
 |---------|---------|--------|
+| *Development* | v0.1.4-beta | Active development (current) |
 | **Stable** | v0.1.1-beta | Stable release |
-| Older Stable | v0.0.5-beta | Legacy stable release |
-| Development | main branch | Active development |
+| Previous **Stable** | v0.0.5-beta | Legacy stable release |
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
 
@@ -90,22 +90,20 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage desktop app** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
-## Highlights (v0.1.3-beta)
+## Highlights (v0.1.4-beta)
 
-- Cross-platform Desktop ↔ Android P2P messaging
-- LAN peer discovery
-- File & image sharing
-- Group chats
-- Voice & Video Calls (P2P WebRTC)
-- End-to-end encryption (DMs)
-- Video file support with preview modal and compression
-- Performance Mode toggle (disables animations, GIFs, background CPU tasks)
-- Connection Stats Panel (live P2P status)
-- Native Android notifications
-- SQLite-backed message storage
-- Backup & restore
-- Message reactions, pinned messages, search
-- Release integrity (SHA256, verified artifacts, build metadata)
+- P2P auto-connection stabilization — keep-alive, reconnect, stale pruning, duplicate protection
+- Desktop P2P bugfix audit — 17 fixes across socket, store, preload, sidebar-middle
+- Translation engine rewrite — cache, dedup, abort, inline retry
+- Image Viewer overhaul — quick-save, keyboard nav, swipe, download fix
+- Performance Mode — two-step confirmation, CSS/runtime guards
+- Voice messages stabilization — content-type, auto-retry, chunked detection
+- Mobile full settings parity — 11 new desktop settings ported and wired
+- Mobile protocol.js synced — 46 types matching desktop (15+ missing types added)
+- Mobile network settings wired — tcpPort, udpPort, timeout, keep-alive, logLevel, bandwidth all affect behavior
+- Mobile DB migration fixed — runs before load, visible console logging
+- Cross-platform group sync fixes — GROUP_CREATE/LEAVE/INVITE/TRANSFER all working
+- Profile frame helper — consistent null-safe rendering across all 7 locations
 
 ## Version History
 <details>
@@ -140,7 +138,7 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 
 - See [CHANGELOG.md](https://github.com/D4niel-dev/Orbit-beta/blob/main/CHANGELOG.md#v004-beta), section 4.
 </details>
-<details>
+<details open>
 <summary>v0.0.5-beta (Stable)</summary>
 
 - **End-to-end encryption** — ECDH key exchange + AES-256-GCM message encryption for DMs. Toggle in Settings → Data Manager.
@@ -268,6 +266,23 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **image-viewer.js Null-Safety** — `openFromMessage` checks null store/messages with fallback; `close()` and `openVideo()` wrapped in try/catch; `init()` uses `readyState` guard
 - **Compact Spacing & Swipe-to-Reply** — Moved from Experimental to general chat settings
 </details>
+<details>
+<summary>v0.1.4-beta</summary>
+
+- **P2P Auto-Connection Stabilization** — PING/PONG keep-alive heartbeat, 8s connection timeout, exponential backoff reconnect (max 5 attempts), stale peer pruning (180s), network IP change detection, auto-connect duplicate protection
+- **Desktop P2P Bugfix Audit (17 fixes)** — Socket 8s timeout disabled after connect, write-queue key collision fixed, reconnect .catch() + counter reset, GROUP_CREATE publicKey enrichment, GROUP_JOIN_REQUEST fields, PIN/UNPIN/SYSTEM routing
+- **Translation Engine Rewrite** — In-memory cache, request dedup, AbortController, inline retry link
+- **Image Viewer Overhaul** — Quick-save button (File System Access API), keyboard navigation, swipe, download fix for custom protocol URLs, loading placeholder CSS
+- **Voice Messages Stabilization** — Content-Type fix, onerror auto-retry, chunked transfer detection with MIME mapping
+- **Performance Mode** — Two-step confirmation, CSS class on `<html>`, runtime guards in chat-panel and app.js
+- **Mobile Protocol.js Synced** — 15+ missing types added (46 total, matching desktop)
+- **Mobile Settings Parity** — 11 desktop defaults ported; logLevel filters debugLog; tcpPort/udpPort in beacon/P2P; netReconnectInterval in reconnect; netKeepAlive in heartbeat; netBandwidthLimit throttles FILE_CHUNK
+- **Mobile DB Migration Fixed** — Runs before MStore.load(); visible console output; reload safety net
+- **Mobile profileFrame Clean-Up** — Helper function defends all 7 render locations; TCP beacon stores 0 correctly
+- **Mobile Changelog** — What's New modal in About tab (v0.0.2 through v0.1.4)
+- **Desktop group sync fixes** — GROUP_OWNER_TRANSFER, GROUP_LEAVE cleanup, GROUP_INVITE init
+- **Desktop reconnect settings bridge** — preload forwards reconnectEnabled/reconnectIntervalMs to main process
+</details>
 
 See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
@@ -332,15 +347,15 @@ Or let GitHub Actions build it automatically — push a `v*` tag or trigger the 
 ## How it works
 
 ```
-  Desktop Orbit           Android Orbit
-       │                        │
-       │        TCP P2P         │
-       ├────────────────────────┤
-       │                        │
-       │     UDP Discovery      │
-       │    (LAN multicast)     │
-       │                        │
-       └────  Local Network   ──┘
+  	Desktop Orbit            Android Orbit
+       	      │                        │
+       	      │        TCP P2P         │
+       	      ├────────────────────────┤
+       	      │                        │
+       	      │     UDP Discovery      │
+       	      │    (LAN multicast)     │
+       	      │                        │
+       	      └────  Local Network   ──┘
 ```
 
 Orbit runs on two platforms with a shared cross-platform core:
@@ -356,34 +371,34 @@ Security defaults (desktop): `nodeIntegration: false`, `contextIsolation: true`.
 
 ```
 Orbit-beta/
-├── desktop/                # Electron desktop app
-│   ├── main.js             # Electron main process
-│   ├── preload.js          # Context-isolated IPC bridge
+├── desktop/                	# Electron desktop app
+│   ├── main.js             	# Electron main process
+│   ├── preload.js          	# Context-isolated IPC bridge
 │   ├── electron-builder.yml
 │   ├── src/
-│   │   ├── index.html      # App shell
-│   │   ├── js/             # UI, network, database
-│   │   ├── styles/         # Themes and layout
-│   │   └── icons/          # App icons & screenshots
+│   │   ├── index.html      	# App shell
+│   │   ├── js/             	# UI, network, database
+│   │   ├── styles/         	# Themes and layout
+│   │   └── icons/          	# App icons & screenshots
 │   └── package.json
-├── mobile/                 # Capacitor Android app
-│   ├── src/                # Mobile web UI
-│   ├── android/            # Android project (Gradle)
-│   ├── build-android.ps1   # Build script
+├── mobile/                 	# Capacitor Android app
+│   ├── src/                	# Mobile web UI
+│   ├── android/            	# Android project (Gradle)
+│   ├── build-android.ps1   	# Build script
 │   └── package.json
-├── shared/                 # Cross-platform modules
-│   ├── core/env.js         # Runtime detection
-│   ├── database/           # DB abstraction factory
-│   ├── network/protocol.js # Packet definitions
-│   ├── crypto/             # E2EE abstraction
-│   └── utils/              # Format, sanitize
+├── shared/                 	# Cross-platform modules
+│   ├── core/env.js         	# Runtime detection
+│   ├── database/           	# DB abstraction factory
+│   ├── network/protocol.js 	# Packet definitions
+│   ├── crypto/             	# E2EE abstraction
+│   └── utils/              	# Format, sanitize
 ├── CHANGELOG.md
 └── README.md
 ```
 
 ### Custom protocols
 
-Orbit serves local resources through privileged custom schemes instead of exposing raw filesystem paths to the renderer:
+Orbit serves **local resources** through privileged custom schemes instead of exposing raw filesystem paths to the renderer:
 
 | Protocol | Purpose |
 |----------|---------|
@@ -426,27 +441,28 @@ Transparency matters in beta. Current constraints include:
 
 ## Roadmap
 
-### Shipped (v0.1.3-beta)
+### Shipped (v0.1.4-beta)
 
-- **Performance Mode** — Experimental toggle with two-step confirmation; kills animations, freezes GIFs, skips link preview OG fetch, slows offline checks to 60s
-- **Image Viewer Reliability** — Hit-test fallback when DOM is recreated mid-click; removed `'friends'` from store subscription to stop re-renders on status beacons
-- **Forced Reflow Cascade Eliminated** — ResizeObserver disconnected during `innerHTML` writes, throttled to 1s, reconnected after all DOM changes
-- **Native Android Notifications** — System notifications via `@capacitor/local-notifications` when app is backgrounded
-- **Desktop Notification Avatars** — Sender avatar as notification icon
-- **Connection Stats Panel** — Live P2P status overlay (peers, uptime, counters)
-- **Video File Support** — Upload, render, preview, and compress video in chat
-- **Video Compression** — Re-encode >5MB videos to 720p/500kbps before sending
-- **P2P Discovery Optimized** — Beacon 5s→10s, stale 120s→180s, exponential retry backoff
-- **Compact Spacing & Swipe-to-Reply** — Moved from Experimental to general settings
-- **image-viewer.js Null-Safety** — Store/missing DOM guard, try/catch, readyState init
+- **P2P Auto-Connection Stabilization** — PING/PONG keep-alive, 8s timeout, exponential backoff reconnect, stale peer pruning, network change detection, duplicate protection
+- **Desktop P2P Bugfix Audit (17 fixes)** — Socket timeout, write-queue, reconnect, GROUP_CREATE/GROUP_JOIN_REQUEST/GROUP_MEMBER_ADDED/PIN/UNPIN/SYSTEM routing
+- **Translation Engine Rewrite** — Cache, dedup, AbortController, inline retry
+- **Image Viewer Overhaul** — Quick-save, keyboard nav, swipe, download fix, loading placeholder
+- **Voice Messages Stabilization** — Content-Type, auto-retry, chunked detection
+- **Performance Mode** — Two-step confirmation, CSS/runtime guards
+- **Mobile Full Settings Parity** — 11 settings ported and deep-wired (logLevel, tcpPort, udpPort, netReconnectInterval, netKeepAlive, netBandwidthLimit, etc.)
+- **Mobile Protocol.js Synced** — 46 types matching desktop
+- **Mobile DB Migration Fixed** — Load order + console visibility
+- **Mobile profileFrame Clean-Up** — Helper function, 7 render locations
+- **Mobile Changelog Modal** — What's New in About tab
+- **Group Sync Fixes** — OWNER_TRANSFER, LEAVE, INVITE, CREATE init
 
 ### In Progress / Planned
 
 - **E2EE cross-platform unification** — Align key derivation (SHA-256 vs HKDF) so desktop and mobile can exchange encrypted DMs and group messages
 - **Group E2EE** — Extend end-to-end encryption to group chats (currently DM-only)
-- **Known issues cleanup** — Mobile UI redesign, large file transfer stability, discovery reliability hardening
+- **Mobile UI redesign** — Modernized touch interface
+- **Large file transfer stability** — Cross-platform transfer hardening
 - **Resumable file transfers** — Pause and resume across sessions
-- **Media compression & thumbnailing** — Smarter image/video handling
 - **Voice messages** — Record and send voice clips
 - **Message threads** — Reply chains and threaded conversations
 - **Custom notification sounds** — Per-chat and per-contact sound profiles
@@ -465,8 +481,9 @@ Transparency matters in beta. Current constraints include:
 ### Desktop (Electron)
 
 ```bash
+# In the app folder
 cd desktop
-npm install
+npm install		  # Install requirements
 npm start                 # Launch Electron
 npm run build:win         # Build Windows installer
 npm run build:mac         # Build macOS .dmg (macOS host required)
@@ -476,16 +493,18 @@ npm run build:linux       # Build Linux .AppImage + .deb
 ### Android (Capacitor)
 
 ```bash
+# In the app folder
 cd mobile
-npm install
+npm install		  # Install requirements
 npm run shared:sync       # Copy shared modules into mobile/src/
 npx cap sync android      # Sync Capacitor Android project
 npx cap open android      # Open in Android Studio
 ```
 
-Or use the build script:
+Or use the pre-made build script:
 
 ```bash
+# In the app folder
 cd mobile
 powershell -File build-android.ps1   # Full build → APK
 ```
@@ -509,9 +528,9 @@ Built artifacts (`desktop/dist/`, `mobile/android/app/build/`) are gitignored �
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/my-change`)
-3. Commit your changes and open a pull request
+3. Commit your changes and open a pull request!
 
-Bug reports and feature ideas are welcome via [GitHub Issues](https://github.com/D4niel-dev/Orbit-beta/issues).
+Bug *reports* and *feature ideas* are welcome via [GitHub Issues](https://github.com/D4niel-dev/Orbit-beta/issues).
 
 ## License
 

@@ -533,16 +533,14 @@ document.addEventListener('DOMContentLoaded', () => {
     window._p2pRecvCount = 0;
 
     if (window.orbitAPI) {
-      window.orbitAPI.networkStart(window.store.getState().currentUser);
+      var state = window.store.getState();
+      var reconnectEnabled = state.settings.netAutoReconnect !== false;
+      var reconnectIntervalMs = (state.settings.netReconnectInterval || 10) * 1000;
+      window.orbitAPI.networkStart(state.currentUser, reconnectEnabled, reconnectIntervalMs);
 
       window.orbitAPI.on('peer-found', (peer) => {
-        console.log('Discovered peer:', peer.username);
+        console.log('[Renderer] peer-found:', peer.username, 'IP:', peer.ip);
         window.store.addOrUpdatePeer(peer);
-        var curState = window.store.getState();
-        var isFriend = curState.friends.some(function(f) { return f.userId === peer.userId; });
-        if (isFriend && peer.userId && peer.ip) {
-          window.orbitAPI.networkSend(peer.userId, peer.ip, window.Protocol.Types.PING, {});
-        }
       });
 
       window.orbitAPI.on('network-message', (packet) => {
@@ -571,7 +569,7 @@ document.addEventListener('DOMContentLoaded', () => {
               cancelText: 'Deny',
               danger: false,
               onConfirm: function() {
-                var newMember = { userId: joinPayload.userId, username: joinPayload.username, publicKey: joinPayload.publicKey || null, status: 'online', ip: null, role: 'member' };
+                var newMember = { userId: joinPayload.userId, username: joinPayload.username, usertag: joinPayload.usertag || '', avatar: joinPayload.avatar || null, status: 'online', ip: requester ? requester.ip || '' : '', role: 'member', publicKey: joinPayload.publicKey || null };
                 window.store.addMemberToGroup(myGroup.groupId, newMember);
                 if (window.orbitAPI && requester) {
                   window.orbitAPI.networkSend(joinPayload.userId, requester.ip || '', window.Protocol.Types.GROUP_JOIN_RESPONSE, {
@@ -584,7 +582,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (m.userId !== currentState.currentUser.userId) {
                       window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.GROUP_MEMBER_ADDED, {
                         groupId: myGroup.groupId,
-                        user: { userId: newMember.userId, username: newMember.username, role: 'member', joinedAt: new Date().toISOString(), publicKey: newMember.publicKey }
+                        user: { userId: newMember.userId, username: newMember.username, usertag: newMember.usertag, avatar: newMember.avatar, status: 'online', role: 'member', joinedAt: new Date().toISOString(), publicKey: newMember.publicKey }
                       });
                     }
                   });
@@ -601,7 +599,7 @@ document.addEventListener('DOMContentLoaded', () => {
               }
             });
           } else if (myGroup) {
-            var newMember = { userId: joinPayload.userId, username: joinPayload.username, publicKey: joinPayload.publicKey || null, status: 'online', ip: null, role: 'member' };
+            var newMember = { userId: joinPayload.userId, username: joinPayload.username, usertag: joinPayload.usertag || '', avatar: joinPayload.avatar || null, status: 'online', ip: null, role: 'member', publicKey: joinPayload.publicKey || null };
             window.store.addMemberToGroup(myGroup.groupId, newMember);
             var requester = currentState.friends.find(function(f) { return f.userId === joinPayload.userId; });
             if (window.orbitAPI && requester) {
@@ -615,7 +613,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (m.userId !== currentState.currentUser.userId) {
                   window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.GROUP_MEMBER_ADDED, {
                     groupId: myGroup.groupId,
-                    user: { userId: newMember.userId, username: newMember.username, role: 'member', joinedAt: new Date().toISOString(), publicKey: newMember.publicKey }
+                    user: { userId: newMember.userId, username: newMember.username, usertag: newMember.usertag, avatar: newMember.avatar, status: 'online', role: 'member', joinedAt: new Date().toISOString(), publicKey: newMember.publicKey }
                   });
                 }
               });
@@ -769,8 +767,20 @@ document.addEventListener('DOMContentLoaded', () => {
           window.orbitAPI.showNotification('File from ' + senderName, data.name, senderAvatar);
         }
         const isImage = data.name.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) != null;
+        const isAudio = data.name.match(/\.(webm|mp3|wav|ogg|flac|aac|m4a|wma)$/i) != null;
         const attId = data.fileId || (window.orbitAPI ? window.orbitAPI.getUuid() : Date.now().toString());
         const fileSize = data.size || 0;
+        var attType = 'file';
+        var attMime = 'application/octet-stream';
+        if (isImage) {
+          attType = 'image';
+          attMime = data.name.toLowerCase().endsWith('.gif') ? 'image/gif' : (data.name.toLowerCase().endsWith('.png') ? 'image/png' : (data.name.toLowerCase().endsWith('.webp') ? 'image/webp' : (data.name.toLowerCase().endsWith('.svg') ? 'image/svg+xml' : 'image/jpeg')));
+        } else if (isAudio) {
+          attType = 'audio';
+          var extMap = { webm: 'audio/webm', mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', flac: 'audio/flac', aac: 'audio/aac', m4a: 'audio/mp4', wma: 'audio/x-ms-wma' };
+          var ext = data.name.split('.').pop().toLowerCase();
+          attMime = extMap[ext] || 'audio/webm';
+        }
         window.store.handleIncomingPacket({
           type: window.Protocol.Types.MESSAGE,
           from: data.sender,
@@ -778,8 +788,8 @@ document.addEventListener('DOMContentLoaded', () => {
             text: '',
             attachments: [{
               id: attId,
-              type: isImage ? 'image' : 'file',
-              mimeType: isImage ? (data.name.toLowerCase().endsWith('.gif') ? 'image/gif' : (data.name.toLowerCase().endsWith('.png') ? 'image/png' : (data.name.toLowerCase().endsWith('.webp') ? 'image/webp' : (data.name.toLowerCase().endsWith('.svg') ? 'image/svg+xml' : 'image/jpeg')))) : 'application/octet-stream',
+              type: attType,
+              mimeType: attMime,
               name: data.name,
               size: fileSize,
               path: data.path,

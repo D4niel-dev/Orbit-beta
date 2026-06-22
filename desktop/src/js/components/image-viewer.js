@@ -33,6 +33,7 @@ window.ImageViewer = {
         <div style="display: flex; align-items: center; gap: 16px;">
           <button id="iv-btn-zoom-out" style="background:transparent; border:none; color:white; cursor:pointer;" title="Zoom Out"><i data-lucide="zoom-out"></i></button>
           <button id="iv-btn-zoom-in" style="background:transparent; border:none; color:white; cursor:pointer;" title="Zoom In"><i data-lucide="zoom-in"></i></button>
+          <button id="iv-btn-save" style="background:transparent; border:none; color:white; cursor:pointer;" title="Quick Save"><i data-lucide="save"></i></button>
           <button id="iv-btn-download" style="background:transparent; border:none; color:white; cursor:pointer;" title="Download"><i data-lucide="download"></i></button>
           <button id="iv-btn-forward" style="background:transparent; border:none; color:white; cursor:pointer;" title="Resend to Active Chat"><i data-lucide="forward"></i></button>
           <button id="iv-btn-close" style="background:transparent; border:none; color:white; cursor:pointer; margin-left: 16px;" title="Close"><i data-lucide="x"></i></button>
@@ -62,14 +63,58 @@ window.ImageViewer = {
       self.updateZoom();
     });
 
-    document.getElementById('iv-btn-download').addEventListener('click', () => {
+    document.getElementById('iv-btn-save').addEventListener('click', async () => {
       if (!self.currentImg) return;
-      const a = document.createElement('a');
-      a.href = self.currentImg.url;
-      a.download = self.currentImg.name || 'download';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      try {
+        var resp = await fetch(self.currentImg.url);
+        var blob = await resp.blob();
+        if (window.showSaveFilePicker) {
+          var handle = await window.showSaveFilePicker({
+            suggestedName: self.currentImg.name || 'image.' + (blob.type.split('/')[1] || 'png'),
+            types: [{ accept: { 'image/*': ['.' + (blob.type.split('/')[1] || 'png')] } }]
+          });
+          var writable = await handle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+        } else {
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          a.href = url;
+          a.download = self.currentImg.name || 'image.' + (blob.type.split('/')[1] || 'png');
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
+        }
+      } catch(e) {
+        if (e.name === 'AbortError') return;
+        console.warn('[ImageViewer] Save failed:', e);
+      }
+    });
+
+    document.getElementById('iv-btn-download').addEventListener('click', async () => {
+      if (!self.currentImg) return;
+      // Use fetch+blob for cross-origin/orbit-db URLs
+      try {
+        var resp = await fetch(self.currentImg.url);
+        var blob = await resp.blob();
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = self.currentImg.name || 'image.' + (blob.type.split('/')[1] || 'png');
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
+      } catch(e) {
+        // Fallback for blob: URLs
+        var a = document.createElement('a');
+        a.href = self.currentImg.url;
+        a.download = self.currentImg.name || 'download';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
     });
 
     document.getElementById('iv-btn-forward').addEventListener('click', () => {
@@ -129,6 +174,64 @@ window.ImageViewer = {
         self.showImage(self.galleryImages[self.currentIndex]);
       }
     });
+
+    // Keyboard navigation
+    this._keyHandler = function(e) {
+      if (self.container.style.display !== 'flex') return;
+      if (e.key === 'Escape') { self.close(); return; }
+      if (e.key === 'ArrowLeft') {
+        if (self.galleryImages.length > 1) {
+          self.currentIndex = (self.currentIndex - 1 + self.galleryImages.length) % self.galleryImages.length;
+          self.showImage(self.galleryImages[self.currentIndex]);
+        }
+        return;
+      }
+      if (e.key === 'ArrowRight') {
+        if (self.galleryImages.length > 1) {
+          self.currentIndex = (self.currentIndex + 1) % self.galleryImages.length;
+          self.showImage(self.galleryImages[self.currentIndex]);
+        }
+        return;
+      }
+    };
+    document.addEventListener('keydown', this._keyHandler);
+
+    // Swipe support for canvas area
+    var canvasArea = document.getElementById('iv-canvas-area');
+    var startX = 0;
+    var startY = 0;
+    canvasArea.addEventListener('mousedown', function(e) {
+      startX = e.clientX;
+      startY = e.clientY;
+    });
+    canvasArea.addEventListener('mouseup', function(e) {
+      var dx = e.clientX - startX;
+      var dy = e.clientY - startY;
+      if (Math.abs(dx) > 80 && Math.abs(dx) > Math.abs(dy) * 2) {
+        if (dx < 0) {
+          document.getElementById('iv-btn-next').click();
+        } else {
+          document.getElementById('iv-btn-prev').click();
+        }
+      }
+    });
+    canvasArea.addEventListener('touchstart', function(e) {
+      var touch = e.touches[0];
+      startX = touch.clientX;
+      startY = touch.clientY;
+    }, { passive: true });
+    canvasArea.addEventListener('touchend', function(e) {
+      var touch = e.changedTouches[0];
+      var dx = touch.clientX - startX;
+      var dy = touch.clientY - startY;
+      if (Math.abs(dx) > 80 && Math.abs(dx) > Math.abs(dy) * 2) {
+        if (dx < 0) {
+          document.getElementById('iv-btn-next').click();
+        } else {
+          document.getElementById('iv-btn-prev').click();
+        }
+      }
+    }, { passive: true });
   },
 
   updateZoom() {
@@ -232,6 +335,10 @@ window.ImageViewer = {
     if (!this.container) return;
     this.container.style.display = 'none';
     this.currentImg = null;
+    if (this._keyHandler) {
+      document.removeEventListener('keydown', this._keyHandler);
+      this._keyHandler = null;
+    }
     try {
       var canvasArea = document.getElementById('iv-canvas-area');
       var vidEl = canvasArea ? canvasArea.querySelector('video') : null;

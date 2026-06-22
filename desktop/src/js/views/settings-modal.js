@@ -415,13 +415,9 @@ window.SettingsModal = {
               '<input id="set-24h" type="checkbox" '+(s.timeFormat24?'checked':'')+'>' +
               '<div><div>24-hour Time</div><div style="font-size:12px;color:var(--text-muted);font-weight:400;">Show timestamps in 24-hour format</div></div>' +
             '</label>' +
-            '<label style="display:flex;align-items:center;gap:12px;font-size:14px;color:var(--text-primary);cursor:pointer;margin-top:12px;padding-top:12px;border-top:1px solid var(--border-subtle);">' +
-              '<input id="set-translate" type="checkbox" '+(s.messageTranslate||s.experimentalMessageTranslate?'checked':'')+'>' +
-              '<div><div>Message Translation</div><div style="font-size:12px;color:var(--text-muted);font-weight:400;">Show a translate button on messages via MyMemory API</div></div>' +
-            '</label>' +
           '</div>' +
         '</div>' +
-
+        
         // Section: Text & Layout
         '<div class="settings-collapsible" style="margin-bottom:12px;border-radius:10px;border:1px solid var(--border-subtle);overflow:hidden;">' +
           '<div class="collapsible-header" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--bg-base);cursor:pointer;user-select:none;" onclick="var b=this.nextElementSibling;var i=this.querySelector(\'.collapse-icon\');if(b.style.display===\'none\'){b.style.display=\'block\';i.style.transform=\'rotate(0deg)\'}else{b.style.display=\'none\';i.style.transform=\'rotate(-90deg)\'}">' +
@@ -491,6 +487,54 @@ window.SettingsModal = {
                 '</label>' +
               '</div>' +
             '</div>' +
+          '<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border-subtle);">' +
+            '<label style="display:flex;align-items:center;gap:12px;font-size:14px;color:var(--text-primary);cursor:pointer;">' +
+              '<input id="set-translate" type="checkbox" '+(s.messageTranslate||s.experimentalMessageTranslate?'checked':'')+'>' +
+              '<div><div>Message Translation</div><div style="font-size:12px;color:var(--text-muted);font-weight:400;">Show a translate button on messages via MyMemory API</div></div>' +
+            '</label>' +
+            '<div id="translate-options" style="' + ((s.messageTranslate || s.experimentalMessageTranslate) ? '' : 'display:none;') + '">' +
+              '<div style="margin-top:12px;">' +
+                '<label style="display:block;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;margin-bottom:6px;">Translate to</label>' +
+                '<select id="set-translate-lang" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);outline:none;font-size:13px;">' +
+                  '<option value="" '+(s.translateTargetLang===''?'selected':'')+'>Auto (browser language)</option>' +
+                  '<option value="en" '+(s.translateTargetLang==='en'?'selected':'')+'>English</option>' +
+                  '<option value="vi" '+(s.translateTargetLang==='vi'?'selected':'')+'>Vietnamese</option>' +
+                  '<option value="es" '+(s.translateTargetLang==='es'?'selected':'')+'>Spanish</option>' +
+                  '<option value="fr" '+(s.translateTargetLang==='fr'?'selected':'')+'>French</option>' +
+                  '<option value="de" '+(s.translateTargetLang==='de'?'selected':'')+'>German</option>' +
+                  '<option value="it" '+(s.translateTargetLang==='it'?'selected':'')+'>Italian</option>' +
+                  '<option value="pt" '+(s.translateTargetLang==='pt'?'selected':'')+'>Portuguese</option>' +
+                  '<option value="ru" '+(s.translateTargetLang==='ru'?'selected':'')+'>Russian</option>' +
+                  '<option value="zh-CN" '+(s.translateTargetLang==='zh-CN'?'selected':'')+'>Chinese (Simplified)</option>' +
+                  '<option value="zh-TW" '+(s.translateTargetLang==='zh-TW'?'selected':'')+'>Chinese (Traditional)</option>' +
+                  '<option value="ja" '+(s.translateTargetLang==='ja'?'selected':'')+'>Japanese</option>' +
+                  '<option value="ko" '+(s.translateTargetLang==='ko'?'selected':'')+'>Korean</option>' +
+                  '<option value="ar" '+(s.translateTargetLang==='ar'?'selected':'')+'>Arabic</option>' +
+                  '<option value="hi" '+(s.translateTargetLang==='hi'?'selected':'')+'>Hindi</option>' +
+                  '<option value="tr" '+(s.translateTargetLang==='tr'?'selected':'')+'>Turkish</option>' +
+                  '<option value="nl" '+(s.translateTargetLang==='nl'?'selected':'')+'>Dutch</option>' +
+                  '<option value="pl" '+(s.translateTargetLang==='pl'?'selected':'')+'>Polish</option>' +
+                  '<option value="sv" '+(s.translateTargetLang==='sv'?'selected':'')+'>Swedish</option>' +
+                  '<option value="th" '+(s.translateTargetLang==='th'?'selected':'')+'>Thai</option>' +
+                  '<option value="id" '+(s.translateTargetLang==='id'?'selected':'')+'>Indonesian</option>' +
+                  '<option value="el" '+(s.translateTargetLang==='el'?'selected':'')+'>Greek</option>' +
+                  '<option value="cs" '+(s.translateTargetLang==='cs'?'selected':'')+'>Czech</option>' +
+                  '<option value="ro" '+(s.translateTargetLang==='ro'?'selected':'')+'>Romanian</option>' +
+                  '<option value="uk" '+(s.translateTargetLang==='uk'?'selected':'')+'>Ukrainian</option>' +
+                  '<option value="hu" '+(s.translateTargetLang==='hu'?'selected':'')+'>Hungarian</option>' +
+                  '<option value="he" '+(s.translateTargetLang==='he'?'selected':'')+'>Hebrew</option>' +
+                  '<option value="da" '+(s.translateTargetLang==='da'?'selected':'')+'>Danish</option>' +
+                  '<option value="fi" '+(s.translateTargetLang==='fi'?'selected':'')+'>Finnish</option>' +
+                  '<option value="no" '+(s.translateTargetLang==='no'?'selected':'')+'>Norwegian</option>' +
+                  '<option value="ms" '+(s.translateTargetLang==='ms'?'selected':'')+'>Malay</option>' +
+                '</select>' +
+              '</div>' +
+              '<label style="display:flex;align-items:center;gap:12px;font-size:14px;color:var(--text-primary);cursor:pointer;margin-top:12px;">' +
+                '<input id="set-translate-autodetect" type="checkbox" '+(s.autoDetectSource?'checked':'')+'>' +
+                '<div><div>Auto-detect Source Language</div><div style="font-size:12px;color:var(--text-muted);font-weight:400;">Detect message language instead of assuming English</div></div>' +
+              '</label>' +
+            '</div>' +
+          '</div>' +
           '</div>' +
         '</div>' +
 
@@ -682,6 +726,14 @@ window.SettingsModal = {
       content.querySelector('#set-translate').addEventListener('change', function(e) {
         updateSettings('messageTranslate', e.target.checked);
         updateSettings('experimentalMessageTranslate', e.target.checked);
+        var opts = content.querySelector('#translate-options');
+        if (opts) opts.style.display = e.target.checked ? '' : 'none';
+      });
+      content.querySelector('#set-translate-lang').addEventListener('change', function(e) {
+        updateSettings('translateTargetLang', e.target.value);
+      });
+      content.querySelector('#set-translate-autodetect').addEventListener('change', function(e) {
+        updateSettings('autoDetectSource', e.target.checked);
       });
       var uploadBtn = content.querySelector('#btn-upload-wallpaper');
       if (uploadBtn) {
@@ -993,8 +1045,18 @@ window.SettingsModal = {
         updateNetwork('netAutoReconnect', e.target.checked);
         var opts = content.querySelector('#net-reconnect-opts');
         if (opts) opts.style.display = e.target.checked ? 'block' : 'none';
+        if (window.orbitAPI && window.orbitAPI.networkSetReconnect) {
+          window.orbitAPI.networkSetReconnect(e.target.checked);
+        }
       });
-      content.querySelector('#net-reconnect-interval').addEventListener('change', function(e) { updateNetwork('netReconnectInterval', parseInt(e.target.value, 10) || 10); });
+      content.querySelector('#net-reconnect-interval').addEventListener('change', function(e) {
+        var val = parseInt(e.target.value, 10) || 10;
+        updateNetwork('netReconnectInterval', val);
+        if (window.orbitAPI && window.orbitAPI.networkSetReconnect) {
+          var enabled = document.querySelector('#net-reconnect')?.checked ?? true;
+          window.orbitAPI.networkSetReconnect(enabled, val * 1000);
+        }
+      });
       content.querySelector('#net-bandwidth').addEventListener('change', function(e) { updateNetwork('netBandwidthLimit', parseInt(e.target.value, 10) || 0); });
     } else if (tabName === 'notifications') {
       var s = state.settings;

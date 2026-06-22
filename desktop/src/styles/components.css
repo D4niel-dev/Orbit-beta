@@ -382,6 +382,19 @@ button:active,
   color: var(--accent-danger);
 }
 
+/* Attachment thumbnail loading placeholder */
+.att-thumb {
+  background: var(--bg-surface);
+  position: relative;
+}
+.att-thumb img {
+  opacity: 0;
+  animation: attThumbFadeIn 0.3s ease forwards;
+}
+@keyframes attThumbFadeIn {
+  to { opacity: 1; }
+}
+
 /* Attachment delete button */
 .att-thumb .att-delete-btn {
   display: none;

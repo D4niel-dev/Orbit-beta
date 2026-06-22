@@ -296,7 +296,8 @@ window.SidebarMiddle = {
               status: friend.status || 'online',
               avatar: friend.avatar || null,
               ip: friend.ip || null,
-              role: 'member'
+              role: 'member',
+              publicKey: friend.publicKey || null
             });
           }
         });
@@ -309,7 +310,8 @@ window.SidebarMiddle = {
             status: 'online',
             avatar: state.currentUser.avatar || null,
             ip: null,
-            role: 'owner'
+            role: 'owner',
+            publicKey: state.currentUser.publicKey || null
           },
           ...selectedMembers
         ];
@@ -363,6 +365,9 @@ window.SidebarMiddle = {
                 inviteCode: code,
                 userId: state.currentUser.userId,
                 username: state.currentUser.username,
+                usertag: state.currentUser.usertag || '',
+                avatar: state.currentUser.avatar || null,
+                status: state.currentUser.status || 'online',
                 publicKey: state.currentUser.publicKey || null
               });
             }

@@ -115,8 +115,12 @@ var MStore = {
     experimentalPerformanceMode: false,
     notifyPreview: true,
     notifySound: true,
+    notifyVolume: 80,
+    notifySoundType: 'chime',
     notifyDnd: false,
     notifyGroupMentions: false,
+    translateTargetLang: '',
+    autoDetectSource: true,
     deleteAttachmentsAfter: 0,
     networkMode: 'LAN Auto-Discovery',
     udpPort: 45678,
@@ -125,7 +129,14 @@ var MStore = {
     fontSize: 'Medium',
     messageAnim: 'slide',
     netAutoReconnect: true,
-    netTimeout: 30
+    netReconnectInterval: 10,
+    netTimeout: 30,
+    netKeepAlive: 30,
+    webrtcFallback: true,
+    logLevel: 'None',
+    netBandwidthLimit: 0,
+    experimentalFpsMonitor: false,
+    experimentalDevOverlay: false
   },
 
   load() {
@@ -230,7 +241,7 @@ var MStore = {
         changed = true;
       }
     });
-    if (changed) this.save();
+    if (changed) { console.log('[Orbit] Migrated ' + this.groups.length + ' group(s) — added missing fields'); this.save(); }
   },
 
   getChats() {
@@ -312,6 +323,7 @@ document.addEventListener('DOMContentLoaded', function() {
     };
   }
 
+  migrateOldData(); // copy unprefixed keys before MStore reads orbit_* keys
   MStore.load();
 
   var activeChatId = null;
@@ -416,7 +428,7 @@ document.addEventListener('DOMContentLoaded', function() {
           // Profile frame for DM avatars
           if (MStore.settings.experimentalProfileFrames) {
             var cf = MStore.friends.find(function(f) { return f.id === c.id; });
-            var cfNum = cf && cf.profileFrame ? cf.profileFrame : 0;
+            var cfNum = cf ? getProfileFrame(cf) : 0;
             if (cfNum > 0) {
               chatFrameHtml = '<img src="icons/frames/pfp_frame_' + cfNum + '.png" class="pfp-frame" style="position:absolute;top:-15%;left:-17%;pointer-events:none;" draggable="false" alt="">';
             }
@@ -788,8 +800,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!bubble) return;
     var existing = bubble.querySelector('.translated-text');
     if (existing) { existing.remove(); return; }
-    var targetLang = (navigator.language || 'en').split('-')[0] || 'en';
-    var url = 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(msg.text) + '&langpair=en|' + targetLang;
+    var targetLang = MStore.settings.translateTargetLang || (navigator.language || 'en').split('-')[0] || 'en';
+    var sourceLang = MStore.settings.autoDetectSource !== false ? 'auto' : 'en';
+    var url = 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(msg.text) + '&langpair=' + sourceLang + '|' + targetLang;
     var div = document.createElement('div');
     div.className = 'translated-text';
     div.textContent = 'Translating...';
@@ -1742,8 +1755,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
   /* -- DB Migration -- */
   function migrateOldData() {
-    if (localStorage.getItem('orbit_migrated_v2')) return;
+    if (localStorage.getItem('orbit_migrated_v2')) { console.log('[Orbit] Data migration already completed — skipping'); return; }
 
+    console.log('[Orbit] Running old data migration...');
     // Check for old non-prefixed keys
     var oldKeys = ['friends', 'chats', 'messages', 'settings'];
     var migrated = false;
@@ -1812,7 +1826,7 @@ document.addEventListener('DOMContentLoaded', function() {
     filtered.forEach(function(f) {
       var color = statusColors[f.status] || 'var(--text-muted)';
       var initial = f.name ? f.name.charAt(0).toUpperCase() : '?';
-      var fPfNum = MStore.settings.experimentalProfileFrames ? (f.profileFrame || 0) : 0;
+      var fPfNum = getProfileFrame(f);
       var fPfHtml = fPfNum > 0 ? '<img src="icons/frames/pfp_frame_' + fPfNum + '.png" class="pfp-frame" style="position:absolute;top:-15%;left:-17%;pointer-events:none;" draggable="false" alt="">' : '';
       html += '<div class="list-row friend-row" data-friend="' + f.id + '">' +
         '<div class="chat-row-avatar-wrapper" style="width:44px;height:44px;">' +
@@ -1845,7 +1859,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var navEl = document.getElementById('nav-user-avatar');
     if (navEl) {
       navEl.innerHTML = u && u.avatar ? '<img src="' + escapeHtml(u.avatar) + '" alt="">' : initial;
-      var navPf = MStore.settings.experimentalProfileFrames ? (MStore.settings.profileFrame || 0) : 0;
+      var navPf = getProfileFrame(MStore.settings);
       var navFrame = navEl.parentNode.querySelector('.pfp-frame');
       if (navPf > 0) {
         if (!navFrame) {
@@ -1875,7 +1889,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var u = MStore.user;
     var initial = u && u.name ? u.name.charAt(0).toUpperCase() : '?';
 
-    var sPfNum = MStore.settings.experimentalProfileFrames ? (MStore.settings.profileFrame || 0) : 0;
+    var sPfNum = getProfileFrame(MStore.settings);
     var sPfHtml = sPfNum > 0 ? '<img src="icons/frames/pfp_frame_' + sPfNum + '.png" class="pfp-frame" style="position:absolute;top:-15%;left:-17%;pointer-events:none;" draggable="false" alt="">' : '';
     container.innerHTML =
       '<div class="settings-profile-card" id="settings-profile-card">' +
@@ -2038,10 +2052,6 @@ document.addEventListener('DOMContentLoaded', function() {
         '<div class="settings-row">' +
           '<div class="settings-row-content"><span class="settings-row-title">Reduce Motion</span><div class="settings-row-desc">Disable animations, freeze GIF previews, and stop avatar effects</div></div>' +
           '<button class="settings-toggle ' + (s.reduceMotion ? 'on' : '') + '" id="set-reduce-motion"></button>' +
-        '</div>' +
-        '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Message Translation</span><div class="settings-row-desc">Translate button on messages</div></div>' +
-          '<button class="settings-toggle ' + (s.messageTranslate ? 'on' : '') + '" id="set-message-translate"></button>' +
         '</div>';
       case 'chat':
         return '<div class="settings-row">' +
@@ -2075,11 +2085,37 @@ document.addEventListener('DOMContentLoaded', function() {
         '<div class="settings-row">' +
           '<div class="settings-row-content"><span class="settings-row-title">Link Previews</span><div class="settings-row-desc">Show rich previews for shared links</div></div>' +
           '<button class="settings-toggle ' + (s.showLinkPreviews !== false ? 'on' : '') + '" id="set-link-previews"></button>' +
+        '</div>' +
+        '<div class="settings-section-divider"></div>' +
+        '<div class="settings-row settings-section-header"><span>Translation</span></div>' +
+        '<div class="settings-row">' +
+          '<div class="settings-row-content"><span class="settings-row-title">Message Translation</span><div class="settings-row-desc">Show translate button on messages</div></div>' +
+          '<button class="settings-toggle ' + (s.messageTranslate ? 'on' : '') + '" id="set-message-translate"></button>' +
+        '</div>' +
+        '<div class="settings-row">' +
+          '<div class="settings-row-content"><span class="settings-row-title">Target Language</span><div class="settings-row-desc">Language to translate messages into</div></div>' +
+          sel([{v:'',l:'Auto'},{v:'en',l:'English'},{v:'vi',l:'Vietnamese'},{v:'es',l:'Spanish'},{v:'fr',l:'French'},{v:'de',l:'German'},{v:'it',l:'Italian'},{v:'pt',l:'Portuguese'},{v:'ru',l:'Russian'},{v:'zh-CN',l:'Chinese (Simplified)'},{v:'zh-TW',l:'Chinese (Traditional)'},{v:'ja',l:'Japanese'},{v:'ko',l:'Korean'},{v:'ar',l:'Arabic'},{v:'hi',l:'Hindi'},{v:'tr',l:'Turkish'},{v:'nl',l:'Dutch'},{v:'pl',l:'Polish'},{v:'sv',l:'Swedish'},{v:'th',l:'Thai'},{v:'id',l:'Indonesian'},{v:'el',l:'Greek'},{v:'cs',l:'Czech'},{v:'ro',l:'Romanian'},{v:'uk',l:'Ukrainian'},{v:'hu',l:'Hungarian'},{v:'he',l:'Hebrew'},{v:'da',l:'Danish'},{v:'fi',l:'Finnish'},{v:'no',l:'Norwegian'},{v:'ms',l:'Malay'}], 'set-translate-target', s.translateTargetLang || '') +
+        '</div>' +
+        '<div class="settings-row">' +
+          '<div class="settings-row-content"><span class="settings-row-title">Auto-Detect Source</span><div class="settings-row-desc">Auto-detect message language instead of assuming English</div></div>' +
+          '<button class="settings-toggle ' + (s.autoDetectSource !== false ? 'on' : '') + '" id="set-auto-detect"></button>' +
         '</div>';
       case 'notifications':
         return         '<div class="settings-row">' +
           '<div class="settings-row-content"><span class="settings-row-title">Message Previews</span><div class="settings-row-desc">Show message content in notifications</div></div>' +
           '<button class="settings-toggle ' + (s.notifyPreview !== false ? 'on' : '') + '" id="notify-preview"></button>' +
+        '</div>' +
+        '<div class="settings-row">' +
+          '<div class="settings-row-content"><span class="settings-row-title">Notification Sound</span><div class="settings-row-desc">Play sound on new messages</div></div>' +
+          '<button class="settings-toggle ' + (s.notifySound ? 'on' : '') + '" id="notify-sound"></button>' +
+        '</div>' +
+        '<div class="settings-row">' +
+          '<div class="settings-row-content"><span class="settings-row-title">Notification Volume</span><div class="settings-row-desc">Volume level for notification sounds</div></div>' +
+          '<div style="display:flex;align-items:center;gap:8px;"><input type="range" min="0" max="100" value="' + (s.notifyVolume || 80) + '" class="settings-slider" id="notify-volume" style="width:100px;"><span id="notify-volume-label" style="font-size:12px;min-width:32px;text-align:right;">' + (s.notifyVolume || 80) + '</span></div>' +
+        '</div>' +
+        '<div class="settings-row">' +
+          '<div class="settings-row-content"><span class="settings-row-title">Sound Type</span><div class="settings-row-desc">Notification sound style</div></div>' +
+          sel([{v:'chime',l:'Chime'},{v:'pop',l:'Pop'},{v:'gentle',l:'Gentle'},{v:'classic',l:'Classic'}], 'notify-sound-type', s.notifySoundType || 'chime') +
         '</div>' +
         '<div class="settings-row">' +
           '<div class="settings-row-content"><span class="settings-row-title">Do Not Disturb</span><div class="settings-row-desc">Mute all notifications</div></div>' +
@@ -2130,18 +2166,43 @@ document.addEventListener('DOMContentLoaded', function() {
           '<div class="settings-row-content"><span class="settings-row-title">Connection Timeout</span><div class="settings-row-desc">Seconds</div></div>' +
           sel([{v:'5',l:'5s'},{v:'10',l:'10s'},{v:'30',l:'30s'},{v:'60',l:'60s'}], 'net-timeout', String(s.netTimeout || 30)) +
         '</div>' +
+        '<div class="settings-row">' +
+          '<div class="settings-row-content"><span class="settings-row-title">Reconnect Interval</span><div class="settings-row-desc">Seconds between reconnect attempts</div></div>' +
+          '<input type="number" class="settings-input" id="net-reconnect-interval" value="' + (s.netReconnectInterval || 10) + '" min="1">' +
+        '</div>' +
+        '<div class="settings-row">' +
+          '<div class="settings-row-content"><span class="settings-row-title">Keep-Alive Interval</span><div class="settings-row-desc">Ping interval for active connections</div></div>' +
+          sel([{v:'10',l:'10s'},{v:'30',l:'30s'},{v:'60',l:'60s'},{v:'120',l:'120s'}], 'net-keepalive', String(s.netKeepAlive || 30)) +
+        '</div>' +
+        '<div class="settings-row">' +
+          '<div class="settings-row-content"><span class="settings-row-title">WebRTC Fallback</span><div class="settings-row-desc">Use WebRTC when direct TCP fails</div></div>' +
+          '<button class="settings-toggle ' + (s.webrtcFallback !== false ? 'on' : '') + '" id="net-webrtc"></button>' +
+        '</div>' +
+        '<div class="settings-row">' +
+          '<div class="settings-row-content"><span class="settings-row-title">Log Level</span><div class="settings-row-desc">Verbosity of connection logs</div></div>' +
+          sel([{v:'None',l:'None'},{v:'Error',l:'Error'},{v:'Info',l:'Info'},{v:'Debug',l:'Debug'}], 'net-loglevel', s.logLevel || 'None') +
+        '</div>' +
+        '<div class="settings-row">' +
+          '<div class="settings-row-content"><span class="settings-row-title">Bandwidth Limit</span><div class="settings-row-desc">KB/s (0 = unlimited)</div></div>' +
+          '<input type="number" class="settings-input" id="net-bandwidth" value="' + (s.netBandwidthLimit || 0) + '" min="0">' +
+        '</div>' +
         '<div class="settings-row" id="row-add-friend" style="cursor:pointer;">' +
           '<span class="settings-row-title" style="color:var(--accent-primary);">Add Friend</span>' +
           '<i data-lucide="user-plus" style="width:18px;height:18px;color:var(--accent-primary);flex-shrink:0;"></i>' +
         '</div>';
       case 'about':
-        var friendsCount = MStore.friends.length;
-        var chatsCount = MStore.chats.length;
+        var friendsCount = MStore ? MStore.friends.length : 0;
+        var chatsCount = MStore ? MStore.chats.length : 0;
         return '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.1.3-beta · Capacitor Android</div></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.1.4-beta · Capacitor Android</div></div>' +
         '</div>' +
         '<div class="settings-row">' +
           '<div class="settings-row-content"><span class="settings-row-title">Statistics</span><div class="settings-row-desc">' + friendsCount + ' friends · ' + chatsCount + ' chats</div></div>' +
+        '</div>' +
+        '<div class="settings-section-divider"></div>' +
+        '<div class="settings-row" id="row-show-changelog" style="cursor:pointer;">' +
+          '<span class="settings-row-title" style="color:var(--accent-primary);">What\'s New</span>' +
+          '<i data-lucide="external-link" style="width:18px;height:18px;color:var(--accent-primary);flex-shrink:0;"></i>' +
         '</div>';
       case 'advanced':
         return '<div class="settings-row">' +
@@ -2214,7 +2275,6 @@ document.addEventListener('DOMContentLoaded', function() {
         bindSelect('set-anim-speed', function(v) { s.animSpeed = v; MStore.save(); applyAnimationSettings(); });
         bindToggle('set-reduce-motion', function(on) { s.reduceMotion = on; MStore.save(); applyAnimationSettings(); if (activeChatId) renderMessages(activeChatId); }, s.reduceMotion);
         bindSelect('set-font-size', function(v) { s.fontSize = v; MStore.save(); applyFontSize(); });
-        bindToggle('set-message-translate', function(on) { s.messageTranslate = on; MStore.save(); if (activeChatId) renderMessages(activeChatId); }, s.messageTranslate);
         break;
       case 'chat':
         bindToggle('set-enter-send', function(on) { s.enterToSend = on; MStore.save(); }, s.enterToSend);
@@ -2225,10 +2285,25 @@ document.addEventListener('DOMContentLoaded', function() {
         bindSelect('set-pattern', function(v) { s.bgPattern = v; MStore.save(); applyBgPattern(); });
         bindToggle('set-image-previews', function(on) { s.showImagePreviews = on; MStore.save(); if (activeChatId) renderMessages(activeChatId); }, s.showImagePreviews !== false);
         bindToggle('set-link-previews', function(on) { s.showLinkPreviews = on; MStore.save(); if (activeChatId) renderMessages(activeChatId); }, s.showLinkPreviews !== false);
+        bindToggle('set-message-translate', function(on) { s.messageTranslate = on; MStore.save(); if (activeChatId) renderMessages(activeChatId); }, s.messageTranslate);
+        bindSelect('set-translate-target', function(v) { s.translateTargetLang = v; MStore.save(); });
+        bindToggle('set-auto-detect', function(on) { s.autoDetectSource = on; MStore.save(); }, s.autoDetectSource !== false);
         break;
       case 'notifications':
         bindToggle('notify-preview', function(on) { s.notifyPreview = on; MStore.save(); }, s.notifyPreview !== false);
         bindToggle('notify-sound', function(on) { s.notifySound = on; MStore.save(); }, s.notifySound);
+        (function() {
+          var volEl = document.getElementById('notify-volume');
+          var volLabel = document.getElementById('notify-volume-label');
+          if (volEl) {
+            volEl.addEventListener('input', function() {
+              s.notifyVolume = parseInt(this.value, 10);
+              if (volLabel) volLabel.textContent = s.notifyVolume;
+              MStore.save();
+            });
+          }
+        })();
+        bindSelect('notify-sound-type', function(v) { s.notifySoundType = v; MStore.save(); });
         bindToggle('notify-dnd', function(on) { s.notifyDnd = on; MStore.save(); }, s.notifyDnd);
         bindToggle('notify-mentions', function(on) { s.notifyGroupMentions = on; MStore.save(); }, s.notifyGroupMentions);
         break;
@@ -2257,6 +2332,19 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         bindToggle('net-autoreconnect', function(on) { s.netAutoReconnect = on; MStore.save(); }, s.netAutoReconnect !== false);
         bindSelect('net-timeout', function(v) { s.netTimeout = parseInt(v, 10); MStore.save(); });
+        bindSelect('net-keepalive', function(v) { s.netKeepAlive = parseInt(v, 10); MStore.save(); });
+        bindToggle('net-webrtc', function(on) { s.webrtcFallback = on; MStore.save(); }, s.webrtcFallback !== false);
+        bindSelect('net-loglevel', function(v) { s.logLevel = v; MStore.save(); });
+        ['net-reconnect-interval', 'net-bandwidth'].forEach(function(id) {
+          var el = document.getElementById(id);
+          if (el) {
+            el.addEventListener('change', function() {
+              var key = id === 'net-reconnect-interval' ? 'netReconnectInterval' : 'netBandwidthLimit';
+              s[key] = parseInt(this.value, 10) || 0;
+              MStore.save();
+            });
+          }
+        });
         var addFriendRow = document.getElementById('row-add-friend');
         if (addFriendRow) addFriendRow.addEventListener('click', showAddFriendModal);
         break;
@@ -2341,7 +2429,221 @@ document.addEventListener('DOMContentLoaded', function() {
           }
         }, s.experimentalPerformanceMode);
         break;
+      case 'about':
+        var changelogBtn = document.getElementById('row-show-changelog');
+        if (changelogBtn) changelogBtn.addEventListener('click', showChangelog);
+        break;
     }
+  }
+
+  function showChangelog() {
+    if (document.getElementById('changelog-overlay')) return;
+    var overlay = document.createElement('div');
+    overlay.id = 'changelog-overlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.6);z-index:99999;display:flex;align-items:center;justify-content:center;';
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+
+    var modal = document.createElement('div');
+    modal.style.cssText = 'background:var(--bg-surface);border-radius:16px;padding:20px;max-width:520px;width:92%;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.4);border:1px solid var(--border-subtle);';
+
+    function vBlock(version, tag, sections) {
+      var tagH = tag ? '<span style="font-size:10px;font-weight:700;color:#fff;background:var(--accent-primary);border-radius:4px;padding:2px 6px;margin-left:8px;text-transform:uppercase;">' + tag + '</span>' : '';
+      var body = sections.map(function(s) {
+        var items = s[1].map(function(i) { return '<li style="font-size:13px;color:var(--text-secondary);line-height:1.6;">' + i + '</li>'; }).join('');
+        return '<div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin:12px 0 4px 0;">' + s[0] + '</div><ul style="margin:0;padding-left:20px;">' + items + '</ul>';
+      }).join('');
+      return '<div style="border-bottom:1px solid var(--border-subtle);padding-bottom:16px;"><div style="font-size:15px;font-weight:600;color:var(--text-primary);margin-bottom:8px;">v' + version + tagH + '</div>' + body + '</div>';
+    }
+
+    modal.innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">' +
+        '<h2 style="margin:0;font-size:18px;font-weight:700;color:var(--text-primary);">What\'s New</h2>' +
+        '<button id="changelog-close-mobile" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;font-size:20px;">✕</button>' +
+      '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:16px;">' +
+        vBlock('0.1.4-beta', 'Latest', [
+          ['New Features', [
+            'Native Android System Notifications: Messages now show as real system notifications when app is backgrounded (requires POST_NOTIFICATIONS permission)',
+            'Desktop Notification Avatars: Sender/group avatar now shown as notification icon',
+            'Connection Stats Panel: Live P2P status — online peers, uptime, sent/received message counters',
+            'Video File Support: Upload, render, and view video files in chat with play overlay',
+            'Video Preview Modal: Full-screen video player on desktop and mobile',
+            'Video Compression: Large videos (>5MB) auto-compressed to 720p/500kbps before sending',
+            'P2P Discovery Optimized: Beacon interval reduced, stale threshold increased, exponential backoff',
+            'Group Info UI: Theme CSS variables for consistent dark/light mode appearance',
+            'Performance Mode: New toggle in Experimental settings with two-step confirmation',
+            'Compact Spacing & Swipe-to-Reply moved from Experimental to chat settings'
+          ]],
+          ['Bug Fixes & Optimizations', [
+            'Image Viewer reliability fixes, JS-level CPU optimization for GIFs and link previews',
+            'Forced reflow cascade eliminated, data-refreshing animation guard added',
+            'Leaked offline check interval fixed, mobile HTML nesting fixed',
+            'E2EE cross-platform key derivation — per-platform group encryption as first step',
+            'P2P Auto-Connection Stabilization: PING/PONG keep-alive, socket timeout, reconnect logic, stale peer pruning',
+            'Translation Improvements: cache, dedup, abort controller, retry on failure',
+            'Voice Messages: Content-Type fix, onerror handler, chunked transfer audio detection',
+            'Image Viewer: quick-save button, keyboard navigation, swipe, download fix, loading placeholder',
+            'Group sync fixes: owner transfer roles, self-leave cleanup, invite adds group, GROUP_CREATE init messages'
+          ]]
+        ]) +
+        vBlock('0.1.3-beta', '', [
+          ['Bug Fixes', [
+            'Manual Connect Bug Fixed: "Add a Friend" IP connect no longer creates duplicate TCP connections',
+            'Hardcoded type strings eliminated — all use Protocol.Types constants'
+          ]],
+          ['Technical', [
+            'Protocol Type Unification: All 47 types unified across shared and desktop protocol.js',
+            'Build Pipeline Overhaul: Android assembleRelease, SHA256 checksums, artifact verification'
+          ]]
+        ]) +
+        vBlock('0.1.2-beta', '', [
+          ['Bug Fixes', [
+            'Desktop Bug Fixes — require(crypto) → window.crypto in sidebar-middle; PIN_MESSAGE groupId in payload'
+          ]]
+        ]) +
+        vBlock('0.1.1-beta', '', [
+          ['New Features', [
+            'Voice & Video Calls (P2P): Full WebRTC call system with incoming notification, mute/speaker controls',
+            'Group Calls (Mesh): Each participant gets their own RTCPeerConnection',
+            'Camera Toggle: On/off during calls with HSL avatar placeholder',
+            'Message Forwarding: Forward messages with attachments to any chat',
+            'Block User: Block/unblock from context menu; P2P filter drops blocked packets',
+            'Search Within a Chat: Scoped search with chatId filter, sender filter, date inputs',
+            'Export Chat History: JSON or TXT export with timestamped downloads',
+            'Save/Load Themes: Export current theme as JSON; import via file picker',
+            'Message Translate Unlocked: Always-on translate button, default enabled'
+          ]],
+          ['Bug Fixes', [
+            'Mobile Reply fromName fix, Lucide Icon null fix, Call Modal UI centering'
+          ]]
+        ]) +
+        vBlock('0.1.0-beta', '', [
+          ['Performance', [
+            'Up to 5× faster startup and rendering — selective store subscriptions, setStateBatch microtask coalescing',
+            'Startup: ~40% faster — deferred init phases, batched store IPC, lazy message loading',
+            'freezeGifImages: Canvas cache, expanded selectors, global call on Reduce Motion toggle'
+          ]],
+          ['Bug Fixes', [
+            'orbit-db://attachment/ 404 fix, selective subscriber undefined changedState fix',
+            'Message avatar click moved from re-attached events to delegated actions',
+            'loadFullChatMessages was dropping existing messages'
+          ]]
+        ]) +
+        vBlock('0.0.9.3-beta', '', [
+          ['New Features', [
+            'Group Info Panel overhaul — Add Member, Leave Group, Transfer Ownership, member search',
+            'DM context menus — Pin/Unpin, Mute, View Profile, Copy ID, Close DM',
+            'Pinned DMs — pinned state sorted first with pin icon',
+            'Close DM removes friend from DB with full cleanup',
+            'P2P Diagnostics panel — logs, errors, peer info, connection stats',
+            'Debug log buffer — captures last 500 console entries',
+            'Global Gallery type filters — All/Images/Files, view mode persisted'
+          ]],
+          ['Bug Fixes', [
+            'Gallery sidebar Files tab fix, Context menu data-action fix',
+            'P2P protocol audit — isPeerConnected key mismatch, type string fixes'
+          ]]
+        ]) +
+        vBlock('0.0.9.2-beta', '', [
+          ['New Features', [
+            'Mobile initP2P Logging — detailed debug logs throughout P2P initialization',
+            'Dev Mode DevTools — toggling loads eruda on-device inspector panel',
+            'Debug Log Buffer — scrollable log overlay when dev mode is active'
+          ]],
+          ['Bug Fixes', [
+            'Desktop sends messages to mobile (BEACON IP fallback)',
+            'Mobile peer merging (host:port→UUID dedup)'
+          ]]
+        ]) +
+        vBlock('0.0.9-beta', '', [
+          ['Bug Fixes', [
+            'Android P2P Stability: 8 Java plugin fixes + 4 JS bridge fixes',
+            'Desktop P2P Stability: 9 fixes (write queue, oversized frames, socket errors, self-beacon filter)',
+            'Desktop Socket Write Queue: per-connection queue prevents TCP byte interleaving',
+            'Mobile DB Fix: migration runs after user load to prevent identity corruption'
+          ]],
+          ['New Features', [
+            'Mobile Group Info Panel: edit name/description, avatar, invite code, pin/mute, member roles',
+            'Pinned Messages: pin/unpin in action bar; pinned section in group info; cross-platform sync',
+            'Message Search: search bar filters messages in real-time on mobile',
+            'Enhanced Message FX: particle confetti system on both platforms',
+            'Mobile Settings: Font Size, Message Animation, Auto-Reconnect, Connection Timeout',
+            'Avatar in P2P Beacons: cross-platform avatar sharing in discovery packets'
+          ]]
+        ]) +
+        vBlock('0.0.8-beta', '', [
+          ['New Features', [
+            'Rich Link Previews v2 — Open Graph metadata fetched via Electron IPC',
+            'Cross-Platform P2P: Desktop ↔ Android LAN discovery and messaging via TCP/UDP',
+            'Mobile Settings Wired: All toggles now have real behavior',
+            'Mobile Toast Overhaul: Type-based accent bar, icons, slide-in animation',
+            'Mobile Notification Sound: Web Audio beep on incoming P2P messages',
+            'Chat Background Patterns: Diagonal Stripes, Crosshatch, Circles'
+          ]],
+          ['Bug Fixes', [
+            'QR Code Fixes, MIME mapping, cache headers, media retry, attachment URL stability'
+          ]]
+        ]) +
+        vBlock('0.0.7-beta', '', [
+          ['New Features', [
+            'First-Time User Tutorial (Welcome Tour) — skippable and replayable via Settings',
+            'Link Previews — Rich URL cards rendered directly in chat messages',
+            'Activity Center Overhaul — Modern notification timeline with tabs',
+            'Shared Media Gallery — Revamped panel with Images, Files, and Links',
+            'Privacy Mode Overhaul — Attachments and thumbnails properly handled'
+          ]]
+        ]) +
+        vBlock('0.0.6-beta', '', [
+          ['Bug Fixes', [
+            'XSS fixes, CSS injection fix, network packet null-safety',
+            'Store immutability, fixed duplicate addMemberToGroup, data cleanup on removeGroup',
+            'Fixed require(crypto) in renderer, unguarded networkSend calls fixed',
+            'Consistent clipboard with fallback'
+          ]],
+          ['New Features', [
+            'Dev Mode master gate, True Dark theme, Custom theme dropdown, Seasonal theme',
+            'Custom Colors modal, Profile Frames, Animated Avatars, Message FX',
+            'Message Translate, Compact Spacing, App Zoom slider',
+            '42 decorative profile frame overlays, experimental feature badges'
+          ]]
+        ]) +
+        vBlock('0.0.5-beta', '', [
+          ['New Features', [
+            'Backup & Restore, Database Health Check, Database Repair',
+            'Unread badges, @mention highlighting, mention badges, jump to first unread',
+            'Read receipts, Edit message sync, Per-chat mute, Keyboard shortcuts',
+            'Transfer cancellation, Disk space check, File size enforcement',
+            'Group roles (Owner/Admin/Member), Group Info Panel, Join request system',
+            'E2EE encryption (ECDH + AES-256-GCM) for DMs, Privacy Mode',
+            'Network Dashboard, Do Not Disturb mode, Settings tabs redesign'
+          ]]
+        ]) +
+        vBlock('0.0.4-beta', '', [
+          ['New Features', [
+            'Group chat creation and joining, Invite code system',
+            'Pinned messages, Message reactions, Image gallery sidebar',
+            'File transfer system with TCP, Transfer progress UI'
+          ]]
+        ]) +
+        vBlock('0.0.3-beta', '', [
+          ['New Features', [
+            'LAN peer discovery via UDP broadcasting',
+            'Local echo channel for testing, Friend list with online status'
+          ]]
+        ]) +
+        vBlock('0.0.2-beta', '', [
+          ['New Features', [
+            'Early development release with core messaging infrastructure',
+            'User identity and profile system, Settings and preferences framework'
+          ]]
+        ]) +
+      '</div>';
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    var closeBtn = document.getElementById('changelog-close-mobile');
+    if (closeBtn) closeBtn.addEventListener('click', function() { overlay.remove(); });
   }
 
   var _fpsMonitorInterval = null;
@@ -2529,7 +2831,7 @@ document.addEventListener('DOMContentLoaded', function() {
       ? 'background-image:url(' + escapeHtml(u.banner) + ');background-size:cover;background-position:center;'
       : '';
 
-    var pfNum = MStore.settings.experimentalProfileFrames ? (MStore.settings.profileFrame || 0) : 0;
+    var pfNum = getProfileFrame(MStore.settings);
     var selfFrameHtml = pfNum > 0 ? '<img src="icons/frames/pfp_frame_' + pfNum + '.png" class="pfp-frame" style="position:absolute;top:-15%;left:-17%;pointer-events:none;" draggable="false" alt="">' : '';
 
     container.innerHTML =
@@ -2700,8 +3002,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var initial = friend.name ? friend.name.charAt(0).toUpperCase() : '?';
     var statusLabels = { online: 'Online', away: 'Away', busy: 'Busy', offline: 'Offline' };
     var statusColor = getStatusColor(friend.status);
-    var showFrames = MStore.settings.experimentalProfileFrames;
-    var frameNum = showFrames ? (friend.profileFrame || 0) : 0;
+    var frameNum = getProfileFrame(friend);
 
     var backdrop = document.createElement('div');
     backdrop.id = 'profile-view-overlay';
@@ -2923,11 +3224,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var statusColor = friend
         ? ({ online: 'var(--accent-success)', away: 'var(--accent-warning)', busy: 'var(--accent-danger)', offline: 'var(--text-muted)' }[friend.status] || 'var(--text-muted)')
         : 'var(--text-muted)';
-      var mPfNum = 0;
-      if (MStore.settings.experimentalProfileFrames) {
-        if (mid === myId) mPfNum = MStore.settings.profileFrame || 0;
-        else if (friend) mPfNum = friend.profileFrame || 0;
-      }
+      var mPfNum = mid === myId ? getProfileFrame(MStore.settings) : (friend ? getProfileFrame(friend) : 0);
       var mPfHtml = mPfNum > 0 ? '<img src="icons/frames/pfp_frame_' + mPfNum + '.png" class="pfp-frame" style="position:absolute;top:-15%;left:-17%;pointer-events:none;" draggable="false" alt="">' : '';
 
       var canManage = isOwner || _isGroupAdmin(group, myId);
@@ -3364,16 +3661,60 @@ document.addEventListener('DOMContentLoaded', function() {
   function playNotificationSound() {
     try {
       var ctx = new (window.AudioContext || window.webkitAudioContext)();
-      var osc = ctx.createOscillator();
+      var vol = (MStore.settings.notifyVolume != null ? MStore.settings.notifyVolume : 80) / 100;
+      var soundType = MStore.settings.notifySoundType || 'chime';
       var gain = ctx.createGain();
-      osc.connect(gain);
       gain.connect(ctx.destination);
-      osc.frequency.value = 660;
-      osc.type = 'sine';
-      gain.gain.setValueAtTime(0.15, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
-      osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + 0.2);
+      var now = ctx.currentTime;
+      if (soundType === 'pop') {
+        var pop = ctx.createOscillator();
+        pop.connect(gain);
+        pop.frequency.value = 880;
+        pop.type = 'sine';
+        gain.gain.setValueAtTime(vol * 0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+        pop.start(now);
+        pop.stop(now + 0.1);
+      } else if (soundType === 'gentle') {
+        var gen = ctx.createOscillator();
+        gen.connect(gain);
+        gen.frequency.value = 440;
+        gen.type = 'sine';
+        gain.gain.setValueAtTime(vol * 0.08, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+        gen.start(now);
+        gen.stop(now + 0.4);
+      } else if (soundType === 'classic') {
+        var c1 = ctx.createOscillator();
+        var g1 = ctx.createGain();
+        c1.connect(g1);
+        g1.connect(ctx.destination);
+        c1.frequency.value = 523;
+        c1.type = 'sine';
+        g1.gain.setValueAtTime(vol * 0.12, now);
+        g1.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+        c1.start(now);
+        c1.stop(now + 0.15);
+        var c2 = ctx.createOscillator();
+        var g2 = ctx.createGain();
+        c2.connect(g2);
+        g2.connect(ctx.destination);
+        c2.frequency.value = 659;
+        c2.type = 'sine';
+        g2.gain.setValueAtTime(vol * 0.12, now + 0.15);
+        g2.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+        c2.start(now + 0.15);
+        c2.stop(now + 0.35);
+      } else {
+        var osc = ctx.createOscillator();
+        osc.connect(gain);
+        osc.frequency.value = 660;
+        osc.type = 'sine';
+        gain.gain.setValueAtTime(vol * 0.15, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+        osc.start(now);
+        osc.stop(now + 0.25);
+      }
     } catch(e) {}
   }
 
@@ -3788,10 +4129,13 @@ document.addEventListener('DOMContentLoaded', function() {
           // Send group data to the new member
           if (window.Orbit && window.Orbit.P2P && Orbit.P2P.isAvailable()) {
             var enrichedMembers = (grp.members || []).map(function(m) {
-              var uid = typeof m === 'string' ? m : m.userId;
+              var origin = typeof m === 'string' ? { userId: m } : m;
+              var uid = origin.userId;
               var mf = MStore.friends.find(function(f) { return f.id === uid; });
-              if (mf) { m.name = m.name || mf.name; m.avatar = m.avatar || mf.avatar || null; }
-              return m;
+              if (mf) {
+                return { ...origin, name: origin.name || mf.name, username: origin.username || origin.name || mf.name, avatar: origin.avatar || mf.avatar || null };
+              }
+              return { ...origin };
             });
             var invitePkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.GROUP_CREATE, {
               groupId: activeChatId,
@@ -3800,7 +4144,8 @@ document.addEventListener('DOMContentLoaded', function() {
               ownerId: grp.ownerId,
               members: enrichedMembers,
               inviteCode: grp.inviteCode,
-              description: grp.description || ''
+              description: grp.description || '',
+              publicKey: MStore.user ? MStore.user.publicKey || null : null
             }, MStore.user ? MStore.user.id : '');
             Orbit.P2P.send(friend.id, invitePkt);
           }
@@ -3811,7 +4156,7 @@ document.addEventListener('DOMContentLoaded', function() {
               if (mid !== friend.id && mid !== (MStore.user ? MStore.user.id : '')) {
                 var memberAddPkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.GROUP_MEMBER_ADDED, {
                   groupId: activeChatId,
-                  user: { userId: friend.id, name: friend.name, username: friend.name, avatar: friend.avatar || null, role: 'member', joinedAt: new Date().toISOString() }
+                  user: { userId: friend.id, name: friend.name, username: friend.name, usertag: friend.tag || '', avatar: friend.avatar || null, status: 'online', role: 'member', joinedAt: new Date().toISOString(), publicKey: friend.publicKey || null }
                 }, MStore.user ? MStore.user.id : '');
                 Orbit.P2P.send(mid, memberAddPkt);
               }
@@ -4530,10 +4875,16 @@ document.addEventListener('DOMContentLoaded', function() {
         publicKey: u.publicKey || null,
         profileFrame: MStore.settings.profileFrame || null,
         banner: u.banner || null,
-        tcpPort: 46000,
+        tcpPort: MStore.settings.tcpPort || 46000,
         device: 'android'
       }
     };
+  }
+
+  function getProfileFrame(source) {
+    if (MStore.settings.experimentalProfileFrames !== true) return 0;
+    var val = (source && source.profileFrame != null) ? source.profileFrame : 0;
+    return Math.max(0, parseInt(val, 10) || 0);
   }
 
   /* -- Debug log buffer (visible when devMode is on) -- */
@@ -4543,11 +4894,16 @@ document.addEventListener('DOMContentLoaded', function() {
     if (typeof s !== 'string') return String(s || '');
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
+  var _logLevels = { 'None': 0, 'Error': 1, 'Info': 2, 'Debug': 3 };
   function debugLog(category, msg, data) {
+    var currentLevel = _logLevels[MStore.settings.logLevel] || 3;
+    if (currentLevel < 2) return;
+    if (currentLevel < 3 && data && typeof data === 'object' && Object.keys(data).length > 2) { data = null; }
     var entry = { t: new Date().toISOString().slice(11,23), cat: category, msg: msg, data: data || null };
     _logBuffer.push(entry);
     if (_logBuffer.length > 500) _logBuffer.shift();
-    console.log('[' + category + ']', msg, data || '');
+    if (currentLevel >= 3) console.log('[' + category + ']', msg, data || '');
+    else if (currentLevel >= 2) console.log('[' + category + ']', msg);
   }
   function showLogOverlay() {
     if (_logOverlay) { _logOverlay.style.display = 'flex'; return; }
@@ -4612,8 +4968,9 @@ document.addEventListener('DOMContentLoaded', function() {
     debugLog('P2P', 'P2P plugin available: ' + Orbit.P2P.isAvailable());
 
     // Start TCP server
-    debugLog('P2P', 'Starting TCP server on port 46000');
-    Orbit.P2P.startServer(46000).then(function(result) {
+    var tcpPort = MStore.settings.tcpPort || 46000;
+    debugLog('P2P', 'Starting TCP server on port ' + tcpPort);
+    Orbit.P2P.startServer(tcpPort).then(function(result) {
       if (result.success) {
         debugLog('P2P', 'Server started on port ' + result.port);
       } else {
@@ -4625,11 +4982,36 @@ document.addEventListener('DOMContentLoaded', function() {
     var beacon = buildBeacon();
     debugLog('P2P', 'Beacon built', { userId: u ? u.id : 'none', username: u ? u.name : 'none' });
 
-    // Start LAN discovery (sends beacon every 5s, receives beacons)
-    debugLog('P2P', 'Starting LAN discovery');
-    Orbit.P2P.startDiscovery(beacon).then(function(r) {
-      debugLog('P2P', 'Discovery start result', r);
-    });
+    // Start LAN discovery (only in auto-discovery mode)
+    if (MStore.settings.networkMode !== 'Custom IP') {
+      var udpPort = MStore.settings.udpPort || 45678;
+      debugLog('P2P', 'Starting LAN discovery on UDP port ' + udpPort);
+      Orbit.P2P.startDiscovery(beacon, udpPort).then(function(r) {
+        debugLog('P2P', 'Discovery start result', r);
+      });
+    } else {
+      debugLog('P2P', 'Custom IP mode — UDP discovery skipped');
+    }
+
+    // Start P2P heartbeat (sends PING at netKeepAlive interval)
+    if (window._heartbeatInterval) clearInterval(window._heartbeatInterval);
+    window._heartbeatPingCount = window._heartbeatPingCount || {};
+    var keepAliveSec = Math.max(10, (MStore.settings.netKeepAlive || 30));
+    window._heartbeatInterval = setInterval(function() {
+      if (!window.Orbit || !Orbit.P2P) return;
+      var conns = Orbit.P2P.getConnections();
+      conns.forEach(function(connId) {
+        var pingPkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.PING, { ts: Date.now() }, MStore.user ? MStore.user.id : '');
+        Orbit.P2P.send(connId, pingPkt).then(function(r) {
+          if (!r.success) {
+            window._heartbeatPingCount[connId] = (window._heartbeatPingCount[connId] || 0) + 1;
+            if (window._heartbeatPingCount[connId] >= 3) {
+              debugLog('P2P', 'Heartbeat: no response from ' + connId + ' after 3 pings');
+            }
+          }
+        });
+      });
+    }, keepAliveSec * 1000);
 
     // Listen for incoming connections — send identity beacon over TCP
     Orbit.P2P.onConnection(function(data) {
@@ -4645,7 +5027,9 @@ document.addEventListener('DOMContentLoaded', function() {
           status: u.status || 'online',
           bio: u.bio || '',
           publicKey: u.publicKey || null,
-          tcpPort: 46000,
+          profileFrame: MStore.settings.profileFrame || null,
+          banner: u.banner || null,
+          tcpPort: MStore.settings.tcpPort || 46000,
           device: 'android'
         }, u.id);
         debugLog('P2P', 'Sending TCP beacon to', { connectionId: data.connectionId, target: u.name });
@@ -4667,6 +5051,21 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       debugLog('P2P', 'Parsed packet type=' + packet.type + ' from=' + (packet.from || packet.senderId || '?'), packet.payload);
       if (MStore.settings.logNetworkPackets) console.log('[NET] P2P recv <-', data.connectionId, packet);
+
+      // Handle PING — respond with PONG
+      if (packet.type === Orbit.Protocol.Types.PING) {
+        var pongPkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.PONG, { ts: Date.now() }, MStore.user ? MStore.user.id : '');
+        Orbit.P2P.send(data.connectionId, pongPkt).catch(function() {});
+        return;
+      }
+
+      // Handle PONG — reset heartbeat ping count
+      if (packet.type === Orbit.Protocol.Types.PONG) {
+        if (window._heartbeatPingCount && data.connectionId) {
+          window._heartbeatPingCount[data.connectionId] = 0;
+        }
+        return;
+      }
 
       // Handle BEACON packets received over TCP (handshake)
       if (packet.type === Orbit.Protocol.Types.BEACON) {
@@ -4713,6 +5112,8 @@ document.addEventListener('DOMContentLoaded', function() {
             bio: bp.bio || '',
             ip: null,
             publicKey: bp.publicKey || null,
+            profileFrame: bp.profileFrame !== undefined ? bp.profileFrame : null,
+            banner: bp.banner || null,
             lastSeen: Date.now()
           });
         } else {
@@ -4720,6 +5121,8 @@ document.addEventListener('DOMContentLoaded', function() {
           existing.lastSeen = Date.now();
           existing.name = peerName;
           if (bp.avatar) existing.avatar = bp.avatar;
+          if (bp.profileFrame !== undefined) existing.profileFrame = bp.profileFrame;
+          if (bp.banner) existing.banner = bp.banner;
         }
         // Ensure chat exists (avoid duplicates from host:port→UUID merge)
         var chatExists = MStore.chats.find(function(c) { return c.id === peerId; });
@@ -4759,8 +5162,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
       var chat = MStore.chats.find(function(c) { return c.id === chatId; });
       if (!chat) {
-        debugLog('P2P', 'Chat not found for message from ' + msgFrom + ' chatId=' + chatId + ' type=' + packet.type, { availableChats: MStore.chats.map(function(c){return c.id;}).join(',') });
-        return;
+        var exemptGroupTypes = [Orbit.Protocol.Types.GROUP_CREATE, Orbit.Protocol.Types.GROUP_JOIN_RESPONSE];
+        if (exemptGroupTypes.indexOf(packet.type) === -1) {
+          debugLog('P2P', 'Chat not found for message from ' + msgFrom + ' chatId=' + chatId + ' type=' + packet.type, { availableChats: MStore.chats.map(function(c){return c.id;}).join(',') });
+          return;
+        }
       }
 
       if (packet.type === Orbit.Protocol.Types.MESSAGE) {
@@ -4858,6 +5264,18 @@ document.addEventListener('DOMContentLoaded', function() {
         if (tx) {
           tx.chunks[packet.payload.chunkIndex] = packet.payload.data;
           tx.received++;
+          var bwLimit = MStore.settings.netBandwidthLimit || 0;
+          if (bwLimit > 0 && tx.received < tx.total) {
+            tx._lastChunkTime = tx._lastChunkTime || 0;
+            var elapsed = Date.now() - tx._lastChunkTime;
+            var chunkSize = (packet.payload.data || '').length;
+            var minInterval = Math.max(50, (chunkSize / (bwLimit * 1024)) * 1000);
+            if (elapsed < minInterval && !tx._throttleScheduled) {
+              tx._throttleScheduled = true;
+              setTimeout(function() { if (tx) tx._throttleScheduled = false; }, Math.min(minInterval - elapsed, 1000));
+            }
+          }
+          tx._lastChunkTime = Date.now();
         }
         return;
       }
@@ -4955,10 +5373,13 @@ document.addEventListener('DOMContentLoaded', function() {
           pinnedMessages: [],
           ownerId: gc.ownerId || msgFrom,
           members: (gc.members || [{ userId: msgFrom, role: 'owner', joinedAt: new Date().toISOString() }]).map(function(m) {
-            var muid = typeof m === 'string' ? m : m.userId;
+            var origin = typeof m === 'string' ? { userId: m } : m;
+            var muid = origin.userId;
             var mf = MStore.friends.find(function(f) { return f.id === muid; });
-            if (mf) { m.name = m.name || mf.name; m.avatar = m.avatar || mf.avatar || null; }
-            return m;
+            if (mf) {
+              return { ...origin, name: origin.name || mf.name, username: origin.username || origin.name || mf.name, avatar: origin.avatar || mf.avatar || null };
+            }
+            return { ...origin };
           }),
           createdAt: gc.createdAt || new Date().toISOString()
         });
@@ -4970,6 +5391,42 @@ document.addEventListener('DOMContentLoaded', function() {
         renderChatList();
         showToast('Added group "' + gc.groupName + '"', 'info');
         console.log('[P2P] Group created:', gc.groupName);
+        return;
+      }
+
+      // Handle GROUP_JOIN_RESPONSE — received when added to a group by desktop peer
+      if (packet.type === Orbit.Protocol.Types.GROUP_JOIN_RESPONSE) {
+        var gjr = packet.payload || {};
+        if (gjr.accepted && gjr.groupId) {
+          var gjrExists = MStore.groups.find(function(g) { return g.id === gjr.groupId; });
+          if (!gjrExists) {
+            var gjrMembers = (gjr.members || []).map(function(m) {
+              var origin = typeof m === 'string' ? { userId: m } : m;
+              var muid = origin.userId;
+              var mf = MStore.friends.find(function(f) { return f.id === muid; });
+              if (mf) {
+                return { ...origin, name: origin.name || mf.name, username: origin.username || origin.name || mf.name, avatar: origin.avatar || mf.avatar || null };
+              }
+              return { ...origin };
+            });
+            MStore.groups.push({
+              id: gjr.groupId,
+              name: gjr.groupName || 'Group',
+              ownerId: msgFrom,
+              members: gjrMembers,
+              createdAt: new Date().toISOString()
+            });
+            var gjrChatExists = MStore.chats.find(function(c) { return c.id === gjr.groupId; });
+            if (!gjrChatExists) {
+              MStore.chats.push({ id: gjr.groupId, name: gjr.groupName || 'Group', lastMessage: '', lastTime: '', unread: 0 });
+            }
+            MStore.save();
+            renderChatList();
+            showToast('Joined group "' + (gjr.groupName || 'Group') + '"', 'info');
+          }
+        } else {
+          showToast('Join request denied', 'info');
+        }
         return;
       }
 
@@ -5058,10 +5515,10 @@ document.addEventListener('DOMContentLoaded', function() {
             gmGrp.members = gmGrp.members || [];
             var enrichedNewMember = JSON.parse(JSON.stringify(newMember));
             var nmf = MStore.friends.find(function(f) { return f.id === (newMember.userId || newMember.id); });
-            if (nmf) { enrichedNewMember.name = enrichedNewMember.name || nmf.name; enrichedNewMember.avatar = enrichedNewMember.avatar || nmf.avatar || null; }
+            if (nmf) { enrichedNewMember.name = enrichedNewMember.name || nmf.name; enrichedNewMember.username = enrichedNewMember.username || enrichedNewMember.name; enrichedNewMember.avatar = enrichedNewMember.avatar || nmf.avatar || null; }
             gmGrp.members.push(enrichedNewMember);
             MStore.save();
-            showToast(enrichedNewMember.name || enrichedNewMember.username || 'Someone' + ' was added to ' + gmGrp.name || 'group', 'info');
+            showToast((enrichedNewMember.name || enrichedNewMember.username || 'Someone') + ' was added to ' + (gmGrp.name || 'group'), 'info');
             if (activeChatId === gmGroupId) {
               var hi = document.getElementById('chat-header-info');
               if (hi) {
@@ -5105,15 +5562,18 @@ document.addEventListener('DOMContentLoaded', function() {
         // Auto-reconnect if enabled
         if (MStore.settings.netAutoReconnect !== false && friend.ip) {
           debugLog('P2P', 'Auto-reconnect scheduled in 5s for ' + friend.name);
+          var reconnectDelay = (MStore.settings.netReconnectInterval || 10) * 1000;
           setTimeout(function() {
             if (friend.status === 'offline') {
-              debugLog('P2P', 'Auto-reconnecting to ' + friend.name + ' at ' + friend.ip);
-              Orbit.P2P.connect(friend.ip, 46000, friend.id).then(function(r) {
+              var tcpPort = MStore.settings.tcpPort || 46000;
+              debugLog('P2P', 'Auto-reconnecting to ' + friend.name + ' at ' + friend.ip + ':' + tcpPort + ' (delay=' + (reconnectDelay / 1000) + 's)');
+              var timeoutMs = (MStore.settings.netTimeout || 30) * 1000;
+              Orbit.P2P.connect(friend.ip, tcpPort, friend.id, timeoutMs).then(function(r) {
                 if (r.success) debugLog('P2P', 'Auto-reconnect OK', { name: friend.name, connectionId: r.connectionId });
                 else debugLog('P2P', 'Auto-reconnect failed for ' + friend.name, { error: r.error });
               });
             }
-          }, 5000);
+          }, reconnectDelay);
         }
       } else {
         debugLog('P2P', 'No friend found for disconnected ID', { id: data.connectionId });
@@ -5365,6 +5825,7 @@ document.addEventListener('DOMContentLoaded', function() {
   debugLog('P2P', 'App initialization starting');
   initP2P();
   migrateOldData();
+  MStore.load(); // reload in case migration just ran for first time
   initEmojiPicker();
 
   // Process static HTML icons (nav, headers, etc.)

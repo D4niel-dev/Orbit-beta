@@ -81,6 +81,8 @@ class Store {
         experimentalProfileFrames: false,
         experimentalMessageTranslate: true,
         messageTranslate: true,
+        translateTargetLang: '',
+        autoDetectSource: true,
         experimentalCompactSpacing: false,
         experimentalFpsMonitor: false,
         experimentalDevOverlay: false,
@@ -413,21 +415,29 @@ class Store {
       const { groupId, groupName, ownerId, members } = packet.payload;
       const existingGroup = this.state.groups.find(g => g.groupId === groupId);
       if (!existingGroup) {
-        if (members) {
-          for (var mi = 0; mi < members.length; mi++) {
-            if (members[mi].publicKey) {
-              this.setPeerPublicKey(members[mi].userId, members[mi].publicKey);
-            }
+        var enrichedMembers = (members || []).map(function(m) {
+          var friend = window.store ? window.store.getState().friends.find(function(f) { return f.userId === m.userId; }) : null;
+          if (friend) {
+            return { ...m, username: m.username || friend.username, avatar: m.avatar || friend.avatar || null, usertag: m.usertag || friend.usertag || '', publicKey: m.publicKey || friend.publicKey || null };
+          }
+          return m;
+        });
+        for (var mi = 0; mi < enrichedMembers.length; mi++) {
+          if (enrichedMembers[mi].publicKey) {
+            this.setPeerPublicKey(enrichedMembers[mi].userId, enrichedMembers[mi].publicKey);
           }
         }
         const group = {
           groupId,
           groupName,
           ownerId,
-          members: members || [],
+          members: enrichedMembers,
           createdAt: packet.timestamp || new Date().toISOString()
         };
         this.addGroup(group);
+        var msgs = { ...this.state.messages };
+        if (!msgs[groupId]) msgs[groupId] = [];
+        this.setState({ messages: msgs });
         if (window.Toast) window.Toast.show('New Group', 'You were added to ' + groupName);
         if (document.hidden && window.orbitAPI && window.orbitAPI.showNotification) {
           window.orbitAPI.showNotification('New Group', 'You were added to ' + groupName);
@@ -437,10 +447,24 @@ class Store {
     }
 
     if (packet.type === window.Protocol.Types.GROUP_INVITE) {
-      const { groupId, groupName, inviter } = packet.payload;
-      if (window.Toast) window.Toast.show('Group Invite', inviter + ' invited you to ' + groupName);
+      const { groupId, groupName, inviter, members } = packet.payload;
+      var inviteGroup = this.state.groups.find(function(g) { return g.groupId === groupId; });
+      if (!inviteGroup && groupId) {
+        var group = {
+          groupId: groupId,
+          groupName: groupName || 'Invited Group',
+          ownerId: packet.from,
+          members: members || [],
+          createdAt: new Date().toISOString()
+        };
+        this.addGroup(group);
+        var msgs = { ...this.state.messages };
+        if (!msgs[groupId]) msgs[groupId] = [];
+        this.setState({ messages: msgs });
+      }
+      if (window.Toast) window.Toast.show('Group Invite', inviter + ' invited you to ' + (groupName || 'a group'));
       if (document.hidden && window.orbitAPI && window.orbitAPI.showNotification) {
-        window.orbitAPI.showNotification('Group Invite', inviter + ' invited you to ' + groupName);
+        window.orbitAPI.showNotification('Group Invite', inviter + ' invited you to ' + (groupName || 'a group'));
       }
       return;
     }
@@ -487,9 +511,17 @@ class Store {
       var leaverGroup = this.state.groups.find(function(g) { return g.groupId === groupId; });
       if (leaverGroup) {
         var leaver = leaverGroup.members ? leaverGroup.members.find(function(m) { return m.userId === userId; }) : null;
-        this.removeGroupMember(groupId, userId);
+        var isSelf = userId === this.state.currentUser.userId;
+        if (isSelf) {
+          this.removeGroup(groupId);
+        } else {
+          this.removeGroupMember(groupId, userId);
+        }
         if (window.Toast) {
-          window.Toast.show('Member Left', (leaver ? leaver.username : 'Someone') + ' left ' + leaverGroup.groupName);
+          window.Toast.show(isSelf ? 'Left Group' : 'Member Left', (isSelf ? 'You left ' : (leaver ? leaver.username : 'Someone') + ' left ') + leaverGroup.groupName);
+          if (isSelf && this.state.activeChatId === groupId) {
+            this.setState({ activeChatId: null });
+          }
         }
       }
       return;
@@ -499,11 +531,21 @@ class Store {
       const { groupId, user } = packet.payload;
       if (groupId && user && user.userId) {
         this.addMemberToGroup(groupId, user);
+        // Update existing member fields if they changed (avatar, usertag, status, publicKey)
+        var gmGroup = this.state.groups.find(function(gg) { return gg.groupId === groupId; });
+        if (gmGroup && gmGroup.members) {
+          var existingMember = gmGroup.members.find(function(m) { return m.userId === user.userId; });
+          if (existingMember) {
+            if (user.avatar !== undefined) existingMember.avatar = user.avatar;
+            if (user.usertag !== undefined) existingMember.usertag = user.usertag;
+            if (user.status !== undefined) existingMember.status = user.status;
+            if (user.publicKey !== undefined) existingMember.publicKey = user.publicKey;
+          }
+        }
         if (user.publicKey) {
           this.setPeerPublicKey(user.userId, user.publicKey);
         }
-        var g = this.state.groups.find(function(gg) { return gg.groupId === groupId; });
-        if (window.Toast) window.Toast.show('New Member', (user.username || 'Someone') + ' was added to ' + (g ? g.groupName : 'group'));
+        if (window.Toast) window.Toast.show('New Member', (user.username || 'Someone') + ' was added to ' + (gmGroup ? gmGroup.groupName : 'group'));
       }
       return;
     }
@@ -511,11 +553,16 @@ class Store {
     if (packet.type === window.Protocol.Types.GROUP_OWNER_TRANSFER) {
       const { groupId, newOwnerId } = packet.payload;
       if (groupId && newOwnerId) {
-        this.updateGroupField(groupId, 'ownerId', newOwnerId);
         var tGroup = this.state.groups.find(function(gg) { return gg.groupId === groupId; });
-        if (tGroup && window.Toast) {
-          var newOwner = tGroup.members ? tGroup.members.find(function(m) { return m.userId === newOwnerId; }) : null;
-          window.Toast.show('Ownership Transferred', 'Group ownership transferred to ' + (newOwner ? newOwner.username : 'someone'));
+        if (tGroup) {
+          var oldOwnerId = tGroup.ownerId;
+          this.updateGroupField(groupId, 'ownerId', newOwnerId);
+          if (oldOwnerId) this.setMemberRole(groupId, oldOwnerId, 'member');
+          this.setMemberRole(groupId, newOwnerId, 'owner');
+          if (window.Toast) {
+            var newOwner = tGroup.members ? tGroup.members.find(function(m) { return m.userId === newOwnerId; }) : null;
+            window.Toast.show('Ownership Transferred', 'Group ownership transferred to ' + (newOwner ? newOwner.username : 'someone'));
+          }
         }
       }
       return;
@@ -623,15 +670,15 @@ class Store {
       // Handle edit/delete sync
       const payload = packet.payload;
       if (payload && payload.action === 'delete' && payload.msgId) {
-        this.deleteMessage(packet.from, payload.msgId);
+        this.deleteMessage(payload.chatId || packet.from, payload.msgId);
       }
     } else if (packet.type === window.Protocol.Types.PIN_MESSAGE) {
-      const { msgId } = packet.payload;
-      this.pinMessage(packet.from, msgId);
+      const { msgId, groupId } = packet.payload;
+      this.pinMessage(groupId || packet.from, msgId);
       return;
     } else if (packet.type === window.Protocol.Types.UNPIN_MESSAGE) {
-      const { msgId } = packet.payload;
-      this.unpinMessage(packet.from, msgId);
+      const { msgId, groupId } = packet.payload;
+      this.unpinMessage(groupId || packet.from, msgId);
       return;
     } else if (packet.type === window.Protocol.Types.MESSAGE_EDIT) {
       const { msgId, newText } = packet.payload;
@@ -941,10 +988,8 @@ class Store {
       }
     }
 
-    // Persist groups in SQLite when they change
-    if (window.orbitAPI && newState.groups) {
-      newState.groups.forEach(g => window.orbitAPI.dbSaveGroup(g));
-    }
+    // Groups are persisted individually by each mutating method (addGroup, addMemberToGroup, etc.)
+    // No bulk save needed here to avoid data corruption from partial groups arrays.
 
     if (window.orbitAPI && (newState.activeTab !== undefined || newState.activeChatId !== undefined)) {
        window.orbitAPI.dbSetSetting('uiState', {
