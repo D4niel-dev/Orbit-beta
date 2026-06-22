@@ -246,6 +246,7 @@ window.ChatPanel = {
         var s = window.store.getState();
         var g = s.groups.find(function(g) { return g.groupId === chatId; });
         if (g) {
+          payload.chatId = chatId;
           (g.members || []).forEach(function(m) {
             if (m.userId !== s.currentUser.userId) {
               window.orbitAPI.networkSend(m.userId, m.ip || '', type, payload);
@@ -1897,6 +1898,7 @@ window.ChatPanel = {
       var s = window.store.getState();
       var g = s.groups.find(function(g) { return g.groupId === targetId; });
       if (g) {
+        payload.chatId = targetId;
         (g.members || []).forEach(function(m) {
           if (m.userId !== s.currentUser.userId) {
             window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.MESSAGE, payload);
@@ -1941,11 +1943,13 @@ window.ChatPanel = {
   },
 
   async sendMessage(text) {
+    if (this._sending) return;
+    this._sending = true;
     var state = window.store.getState();
     var activeChatId = state.activeChatId;
-    if (!activeChatId) return;
+    if (!activeChatId) { this._sending = false; return; }
 
-    if (!text && this.stagedFiles.length === 0) return;
+    if (!text && this.stagedFiles.length === 0) { this._sending = false; return; }
 
     const friend = state.friends.find(function(f) { return f.userId === activeChatId; });
     const activeGroup = state.groups.find(function(g) { return g.groupId === activeChatId; });
@@ -1994,12 +1998,15 @@ window.ChatPanel = {
     // Handle edit separately (text-only)
     if (this.editingMsg) {
       const editId = this.editingMsg.id;
-      sendToAll(window.Protocol.Types.MESSAGE_EDIT, { msgId: editId, newText: text || '' });
+      var editPayload = { msgId: editId, newText: text || '' };
+      if (isGroup) editPayload.chatId = activeChatId;
+      sendToAll(window.Protocol.Types.MESSAGE_EDIT, editPayload);
       window.store.editMessage(activeChatId, editId, text || '');
       this.editingMsg = null;
       var input = document.getElementById('chat-input');
       if (input) input.value = '';
       window.store.notify();
+      this._sending = false;
       return;
     }
 
@@ -2204,6 +2211,7 @@ window.ChatPanel = {
     var input = document.getElementById('chat-input');
     if (input) input.value = '';
     window.store.notify();
+    this._sending = false;
   },
 
   _injectMessageParticles() {

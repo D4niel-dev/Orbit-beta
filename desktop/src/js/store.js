@@ -382,8 +382,12 @@ class Store {
       if (g.groupId !== groupId) return g;
       const members = g.members || [];
       if (!members.find(m => m.userId === user.userId)) {
-        if (window.orbitAPI) window.orbitAPI.dbAddGroupMember(groupId, user);
-        return { ...g, members: [...members, { ...user, joinedAt: user.joinedAt || new Date().toISOString() }] };
+        var friend = this.state.friends.find(function(f) { return f.userId === user.userId; });
+        var enrichedUser = friend
+          ? { ...user, username: user.username || friend.username, avatar: user.avatar || friend.avatar || null, usertag: user.usertag || friend.usertag || '', publicKey: user.publicKey || friend.publicKey || null }
+          : { ...user, avatar: user.avatar || null };
+        if (window.orbitAPI) window.orbitAPI.dbAddGroupMember(groupId, enrichedUser);
+        return { ...g, members: [...members, { ...enrichedUser, joinedAt: user.joinedAt || new Date().toISOString() }] };
       }
       return g;
     });
@@ -412,7 +416,7 @@ class Store {
       return;
     }
     if (packet.type === window.Protocol.Types.GROUP_CREATE) {
-      const { groupId, groupName, ownerId, members } = packet.payload;
+      const { groupId, groupName, ownerId, members, groupAvatar } = packet.payload;
       const existingGroup = this.state.groups.find(g => g.groupId === groupId);
       if (!existingGroup) {
         var enrichedMembers = (members || []).map(function(m) {
@@ -431,6 +435,7 @@ class Store {
           groupId,
           groupName,
           ownerId,
+          avatarDataUrl: groupAvatar || null,
           members: enrichedMembers,
           createdAt: packet.timestamp || new Date().toISOString()
         };
@@ -447,13 +452,14 @@ class Store {
     }
 
     if (packet.type === window.Protocol.Types.GROUP_INVITE) {
-      const { groupId, groupName, inviter, members } = packet.payload;
+      const { groupId, groupName, inviter, members, groupAvatar } = packet.payload;
       var inviteGroup = this.state.groups.find(function(g) { return g.groupId === groupId; });
       if (!inviteGroup && groupId) {
         var group = {
           groupId: groupId,
           groupName: groupName || 'Invited Group',
           ownerId: packet.from,
+          avatarDataUrl: groupAvatar || null,
           members: members || [],
           createdAt: new Date().toISOString()
         };
@@ -474,7 +480,7 @@ class Store {
     }
 
     if (packet.type === window.Protocol.Types.GROUP_JOIN_RESPONSE) {
-      const { groupId, groupName, accepted, members } = packet.payload;
+      const { groupId, groupName, groupAvatar, accepted, members } = packet.payload;
       if (accepted && groupId) {
         var existing = this.state.groups.find(function(g) { return g.groupId === groupId; });
         if (!existing) {
@@ -491,6 +497,7 @@ class Store {
             groupId: groupId,
             groupName: groupName || 'Group',
             ownerId: packet.from,
+            avatarDataUrl: groupAvatar || null,
             members: members || [],
             createdAt: new Date().toISOString()
           };
@@ -531,17 +538,30 @@ class Store {
       const { groupId, user } = packet.payload;
       if (groupId && user && user.userId) {
         this.addMemberToGroup(groupId, user);
-        // Update existing member fields if they changed (avatar, usertag, status, publicKey)
         var gmGroup = this.state.groups.find(function(gg) { return gg.groupId === groupId; });
-        if (gmGroup && gmGroup.members) {
-          var existingMember = gmGroup.members.find(function(m) { return m.userId === user.userId; });
-          if (existingMember) {
-            if (user.avatar !== undefined) existingMember.avatar = user.avatar;
-            if (user.usertag !== undefined) existingMember.usertag = user.usertag;
-            if (user.status !== undefined) existingMember.status = user.status;
-            if (user.publicKey !== undefined) existingMember.publicKey = user.publicKey;
-          }
+        if (gmGroup && gmGroup.members && gmGroup.members.some(function(m) { return m.userId === user.userId; })) {
+          var updatedGroups = this.state.groups.map(function(gg) {
+            if (gg.groupId === groupId && gg.members) {
+              return {
+                ...gg,
+                members: gg.members.map(function(m) {
+                  if (m.userId === user.userId) {
+                    var updated = { ...m };
+                    if (user.avatar !== undefined) updated.avatar = user.avatar;
+                    if (user.usertag !== undefined) updated.usertag = user.usertag;
+                    if (user.status !== undefined) updated.status = user.status;
+                    if (user.publicKey !== undefined) updated.publicKey = user.publicKey;
+                    return updated;
+                  }
+                  return m;
+                })
+              };
+            }
+            return gg;
+          });
+          this.setState({ groups: updatedGroups });
         }
+        gmGroup = this.state.groups.find(function(gg) { return gg.groupId === groupId; });
         if (user.publicKey) {
           this.setPeerPublicKey(user.userId, user.publicKey);
         }
@@ -599,7 +619,7 @@ class Store {
     // Basic message handling logic
     if (packet.type === window.Protocol.Types.MESSAGE) {
       if (window._p2pRecvCount !== undefined) window._p2pRecvCount++;
-      const fromId = packet.payload.chatId || packet.from;
+      const fromId = packet.payload.chatId || packet.payload.groupId || packet.from;
       var text = packet.payload.text || (typeof packet.payload === 'string' ? packet.payload : '');
 
       // Decrypt E2EE messages
@@ -681,11 +701,11 @@ class Store {
       this.unpinMessage(groupId || packet.from, msgId);
       return;
     } else if (packet.type === window.Protocol.Types.MESSAGE_EDIT) {
-      const { msgId, newText } = packet.payload;
-      this.editMessage(packet.from, msgId, newText);
+      const { msgId, newText, chatId } = packet.payload;
+      this.editMessage(chatId || packet.from, msgId, newText);
     } else if (packet.type === window.Protocol.Types.MESSAGE_DELETE) {
-      const { msgId } = packet.payload;
-      this.deleteMessage(packet.from, msgId);
+      const { msgId, chatId } = packet.payload;
+      this.deleteMessage(chatId || packet.from, msgId);
     } else if (packet.type === window.Protocol.Types.READ) {
       const { chatId, lastReadMsgId } = packet.payload;
       if (chatId && lastReadMsgId) {
@@ -744,6 +764,7 @@ class Store {
     const MAX_MSGS = 500;
     const msgs = { ...this.state.messages };
     if (!msgs[chatId]) msgs[chatId] = [];
+    if (messageObj.id && msgs[chatId].some(function(m) { return m.id === messageObj.id; })) return;
     msgs[chatId] = [...msgs[chatId], messageObj];
     if (msgs[chatId].length > MAX_MSGS) msgs[chatId] = msgs[chatId].slice(-MAX_MSGS);
 

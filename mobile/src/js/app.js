@@ -5412,13 +5412,14 @@ document.addEventListener('DOMContentLoaded', function() {
             MStore.groups.push({
               id: gjr.groupId,
               name: gjr.groupName || 'Group',
+              avatar: gjr.groupAvatar || null,
               ownerId: msgFrom,
               members: gjrMembers,
               createdAt: new Date().toISOString()
             });
             var gjrChatExists = MStore.chats.find(function(c) { return c.id === gjr.groupId; });
             if (!gjrChatExists) {
-              MStore.chats.push({ id: gjr.groupId, name: gjr.groupName || 'Group', lastMessage: '', lastTime: '', unread: 0 });
+              MStore.chats.push({ id: gjr.groupId, name: gjr.groupName || 'Group', avatar: gjr.groupAvatar || null, lastMessage: '', lastTime: '', unread: 0 });
             }
             MStore.save();
             renderChatList();

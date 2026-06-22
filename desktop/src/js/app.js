@@ -575,6 +575,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   window.orbitAPI.networkSend(joinPayload.userId, requester.ip || '', window.Protocol.Types.GROUP_JOIN_RESPONSE, {
                     groupId: myGroup.groupId,
                     groupName: myGroup.groupName,
+                    groupAvatar: myGroup.avatarDataUrl || null,
                     accepted: true,
                     members: [...(myGroup.members || []), newMember]
                   });
@@ -606,6 +607,7 @@ document.addEventListener('DOMContentLoaded', () => {
               window.orbitAPI.networkSend(joinPayload.userId, requester.ip || '', window.Protocol.Types.GROUP_JOIN_RESPONSE, {
                 groupId: myGroup.groupId,
                 groupName: myGroup.groupName,
+                groupAvatar: myGroup.avatarDataUrl || null,
                 accepted: true,
                 members: [...(myGroup.members || []), newMember]
               });

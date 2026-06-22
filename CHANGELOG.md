@@ -57,6 +57,11 @@
 
 ### Bug Fixes
 
+- **Forward/Edit/Delete routing fixed — group messages no longer arrive in DMs:** `doForward()` was missing `payload.chatId` for group targets; `MESSAGE_EDIT` and `MESSAGE_DELETE` payloads also lacked `chatId`. Receivers routed these to `packet.from` (a user DM) instead of the group. All three now include `chatId` for groups, plus store.js handler falls back to `payload.groupId` for broader compatibility.
+- **Duplicate message sending guard:** Added `this._sending` lock in `sendMessage()` to prevent concurrent sends. Added msgId deduplication in `addMessage()` — if a message with the same id already exists, the duplicate is silently dropped.
+- **GROUP_MEMBER_ADDED immutable state:** Replaced direct object mutation (which bypassed `setState` and caused stale reads) with proper `setState()` using `map()`.
+- **addMemberToGroup avatar enrichment:** New members now have their avatar cross-referenced from the friends list when the incoming packet lacks one (common in cross-platform flows).
+- **Group avatar sync (desktop↔mobile):** Desktop avatar upload now stores `avatarDataUrl` alongside `avatarPath`; desktop GROUP_CREATE and GROUP_JOIN_RESPONSE payloads include `groupAvatar`; desktop store.js handlers read `groupAvatar` from incoming packets; mobile GROUP_JOIN_RESPONSE handler now reads `groupAvatar` and stores it; desktop renderers fall back to `avatarDataUrl` when `avatarPath` is not set.
 - **Desktop blank window — syntax error:** Missing `)` on line 777 of `app.js` in the MIME type ternary chain (`'image/jpeg'));` → `'image/jpeg')));`). Mismatched parenthesis caused the entire renderer JavaScript to fail silently.
 - **Mobile auto-reconnect now reads user settings** (was hardcoded 5s).
 - **Mobile PING/PONG heartbeat now uses `netKeepAlive` from settings** (was not implemented).
@@ -82,6 +87,7 @@
 - **profileFrame Helper:** `getProfileFrame(source)` — returns `Math.max(0, parseInt(val, 10) || 0)`. Returns `0` when experimental toggle is off or source is null/invalid. Used in all 7 render locations.
 - **Bandwidth Throttling:** `FILE_CHUNK` calculates minimum inter-chunk interval from `chunkSize / (bwLimit * 1024) * 1000` ms; uses `setTimeout` to pace. Only active when `netBandwidthLimit > 0`.
 - **Network Settings 3-Layer Chain:** JS settings → p2p-mobile.js bridge parameters → native Java plugin method args. Settings actually affect socket/discovery behavior.
+- **Avatar Data URL Transport:** Group avatar data URLs stored as `avatarDataUrl` alongside file-based `avatarPath`. Desktop GROUP_CREATE/GROUP_JOIN_RESPONSE payloads carry `groupAvatar` field; receivers store as `avatarDataUrl` (desktop) or `avatar` (mobile). Desktop renderers fall back to `avatarDataUrl` when `avatarPath` is unset.
 
 ## v0.1.3-beta
 - **Native Android System Notifications:** Messages now show as real system notifications when app is backgrounded (requires POST_NOTIFICATIONS permission).

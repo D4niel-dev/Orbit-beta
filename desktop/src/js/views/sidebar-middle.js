@@ -135,6 +135,8 @@ window.SidebarMiddle = {
         var displayMembers = [];
         if (group.avatarPath) {
           avatarHtml = '<img src="orbit-avatar://' + window.Sanitize.escapeHtml(group.groupId) + '?t=' + (group.avatarUpdatedAt || 0) + '" style="width:40px;height:40px;border-radius:12px;object-fit:cover;">';
+        } else if (group.avatarDataUrl) {
+          avatarHtml = '<img src="' + window.Sanitize.escapeHtml(group.avatarDataUrl) + '" style="width:40px;height:40px;border-radius:12px;object-fit:cover;">';
         } else {
           displayMembers = members.slice(0, 3);
           displayMembers.forEach(function(m, idx) {
@@ -145,7 +147,7 @@ window.SidebarMiddle = {
             avatarHtml += memberAvatar;
           });
         }
-        var avatarWidth = group.avatarPath ? 40 : Math.min(displayMembers.length, 3) * 14 + 28;
+        var avatarWidth = (group.avatarPath || group.avatarDataUrl) ? 40 : Math.min(displayMembers.length, 3) * 14 + 28;
 
         var pinIcon = group.pinned ? '<i data-lucide="pin" style="width:12px;height:12px;color:var(--accent-primary);margin-left:4px;"></i>' : '';
 
@@ -337,6 +339,7 @@ window.SidebarMiddle = {
                 groupId: groupId,
                 groupName: groupName,
                 ownerId: state.currentUser.userId,
+                groupAvatar: state.currentUser.avatar || null,
                 members: allMembers
               });
             }
@@ -1041,7 +1044,7 @@ window.SidebarMiddle = {
             });
             var membersForNew = group.members.map(function(m) { return { userId: m.userId, username: m.username, usertag: m.usertag, avatar: m.avatar, status: m.status, role: m.role, publicKey: m.publicKey || null }; });
             membersForNew.push({ userId: myId, username: state2.currentUser.username, usertag: state2.currentUser.usertag || state2.currentUser.userTag || '', avatar: state2.currentUser.avatar || '', status: 'online', role: isOwner ? 'owner' : 'admin', publicKey: state2.currentUser.publicKey || null });
-            window.orbitAPI.networkSend(friend.userId, friend.ip || '', window.Protocol.Types.GROUP_JOIN_RESPONSE, { groupId: groupId, groupName: group.groupName, accepted: true, members: membersForNew });
+            window.orbitAPI.networkSend(friend.userId, friend.ip || '', window.Protocol.Types.GROUP_JOIN_RESPONSE, { groupId: groupId, groupName: group.groupName, groupAvatar: group.avatarDataUrl || null, accepted: true, members: membersForNew });
           }
           scopeEl.remove();
           window.SidebarMiddle.showGroupInfo(groupId);
@@ -1052,11 +1055,15 @@ window.SidebarMiddle = {
 
     var avatarSection = group.avatarPath
       ? '<img src="orbit-avatar://' + window.Sanitize.escapeHtml(groupId) + '?t=' + (group.avatarUpdatedAt || 0) + '" id="group-info-avatar-img" style="width:86px;height:86px;border-radius:18px;object-fit:cover;cursor:pointer;border:1px solid var(--border-subtle);box-shadow:var(--shadow-sm);">'
-      : '<div id="group-info-avatar-img" style="width:86px;height:86px;border-radius:18px;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:30px;color:white;font-weight:700;cursor:pointer;border:1px solid var(--border-subtle);box-shadow:var(--shadow-sm);">' + (group.groupName || 'G').charAt(0).toUpperCase() + '</div>';
+      : group.avatarDataUrl
+        ? '<img src="' + window.Sanitize.escapeHtml(group.avatarDataUrl) + '" id="group-info-avatar-img" style="width:86px;height:86px;border-radius:18px;object-fit:cover;cursor:pointer;border:1px solid var(--border-subtle);box-shadow:var(--shadow-sm);">'
+        : '<div id="group-info-avatar-img" style="width:86px;height:86px;border-radius:18px;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:30px;color:white;font-weight:700;cursor:pointer;border:1px solid var(--border-subtle);box-shadow:var(--shadow-sm);">' + (group.groupName || 'G').charAt(0).toUpperCase() + '</div>';
 
     var previewAvatarSection = group.avatarPath
       ? '<img src="orbit-avatar://' + window.Sanitize.escapeHtml(groupId) + '?t=' + (group.avatarUpdatedAt || 0) + '" id="group-info-preview-avatar-img" style="position:absolute;left:24px;bottom:-38px;width:76px;height:76px;border-radius:18px;object-fit:cover;border:4px solid var(--bg-surface);">'
-      : '<div style="position:absolute;left:24px;bottom:-38px;width:76px;height:76px;border-radius:18px;background:var(--bg-surface);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:var(--text-primary);border:4px solid var(--bg-surface);">' + groupInitial + '</div>';
+      : group.avatarDataUrl
+        ? '<img src="' + window.Sanitize.escapeHtml(group.avatarDataUrl) + '" id="group-info-preview-avatar-img" style="position:absolute;left:24px;bottom:-38px;width:76px;height:76px;border-radius:18px;object-fit:cover;border:4px solid var(--bg-surface);">'
+        : '<div style="position:absolute;left:24px;bottom:-38px;width:76px;height:76px;border-radius:18px;background:var(--bg-surface);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:var(--text-primary);border:4px solid var(--bg-surface);">' + groupInitial + '</div>';
 
     var createdDate = group.createdAt ? new Date(group.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'Unknown';
     var groupInitial = (group.groupName || 'G').charAt(0).toUpperCase();
@@ -1326,8 +1333,10 @@ window.SidebarMiddle = {
           var ts = Date.now();
           var dataParts = ev.target.result.split(',');
           if (dataParts.length < 2) { if (window.Toast) window.Toast.show('Error', 'Invalid image data'); return; }
+          var fullDataUrl = ev.target.result;
           window.orbitAPI.saveAvatar(groupId, dataParts[1]).then(function(path) {
             window.store.updateGroupField(groupId, 'avatarPath', path);
+            window.store.updateGroupField(groupId, 'avatarDataUrl', fullDataUrl);
             window.store.updateGroupField(groupId, 'avatarUpdatedAt', ts);
             var newSrc = 'orbit-avatar://' + groupId + '?t=' + ts;
             var img = document.getElementById('group-info-avatar-img');

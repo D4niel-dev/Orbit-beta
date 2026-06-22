@@ -29,7 +29,8 @@ window.Changelog = {
             'Mobile Translation: Target language select (30 languages), auto-detect toggle, moved to Chat section',
             'Mobile Network Settings: Reconnect interval, keep-alive select, WebRTC fallback, log level, bandwidth limit',
             'Mobile DB Migration Fixed: Runs before MStore.load() — old unprefixed localStorage keys now picked up correctly',
-            'Mobile What\'s New: Full changelog modal in About tab (v0.0.2 through v0.1.4)'
+            'Mobile What\'s New: Full changelog modal in About tab (v0.0.2 through v0.1.4)',
+            'Cross-Platform Avatar Sync: Group avatar data URL stored on upload, sent in GROUP_CREATE/GROUP_JOIN_RESPONSE, rendered on desktop (avatarDataUrl fallback) and mobile (GROUP_JOIN_RESPONSE avatar field)'
           ]],
           ['Bug Fixes', [
             'Desktop blank window fixed — missing closing paren in app.js:777 ternary chain crashed entire renderer',
@@ -42,7 +43,14 @@ window.Changelog = {
             'profileFrame value 0 stored correctly (TCP beacon was converting 0→null via ||)',
             'Desktop group sync fixes: GROUP_OWNER_TRANSFER role, GROUP_LEAVE cleanup, GROUP_INVITE init, PIN/UNPIN routing',
             'Desktop write-queue key collision fixed (key + "" → "" + key operator precedence)',
-            'Desktop reconnect .catch() added, counter resets on data, duplicate connection protection'
+            'Desktop reconnect .catch() added, counter resets on data, duplicate connection protection',
+            'Forward to group fixed — missing chatId in payload caused group forwards to arrive in DMs',
+            'Message edit/delete routing fixed — MESSAGE_EDIT and MESSAGE_DELETE now include chatId for group targets',
+            'Duplicate message guard — _sending lock prevents concurrent sendMessage calls, msgId dedup in addMessage',
+            'GROUP_MEMBER_ADDED immutable state — replaced direct mutation with proper setState',
+            'addMemberToGroup avatar enrichment — member avatar now cross-referenced from friends list',
+            'Desktop GROUP_CREATE handler reads groupAvatar from mobile packets, stores as avatarDataUrl',
+            'Mobile GROUP_JOIN_RESPONSE handler reads groupAvatar and stores on group + chat entry'
           ]]
         ]) +
         versionBlock('0.1.3-beta', '', [
