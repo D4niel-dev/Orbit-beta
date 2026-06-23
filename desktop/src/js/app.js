@@ -335,13 +335,13 @@ document.addEventListener('DOMContentLoaded', () => {
       var state = window.store.getState();
       var now = Date.now();
       var updated = state.friends.map(function(f) {
-        if (f.status === 'online' && f.lastSeen && (now - f.lastSeen) > 180000) {
+        if (f.userId !== 'local-echo' && f.status === 'online' && f.lastSeen && now - f.lastSeen > 45000) {
           return { ...f, status: 'offline' };
         }
         return f;
       });
       window.store.setState({ friends: updated });
-    }, perfMode ? 60000 : 30000);
+    }, perfMode ? 60000 : 15000);
   };
 
   // Freeze GIF images when reduce-motion or performance mode is enabled
@@ -475,16 +475,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ---- Phase 2 (next frame): Identity, network, views ----
-  setTimeout(function() {
-    (function() {
-      var state = window.store.getState();
-      var pf = state.settings && state.settings.profileFrame;
-      if (pf && state.currentUser) {
-        var updated = { ...state.currentUser, profileFrame: pf };
-        window.store.setState({ currentUser: updated });
-      }
-    })();
-
+  function startPhase2() {
+    setTimeout(function() {
     window.store.subscribe((state, changedState) => {
       if (!changedState || 'settings' in changedState) applySettings(state.settings);
     });
@@ -525,7 +517,26 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    if (window.Identity) window.Identity.init();
+    if (window.Identity) {
+      window.Identity.init();
+      // Filter data for the current user (per-account message isolation)
+      if (window.store) {
+        window.store.reloadDataForCurrentUser();
+        window.store.trackChatForCurrentUser('local-echo');
+      }
+    }
+
+    // Profile frame migration — runs after Identity.init() so currentUser is real
+    (function() {
+      var state = window.store.getState();
+      var pf = state.settings && state.settings.profileFrame;
+      var cur = state.currentUser && state.currentUser.profileFrame;
+      if (state.currentUser && state.currentUser.userId && pf && pf !== cur) {
+        var updated = { ...state.currentUser, profileFrame: pf };
+        window.store.setState({ currentUser: updated });
+        if (window.orbitAPI) window.orbitAPI.dbSaveUser(updated);
+      }
+    })();
 
     // P2P stats tracking
     window._p2pStartTime = Date.now();
@@ -541,6 +552,19 @@ document.addEventListener('DOMContentLoaded', () => {
       window.orbitAPI.on('peer-found', (peer) => {
         console.log('[Renderer] peer-found:', peer.username, 'IP:', peer.ip);
         window.store.addOrUpdatePeer(peer);
+      });
+
+      window.orbitAPI.on('peer-gone', (peerId) => {
+        if (peerId === 'local-echo') return;
+        console.log('[Renderer] peer-gone:', peerId);
+        var state = window.store.getState();
+        var friends = state.friends.map(function(f) {
+          if (f.userId === peerId && f.status === 'online') {
+            return { ...f, status: 'offline', lastSeen: Date.now() };
+          }
+          return f;
+        });
+        window.store.setState({ friends: friends });
       });
 
       window.orbitAPI.on('network-message', (packet) => {
@@ -628,7 +652,13 @@ document.addEventListener('DOMContentLoaded', () => {
           var state = window.store.getState();
           var friends = state.friends.map(function(f) {
             if (f.userId === (packet.from || bp.userId)) {
-              return { ...f, lastSeen: Date.now(), status: bp.status || f.status };
+              var updated = { ...f, lastSeen: Date.now(), status: bp.status || f.status };
+              if (bp.avatar) updated.avatar = bp.avatar;
+              if (bp.banner !== undefined) updated.banner = bp.banner;
+              if (bp.bio !== undefined) updated.bio = bp.bio;
+              if (bp.profileFrame !== undefined) updated.profileFrame = bp.profileFrame;
+              if (bp.publicKey) updated.publicKey = bp.publicKey;
+              return updated;
             }
             return f;
           });
@@ -818,18 +848,73 @@ document.addEventListener('DOMContentLoaded', () => {
     if (window.SidebarMiddle) window.SidebarMiddle.init();
     if (window.ChatPanel) window.ChatPanel.init();
 
+    // Orbit Echo welcome sequence
+    (function() {
+      var state = window.store.getState();
+      var echoMsgs = state.messages && state.messages['local-echo'];
+      if (!echoMsgs || echoMsgs.length === 0) {
+        var CID = 'local-echo', UID = 'local-echo', UNAME = 'Orbit Echo';
+        var TXTS = [
+          "Hi! I'm Orbit Echo! You can call me Bit if you want.",
+          "You can send messages in here and i'll echo it back at you! (except for images, files, folders and sounds files)",
+          "**THIS MESSAGE WILL SELF-DESTRUCT AFTER 5s**",
+          "_Just kidding.._"
+        ];
+        var DELAYS = [5000, 7000, 7000, 7000];
+        (function show(i) {
+          if (i >= TXTS.length) return;
+          window.TypingState.addUser(CID, UID, UNAME);
+          setTimeout(function() {
+            window.TypingState.removeUser(CID, UID);
+            window.store.addMessage(CID, {
+              id: 'echo-welcome-' + i + '-' + Date.now(),
+              sender: UID,
+              text: TXTS[i],
+              timestamp: new Date().toISOString()
+            });
+            show(i + 1);
+          }, DELAYS[i]);
+        })(0);
+      }
+    })();
+
     if (window.ContextMenu) window.ContextMenu.init();
 
     // Offline check is created in applySettings() — not duplicated here
 
     console.log('Orbit Shell Ready.');
   }, 0);
+  }
+
+  // PIN Lock Check — block Phase 2/3 if PIN is enabled
+  var pinEnabled = window.orbitAPI ? window.orbitAPI.pinStatus() : false;
+  if (pinEnabled) {
+    if (window.PinLockScreen) {
+      window.PinLockScreen.show(function() {
+        startPhase2();
+        requestIdleCallback(function() {
+          if (window.EmojiPicker) window.EmojiPicker.init();
+          if (window.Toast) window.Toast.init();
+          if (window.CustomThemeModal) window.CustomThemeModal.init();
+          if (window.AccountSwitcher) window.AccountSwitcher.init();
+          setTimeout(function() {
+            if (window.TutorialModal && window.TutorialModal.shouldShowOnStartup()) {
+              window.TutorialModal.show();
+            }
+          }, 800);
+        });
+      });
+      return; // Don't proceed with normal boot until unlocked
+    }
+  }
+  startPhase2();
 
   // ---- Phase 3 (idle): Non-critical components ----
   requestIdleCallback(function() {
     if (window.EmojiPicker) window.EmojiPicker.init();
     if (window.Toast) window.Toast.init();
     if (window.CustomThemeModal) window.CustomThemeModal.init();
+    if (window.AccountSwitcher) window.AccountSwitcher.init();
 
     setTimeout(function() {
       if (window.TutorialModal && window.TutorialModal.shouldShowOnStartup()) {
@@ -871,9 +956,9 @@ window.Frames = {
   getFrameForUser(userId) {
     var state = window.store ? window.store.getState() : null;
     if (!state) return 0;
-    // Self
+    // Self — use currentUser.profileFrame (per-account)
     if (state.currentUser && state.currentUser.userId === userId) {
-      return (state.settings && state.settings.profileFrame) || 0;
+      return (state.currentUser.profileFrame != null ? state.currentUser.profileFrame : 0);
     }
     // Friend/peer
     var friend = state.friends.find(function(f) { return f.userId === userId; });

@@ -163,6 +163,7 @@ class SocketManager extends EventEmitter {
       avatar: identity.avatar || null,
       status: identity.status || 'online',
       bio: identity.bio || '',
+      banner: identity.banner || null,
       publicKey: identity.publicKey || null,
       profileFrame: identity.profileFrame || null,
       tcpPort: this.TCP_PORT,

@@ -142,6 +142,10 @@ function startNetworkMonitor() {
             });
           }
         });
+        discoveryInstance.onPeerGone = function(peerId) {
+          console.log('[AutoConnect] Peer gone:', peerId);
+          if (mainWindow) mainWindow.webContents.send('peer-gone', peerId);
+        };
         discoveryInstance.start();
       }
     }
@@ -427,6 +431,11 @@ app.whenReady().then(() => {
     }
   });
 
+  ipcMain.on('relaunch-app', () => {
+    app.relaunch();
+    app.exit(0);
+  });
+
   // Tray Setup
   const iconPath = path.join(__dirname, 'src/icons/app/orbit.ico');
   const icon = nativeImage.createFromPath(iconPath);
@@ -511,16 +520,57 @@ app.whenReady().then(() => {
     }
   });
 
+  ipcMain.on('pin-verify', (event, pin) => {
+    var currentHash = persistentStore.get('pin_hash');
+    if (!currentHash) { event.returnValue = false; return; }
+    var hash = crypto.createHash('sha256').update(String(pin)).digest('hex');
+    event.returnValue = hash === currentHash;
+  });
+
+  ipcMain.on('pin-set', (event, pin) => {
+    var hash = crypto.createHash('sha256').update(String(pin)).digest('hex');
+    persistentStore.set('pin_hash', hash);
+    persistentStore.set('pin_enabled', true);
+    event.returnValue = true;
+  });
+
+  ipcMain.on('pin-disable', (event, currentPin) => {
+    var currentHash = persistentStore.get('pin_hash');
+    if (currentHash) {
+      var hash = crypto.createHash('sha256').update(String(currentPin)).digest('hex');
+      if (hash !== currentHash) { event.returnValue = false; return; }
+    }
+    persistentStore.delete('pin_hash');
+    persistentStore.set('pin_enabled', false);
+    event.returnValue = true;
+  });
+
+  ipcMain.on('pin-status', (event) => {
+    event.returnValue = persistentStore.get('pin_enabled', false);
+  });
+
+  ipcMain.on('pin-forgot', () => {
+    persistentStore.delete('pin_hash');
+    persistentStore.set('pin_enabled', false);
+  });
+
   // Database IPC
-  ipcMain.on('db-get-all-startup-data', (event) => {
+  ipcMain.on('db-get-all-startup-data', (event, userId) => {
     if (!globalDb) { event.returnValue = null; return; }
-    event.returnValue = globalDb.getAllStartupData();
+    event.returnValue = globalDb.getAllStartupData(userId || null);
   });
   ipcMain.on('db-get-local-user', (event) => {
     event.returnValue = globalDb.getLocalUser();
   });
   ipcMain.on('db-get-user', (event, userId) => {
     event.returnValue = globalDb.getUser(userId);
+  });
+  ipcMain.on('db-get-all-users', (event) => {
+    event.returnValue = globalDb.getAllUsers();
+  });
+  ipcMain.on('db-delete-user', (event, userId) => {
+    globalDb.deleteUser(userId);
+    event.returnValue = true;
   });
   ipcMain.on('db-save-user', (event, user) => {
     globalDb.saveUser(user);
@@ -817,6 +867,10 @@ app.whenReady().then(() => {
           console.log('[AutoConnect] Skipped — socket:', !!socketInstance, 'userId:', !!peer.userId, 'ip:', !!peer.ip);
         }
       });
+      discoveryInstance.onPeerGone = function(peerId) {
+        console.log('[AutoConnect] Peer gone:', peerId);
+        mainWindow.webContents.send('peer-gone', peerId);
+      };
       discoveryInstance.start();
       tryAddFirewallRule();
       startLanScan(socketInstance);

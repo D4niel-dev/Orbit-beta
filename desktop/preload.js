@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('orbitAPI', {
   
   // Networking
   networkStart: (identity, reconnectEnabled, reconnectIntervalMs) => ipcRenderer.sendSync('network-start', identity, reconnectEnabled, reconnectIntervalMs),
+  networkStop: () => ipcRenderer.send('network-stop'),
   networkSend: (toPeerId, toIp, type, payload) => ipcRenderer.sendSync('network-send', toPeerId, toIp, type, payload),
   networkSendFile: (toPeerId, toIp, filePath, fileName) => ipcRenderer.invoke('network-send-file', toPeerId, toIp, filePath, fileName),
   connect: (ip) => ipcRenderer.send('network-connect', ip),
@@ -36,8 +37,20 @@ contextBridge.exposeInMainWorld('orbitAPI', {
   e2eeEncrypt: (plaintext, peerPublicKey) => ipcRenderer.sendSync('e2ee-encrypt', plaintext, peerPublicKey),
   e2eeDecrypt: (ciphertext, peerPublicKey) => ipcRenderer.sendSync('e2ee-decrypt', ciphertext, peerPublicKey),
 
+  // Account Switcher
+  dbGetAllUsers: () => ipcRenderer.sendSync('db-get-all-users'),
+  dbDeleteUser: (userId) => ipcRenderer.sendSync('db-delete-user', userId),
+  relaunchApp: () => ipcRenderer.send('relaunch-app'),
+
+  // PIN / 2FA
+  pinVerify: (pin) => ipcRenderer.sendSync('pin-verify', pin),
+  pinSet: (pin) => ipcRenderer.sendSync('pin-set', pin),
+  pinDisable: (currentPin) => ipcRenderer.sendSync('pin-disable', currentPin),
+  pinStatus: () => ipcRenderer.sendSync('pin-status'),
+  pinForgot: () => ipcRenderer.send('pin-forgot'),
+
   // Database
-  dbGetAllStartupData: () => ipcRenderer.sendSync('db-get-all-startup-data'),
+  dbGetAllStartupData: (userId) => ipcRenderer.sendSync('db-get-all-startup-data', userId),
   dbGetLocalUser: () => ipcRenderer.sendSync('db-get-local-user'),
   dbGetUser: (userId) => ipcRenderer.sendSync('db-get-user', userId),
   dbSaveUser: (user) => ipcRenderer.sendSync('db-save-user', user),

@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v014-beta-current-version">v0.1.4-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v015-beta-latest-version">v0.1.5-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@
 
 | Channel | Version | Status |
 |---------|---------|--------|
-| *Development* | v0.1.4-beta | Active development (current) |
+| *Development* | v0.1.5-beta | Latest build (unstable) |
 | **Stable** | v0.1.1-beta | Stable release |
 | Previous **Stable** | v0.0.5-beta | Legacy stable release |
 
@@ -90,20 +90,21 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage desktop app** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
-## Highlights (v0.1.4-beta)
+## Highlights (v0.1.5-beta)
 
-- P2P auto-connection stabilization — keep-alive, reconnect, stale pruning, duplicate protection
-- Desktop P2P bugfix audit — 17 fixes across socket, store, preload, sidebar-middle
-- Translation engine rewrite — cache, dedup, abort, inline retry
-- Image Viewer overhaul — quick-save, keyboard nav, swipe, download fix
-- Performance Mode — two-step confirmation, CSS/runtime guards
-- Voice messages stabilization — content-type, auto-retry, chunked detection
-- Mobile full settings parity — 11 new desktop settings ported and wired
-- Mobile protocol.js synced — 46 types matching desktop (15+ missing types added)
-- Mobile network settings wired — tcpPort, udpPort, timeout, keep-alive, logLevel, bandwidth all affect behavior
-- Mobile DB migration fixed — runs before load, visible console logging
-- Cross-platform group sync fixes — GROUP_CREATE/LEAVE/INVITE/TRANSFER all working
-- Profile frame helper — consistent null-safe rendering across all 7 locations
+- **Account Switcher (Experimental):** Right-click avatar → panel to add/switch/logout accounts. Logout quits app (accounts persist in DB). Last active user auto-loaded on launch. Gated behind Experimental Features toggle in Advanced settings.
+- **PIN Lock Screen (2FA Experimental):** 4-8 digit numeric PIN with SHA-256 hashing (Node `crypto` on main process). Numpad UI, 5-attempt cooldown (30s), "Forgot PIN" reset (data intact). Only prompted on app launch (never on resume/sleep). Gated behind Experimental Features.
+- **Settings Security Tab:** PIN setup, change, disable flows. Full modal re-render when Experimental Features toggled to show/hide tab.
+- **Messages from other accounts no longer leak:** `reloadDataForCurrentUser()` auto-track now only includes friends/groups with `accountOwnerId === uid`. `renderList()` filters displayed DMs by `_userChatIds`. `renderGroups()` only shows groups where current user is a member.
+- **Closing DMs doesn't affect other accounts:** `closeDM()` no longer calls `dbDeleteFriend` (was deleting globally). `closedDMs` and `pinnedDMs` stored per-account in settings (`userClosedDMs`, `userPinnedDMs`). Loaded/saved per user on account switch.
+- **Leaving groups correctly hides the group:** `removeGroupMember()` untracks chat from `userChatIds` when current user leaves. `renderGroups()` checks membership before showing group. Group removed from current account's list.
+- **"User"#0000 placeholder leaking:** `identity.js:getAll()` filters out entries without valid `userId/usertag/username`. Store placeholder changed from `id: null` to `userId: null`. Profile frame migration guarded with `userId` check and moved after `Identity.init()`.
+- **Profile frame migration not triggering:** Migration condition changed from `currentUser.profileFrame == null && pf` to `pf && pf !== cur` — handles the case where `Identity.init()`'s `save()` converted `null` to `0` via `dbSaveUser`.
+- **SidebarLeft.renderAvatar crash before init:** Added `if (!this.container) return;` guard to prevent TypeError when called before `SidebarLeft.init()`.
+- **Store.js syntax error:** Removed trailing commas between class methods that caused "Unexpected token ','".
+- **`window.ChatPanel.showChat is not a function`:** Removed premature `ChatPanel.showChat()` call from `reloadDataForCurrentUser()`.
+- **`require('crypto')` in renderer:** Changed to `window.crypto` for invite code generation.
+- **Migration v11 robustness:** Column-existence checks before `ALTER TABLE`. Guard in `migrations.run()` handles non-transactional `user_version` — if version ≥ 11 but columns missing, resets to 10 and re-runs.
 
 ## Version History
 <details>
@@ -283,6 +284,24 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Desktop group sync fixes** — GROUP_OWNER_TRANSFER, GROUP_LEAVE cleanup, GROUP_INVITE init
 - **Desktop reconnect settings bridge** — preload forwards reconnectEnabled/reconnectIntervalMs to main process
 </details>
+<details>
+<summary>v0.1.5-beta</summary>
+
+- **Account Switcher (Experimental):** Right-click avatar → panel to add/switch/logout accounts. Logout quits app (accounts persist in DB). Last active user auto-loaded on launch. Gated behind Experimental Features toggle in Advanced settings.
+- **PIN Lock Screen (2FA Experimental):** 4-8 digit numeric PIN with SHA-256 hashing (Node `crypto` on main process). Numpad UI, 5-attempt cooldown (30s), "Forgot PIN" reset (data intact). Only prompted on app launch (never on resume/sleep). Gated behind Experimental Features.
+- **Settings Security Tab:** PIN setup, change, disable flows. Full modal re-render when Experimental Features toggled to show/hide tab.
+- **Orbit Echo Welcome Sequence:** 4 welcome messages with 5-8s typing indicator delays. Fires only when echo chat is empty. Echo excepted from all offline checks.
+- **Group Avatar Backfill:** Async fetch of `orbit-avatar://` for groups with `avatarPath` but no `avatarDataUrl` on store init + group info open. Non-blocking, errors silently caught.
+- **SidebarLeft.renderAvatar crash before init:** Added `if (!this.container) return;` guard to prevent TypeError when called before `SidebarLeft.init()`.
+- **Store.js syntax error:** Removed trailing commas between class methods that caused "Unexpected token ','".
+- **`window.ChatPanel.showChat is not a function`:** Removed premature `ChatPanel.showChat()` call from `reloadDataForCurrentUser()`.
+- **`require('crypto')` in renderer:** Changed to `window.crypto` for invite code generation.
+- **Migration v11 robustness:** Column-existence checks before `ALTER TABLE`. Guard in `migrations.run()` handles non-transactional `user_version` — if version ≥ 11 but columns missing, resets to 10 and re-runs.
+- **Identity System:** `Identity.init()` loads from multi-user DB. `getAll()` returns all saved users. `switchTo(userId)` swaps identity and updates last active tracking. `saveUser` stores `profileFrame` with `!= null` guard.
+- **Database Schema:** v10: `ALTER TABLE users ADD COLUMN profileFrame INTEGER DEFAULT 0`. v11: `accountOwnerId TEXT` on friends, groups, group_members tables.
+- **Network Restart:** Account switch calls `networkStop` (nullifies all instances) → `Identity.switchTo()` → `networkStart` (re-creates with new identity). All TCP connections drop and re-establish.
+- **Migration Rollback Guard:** `db.pragma('user_version')` is non-transactional. Added column-existence check at start of `migrations.run()` to detect partial migration state and recover.
+</details>
 
 See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
@@ -347,7 +366,7 @@ Or let GitHub Actions build it automatically — push a `v*` tag or trigger the 
 ## How it works
 
 ```
-  	Desktop Orbit            Android Orbit
+  	    Desktop Orbit            Android Orbit
        	      │                        │
        	      │        TCP P2P         │
        	      ├────────────────────────┤
@@ -441,20 +460,19 @@ Transparency matters in beta. Current constraints include:
 
 ## Roadmap
 
-### Shipped (v0.1.4-beta)
+### Shipped (v0.1.5-beta)
 
-- **P2P Auto-Connection Stabilization** — PING/PONG keep-alive, 8s timeout, exponential backoff reconnect, stale peer pruning, network change detection, duplicate protection
-- **Desktop P2P Bugfix Audit (17 fixes)** — Socket timeout, write-queue, reconnect, GROUP_CREATE/GROUP_JOIN_REQUEST/GROUP_MEMBER_ADDED/PIN/UNPIN/SYSTEM routing
-- **Translation Engine Rewrite** — Cache, dedup, AbortController, inline retry
-- **Image Viewer Overhaul** — Quick-save, keyboard nav, swipe, download fix, loading placeholder
-- **Voice Messages Stabilization** — Content-Type, auto-retry, chunked detection
-- **Performance Mode** — Two-step confirmation, CSS/runtime guards
-- **Mobile Full Settings Parity** — 11 settings ported and deep-wired (logLevel, tcpPort, udpPort, netReconnectInterval, netKeepAlive, netBandwidthLimit, etc.)
-- **Mobile Protocol.js Synced** — 46 types matching desktop
-- **Mobile DB Migration Fixed** — Load order + console visibility
-- **Mobile profileFrame Clean-Up** — Helper function, 7 render locations
-- **Mobile Changelog Modal** — What's New in About tab
-- **Group Sync Fixes** — OWNER_TRANSFER, LEAVE, INVITE, CREATE init
+- **Account Switcher (Experimental):** Right-click avatar → panel to add/switch/logout accounts. Logout quits app (accounts persist in DB). Last active user auto-loaded on launch. Gated behind Experimental Features toggle in Advanced settings.
+- **PIN Lock Screen (2FA Experimental):** 4-8 digit numeric PIN with SHA-256 hashing (Node `crypto` on main process). Numpad UI, 5-attempt cooldown (30s), "Forgot PIN" reset (data intact). Only prompted on app launch (never on resume/sleep). Gated behind Experimental Features.
+- **Settings Security Tab:** PIN setup, change, disable flows. Full modal re-render when Experimental Features toggled to show/hide tab.
+- **Orbit Echo Welcome Sequence:** 4 welcome messages with 5-8s typing indicator delays. Fires only when echo chat is empty. Echo excepted from all offline checks.
+- **Per-Account Message Isolation:** Messages stored per-user via `userChatIds` settings map. DB migration v11 adds `accountOwnerId` to friends/groups/group_members. `reloadDataForCurrentUser()` re-reads filtered messages on account switch. Friends and groups remain shared; messages filtered by tracked chat IDs per user.
+- **Per-Account Avatar Frames:** v10 migration adds `profileFrame` column to users table. Frame loaded from user record (not shared settings). `getFrameForUser()` reads from `currentUser.profileFrame`. Settings handler syncs frame selection to identity.
+- **Avatar Frames in Account Switcher:** Both current account (36px) and other account rows (32px) render profile frame overlay at `top:-16%;left:-17%;width:133%;height:133%`, matching sidebar-left styling.
+- **Profile Frame Migration:** Existing settings-based frames migrated to per-account on first boot after v10. Runs after `Identity.init()` so `currentUser` is real (not placeholder). `SidebarLeft.renderAvatar()` called after migration for immediate display.
+- **Desktop Beacon Payload Enriched:** Both UDP (`discovery.js`) and TCP (`socket.js`) beacons now transmit `avatar`, `banner`, `bio`, `profileFrame`, `publicKey`. Incoming BEACON handler stores full profile on peers.
+- **Friend Status Starts Offline:** Friends load with `lastSeen=0` and `status='offline'` (except `local-echo` which stays online). Offline check threshold reduced to 45s with 15s check interval. Discovery emits `peer-gone` callback → IPC → marks friend offline.
+- **Group Avatar Backfill:** Async fetch of `orbit-avatar://` for groups with `avatarPath` but no `avatarDataUrl` on store init + group info open. Non-blocking, errors silently caught.
 
 ### In Progress / Planned
 
@@ -483,7 +501,7 @@ Transparency matters in beta. Current constraints include:
 ```bash
 # In the app folder
 cd desktop
-npm install		  # Install requirements
+npm install		            # Install requirements
 npm start                 # Launch Electron
 npm run build:win         # Build Windows installer
 npm run build:mac         # Build macOS .dmg (macOS host required)
@@ -495,7 +513,7 @@ npm run build:linux       # Build Linux .AppImage + .deb
 ```bash
 # In the app folder
 cd mobile
-npm install		  # Install requirements
+npm install		            # Install requirements
 npm run shared:sync       # Copy shared modules into mobile/src/
 npx cap sync android      # Sync Capacitor Android project
 npx cap open android      # Open in Android Studio

@@ -6,7 +6,7 @@ window.SidebarMiddle = {
     
     // Subscribe to store
     this.unsubscribe = window.store.subscribe((state, changedState) => {
-      var relevant = ['messages', 'friends', 'groups', 'activeChatId', 'activeTab', 'activeView', 'currentUser', 'unreadCounts'];
+      var relevant = ['messages', 'friends', 'groups', 'activeChatId', 'activeTab', 'activeView', 'currentUser', 'unreadCounts', 'closedDMs', 'pinnedDMs'];
       if (!changedState || relevant.some(function(k) { return k in changedState; })) {
         if (state.activeView === 'groups') {
           this.renderGroups();
@@ -80,7 +80,10 @@ window.SidebarMiddle = {
     var listContainer = document.getElementById('friends-list-container');
     if (!listContainer) return;
     var state = window.store.getState();
-    var groups = state.groups || [];
+    var uid = state.currentUser && state.currentUser.userId;
+    var groups = (state.groups || []).filter(function(g) {
+      return g.members && g.members.some(function(m) { return m.userId === uid; });
+    });
     var activeChatId = state.activeChatId;
     var messages = state.messages;
 
@@ -397,7 +400,12 @@ window.SidebarMiddle = {
   renderList(state) {
     var closedDMs = state.closedDMs || {};
     var pinnedDMs = state.pinnedDMs || {};
-    var friends = state.friends.filter(function(f) { return !closedDMs[f.userId]; });
+    var userChatIds = state._userChatIds;
+    var friends = state.friends.filter(function(f) {
+      if (closedDMs[f.userId]) return false;
+      if (userChatIds && userChatIds.indexOf(f.userId) === -1) return false;
+      return true;
+    });
     // Sort: pinned DMs first, then by name
     friends.sort(function(a, b) {
       if (pinnedDMs[a.userId] && !pinnedDMs[b.userId]) return -1;
@@ -692,7 +700,24 @@ window.SidebarMiddle = {
         if (type === 'group') {
           var group = state.groups.find(function(g) { return g.groupId === id; });
           if (!group) return;
-          var isOwner = group.ownerId === state.currentUser.userId;
+    // Backfill avatarDataUrl for groups with file-based avatars
+    if (group.avatarPath && !group.avatarDataUrl) {
+      fetch('orbit-avatar://' + group.groupId + '?t=' + Date.now())
+        .then(function(r) { return r.blob(); })
+        .then(function(blob) {
+          return new Promise(function(resolve) {
+            var reader = new FileReader();
+            reader.onload = function() { resolve(reader.result); };
+            reader.readAsDataURL(blob);
+          });
+        })
+        .then(function(dataUrl) {
+          window.store.updateGroupField(group.groupId, 'avatarDataUrl', dataUrl);
+        })
+        .catch(function() {});
+    }
+
+    var isOwner = group.ownerId === state.currentUser.userId;
           var items = [
             { label: (group.pinned ? 'Unpin' : 'Pin') + ' Group', icon: 'pin', onClick: function() {
               window.store.updateGroupField(id, 'pinned', group.pinned ? 0 : 1);
@@ -865,8 +890,11 @@ window.SidebarMiddle = {
           ? '<span style="width:8px;height:8px;border-radius:50%;background:var(--accent-success);display:inline-block;margin-right:8px;"></span>'
           : '<span style="width:8px;height:8px;border-radius:50%;background:var(--text-muted);display:inline-block;margin-right:8px;"></span>';
         var mFrame = window.Frames.getFrameForUser(m.userId);
-        var mAvatar = m.avatar
-          ? '<img src="' + window.Sanitize.escapeHtml(m.avatar) + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover;">'
+        // Cross-reference friends list for correct avatar (member.avatar may be stale/wrong)
+        var mFriend = window.store ? window.store.getState().friends.find(function(f) { return f.userId === m.userId; }) : null;
+        var bestAvatar = mFriend ? (mFriend.avatar || null) : (m.avatar || null);
+        var mAvatar = bestAvatar
+          ? '<img src="' + window.Sanitize.escapeHtml(bestAvatar) + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover;">'
           : '<div style="width:32px;height:32px;border-radius:50%;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:12px;color:white;font-weight:600;">' + m.username.charAt(0).toUpperCase() + '</div>';
         var mAvatarContainer = '<div style="position:relative;display:inline-block;">' + mAvatar + (mFrame ? '<img src="icons/frames/pfp_frame_' + mFrame + '.png" style="position:absolute;top:-21%;left:-17%;width:133%;height:133%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '') + '</div>';
         var role = m.role || 'member';
@@ -1042,8 +1070,9 @@ window.SidebarMiddle = {
             group.members.forEach(function(m) {
               window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.GROUP_MEMBER_ADDED, { groupId: groupId, user: { userId: friend.userId, username: friend.username || friend.name, usertag: friend.usertag, avatar: friend.avatar, status: friend.status || 'offline', role: 'member', publicKey: friend.publicKey || null } });
             });
-            var membersForNew = group.members.map(function(m) { return { userId: m.userId, username: m.username, usertag: m.usertag, avatar: m.avatar, status: m.status, role: m.role, publicKey: m.publicKey || null }; });
+            var membersForNew = group.members.filter(function(m) { return m.userId !== myId; }).map(function(m) { return { userId: m.userId, username: m.username, usertag: m.usertag, avatar: m.avatar, status: m.status, role: m.role, publicKey: m.publicKey || null }; });
             membersForNew.push({ userId: myId, username: state2.currentUser.username, usertag: state2.currentUser.usertag || state2.currentUser.userTag || '', avatar: state2.currentUser.avatar || '', status: 'online', role: isOwner ? 'owner' : 'admin', publicKey: state2.currentUser.publicKey || null });
+            membersForNew.push({ userId: friend.userId, username: friend.username || friend.name, usertag: friend.usertag || '', avatar: friend.avatar || '', status: friend.status || 'offline', role: 'member', publicKey: friend.publicKey || null });
             window.orbitAPI.networkSend(friend.userId, friend.ip || '', window.Protocol.Types.GROUP_JOIN_RESPONSE, { groupId: groupId, groupName: group.groupName, groupAvatar: group.avatarDataUrl || null, accepted: true, members: membersForNew });
           }
           scopeEl.remove();

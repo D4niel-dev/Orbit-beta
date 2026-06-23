@@ -31,6 +31,8 @@ window.SettingsModal = {
   },
 
   render() {
+    var s = window.store.getState().settings || {};
+    var showSecurity = s.enableExperimental;
     this.container.innerHTML =
       '<div style="width:800px;height:600px;background:var(--bg-surface);border-radius:12px;display:flex;overflow:hidden;box-shadow:var(--shadow-xl);border:1px solid var(--border-subtle);">' +
         '<div style="width:240px;background:var(--bg-base);padding:24px;border-right:1px solid var(--border-subtle);display:flex;flex-direction:column;">' +
@@ -41,6 +43,7 @@ window.SettingsModal = {
             '<button class="settings-tab" data-tab="network" style="text-align:left;padding:10px 16px;border-radius:8px;color:var(--text-secondary);background:transparent;border:none;cursor:pointer;">Network</button>' +
             '<button class="settings-tab" data-tab="notifications" style="text-align:left;padding:10px 16px;border-radius:8px;color:var(--text-secondary);background:transparent;border:none;cursor:pointer;">Notifications</button>' +
             '<button class="settings-tab" data-tab="data" style="text-align:left;padding:10px 16px;border-radius:8px;color:var(--text-secondary);background:transparent;border:none;cursor:pointer;">Data Manager</button>' +
+            (showSecurity ? '<button class="settings-tab" data-tab="security" style="text-align:left;padding:10px 16px;border-radius:8px;color:var(--text-secondary);background:transparent;border:none;cursor:pointer;">Security</button>' : '') +
             '<button class="settings-tab" data-tab="advanced" style="text-align:left;padding:10px 16px;border-radius:8px;color:var(--text-secondary);background:transparent;border:none;cursor:pointer;">Advanced</button>' +
             '<button class="settings-tab" data-tab="about" style="text-align:left;padding:10px 16px;border-radius:8px;color:var(--text-secondary);background:transparent;border:none;cursor:pointer;">About</button>' +
           '</div>' +
@@ -1196,6 +1199,139 @@ window.SettingsModal = {
       });
       content.querySelector('#notify-sound-type').addEventListener('change', function(e) { updateSettings('notifySoundType', e.target.value); });
       
+    } else if (tabName === 'security') {
+      if (!state.settings.enableExperimental) {
+        content.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-muted);text-align:center;gap:8px;padding:40px;">' +
+          '<i data-lucide="lock" style="width:32px;height:32px;opacity:0.3;"></i>' +
+          '<div style="font-size:15px;font-weight:600;color:var(--text-secondary);">Experimental Features Disabled</div>' +
+          '<div style="font-size:13px;line-height:1.5;">Enable "Experimental Features" in Advanced settings to access Security options.</div>' +
+        '</div>';
+        return;
+      }
+      (function() {
+        var pinEnabled = window.orbitAPI ? window.orbitAPI.pinStatus() : false;
+        var html =
+          '<h3 style="font-family:var(--font-display);font-size:24px;margin-bottom:8px;">Security <span style="display:inline-block;font-size:8px;font-weight:700;color:#fff;background:var(--accent-warning);border-radius:3px;padding:1px 5px;text-transform:uppercase;line-height:1.4;vertical-align:middle;margin-left:6px;">EXPERIMENTAL</span></h3>' +
+          '<div style="font-size:13px;color:var(--text-muted);margin-bottom:24px;line-height:1.5;">Manage your account security settings.</div>' +
+
+          '<div style="background:var(--bg-base);border-radius:12px;padding:20px;border:1px solid var(--border-subtle);">' +
+            '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">' +
+              '<div>' +
+                '<div style="font-size:15px;font-weight:600;color:var(--text-primary);">App Lock (PIN)</div>' +
+                '<div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Protect Orbit with a PIN code on launch</div>' +
+              '</div>' +
+              '<label style="position:relative;display:inline-block;width:44px;height:24px;">' +
+                '<input type="checkbox" id="pin-toggle"' + (pinEnabled ? ' checked' : '') + ' style="opacity:0;width:0;height:0;">' +
+                '<span class="toggle-slider" style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:' + (pinEnabled ? 'var(--accent-primary)' : 'var(--border-strong)') + ';border-radius:24px;transition:0.3s;"></span>' +
+                '<span class="toggle-knob" style="position:absolute;height:18px;width:18px;left:3px;bottom:3px;background:white;border-radius:50%;transition:0.3s;' + (pinEnabled ? 'transform:translateX(20px);' : '') + '"></span>' +
+              '</label>' +
+            '</div>' +
+            (pinEnabled
+              ? '<div id="pin-change-area" style="border-top:1px solid var(--border-subtle);padding-top:16px;">' +
+                  '<button id="btn-change-pin" style="padding:10px 20px;border-radius:10px;border:1px solid var(--border-subtle);background:transparent;color:var(--text-primary);font-size:13px;font-weight:500;cursor:pointer;transition:background 0.15s;">Change PIN</button>' +
+                '</div>'
+              : '<div id="pin-setup-area">' +
+                  '<div style="margin-bottom:12px;">' +
+                    '<label style="font-size:13px;font-weight:500;color:var(--text-secondary);display:block;margin-bottom:6px;">Set PIN (4-8 digits)</label>' +
+                    '<input id="pin-new" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="Enter PIN" style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-hover);color:var(--text-primary);font-size:15px;outline:none;box-sizing:border-box;letter-spacing:4px;text-align:center;">' +
+                  '</div>' +
+                  '<div style="margin-bottom:16px;">' +
+                    '<label style="font-size:13px;font-weight:500;color:var(--text-secondary);display:block;margin-bottom:6px;">Confirm PIN</label>' +
+                    '<input id="pin-confirm" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="Re-enter PIN" style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-hover);color:var(--text-primary);font-size:15px;outline:none;box-sizing:border-box;letter-spacing:4px;text-align:center;">' +
+                  '</div>' +
+                  '<div id="pin-setup-error" style="font-size:12px;color:var(--accent-danger);margin-bottom:8px;min-height:16px;"></div>' +
+                  '<button id="btn-save-pin" style="padding:10px 24px;border-radius:10px;border:none;background:var(--accent-primary);color:white;font-size:13px;font-weight:500;cursor:pointer;transition:opacity 0.15s;">Save PIN</button>' +
+                '</div>'
+            ) +
+          '</div>' +
+
+          '<div style="margin-top:16px;padding:16px;background:var(--accent-soft);border-radius:12px;border:1px solid var(--accent-primary);">' +
+            '<div style="font-size:12px;color:var(--text-muted);line-height:1.5;">' +
+              '<strong style="color:var(--accent-primary);">Note:</strong> PIN lock is an experimental feature. It protects access to Orbit on this device but does not encrypt your messages or data. ' +
+              'If you forget your PIN, use "Forgot PIN" on the lock screen to reset it (your account data stays intact).' +
+            '</div>' +
+          '</div>';
+
+        content.innerHTML = html;
+
+        // Toggle switch
+        var toggle = content.querySelector('#pin-toggle');
+        if (toggle) {
+          toggle.addEventListener('change', function() {
+            if (this.checked) {
+              // Enabling — show setup area
+              var area = content.querySelector('#pin-setup-area');
+              var changeArea = content.querySelector('#pin-change-area');
+              if (area) area.style.display = 'block';
+              if (changeArea) changeArea.style.display = 'none';
+              // Re-render to show setup fields
+              window.SettingsModal.renderTab('security');
+            } else {
+              // Disabling — require current PIN
+              var currentPin = prompt('Enter your current PIN to disable App Lock:');
+              if (currentPin && window.orbitAPI) {
+                var ok = window.orbitAPI.pinDisable(currentPin);
+                if (ok) {
+                  window.SettingsModal.renderTab('security');
+                } else {
+                  alert('Incorrect PIN. App Lock remains enabled.');
+                  this.checked = true;
+                }
+              } else {
+                this.checked = true;
+              }
+            }
+          });
+        }
+
+        // Save PIN
+        var saveBtn = content.querySelector('#btn-save-pin');
+        if (saveBtn) {
+          saveBtn.addEventListener('click', function() {
+            var pinNew = content.querySelector('#pin-new').value.replace(/\D/g, '');
+            var pinConfirm = content.querySelector('#pin-confirm').value.replace(/\D/g, '');
+            var errorEl = content.querySelector('#pin-setup-error');
+
+            if (pinNew.length < 4) {
+              errorEl.textContent = 'PIN must be at least 4 digits.';
+              return;
+            }
+            if (pinNew !== pinConfirm) {
+              errorEl.textContent = 'PINs do not match.';
+              return;
+            }
+            if (window.orbitAPI) {
+              window.orbitAPI.pinSet(pinNew);
+              window.SettingsModal.renderTab('security');
+            }
+          });
+        }
+
+        // Change PIN
+        var changeBtn = content.querySelector('#btn-change-pin');
+        if (changeBtn) {
+          changeBtn.addEventListener('click', function() {
+            var currentPin = prompt('Enter your current PIN:');
+            if (!currentPin) return;
+            var newPin = prompt('Enter new PIN (4-8 digits):');
+            if (!newPin) return;
+            var confirmNew = prompt('Confirm new PIN:');
+            if (!confirmNew) return;
+            newPin = newPin.replace(/\D/g, '');
+            confirmNew = confirmNew.replace(/\D/g, '');
+            if (newPin.length < 4) { alert('PIN must be at least 4 digits.'); return; }
+            if (newPin !== confirmNew) { alert('PINs do not match.'); return; }
+            // Verify current PIN first
+            if (window.orbitAPI) {
+              var valid = window.orbitAPI.pinVerify(currentPin);
+              if (!valid) { alert('Current PIN is incorrect.'); return; }
+              window.orbitAPI.pinSet(newPin);
+              window.SettingsModal.renderTab('security');
+            }
+          });
+        }
+      })();
+
     } else if (tabName === 'advanced') {
       var s = state.settings || {};
 
@@ -1347,7 +1483,19 @@ window.SettingsModal = {
         if (e.target.checked && window.Toast) {
           window.Toast.show('Experimental', 'Experimental features enabled. Some features may be unstable.');
         }
-        if (window.SettingsModal) window.SettingsModal.renderTab('advanced');
+        // Toggle Security tab visibility in sidebar
+        var secTab = window.SettingsModal.container.querySelector('.settings-tab[data-tab="security"]');
+        if (e.target.checked && !secTab) {
+          window.SettingsModal.render();
+          var tabEl = window.SettingsModal.container.querySelector('.settings-tab[data-tab="advanced"]');
+          if (tabEl) tabEl.click();
+        } else if (!e.target.checked && secTab) {
+          window.SettingsModal.render();
+          var tabEl = window.SettingsModal.container.querySelector('.settings-tab[data-tab="advanced"]');
+          if (tabEl) tabEl.click();
+        } else {
+          if (window.SettingsModal) window.SettingsModal.renderTab('advanced');
+        }
       });
 
       var expToggle = function(id, key) {
@@ -1899,7 +2047,7 @@ window.SettingsModal = {
       });
 
     } else if (tabName === 'about') {
-      var version = window.orbitAPI ? (window.orbitAPI.version || '0.1.3-beta') : '0.1.3-beta';
+      var version = window.orbitAPI ? (window.orbitAPI.version || '0.1.5-beta') : '0.1.5-beta';
       var friendCount = state.friends ? state.friends.length : 0;
       var groupCount = state.groups ? state.groups.length : 0;
       var chatCount = Object.keys(state.messages || {}).length;

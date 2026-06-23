@@ -8,7 +8,16 @@ class Store {
       data = window.orbitAPI.dbGetAllStartupData();
       savedSettings = data.settings || {};
       savedNetwork = data.networkSettings || {};
-      dbFriends = data.friends || [];
+      dbFriends = (data.friends || []).map(function(f) {
+        if (f.userId === 'local-echo') {
+          f.lastSeen = Date.now();
+          f.status = 'online';
+        } else {
+          f.lastSeen = 0;
+          f.status = 'offline';
+        }
+        return f;
+      });
       dbMessages = data.messages || {};
       dbGroups = data.groups || [];
       uiState = data.uiState || { activeTab: 'dms', activeChatId: 'local-echo' };
@@ -18,7 +27,7 @@ class Store {
     } else {
       savedSettings = window.Storage ? window.Storage.get('settings', {}) : {};
       savedNetwork = window.Storage ? window.Storage.get('networkSettings', {}) : {};
-      dbFriends = window.Storage ? (window.Storage.get('appData', {}).friends || []) : [];
+      dbFriends = window.Storage ? (window.Storage.get('appData', {}).friends || []).map(function(f) { if (f.userId === 'local-echo') { f.lastSeen = Date.now(); f.status = 'online'; } else { f.lastSeen = 0; f.status = 'offline'; } return f; }) : [];
       dbMessages = window.Storage ? (window.Storage.get('appData', {}).messages || {}) : {};
       dbGroups = window.Storage ? (window.Storage.get('appData', {}).groups || []) : [];
       uiState = { activeTab: 'dms', activeChatId: 'local-echo' };
@@ -43,7 +52,7 @@ class Store {
 
     this.state = {
       currentUser: {
-        id: null,
+        userId: null,
         username: 'User',
         usertag: '0000',
         status: 'online',
@@ -163,6 +172,112 @@ class Store {
     this.setState({ messages: raw });
   }
 
+  // Per-account closedDMs helpers
+  _loadUserClosedDMs(uid) {
+    if (!uid || !window.orbitAPI) return {};
+    var allMaps = window.orbitAPI.dbGetSetting('userClosedDMs', {});
+    return allMaps[uid] || {};
+  }
+  _saveUserClosedDMs(uid, map) {
+    if (!uid || !window.orbitAPI) return;
+    var allMaps = window.orbitAPI.dbGetSetting('userClosedDMs', {});
+    allMaps[uid] = map;
+    window.orbitAPI.dbSetSetting('userClosedDMs', allMaps);
+  }
+  // Per-account pinnedDMs helpers
+  _loadUserPinnedDMs(uid) {
+    if (!uid || !window.orbitAPI) return {};
+    var allMaps = window.orbitAPI.dbGetSetting('userPinnedDMs', {});
+    return allMaps[uid] || {};
+  }
+  _saveUserPinnedDMs(uid, map) {
+    if (!uid || !window.orbitAPI) return;
+    var allMaps = window.orbitAPI.dbGetSetting('userPinnedDMs', {});
+    allMaps[uid] = map;
+    window.orbitAPI.dbSetSetting('userPinnedDMs', allMaps);
+  }
+
+  // Re-load messages from DB filtered to the current user (for account switching)
+  reloadDataForCurrentUser() {
+    var state = this.state;
+    var uid = state.currentUser && state.currentUser.userId;
+    if (!uid || !window.orbitAPI) return;
+    // On first load for this user, auto-track friends/groups tagged with this account
+    var allMaps = window.orbitAPI.dbGetSetting('userChatIds', {});
+    var chatIds = allMaps[uid];
+    if (!chatIds || chatIds.length === 0) {
+      chatIds = ['local-echo'];
+      state.friends.forEach(function(f) { if (f.accountOwnerId === uid && f.userId !== 'local-echo' && chatIds.indexOf(f.userId) === -1) chatIds.push(f.userId); });
+      state.groups.forEach(function(g) { if (g.accountOwnerId === uid && chatIds.indexOf(g.groupId) === -1) chatIds.push(g.groupId); });
+      allMaps[uid] = chatIds;
+      window.orbitAPI.dbSetSetting('userChatIds', allMaps);
+    } else {
+      // Clean stale chat IDs that belong to other accounts (from old auto-track)
+      var cleaned = chatIds.filter(function(id) {
+        if (id === 'local-echo') return true;
+        var friend = state.friends.find(function(f) { return f.userId === id; });
+        if (friend && friend.accountOwnerId && friend.accountOwnerId !== uid) return false;
+        var group = state.groups.find(function(g) { return g.groupId === id; });
+        if (group && group.accountOwnerId && group.accountOwnerId !== uid) return false;
+        return true;
+      });
+      if (cleaned.length !== chatIds.length) {
+        allMaps[uid] = cleaned;
+        window.orbitAPI.dbSetSetting('userChatIds', allMaps);
+        chatIds = cleaned;
+      }
+    }
+    var data = window.orbitAPI.dbGetAllStartupData(uid);
+    if (!data) return;
+    // Load per-account closedDMs and pinnedDMs
+    var closedDMs = this._loadUserClosedDMs(uid);
+    var pinnedDMs = this._loadUserPinnedDMs(uid);
+    // Reset messages and UI to Echo for the new account
+    var dbFriends = state.friends;
+    var echoFriend = {
+      userId: 'local-echo', username: 'Orbit Echo', usertag: 'BOT',
+      status: 'online', avatar: 'icons/orbit/orbit_default.png',
+      bio: 'A local echo channel for testing messages.'
+    };
+    if (!dbFriends.some(function(f) { return f.userId === 'local-echo'; })) {
+      dbFriends = [echoFriend].concat(dbFriends);
+      if (window.orbitAPI && window.orbitAPI.dbSaveFriend) window.orbitAPI.dbSaveFriend(echoFriend);
+    }
+    this.setState({
+      messages: data.messages || {},
+      activeChatId: 'local-echo',
+      activeTab: 'dms',
+      unreadCounts: {},
+      mentionCounts: {},
+      lastReadIds: data.readStates || {},
+      closedDMs: closedDMs,
+      pinnedDMs: pinnedDMs,
+      _userChatIds: allMaps[uid] || []
+    });
+    if (window.SidebarMiddle) {
+      var s = this.state;
+      window.SidebarMiddle.renderList(s);
+      window.SidebarMiddle.renderGroups();
+    }
+    console.log('[Store] Messages reloaded for user:', uid);
+  }
+
+  // Ensure a chatId is tracked for the current user (per-account message isolation)
+  trackChatForCurrentUser(chatId) {
+    if (!chatId || !window.orbitAPI) return;
+    var uid = this.state.currentUser && this.state.currentUser.userId;
+    if (!uid) return;
+    var allMaps = window.orbitAPI.dbGetSetting('userChatIds', {});
+    if (!allMaps[uid]) allMaps[uid] = [];
+    if (allMaps[uid].indexOf(chatId) === -1) {
+      allMaps[uid].push(chatId);
+      window.orbitAPI.dbSetSetting('userChatIds', allMaps);
+      // Sync in-memory state for render filters
+      var ids = this.state._userChatIds || [];
+      if (ids.indexOf(chatId) === -1) this.state._userChatIds = ids.concat([chatId]);
+    }
+  }
+
   addOrUpdatePeer(peer) {
     const friends = [...this.state.friends];
     const existingIndex = friends.findIndex(f => f.userId === peer.userId);
@@ -171,7 +286,11 @@ class Store {
       var existing = friends[existingIndex];
       var updated = { ...existing, ...peer };
       if (peer.lastSeen) updated.lastSeen = peer.lastSeen;
+      if (!updated.accountOwnerId) updated.accountOwnerId = existing.accountOwnerId || (this.state.currentUser && this.state.currentUser.userId) || null;
       friends[existingIndex] = updated;
+      
+      // Track for current account so friend shows up in filtered list
+      this.trackChatForCurrentUser(peer.userId);
       
       // If status changed to online
       if (existing.status !== 'online' && peer.status === 'online') {
@@ -179,18 +298,28 @@ class Store {
       } else if (existing.status === 'online' && peer.status === 'offline') {
         this.addSystemLog('peer_disconnect', 'Peer disconnected: ' + peer.username);
       }
+      
+      // Store peer's public key for E2EE
+      if (peer.publicKey) {
+        this.setPeerPublicKey(peer.userId, peer.publicKey);
+      }
+      
+      if (window.orbitAPI) window.orbitAPI.dbSaveFriend(updated);
+      this.setState({ friends });
+      return;
     } else {
-      friends.push(peer);
+      var newPeer = { ...peer };
+      if (!newPeer.accountOwnerId) newPeer.accountOwnerId = this.state.currentUser && this.state.currentUser.userId || null;
+      if (peer.publicKey) {
+        this.setPeerPublicKey(peer.userId, peer.publicKey);
+      }
+      friends.push(newPeer);
       this.addSystemLog('peer_connect', 'New peer discovered: ' + peer.username);
+      this.trackChatForCurrentUser(peer.userId);
+      if (window.orbitAPI) window.orbitAPI.dbSaveFriend(newPeer);
+      this.setState({ friends });
+      return;
     }
-
-    // Store peer's public key for E2EE
-    if (peer.publicKey) {
-      this.setPeerPublicKey(peer.userId, peer.publicKey);
-    }
-    
-    if (window.orbitAPI) window.orbitAPI.dbSaveFriend(peer);
-    this.setState({ friends });
   }
 
   addSystemLog(type, message) {
@@ -269,15 +398,21 @@ class Store {
     
     // Generate invite code for new groups
     if (!group.inviteCode) {
-      group.inviteCode = require('crypto').randomBytes(4).toString('hex');
+      var arr = new Uint8Array(4);
+      if (window.crypto) window.crypto.getRandomValues(arr);
+      else arr = [Math.random()*255|0, Math.random()*255|0, Math.random()*255|0, Math.random()*255|0];
+      group.inviteCode = Array.prototype.map.call(arr, function(b) { return (b < 16 ? '0' : '') + b.toString(16); }).join('');
     }
     
+    var tagged = { ...group };
+    if (!tagged.accountOwnerId) tagged.accountOwnerId = this.state.currentUser && this.state.currentUser.userId || null;
+    
     if (existing >= 0) {
-      groups[existing] = { ...groups[existing], ...group };
+      groups[existing] = { ...groups[existing], ...tagged };
     } else {
-      groups.push(group);
+      groups.push(tagged);
     }
-    if (window.orbitAPI) window.orbitAPI.dbSaveGroup(group);
+    if (window.orbitAPI) window.orbitAPI.dbSaveGroup(tagged);
     this.setState({ groups });
   }
 
@@ -318,8 +453,7 @@ class Store {
   }
 
   closeDM(userId) {
-    const friends = this.state.friends.filter(function(f) { return f.userId !== userId; });
-    if (window.orbitAPI) window.orbitAPI.dbDeleteFriend(userId);
+    // Don't delete friend globally — just close the DM for this account
     const messages = { ...this.state.messages };
     delete messages[userId];
     const pinnedMessages = { ...this.state.pinnedMessages };
@@ -332,26 +466,34 @@ class Store {
     delete lastReadIds[userId];
     const mutedChats = { ...this.state.mutedChats };
     delete mutedChats[userId];
-    const pinnedDMs = { ...this.state.pinnedDMs };
+    const uid = this.state.currentUser && this.state.currentUser.userId;
+    var closedDMs = this._loadUserClosedDMs(uid);
+    closedDMs = { ...closedDMs, [userId]: true };
+    this._saveUserClosedDMs(uid, closedDMs);
+    var pinnedDMs = this._loadUserPinnedDMs(uid);
     delete pinnedDMs[userId];
-    const closedDMs = { ...this.state.closedDMs, [userId]: true };
-    this.setState({ friends, messages, pinnedMessages, unreadCounts, mentionCounts, lastReadIds, mutedChats, pinnedDMs, closedDMs, activeChatId: 'local-echo' });
-    if (window.Toast) window.Toast.show('Closed', 'DM closed — friend removed');
+    this._saveUserPinnedDMs(uid, pinnedDMs);
+    this.setState({ messages, pinnedMessages, unreadCounts, mentionCounts, lastReadIds, mutedChats, pinnedDMs, closedDMs, activeChatId: 'local-echo' });
+    if (window.Toast) window.Toast.show('Closed', 'DM closed');
   }
 
   togglePinDM(userId) {
-    const pinnedDMs = { ...this.state.pinnedDMs };
+    const uid = this.state.currentUser && this.state.currentUser.userId;
+    var pinnedDMs = this._loadUserPinnedDMs(uid);
     if (pinnedDMs[userId]) {
       delete pinnedDMs[userId];
     } else {
-      pinnedDMs[userId] = true;
+      pinnedDMs = { ...pinnedDMs, [userId]: true };
     }
+    this._saveUserPinnedDMs(uid, pinnedDMs);
     this.setState({ pinnedDMs });
   }
 
   reopenDM(userId) {
-    const closedDMs = { ...this.state.closedDMs };
+    const uid = this.state.currentUser && this.state.currentUser.userId;
+    var closedDMs = this._loadUserClosedDMs(uid);
     delete closedDMs[userId];
+    this._saveUserClosedDMs(uid, closedDMs);
     this.setState({ closedDMs, activeChatId: userId });
   }
 
@@ -363,6 +505,17 @@ class Store {
       return g;
     });
     if (window.orbitAPI) window.orbitAPI.dbRemoveGroupMember(groupId, userId);
+    // If removing self, untrack this chat for the current account
+    var uid = this.state.currentUser && this.state.currentUser.userId;
+    if (uid && userId === uid) {
+      var allMaps = window.orbitAPI.dbGetSetting('userChatIds', {});
+      if (allMaps[uid]) {
+        allMaps[uid] = allMaps[uid].filter(function(id) { return id !== groupId; });
+        window.orbitAPI.dbSetSetting('userChatIds', allMaps);
+      }
+      var ids = this.state._userChatIds || [];
+      this.state._userChatIds = ids.filter(function(id) { return id !== groupId; });
+    }
     this.setState({ groups });
   }
 
@@ -639,8 +792,10 @@ class Store {
 
       // Auto-reopen DM if it was closed
       if (this.state.closedDMs && this.state.closedDMs[fromId]) {
-        const closedDMs = { ...this.state.closedDMs };
+        const uid = this.state.currentUser && this.state.currentUser.userId;
+        var closedDMs = this._loadUserClosedDMs(uid);
         delete closedDMs[fromId];
+        this._saveUserClosedDMs(uid, closedDMs);
         this.setState({ closedDMs });
       }
 
@@ -768,7 +923,10 @@ class Store {
     msgs[chatId] = [...msgs[chatId], messageObj];
     if (msgs[chatId].length > MAX_MSGS) msgs[chatId] = msgs[chatId].slice(-MAX_MSGS);
 
-    if (window.orbitAPI) window.orbitAPI.dbAddMessage(chatId, messageObj);
+    if (window.orbitAPI) {
+      window.orbitAPI.dbAddMessage(chatId, messageObj);
+      this.trackChatForCurrentUser(chatId);
+    }
 
     // Track unread if not the active chat
     const isActive = this.state.activeChatId === chatId && !document.hidden;
@@ -1106,3 +1264,26 @@ class Store {
 
 // Global singleton store
 window.store = new Store();
+
+// Backfill avatarDataUrl for existing groups that only have file-based avatarPath
+setTimeout(function() {
+  var s = window.store ? window.store.getState() : null;
+  if (!s || !s.groups) return;
+  s.groups.forEach(function(g) {
+    if (g.avatarPath && !g.avatarDataUrl && g.groupId) {
+      fetch('orbit-avatar://' + g.groupId + '?t=' + (g.avatarUpdatedAt || 0))
+        .then(function(r) { return r.blob(); })
+        .then(function(blob) {
+          return new Promise(function(resolve) {
+            var reader = new FileReader();
+            reader.onload = function() { resolve(reader.result); };
+            reader.readAsDataURL(blob);
+          });
+        })
+        .then(function(dataUrl) {
+          window.store.updateGroupField(g.groupId, 'avatarDataUrl', dataUrl);
+        })
+        .catch(function() {});
+    }
+  });
+}, 100);

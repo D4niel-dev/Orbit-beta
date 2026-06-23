@@ -16,6 +16,7 @@ window.SidebarLeft = {
   },
 
   renderAvatar(user) {
+    if (!this.container) return;
     const profileBtn = this.container.querySelector('#btn-profile');
     if (!profileBtn) return;
     var frame = window.Frames.getFrameForUser(user ? user.userId : null);
@@ -98,6 +99,10 @@ window.SidebarLeft = {
     if (profileBtn) {
       profileBtn.addEventListener('click', () => {
         if(window.ProfileCard) window.ProfileCard.toggle();
+      });
+      profileBtn.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        if(window.AccountSwitcher) window.AccountSwitcher.toggle();
       });
     }
   }

@@ -123,7 +123,8 @@ class Discovery {
       avatarHash: identity.avatar ? 'has_avatar' : null,
       avatar: avatarChanged ? identity.avatar : undefined,
       status: broadcastStatus,
-      bio: identity.bio,
+      bio: identity.bio || '',
+      banner: identity.banner || null,
       publicKey: identity.publicKey || null,
       profileFrame: identity.profileFrame || null,
       tcpPort: 46000
@@ -165,15 +166,20 @@ class Discovery {
   _pruneStalePeers() {
     var now = Date.now();
     var staleThreshold = 180000;
-    var pruned = 0;
+    var pruned = [];
     for (var [id, peer] of this.peers) {
       if (now - peer.lastSeen > staleThreshold) {
         this.peers.delete(id);
-        pruned++;
+        pruned.push(id);
       }
     }
-    if (pruned > 0) {
-      console.log('[Discovery] Pruned', pruned, 'stale peers');
+    if (pruned.length > 0) {
+      console.log('[Discovery] Pruned', pruned.length, 'stale peers:', pruned);
+      pruned.forEach(function(id) {
+        if (typeof this.onPeerGone === 'function') {
+          this.onPeerGone(id);
+        }
+      }, this);
     }
   }
 

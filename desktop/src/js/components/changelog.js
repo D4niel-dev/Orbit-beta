@@ -14,7 +14,34 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.1.4-beta', 'Latest', [
+        versionBlock('0.1.5-beta', 'Latest', [
+          ['New Features', [
+            'Account Switcher (Experimental): Right-click avatar → panel to add/switch/logout accounts. Last active user auto-loaded. Gated behind Experimental Features.',
+            'PIN Lock Screen (2FA Experimental): 4-8 digit PIN, SHA-256 hashed on main process, numpad UI, 5-attempt cooldown, Forgot PIN reset. Gated behind Experimental Features.',
+            'Settings Security Tab: PIN setup, change, disable — re-renders when Experimental Features toggled.',
+            'Orbit Echo Welcome Sequence: 4 welcome messages with typing indicator delays.',
+            'Per-Account Message Isolation: Messages stored per-user via userChatIds. DB migration v11 adds accountOwnerId columns. reloadDataForCurrentUser() filters messages per account.',
+            'Per-Account Avatar Frames: v10 migration adds profileFrame to users table. Frame loaded from user record, not shared settings.',
+            'Avatar Frames in Account Switcher: Frame overlays on current account + other account rows.',
+            'Beacon Payload Enriched: Both UDP and TCP beacons transmit avatar, banner, bio, profileFrame, publicKey.',
+            'Friend Status Starts Offline: Friends load offline (except Echo). Offline check 45s threshold, 15s interval. Discovery emits peer-gone.',
+            'Group Avatar Backfill: Async fetch of orbit-avatar:// for groups with avatarPath but no avatarDataUrl.',
+            'Profile Frame Migration: Existing settings-based frames copied to per-account user record on first boot after v10.'
+          ]],
+          ['Bug Fixes', [
+            'Messages from other accounts no longer leak — auto-track scoped to accountOwnerId, renderList filters by _userChatIds, renderGroups checks membership',
+            'Closing DMs no longer affects other accounts — closeDM skips dbDeleteFriend, closedDMs/pinnedDMs stored per-account in settings',
+            'Leaving groups correctly hides the group — removeGroupMember untracks chat, renderGroups checks membership',
+            '"User"#0000 placeholder leaking fixed — getAll() filters invalid entries, store placeholder uses userId: null',
+            'Profile frame migration condition fixed — pf && pf !== cur handles null→0 conversion by saveUser',
+            'SidebarLeft.renderAvatar crashes before init — added !this.container guard',
+            'Store.js trailing comma syntax error fixed between class methods',
+            'window.ChatPanel.showChat not a function — removed premature call from reloadDataForCurrentUser',
+            'require(\'crypto\') → window.crypto in renderer for invite code generation',
+            'Migration v11 robustness — column-existence checks, user_version guard for non-transactional pragma'
+          ]]
+        ]) +
+        versionBlock('0.1.4-beta', '', [
           ['New Features', [
             'Desktop P2P Bugfix Audit (17 fixes): Socket 8s timeout disabled after connect, write-queue key precedence fix, reconnect .catch() + counter reset on data, preload reconnect args, PIN/UNPIN groupId routing, GROUP_MEMBER_ADDED field update, GROUP_CREATE publicKey enrichment, GROUP_JOIN_REQUEST usertag/avatar/status',
             'P2P Auto-Connection Stabilization: PING/PONG keep-alive (15s heartbeat, 30s idle → close), 8s connection timeout, reconnect with exponential backoff (5 attempts max, 30s cap), stale peer pruning (180s), network change detection (10s IP polling → full restart), auto-connect duplicate protection',

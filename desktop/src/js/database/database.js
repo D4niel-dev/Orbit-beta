@@ -36,11 +36,13 @@ class OrbitDatabase {
       // Users
       getUser: this.db.prepare('SELECT * FROM users WHERE userId = ?'),
       getLocalUser: this.db.prepare('SELECT * FROM users LIMIT 1'),
-      saveUser: this.db.prepare('INSERT OR REPLACE INTO users (userId, username, usertag, status, avatar, banner, bio) VALUES (@userId, @username, @usertag, @status, @avatar, @banner, @bio)'),
+      getAllUsers: this.db.prepare('SELECT * FROM users ORDER BY username'),
+      deleteUser: this.db.prepare('DELETE FROM users WHERE userId = ?'),
+      saveUser: this.db.prepare('INSERT OR REPLACE INTO users (userId, username, usertag, status, avatar, banner, bio, profileFrame) VALUES (@userId, @username, @usertag, @status, @avatar, @banner, @bio, @profileFrame)'),
       
       // Friends
       getFriends: this.db.prepare('SELECT * FROM friends'),
-      saveFriend: this.db.prepare('INSERT OR REPLACE INTO friends (userId, username, usertag, status, avatar, bio) VALUES (@userId, @username, @usertag, @status, @avatar, @bio)'),
+      saveFriend: this.db.prepare('INSERT OR REPLACE INTO friends (userId, username, usertag, status, avatar, bio, accountOwnerId) VALUES (@userId, @username, @usertag, @status, @avatar, @bio, @accountOwnerId)'),
       deleteFriend: this.db.prepare('DELETE FROM friends WHERE userId = ?'),
       
       // Messages
@@ -60,11 +62,11 @@ class OrbitDatabase {
       // Groups
       getGroups: this.db.prepare('SELECT g.*, COUNT(gm.userId) as memberCount FROM groups g LEFT JOIN group_members gm ON g.groupId = gm.groupId GROUP BY g.groupId ORDER BY g.pinned DESC, g.createdAt DESC'),
       getGroup: this.db.prepare('SELECT * FROM groups WHERE groupId = ?'),
-      saveGroup: this.db.prepare('INSERT OR REPLACE INTO groups (groupId, groupName, ownerId, createdAt, avatarPath, description, pinned, notificationMuted, inviteCode, avatarUpdatedAt) VALUES (@groupId, @groupName, @ownerId, @createdAt, @avatarPath, @description, @pinned, @notificationMuted, @inviteCode, @avatarUpdatedAt)'),
+      saveGroup: this.db.prepare('INSERT OR REPLACE INTO groups (groupId, groupName, ownerId, createdAt, avatarPath, description, pinned, notificationMuted, inviteCode, avatarUpdatedAt, accountOwnerId) VALUES (@groupId, @groupName, @ownerId, @createdAt, @avatarPath, @description, @pinned, @notificationMuted, @inviteCode, @avatarUpdatedAt, @accountOwnerId)'),
       deleteGroup: this.db.prepare('DELETE FROM groups WHERE groupId = ?'),
       // no updateGroupField prepared statement — uses dynamic sql via method
       getGroupByInviteCode: this.db.prepare('SELECT * FROM groups WHERE inviteCode = ?'),
-      addGroupMember: this.db.prepare('INSERT OR REPLACE INTO group_members (groupId, userId, username, usertag, status, avatar, ip, joinedAt, role) VALUES (@groupId, @userId, @username, @usertag, @status, @avatar, @ip, @joinedAt, @role)'),
+      addGroupMember: this.db.prepare('INSERT OR REPLACE INTO group_members (groupId, userId, username, usertag, status, avatar, ip, joinedAt, role, accountOwnerId) VALUES (@groupId, @userId, @username, @usertag, @status, @avatar, @ip, @joinedAt, @role, @accountOwnerId)'),
       removeGroupMember: this.db.prepare('DELETE FROM group_members WHERE groupId = ? AND userId = ?'),
       getGroupMembers: this.db.prepare('SELECT * FROM group_members WHERE groupId = ?'),
       setMemberRole: this.db.prepare('UPDATE group_members SET role = ? WHERE groupId = ? AND userId = ?'),
@@ -98,6 +100,15 @@ class OrbitDatabase {
     if (!user) return null;
     return this.parseUser(user);
   }
+
+  getAllUsers() {
+    const rows = this.stmts.getAllUsers.all();
+    return rows.map(r => this.parseUser(r));
+  }
+
+  deleteUser(userId) {
+    this.stmts.deleteUser.run(userId);
+  }
   
   saveUser(user) {
     this.stmts.saveUser.run({
@@ -107,7 +118,8 @@ class OrbitDatabase {
       status: user.status,
       avatar: (user.avatar instanceof Buffer || typeof user.avatar === 'string') ? user.avatar : null,
       banner: (user.banner instanceof Buffer || typeof user.banner === 'string') ? user.banner : null,
-      bio: user.bio || ''
+      bio: user.bio || '',
+      profileFrame: user.profileFrame != null ? user.profileFrame : 0
     });
   }
 
@@ -135,7 +147,8 @@ class OrbitDatabase {
       usertag: friend.usertag,
       status: friend.status,
       avatar: (friend.avatar instanceof Buffer || typeof friend.avatar === 'string') ? friend.avatar : null,
-      bio: friend.bio || ''
+      bio: friend.bio || '',
+      accountOwnerId: friend.accountOwnerId || friend.ownerId || null
     });
   }
 
@@ -173,7 +186,8 @@ class OrbitDatabase {
       pinned: group.pinned ? 1 : 0,
       notificationMuted: group.notificationMuted ? 1 : 0,
       inviteCode: group.inviteCode || null,
-      avatarUpdatedAt: group.avatarUpdatedAt || 0
+      avatarUpdatedAt: group.avatarUpdatedAt || 0,
+      accountOwnerId: group.accountOwnerId || group.ownerId || null
     });
     if (group.members && Array.isArray(group.members)) {
       group.members.forEach(m => this.addGroupMember(group.groupId, m));
@@ -203,7 +217,8 @@ class OrbitDatabase {
       avatar: user.avatar || null,
       ip: user.ip || null,
       joinedAt: user.joinedAt || new Date().toISOString(),
-      role: user.role || 'member'
+      role: user.role || 'member',
+      accountOwnerId: user.accountOwnerId || null
     });
   }
 
@@ -233,17 +248,41 @@ class OrbitDatabase {
     return map;
   }
 
-  getAllStartupData() {
-    return this.db.transaction(() => ({
-      settings: this.getSetting('settings', {}),
-      networkSettings: this.getSetting('networkSettings', {}),
-      friends: this.getFriends(),
-      messages: this.getRecentMessagesByChat(50),
-      groups: this.getGroups(),
-      uiState: this.getSetting('uiState', { activeTab: 'dms', activeChatId: 'local-echo' }),
-      mutedChats: this.getSetting('mutedChats', {}),
-      readStates: this.getAllReadStates()
-    }))();
+  getAllStartupData(userId) {
+    return this.db.transaction(() => {
+      var friends = this.getFriends();
+      var groups = this.getGroups();
+      var messages = this.getRecentMessagesByChat(50);
+
+      if (userId) {
+        // Filter messages per-account using per-user chat ID tracking
+        var userChatIds = this.getSetting('userChatIds', {})[userId];
+        if (userChatIds && Array.isArray(userChatIds) && userChatIds.length > 0) {
+          var validSet = {};
+          userChatIds.forEach(function(id) { validSet[id] = true; });
+          var filteredMessages = {};
+          Object.keys(messages).forEach(function(chatId) {
+            if (validSet[chatId]) filteredMessages[chatId] = messages[chatId];
+          });
+          messages = filteredMessages;
+        } else {
+          // No chat IDs tracked for this user yet — show nothing
+          messages = {};
+        }
+      }
+
+      return {
+        settings: this.getSetting('settings', {}),
+        networkSettings: this.getSetting('networkSettings', {}),
+        friends: friends,
+        messages: messages,
+        groups: groups,
+        uiState: this.getSetting('uiState', { activeTab: 'dms', activeChatId: 'local-echo' }),
+        mutedChats: this.getSetting('mutedChats', {}),
+        readStates: this.getAllReadStates(),
+        blockedUsers: this.getSetting('blockedUsers', [])
+      };
+    })();
   }
 
   setReadState(chatId, lastReadMsgId) {

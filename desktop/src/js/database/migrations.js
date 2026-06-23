@@ -132,6 +132,39 @@ const migrations = [
       CREATE INDEX IF NOT EXISTS idx_mentions_chatId ON mentions(chatId);
       CREATE INDEX IF NOT EXISTS idx_messages_chatId_timestamp ON messages(chatId, timestamp DESC);
     `);
+  },
+  // v10 - Add profileFrame to users table
+  (db) => {
+    db.exec(`
+      ALTER TABLE users ADD COLUMN profileFrame INTEGER DEFAULT 0;
+    `);
+  },
+  // v11 - Add accountOwnerId for per-account data isolation
+  // (distinct from groups.ownerId which is the group creator)
+  (db) => {
+    // Check if column exists before adding (handles partial migration)
+    var cols;
+    try { cols = db.pragma('table_info(friends)'); } catch(e) { cols = []; }
+    if (!cols.some(function(c) { return c.name === 'accountOwnerId'; })) {
+      try { db.exec("ALTER TABLE friends ADD COLUMN accountOwnerId TEXT"); } catch(e) {}
+    }
+    try { cols = db.pragma('table_info(groups)'); } catch(e) { cols = []; }
+    if (!cols.some(function(c) { return c.name === 'accountOwnerId'; })) {
+      try { db.exec("ALTER TABLE groups ADD COLUMN accountOwnerId TEXT"); } catch(e) {}
+    }
+    try { cols = db.pragma('table_info(group_members)'); } catch(e) { cols = []; }
+    if (!cols.some(function(c) { return c.name === 'accountOwnerId'; })) {
+      try { db.exec("ALTER TABLE group_members ADD COLUMN accountOwnerId TEXT"); } catch(e) {}
+    }
+    // Backfill existing data with the first user's userId so pre-migration data
+    // is assigned to the original (first) account, not orphaned.
+    var firstUser = db.prepare('SELECT userId FROM users LIMIT 1').get();
+    if (firstUser && firstUser.userId) {
+      var uid = firstUser.userId;
+      db.prepare('UPDATE friends SET accountOwnerId = ? WHERE accountOwnerId IS NULL').run(uid);
+      db.prepare('UPDATE groups SET accountOwnerId = ? WHERE accountOwnerId IS NULL').run(uid);
+      db.prepare('UPDATE group_members SET accountOwnerId = ? WHERE accountOwnerId IS NULL').run(uid);
+    }
   }
 ];
 
@@ -140,6 +173,28 @@ module.exports = {
     // Check current user_version
     const { user_version } = db.prepare('PRAGMA user_version').get();
     let currentVersion = user_version || 0;
+    
+    // Guard: if user_version >= 11 but accountOwnerId columns are missing
+    // (e.g. from a partially-rolled-back transaction), force re-run v11
+    if (currentVersion >= 11) {
+      try {
+        var friendCols = db.pragma('table_info(friends)').map(function(c) { return c.name; });
+        var groupCols = db.pragma('table_info(groups)').map(function(c) { return c.name; });
+        var memberCols = db.pragma('table_info(group_members)').map(function(c) { return c.name; });
+        var hasAccountOwnerId = friendCols.indexOf('accountOwnerId') >= 0
+          && groupCols.indexOf('accountOwnerId') >= 0
+          && memberCols.indexOf('accountOwnerId') >= 0;
+        if (!hasAccountOwnerId) {
+          console.log('[Migration] accountOwnerId columns missing, resetting to v10');
+          currentVersion = 10;
+          db.pragma('user_version = 10');
+        }
+      } catch(e) {
+        console.warn('[Migration] Column check failed, resetting:', e.message);
+        currentVersion = 10;
+        db.pragma('user_version = 10');
+      }
+    }
     
     // Begin transaction for migrations
     const migrateTransaction = db.transaction(() => {

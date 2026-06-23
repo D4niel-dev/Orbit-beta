@@ -140,7 +140,7 @@ var MStore = {
   },
 
   load() {
-    this.friends = this.get('friends', []);
+    this.friends = this.get('friends', []).map(function(f) { f.lastSeen = 0; f.status = 'offline'; return f; });
     this.chats = this.get('chats', []);
     this.groups = this.get('groups', []);
     this.messages = this.get('messages', {});
@@ -198,8 +198,10 @@ var MStore = {
     // Add default messages for echo
     if (!this.messages['echo'] || this.messages['echo'].length === 0) {
       this.messages['echo'] = [
-        { id: 'e1', from: 'echo', text: 'Welcome to Orbit Mobile!', time: new Date().toISOString() },
-        { id: 'e2', from: 'echo', text: 'Send a message and I will echo it back.', time: new Date().toISOString() }
+        { id: 'e1', from: 'echo', text: "Hi! I'm Orbit Echo! You can call me Bit if you want.", time: new Date().toISOString() },
+        { id: 'e2', from: 'echo', text: "You can send messages in here and i'll echo it back at you! (except for images, files, folders and sounds files)", time: new Date().toISOString() },
+        { id: 'e3', from: 'echo', text: 'THIS MESSAGE WILL SELF-DESTRUCT AFTER 5s', time: new Date().toISOString() },
+        { id: 'e4', from: 'echo', text: 'Just kidding..', time: new Date().toISOString() }
       ];
     }
     this.save();
@@ -2194,7 +2196,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var friendsCount = MStore ? MStore.friends.length : 0;
         var chatsCount = MStore ? MStore.chats.length : 0;
         return '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.1.4-beta · Capacitor Android</div></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.1.5-beta · Capacitor Android</div></div>' +
         '</div>' +
         '<div class="settings-row">' +
           '<div class="settings-row-content"><span class="settings-row-title">Statistics</span><div class="settings-row-desc">' + friendsCount + ' friends · ' + chatsCount + ' chats</div></div>' +
@@ -2404,12 +2406,12 @@ document.addEventListener('DOMContentLoaded', function() {
             window._offlineCheckInterval = setInterval(function() {
               var now = Date.now();
               MStore.friends.forEach(function(f) {
-                if (f.status === 'online' && f.lastSeen && (now - f.lastSeen) > 180000) { f.status = 'offline'; }
+                if (f.status === 'online' && f.lastSeen && now - f.lastSeen > 45000) { f.status = 'offline'; }
               });
               MStore.save();
               renderFriends();
               renderChatList();
-            }, 60000);
+            }, 15000);
             // Stop dev overlay polling
             if (window._stopDevOverlay) window._stopDevOverlay = true;
           } else {
@@ -2418,12 +2420,12 @@ document.addEventListener('DOMContentLoaded', function() {
             window._offlineCheckInterval = setInterval(function() {
               var now = Date.now();
               MStore.friends.forEach(function(f) {
-                if (f.status === 'online' && f.lastSeen && (now - f.lastSeen) > 180000) { f.status = 'offline'; }
+                if (f.status === 'online' && f.lastSeen && now - f.lastSeen > 45000) { f.status = 'offline'; }
               });
               MStore.save();
               renderFriends();
               renderChatList();
-            }, 30000);
+            }, 15000);
             // Restore dev overlay polling
             if (window._stopDevOverlay) window._stopDevOverlay = false;
           }
@@ -2461,7 +2463,25 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button id="changelog-close-mobile" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;font-size:20px;">✕</button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
-        vBlock('0.1.4-beta', 'Latest', [
+        vBlock('0.1.5-beta', 'Latest', [
+          ['New Features', [
+            'Account Switcher (Experimental): Right-click avatar on desktop to add/switch/logout accounts. Last active user auto-loaded.',
+            'PIN Lock Screen (2FA Experimental): 4-8 digit PIN, SHA-256 hashed, numpad UI, 5-attempt cooldown, Forgot PIN reset.',
+            'Per-Account Message Isolation: Messages stored per-user via userChatIds. accountOwnerId columns for DB isolation.',
+            'Per-Account Avatar Frames: Frame loaded from user record, not shared settings.',
+            'Orbit Echo Welcome Sequence: 4 welcome messages with typing indicator delays.',
+            'Beacon Payload Enriched: Avatar, banner, bio, profileFrame, publicKey in both UDP and TCP beacons.',
+            'Friend Status Starts Offline: Friends load offline (except Echo). Faster offline detection (45s threshold, 15s interval).',
+            'Group Avatar Backfill: Async fetch for groups with avatarPath but no avatarDataUrl.'
+          ]],
+          ['Bug Fixes', [
+            'Messages from other accounts no longer leak — per-account auto-track and render filtering',
+            'Closing DMs no longer affects other accounts — per-account closedDMs/pinnedDMs in settings',
+            'Leaving groups correctly hides the group — renderGroups checks membership, removeGroupMember untracks chat',
+            '"User"#0000 placeholder fixed, store syntax error fixed, various cross-account isolation fixes'
+          ]]
+        ]) +
+        vBlock('0.1.4-beta', '', [
           ['New Features', [
             'Native Android System Notifications: Messages now show as real system notifications when app is backgrounded (requires POST_NOTIFICATIONS permission)',
             'Desktop Notification Avatars: Sender/group avatar now shown as notification icon',
@@ -3006,7 +3026,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     var backdrop = document.createElement('div');
     backdrop.id = 'profile-view-overlay';
-    backdrop.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:99999;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;animation:fadeIn 0.15s;';
+    var safeBottom = 'var(--safe-area-bottom, 0px)';
+    backdrop.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100dvh;z-index:99999;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;animation:fadeIn 0.15s;';
     backdrop.addEventListener('click', function(e) { if (e.target === backdrop) backdrop.remove(); });
 
     var card = document.createElement('div');
@@ -3913,8 +3934,9 @@ document.addEventListener('DOMContentLoaded', function() {
     moreBtn.addEventListener('click', function() {
       if (!activeChatId) return;
       var isGroup = !!MStore.groups.find(function(g) { return g.id === activeChatId; });
-      var html = '<div class="action-sheet-overlay" id="chat-more-action-sheet" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;flex-direction:column;justify-content:flex-end;">' +
-        '<div class="action-sheet-content" style="background:var(--bg-surface);border-radius:24px 24px 0 0;padding:24px 16px;animation:slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);">' +
+      var safeBottom = 'var(--safe-area-bottom, 0px)';
+      var html = '<div class="action-sheet-overlay" id="chat-more-action-sheet" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:' + safeBottom + ';">' +
+        '<div class="action-sheet-content" style="background:var(--bg-surface);border-radius:24px 24px 0 0;padding:24px 16px;padding-bottom:calc(24px + ' + safeBottom + ');animation:slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);">' +
           '<div style="width:40px;height:5px;background:var(--border-subtle);border-radius:4px;margin:0 auto 24px;"></div>' +
           '<div class="action-btn" id="action-view-info" style="padding:16px;display:flex;align-items:center;gap:14px;font-size:16px;font-weight:600;color:var(--text-primary);cursor:pointer;border-radius:12px;transition:background 0.2s;">' +
             '<i data-lucide="' + (isGroup ? 'users' : 'user') + '"></i> ' + (isGroup ? 'Group Info' : 'View Profile') +
@@ -5586,14 +5608,12 @@ document.addEventListener('DOMContentLoaded', function() {
     window._offlineCheckInterval = setInterval(function() {
       var now = Date.now();
       MStore.friends.forEach(function(f) {
-        if (f.status === 'online' && f.lastSeen && (now - f.lastSeen) > 180000) {
-          f.status = 'offline';
-        }
+        if (f.status === 'online' && f.lastSeen && now - f.lastSeen > 45000) { f.status = 'offline'; }
       });
       MStore.save();
       renderFriends();
       renderChatList();
-    }, 30000);
+    }, 15000);
 
     Orbit.P2P.onPeerFound(function(data) {
       if (!data || !data.host) {
