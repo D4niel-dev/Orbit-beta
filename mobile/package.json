@@ -1,6 +1,6 @@
 {
   "name": "orbit-mobile",
-  "version": "0.1.5-beta",
+  "version": "0.1.6-beta",
   "private": true,
   "description": "Orbit P2P Chat — Android App",
   "main": "src/index.html",

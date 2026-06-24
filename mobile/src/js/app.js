@@ -180,6 +180,7 @@ var MStore = {
       });
     } else {
       echoFriend.avatar = 'icons/app/orbit_1024.png';
+      echoFriend.status = 'online';
     }
     // Ensure echo chat exists and update avatar
     var echoChat = this.chats.find(function(c) { return c.id === 'echo'; });
@@ -820,6 +821,109 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  function sendReaction(chatId, msgId, emoji, action) {
+    if (!window.Orbit || !Orbit.P2P || !Orbit.P2P.isAvailable()) return;
+    var myId = MStore.user ? MStore.user.id : 'mobile';
+    var isGroup = MStore.groups.some(function(g) { return g.id === chatId; });
+    if (isGroup) {
+      var grp = MStore.groups.find(function(g) { return g.id === chatId; });
+      if (grp) {
+        (grp.members || []).forEach(function(m) {
+          var mid = typeof m === 'string' ? m : m.userId;
+          if (mid !== myId) {
+            var pkt = Orbit.Protocol.createPacket(
+              Orbit.Protocol.Types.REACTION,
+              { msgId: msgId, emoji: emoji, action: action, userId: myId, chatId: chatId },
+              myId
+            );
+            Orbit.P2P.send(mid, pkt);
+          }
+        });
+      }
+    } else {
+      var pkt = Orbit.Protocol.createPacket(
+        Orbit.Protocol.Types.REACTION,
+        { msgId: msgId, emoji: emoji, action: action, userId: myId, chatId: chatId },
+        myId
+      );
+      Orbit.P2P.send(chatId, pkt);
+    }
+  }
+
+  function applyReactionLocally(chatId, msgId, emoji, action) {
+    var msgs = MStore.messages[chatId];
+    if (!msgs) return;
+    var myId = MStore.user ? MStore.user.id : '';
+    for (var i = 0; i < msgs.length; i++) {
+      if (String(msgs[i].id) === String(msgId)) {
+        var reactions = msgs[i].reactions ? msgs[i].reactions.slice() : [];
+        var existingIdx = reactions.findIndex(function(r) { return r.emoji === emoji && r.userId === myId; });
+        if (action === 'add' && existingIdx < 0) {
+          reactions.push({ emoji: emoji, userId: myId });
+        } else if (action === 'remove' && existingIdx >= 0) {
+          reactions.splice(existingIdx, 1);
+        }
+        msgs[i].reactions = reactions;
+        break;
+      }
+    }
+    MStore.save();
+    if (activeChatId === chatId) renderMessages(chatId);
+  }
+
+  function toggleReaction(msgId, pillEl) {
+    if (!activeChatId) return;
+    var msgs = MStore.messages[activeChatId] || [];
+    var msg = msgs.find(function(m) { return String(m.id) === String(msgId); });
+    if (!msg) return;
+    var emoji = pillEl.querySelector('span') ? pillEl.querySelector('span').textContent : '';
+    if (!emoji) return;
+    var myId = MStore.user ? MStore.user.id : '';
+    var hasReacted = msg.reactions && msg.reactions.some(function(r) { return r.emoji === emoji && r.userId === myId; });
+    var action = hasReacted ? 'remove' : 'add';
+    applyReactionLocally(activeChatId, msgId, emoji, action);
+    sendReaction(activeChatId, msgId, emoji, action);
+  }
+
+  var _reactionPickerEl = null;
+  function showReactionPicker(btnEl, msgId) {
+    if (_reactionPickerEl) { _reactionPickerEl.remove(); _reactionPickerEl = null; return; }
+    var emojis = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+    var myId = MStore.user ? MStore.user.id : '';
+    var msgs = MStore.messages[activeChatId] || [];
+    var msg = msgs.find(function(m) { return String(m.id) === String(msgId); });
+    var picker = document.createElement('div');
+    picker.className = 'reaction-picker';
+    picker.style.cssText = 'position:fixed;z-index:9999;background:var(--surface-color);border:1px solid var(--border-color);border-radius:12px;padding:6px;display:flex;gap:4px;box-shadow:0 4px 16px rgba(0,0,0,0.3);';
+    var rect = btnEl.getBoundingClientRect();
+    picker.style.left = Math.max(8, rect.left + rect.width / 2 - 140) + 'px';
+    picker.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+    emojis.forEach(function(emoji) {
+      var hasReacted = msg && msg.reactions && msg.reactions.some(function(r) { return r.emoji === emoji && r.userId === myId; });
+      var el = document.createElement('span');
+      el.textContent = emoji;
+      el.style.cssText = 'font-size:24px;cursor:pointer;padding:4px 8px;border-radius:8px;transition:background 0.15s;' + (hasReacted ? 'background:var(--accent-primary-alpha);' : '');
+      el.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var action = hasReacted ? 'remove' : 'add';
+        applyReactionLocally(activeChatId, msgId, emoji, action);
+        sendReaction(activeChatId, msgId, emoji, action);
+        if (_reactionPickerEl) { _reactionPickerEl.remove(); _reactionPickerEl = null; }
+      });
+      picker.appendChild(el);
+    });
+    document.body.appendChild(picker);
+    _reactionPickerEl = picker;
+    function closePicker(e) {
+      if (!picker.contains(e.target) && e.target !== btnEl) {
+        picker.remove();
+        _reactionPickerEl = null;
+        document.removeEventListener('click', closePicker);
+      }
+    }
+    setTimeout(function() { document.addEventListener('click', closePicker); }, 0);
+  }
+
   function confirmDeleteMessage(msgId) {
     if (!confirm('Delete this message? This cannot be undone.')) return;
     MStore.deleteMessage(activeChatId, msgId);
@@ -1076,6 +1180,7 @@ document.addEventListener('DOMContentLoaded', function() {
           '<i data-lucide="reply" style="width:15px;height:15px;"></i></button>' +
         '<button class="msg-action-btn msg-forward-btn" data-msg-id="' + m.id + '" title="Forward">' +
           '<i data-lucide="send" style="width:15px;height:15px;"></i></button>' +
+        '<button class="msg-action-btn msg-react-btn" data-msg-id="' + m.id + '" title="React"><i data-lucide="smile-plus" style="width:15px;height:15px;"></i></button>' +
         '<button class="msg-action-btn msg-translate-btn" data-msg-id="' + m.id + '" title="Translate"><i data-lucide="languages" style="width:15px;height:15px;"></i></button>' +
         (isMine
           ? '<button class="msg-action-btn msg-edit-btn" data-msg-id="' + m.id + '" title="Edit">' +
@@ -1106,6 +1211,8 @@ document.addEventListener('DOMContentLoaded', function() {
               '<video src="' + escapeHtml(a.url) + '" style="width:100%;height:100%;object-fit:cover;display:block;" preload="metadata"></video>' +
               '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:40px;height:40px;border-radius:50%;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;pointer-events:none;"><svg viewBox="0 0 24 24" width="20" height="20" fill="white"><polygon points="8,5 19,12 8,19"/></svg></div>' +
             '</div>';
+          } else if (a.type === 'audio' && a.url) {
+            gridHtml += '<div class="att-grid-cell att-audio-cell oap-placeholder" data-oap-url="' + escapeHtml(a.url) + '"></div>';
           } else {
             gridHtml += '<div class="att-grid-cell att-file-cell">' +
               '<i data-lucide="file" style="width:28px;height:28px;margin-bottom:6px;color:var(--text-muted);"></i>' +
@@ -1168,6 +1275,7 @@ document.addEventListener('DOMContentLoaded', function() {
     feed.setAttribute('data-refreshing', 'true');
     feed.innerHTML = html;
     freezeGifImages(feed);
+    if (window.OrbitAudioPlayer) OrbitAudioPlayer.init(feed);
     requestAnimationFrame(function() { feed.removeAttribute('data-refreshing'); });
     // Bind action buttons
     feed.querySelectorAll('.msg-reply-btn').forEach(function(btn) {
@@ -1184,6 +1292,12 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     feed.querySelectorAll('.msg-translate-btn').forEach(function(btn) {
       btn.addEventListener('click', function(e) { e.stopPropagation(); var msgId = this.getAttribute('data-msg-id'); if (MStore.settings.messageTranslate) translateMessage(msgId); });
+    });
+    feed.querySelectorAll('.msg-react-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) { e.stopPropagation(); showReactionPicker(this, this.getAttribute('data-msg-id')); });
+    });
+    feed.querySelectorAll('.reaction-pill').forEach(function(pill) {
+      pill.addEventListener('click', function(e) { e.stopPropagation(); toggleReaction(this.parentElement.getAttribute('data-msg-id') || this.closest('[data-msg-id]').getAttribute('data-msg-id'), this); });
     });
     feed.querySelectorAll('.msg-pin-btn').forEach(function(btn) {
       btn.addEventListener('click', function(e) {
@@ -1475,11 +1589,39 @@ document.addEventListener('DOMContentLoaded', function() {
   function sendMessage() {
     var input = document.getElementById('chat-input');
     var text = input.value.trim();
-    if (!text || !activeChatId) return;
+    if ((!text && stagedFiles.length === 0) || !activeChatId) return;
 
     if (editingMsg) {
       // Edit existing message
       MStore.editMessage(editingMsg.chatId, editingMsg.id, text);
+      // Broadcast edit over P2P
+      if (window.Orbit && window.Orbit.P2P && Orbit.P2P.isAvailable()) {
+        var isGroup = MStore.groups.some(function(g) { return g.id === editingMsg.chatId; });
+        var myId = MStore.user ? MStore.user.id : 'mobile';
+        if (isGroup) {
+          var grp = MStore.groups.find(function(g) { return g.id === editingMsg.chatId; });
+          if (grp) {
+            (grp.members || []).forEach(function(m) {
+              var mid = typeof m === 'string' ? m : m.userId;
+              if (mid !== myId) {
+                var pkt = Orbit.Protocol.createPacket(
+                  Orbit.Protocol.Types.MESSAGE_EDIT,
+                  { msgId: editingMsg.id, newText: text, chatId: editingMsg.chatId },
+                  myId
+                );
+                Orbit.P2P.send(mid, pkt);
+              }
+            });
+          }
+        } else {
+          var pkt = Orbit.Protocol.createPacket(
+            Orbit.Protocol.Types.MESSAGE_EDIT,
+            { msgId: editingMsg.id, newText: text },
+            myId
+          );
+          Orbit.P2P.send(editingMsg.chatId, pkt);
+        }
+      }
       editingMsg = null;
       replyingTo = null;
       updateReplyEditBar();
@@ -1663,8 +1805,9 @@ document.addEventListener('DOMContentLoaded', function() {
           if (done === total) renderFilePreview();
           return;
         }
-        var isImage = file.type.startsWith('image/');
-        var isVideo = file.type.startsWith('video/');
+    var isImage = file.type.startsWith('image/');
+    var isVideo = file.type.startsWith('video/');
+    var isAudio = file.type.startsWith('audio/');
         if (isImage) {
           var reader = new FileReader();
           reader.onload = function(ev) {
@@ -1707,6 +1850,19 @@ document.addEventListener('DOMContentLoaded', function() {
             }
           };
           reader.readAsDataURL(file);
+        } else if (isAudio) {
+          var audioReader = new FileReader();
+          audioReader.onload = function(ev) {
+            stagedFiles.push({
+              name: file.name,
+              size: file.size,
+              type: 'audio',
+              url: ev.target.result
+            });
+            done++;
+            if (done === total) renderFilePreview();
+          };
+          audioReader.readAsDataURL(file);
         } else {
           stagedFiles.push({
             name: file.name,
@@ -1735,6 +1891,10 @@ document.addEventListener('DOMContentLoaded', function() {
       if (s.type === 'image' && s.url) {
         html += '<div class="file-preview-item">' +
           '<img src="' + s.url + '" loading="lazy">' +
+          '<button class="file-preview-remove" data-index="' + i + '">&times;</button></div>';
+      } else if (s.type === 'audio') {
+        html += '<div class="file-preview-item">' +
+          '<div class="file-icon" style="color:#ec4899;"><i data-lucide="music"></i></div>' +
           '<button class="file-preview-remove" data-index="' + i + '">&times;</button></div>';
       } else {
         html += '<div class="file-preview-item">' +
@@ -2196,7 +2356,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var friendsCount = MStore ? MStore.friends.length : 0;
         var chatsCount = MStore ? MStore.chats.length : 0;
         return '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.1.5-beta · Capacitor Android</div></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.1.6-beta · Capacitor Android</div></div>' +
         '</div>' +
         '<div class="settings-row">' +
           '<div class="settings-row-content"><span class="settings-row-title">Statistics</span><div class="settings-row-desc">' + friendsCount + ' friends · ' + chatsCount + ' chats</div></div>' +
@@ -2463,7 +2623,38 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button id="changelog-close-mobile" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;font-size:20px;">✕</button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
-        vBlock('0.1.5-beta', 'Latest', [
+        vBlock('0.1.6-beta', 'Latest', [
+          ['P2P Connectivity & Bug Fixes', [
+            'Desktop Auto-Connect Port: Uses peer.tcpPort instead of hardcoded 46000. Per-peer ports stored in SocketManager._peerPorts.',
+            'Desktop P2P Edit Loop Fixed: store.editMessage no longer re-broadcasts (caused echo). Single broadcast from chat-panel.js.',
+            'Desktop Context Menu Edit: No-op log replaced with proper editingMsg flow.',
+            'Mobile Disconnect Handler Fixed (Critical): Friend lookup by connectionId works — connectionId stored on connect + beacon. Falls back to IP split.',
+            'Mobile TCP/UDP Beacon Handlers: Store tcpPort, connectionId, ip on friends. Auto-reconnect uses peer port.',
+            'Mobile Orbit Echo: Status correctly reset to online on friend load.'
+          ]],
+          ['Message Editing & Reactions', [
+            'Mobile Edit P2P Broadcast: Edits broadcast to DMs and group members with chatId for group routing.',
+            'Mobile edited Flag: Incoming MESSAGE_EDIT sets msg.edited = true.',
+            'Mobile Reaction UI: Reaction button, floating picker (6 emojis), toggle on pills, P2P broadcast via REACTION protocol.'
+          ]],
+          ['Android Foreground Service', [
+            'OrbitForegroundService: Full P2P engine as persistent Android Service — TCP server, UDP multicast, WakeLock, START_STICKY.',
+            'OrbitP2PPlugin: Thin proxy forwarding calls via Binder. Events drained every 100ms to JS listeners.',
+            'BootReceiver: Restarts foreground service on BOOT_COMPLETED.',
+            'JS Lifecycle: visibilitychange, appStateChange, pageshow re-render UI and restart discovery on foreground.',
+            'sendFailed/connectFailed events now delivered to JS (were silently dropped).',
+            'Battery Optimization exemption permission + JS bridge method.'
+          ]],
+          ['Silent Bug Fixes', [
+            'serverSocket volatile — prevents stale null on stopServer',
+            'PeerConnection stale map entry eliminated — both original + updated peerId keys cleaned',
+            'Executor shutdownNow on destroy — prevents thread leaks on START_STICKY recreation',
+            'Static eventQueue cleared on destroy — prevents stale events from old instance',
+            'SO_REUSEADDR on MulticastSocket — prevents bind failure on discovery restart',
+            'joinGroup with explicit NetworkInterface — Android 10+ compatibility'
+          ]]
+        ]) +
+        vBlock('0.1.5-beta', '', [
           ['New Features', [
             'Account Switcher (Experimental): Right-click avatar on desktop to add/switch/logout accounts. Last active user auto-loaded.',
             'PIN Lock Screen (2FA Experimental): 4-8 digit PIN, SHA-256 hashed, numpad UI, 5-attempt cooldown, Forgot PIN reset.',
@@ -5121,6 +5312,8 @@ document.addEventListener('DOMContentLoaded', function() {
             connFriend.status = bp.status || 'online';
             if (bp.avatar) connFriend.avatar = bp.avatar;
             if (bp.publicKey) connFriend.publicKey = bp.publicKey;
+            if (bp.tcpPort) connFriend.tcpPort = bp.tcpPort;
+            if (data.connectionId) connFriend.connectionId = data.connectionId;
             existing = connFriend;
           }
         }
@@ -5132,7 +5325,9 @@ document.addEventListener('DOMContentLoaded', function() {
             status: bp.status || 'online',
             avatar: bp.avatar || null,
             bio: bp.bio || '',
-            ip: null,
+            ip: data.connectionId ? data.connectionId.split(':')[0] : null,
+            tcpPort: bp.tcpPort || null,
+            connectionId: data.connectionId || null,
             publicKey: bp.publicKey || null,
             profileFrame: bp.profileFrame !== undefined ? bp.profileFrame : null,
             banner: bp.banner || null,
@@ -5145,6 +5340,9 @@ document.addEventListener('DOMContentLoaded', function() {
           if (bp.avatar) existing.avatar = bp.avatar;
           if (bp.profileFrame !== undefined) existing.profileFrame = bp.profileFrame;
           if (bp.banner) existing.banner = bp.banner;
+          if (bp.tcpPort) existing.tcpPort = bp.tcpPort;
+          if (data.connectionId) existing.ip = data.connectionId.split(':')[0];
+          if (data.connectionId) existing.connectionId = data.connectionId;
         }
         // Ensure chat exists (avoid duplicates from host:port→UUID merge)
         var chatExists = MStore.chats.find(function(c) { return c.id === peerId; });
@@ -5308,8 +5506,18 @@ document.addEventListener('DOMContentLoaded', function() {
         if (txEnd) {
           var base64Data = txEnd.chunks.join('');
           var extMatch = txEnd.fileName.match(/\.(png|jpe?g|gif|webp)$/i);
-          var mimeType = extMatch ? 'image/' + extMatch[1].replace('jpg','jpeg').toLowerCase() : 'application/octet-stream';
-          var isImage = !!extMatch;
+          var audioMatch = txEnd.fileName.match(/\.(mp3|wav|ogg|flac|aac|m4a|wma|webm)$/i);
+          var mimeType = 'application/octet-stream';
+          var isImage = false;
+          var isAudio = false;
+          if (extMatch) {
+            mimeType = 'image/' + extMatch[1].replace('jpg','jpeg').toLowerCase();
+            isImage = true;
+          } else if (audioMatch) {
+            var audioExtMap = { mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', flac: 'audio/flac', aac: 'audio/aac', m4a: 'audio/mp4', wma: 'audio/x-ms-wma', webm: 'audio/webm' };
+            mimeType = audioExtMap[audioMatch[1].toLowerCase()] || 'audio/mpeg';
+            isAudio = true;
+          }
           
           var fileDataUrl = 'data:' + mimeType + ';base64,' + base64Data;
           
@@ -5321,7 +5529,7 @@ document.addEventListener('DOMContentLoaded', function() {
             attachments: [{
               id: packet.payload.fileId,
               name: txEnd.fileName,
-              type: isImage ? 'image' : 'file',
+              type: isImage ? 'image' : (isAudio ? 'audio' : 'file'),
               url: fileDataUrl
             }]
           });
@@ -5348,6 +5556,7 @@ document.addEventListener('DOMContentLoaded', function() {
           var msgIdx = MStore.messages[chatId].findIndex(function(m) { return String(m.id) === String(me.msgId); });
           if (msgIdx !== -1) {
             MStore.messages[chatId][msgIdx].text = me.newText || me.text;
+            MStore.messages[chatId][msgIdx].edited = true;
             MStore.save();
             if (activeChatId === chatId) renderMessages(chatId);
           }
@@ -5575,7 +5784,11 @@ document.addEventListener('DOMContentLoaded', function() {
     Orbit.P2P.onDisconnect(function(data) {
       debugLog('P2P', 'Disconnected', { connectionId: data.connectionId });
       showConnectionStatus('disconnected', 'Disconnected');
-      var friend = MStore.friends.find(function(f) { return f.id === data.connectionId; });
+      var friend = MStore.friends.find(function(f) { return f.connectionId === data.connectionId; });
+      if (!friend && data.connectionId) {
+        var discIp = data.connectionId.split(':')[0];
+        friend = MStore.friends.find(function(f) { return f.ip === discIp; });
+      }
       if (friend) {
         debugLog('P2P', 'Marking friend offline', { name: friend.name, id: friend.id });
         friend.status = 'offline';
@@ -5588,7 +5801,7 @@ document.addEventListener('DOMContentLoaded', function() {
           var reconnectDelay = (MStore.settings.netReconnectInterval || 10) * 1000;
           setTimeout(function() {
             if (friend.status === 'offline') {
-              var tcpPort = MStore.settings.tcpPort || 46000;
+              var tcpPort = friend.tcpPort || MStore.settings.tcpPort || 46000;
               debugLog('P2P', 'Auto-reconnecting to ' + friend.name + ' at ' + friend.ip + ':' + tcpPort + ' (delay=' + (reconnectDelay / 1000) + 's)');
               var timeoutMs = (MStore.settings.netTimeout || 30) * 1000;
               Orbit.P2P.connect(friend.ip, tcpPort, friend.id, timeoutMs).then(function(r) {
@@ -5678,6 +5891,7 @@ document.addEventListener('DOMContentLoaded', function() {
           ipFriend.ip = data.host;
           if (pPayload.avatar) ipFriend.avatar = pPayload.avatar;
           if (pPayload.publicKey) ipFriend.publicKey = pPayload.publicKey;
+          if (pPayload.tcpPort) ipFriend.tcpPort = pPayload.tcpPort;
           existing = ipFriend;
         }
       }
@@ -5691,6 +5905,7 @@ document.addEventListener('DOMContentLoaded', function() {
           avatar: pPayload.avatar || null,
           bio: pPayload.bio || '',
           ip: data.host,
+          tcpPort: pPayload.tcpPort || null,
           publicKey: pPayload.publicKey || null,
           profileFrame: pPayload.profileFrame !== undefined ? pPayload.profileFrame : null,
           banner: pPayload.banner || null
@@ -5705,6 +5920,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (pPayload.publicKey) existing.publicKey = pPayload.publicKey;
         if (pPayload.profileFrame !== undefined) existing.profileFrame = pPayload.profileFrame;
         if (pPayload.banner) existing.banner = pPayload.banner;
+        if (pPayload.tcpPort) existing.tcpPort = pPayload.tcpPort;
         MStore.save();
         renderFriends();
       }
@@ -5740,6 +5956,7 @@ document.addEventListener('DOMContentLoaded', function() {
             var friend = MStore.friends.find(function(f) { return f.id === peerId; });
             if (friend) {
               friend.status = 'online';
+              friend.connectionId = result.connectionId;
               MStore.save();
               renderFriends();
             }
@@ -5841,6 +6058,59 @@ document.addEventListener('DOMContentLoaded', function() {
       applyTheme('system');
     }
   });
+
+  /* -- App lifecycle handlers for background execution -- */
+  (function() {
+    // Request battery optimization exemption (user prompt)
+    try {
+      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.OrbitP2P) {
+        var p = window.Capacitor.Plugins.OrbitP2P;
+        if (p.requestIgnoreBatteryOptimizations) p.requestIgnoreBatteryOptimizations();
+      }
+    } catch(e) { console.log('[Lifecycle] Battery opt request skipped', e.message); }
+
+    // Handle visibility changes — when app comes to foreground, refresh UI
+    document.addEventListener('visibilitychange', function() {
+      if (!document.hidden) {
+        console.log('[Lifecycle] App foregrounded (visibility)');
+        renderFriends();
+        renderChatList();
+        if (activeChatId) renderMessages(activeChatId);
+        // Service handles networking — JS just re-renders
+      }
+    });
+
+    // Handle Capacitor appStateChange (more reliable than visibility on Android)
+    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
+      try {
+        window.Capacitor.Plugins.App.addListener('appStateChange', function(state) {
+          if (state.isActive) {
+            console.log('[Lifecycle] App foregrounded (capacitor)');
+            renderFriends();
+            renderChatList();
+            if (activeChatId) renderMessages(activeChatId);
+            // If discovery/connections were stopped on background, restart
+            if (window.Orbit && window.Orbit.P2P && !Orbit.P2P.isDiscoveryActive()) {
+              var beacon = buildBeacon();
+              var udpPort = MStore.settings.udpPort || 45678;
+              Orbit.P2P.startDiscovery(beacon, udpPort);
+            }
+          } else {
+            console.log('[Lifecycle] App backgrounded — service keeps running');
+            MStore.save();
+          }
+        });
+      } catch(e) { console.log('[Lifecycle] App plugin listener error', e.message); }
+    }
+
+    // On page show (after background), service is already running — just refresh UI
+    window.addEventListener('pageshow', function() {
+      console.log('[Lifecycle] Page shown');
+      renderFriends();
+      renderChatList();
+      if (activeChatId) renderMessages(activeChatId);
+    });
+  })();
 
   /* -- Init -- */
   debugLog('P2P', 'App initialization starting');

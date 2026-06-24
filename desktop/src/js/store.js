@@ -995,24 +995,6 @@ class Store {
       });
       if (window.orbitAPI) window.orbitAPI.dbEditMessage(chatId, msgId, newText);
       this.setState({ messages: msgs });
-
-      // Broadcast edit to peers
-      const state = this.state;
-      const members = this.getGroupMembers(chatId);
-      if (window.orbitAPI) {
-        if (members.length > 0) {
-          members.forEach(m => {
-            if (m.userId !== state.currentUser.userId) {
-              window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.MESSAGE_EDIT, { msgId, newText });
-            }
-          });
-        } else {
-          const friend = state.friends.find(f => f.userId === chatId);
-          if (friend) {
-            window.orbitAPI.networkSend(chatId, friend.ip || '', window.Protocol.Types.MESSAGE_EDIT, { msgId, newText });
-          }
-        }
-      }
     }
   }
 

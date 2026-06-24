@@ -232,10 +232,39 @@ Orbit.P2P = (function() {
       return addListener('onPeerFound', callback);
     },
 
+    onSendFailed(callback) {
+      return addListener('onSendFailed', callback);
+    },
+
+    onConnectFailed(callback) {
+      return addListener('onConnectFailed', callback);
+    },
+
+    async startNetwork() {
+      var p = getPlugin();
+      if (!p) return;
+      try { await p.startNetwork(); } catch(e) { console.log('[P2P-Bridge] startNetwork error: ' + e.message); }
+    },
+
+    async stopNetwork() {
+      var p = getPlugin();
+      if (!p) return;
+      try { await p.stopNetwork(); } catch(e) { console.log('[P2P-Bridge] stopNetwork error: ' + e.message); }
+    },
+
+    async requestIgnoreBatteryOptimizations() {
+      // Not all Android versions need this; best-effort
+      try {
+        if (navigator.battery) navigator.battery = null;
+        var p = getPlugin();
+        if (p && p.requestIgnoreBatteryOptimizations) {
+          await p.requestIgnoreBatteryOptimizations();
+        }
+      } catch(e) { /* silently ignore */ }
+    },
+
     cleanup() {
       console.log('[P2P-Bridge] cleanup called');
-      this.stopServer();
-      this.stopDiscovery();
       removeAllListeners();
       connections = {};
       lastConnectAttempt = {};

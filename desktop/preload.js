@@ -22,7 +22,7 @@ contextBridge.exposeInMainWorld('orbitAPI', {
   networkStop: () => ipcRenderer.send('network-stop'),
   networkSend: (toPeerId, toIp, type, payload) => ipcRenderer.sendSync('network-send', toPeerId, toIp, type, payload),
   networkSendFile: (toPeerId, toIp, filePath, fileName) => ipcRenderer.invoke('network-send-file', toPeerId, toIp, filePath, fileName),
-  connect: (ip) => ipcRenderer.send('network-connect', ip),
+  connect: (ip, port) => ipcRenderer.send('network-connect', ip, port || 46000),
   cancelTransfer: (fileId) => ipcRenderer.send('cancel-transfer', fileId),
   checkDiskSpace: () => ipcRenderer.invoke('check-disk-space'),
   networkSetReconnect: (enabled, intervalMs) => ipcRenderer.sendSync('network-set-reconnect', enabled, intervalMs),

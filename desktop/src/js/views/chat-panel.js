@@ -21,7 +21,7 @@ window.ChatPanel = {
     
     // Subscribe to store
     this.unsubscribe = window.store.subscribe((state, changedState) => {
-      var relevant = ['messages', 'activeChatId', 'activeTab', 'groups', 'currentUser', 'settings', 'transferProgress', 'transferErrors'];
+      var relevant = ['messages', 'activeChatId', 'activeTab', 'groups', 'currentUser', 'settings'];
       if (!changedState || relevant.some(function(k) { return k in changedState; })) {
         if (changedState && 'activeChatId' in changedState && state.activeChatId) {
           window.store.loadFullChatMessages(state.activeChatId);
@@ -488,7 +488,18 @@ window.ChatPanel = {
       }
       if (isMine) {
         items.push('separator');
-        items.push({ label: 'Edit Message', action: 'edit', icon: 'edit-2', onClick: function() { console.log('Edit', msg.id); } });
+        items.push({ label: 'Edit Message', action: 'edit', icon: 'edit-2', onClick: function() {
+          var state = window.store.getState();
+          var msgs = state.messages[state.activeChatId] || [];
+          var targetMsg = msgs.find(function(m) { return m.id == msg.id; });
+          if (targetMsg) {
+            self.editingMsg = { id: targetMsg.id, chatId: state.activeChatId, text: targetMsg.text };
+            self.replyingTo = null;
+            var inp = document.getElementById('chat-input');
+            if (inp) { inp.value = targetMsg.text; inp.focus(); }
+            window.store.notify();
+          }
+        } });
         items.push({ label: 'Delete Message', action: 'delete', icon: 'trash-2', color: 'var(--accent-danger)', onClick: function() { 
           window.store.deleteMessage(state.activeChatId, msg.id);
         } });
@@ -667,9 +678,8 @@ window.ChatPanel = {
             }
           } else if (att.type === 'audio' || (att.mimeType && att.mimeType.startsWith('audio/'))) {
             const safeUrl = window.Sanitize.escapeHtml(att.url);
-            gridHtml += '<div class="att-thumb" style="position:relative;border-radius: 8px; border: 1px solid var(--border-subtle); background: var(--bg-hover); padding: 8px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;">' +
+            gridHtml += '<div class="att-thumb oap-placeholder" data-oap-url="' + safeUrl + '" style="position:relative;border-radius: 8px; border: 1px solid var(--border-subtle); background: var(--bg-hover); padding: 4px;">' +
               deleteBtn +
-              '<audio controls src="' + safeUrl + '" style="height:32px;width:100%;outline:none;border-radius:16px;" controlsList="nodownload" onerror="if(window.mediaSrcOnError) window.mediaSrcOnError(this)"></audio>' +
             '</div>';
           } else {
             gridHtml += '<div class="att-thumb" style="position:relative;border-radius: 8px; height: 120px; border: 1px solid var(--border-subtle); display:flex; flex-direction:column; align-items:center; justify-content:center; background: rgba(0,0,0,0.1); padding: 8px; text-align:center;">' +
@@ -1073,6 +1083,9 @@ window.ChatPanel = {
 
     // Attach local input events
     this.attachEvents();
+
+    // Initialize audio player visualizers
+    if (window.OrbitAudioPlayer) window.OrbitAudioPlayer.init(this.container);
   },
 
   _positionMessageActions() {
@@ -1291,14 +1304,15 @@ window.ChatPanel = {
         for (let i = 0; i < e.target.files.length; i++) {
           const file = e.target.files[i];
           const isImage = file.type.startsWith('image/');
+          const isAudio = file.type.startsWith('audio/');
           var entry = {
             file: file,
             path: file.path || file.name,
             name: file.name,
             size: file.size,
             mimeType: file.type,
-            type: isImage ? 'image' : 'file',
-            url: isImage ? URL.createObjectURL(file) : null,
+            type: isImage ? 'image' : (isAudio ? 'audio' : 'file'),
+            url: isImage || isAudio ? URL.createObjectURL(file) : null,
             width: 0,
             height: 0
           };
@@ -1405,14 +1419,15 @@ window.ChatPanel = {
       for (var i = 0; i < e.dataTransfer.files.length; i++) {
         var file = e.dataTransfer.files[i];
         var isImage = file.type.startsWith('image/');
+        var isAudio = file.type.startsWith('audio/');
         self.stagedFiles.push({
           file: file,
           path: file.path || file.name,
           name: file.name,
           size: file.size,
           mimeType: file.type,
-          type: isImage ? 'image' : 'file',
-          url: isImage ? URL.createObjectURL(file) : null,
+          type: isImage ? 'image' : (isAudio ? 'audio' : 'file'),
+          url: isImage || isAudio ? URL.createObjectURL(file) : null,
           width: 0,
           height: 0
         });
@@ -2048,6 +2063,10 @@ window.ChatPanel = {
 
         if (fileData && fileData.byteLength >= INLINE_LIMIT) {
           // Large file: send via chunked FILE_TRANSFER protocol (mobile-compatible)
+          if (s.type === 'audio' || s.type === 'video') {
+            var rawMime = s.file ? s.file.type : (s.type === 'audio' ? 'audio/mpeg' : 'video/mp4');
+            att.url = URL.createObjectURL(new Blob([fileData], { type: rawMime }));
+          }
           largeFiles.push({ staged: s, data: fileData, att: att });
         } else if (fileData) {
           // Small file: inline as base64 data URL in MESSAGE payload
@@ -2056,8 +2075,12 @@ window.ChatPanel = {
           for (var b = 0; b < bytes.byteLength; b++) {
             binary += String.fromCharCode(bytes[b]);
           }
-          var mimeType = s.file ? s.file.type : (s.type === 'image' ? 'image/png' : 'application/octet-stream');
+          var mimeType = s.file ? s.file.type : (s.type === 'image' ? 'image/png' : (s.type === 'audio' ? 'audio/mpeg' : 'application/octet-stream'));
           var dataUrl = 'data:' + mimeType + ';base64,' + btoa(binary);
+          // Use blob URL for local display (CSP allows blob: in media-src)
+          if (s.type === 'audio' || s.type === 'video') {
+            att.url = URL.createObjectURL(new Blob([fileData], { type: mimeType }));
+          }
           inlineAttachments.push({
             id: att.id,
             name: s.name,
@@ -2068,6 +2091,9 @@ window.ChatPanel = {
             height: s.height || 0
           });
         } else if (s.url && typeof s.url === 'string' && s.url.indexOf('data:') === 0) {
+          if (s.type === 'audio' || s.type === 'video') {
+            att.url = s.url;
+          }
           inlineAttachments.push({
             id: att.id,
             name: s.name,
@@ -2117,10 +2143,12 @@ window.ChatPanel = {
     }
 
     // ---- Send large files via chunked FILE_TRANSFER protocol ----
+    var sentFileIds = [];
     for (var li = 0; li < largeFiles.length; li++) {
       var lf = largeFiles[li];
       var fileData = lf.data;
       var fileId = (window.orbitAPI && window.orbitAPI.getUuid) ? window.orbitAPI.getUuid() : (Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8));
+      sentFileIds.push(fileId);
       var totalChunks = Math.ceil(fileData.byteLength / CHUNK_SIZE);
 
       // Compute SHA-256 hash
@@ -2185,6 +2213,13 @@ window.ChatPanel = {
         fileId: fileId,
         hash: hash
       });
+    }
+
+    // Clean up transfer progress for sent files
+    if (sentFileIds.length > 0 && window.store) {
+      var cp = { ...window.store.getState().transferProgress };
+      sentFileIds.forEach(function(fid) { delete cp[fid]; });
+      window.store.setState({ transferProgress: cp });
     }
 
     // Store locally with orbit-db attachment URLs

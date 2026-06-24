@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v015-beta-latest-version">v0.1.5-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v016-beta-latest-version">v0.1.6-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@
 
 | Channel | Version | Status |
 |---------|---------|--------|
-| *Development* | v0.1.5-beta | Latest build (unstable) |
+| *Development* | v0.1.6-beta | Latest build (unstable) |
 | **Stable** | v0.1.1-beta | Stable release |
 | Previous **Stable** | v0.0.5-beta | Legacy stable release |
 
@@ -90,21 +90,13 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage desktop app** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
-## Highlights (v0.1.5-beta)
+## Highlights (v0.1.6-beta)
 
-- **Account Switcher (Experimental):** Right-click avatar → panel to add/switch/logout accounts. Logout quits app (accounts persist in DB). Last active user auto-loaded on launch. Gated behind Experimental Features toggle in Advanced settings.
-- **PIN Lock Screen (2FA Experimental):** 4-8 digit numeric PIN with SHA-256 hashing (Node `crypto` on main process). Numpad UI, 5-attempt cooldown (30s), "Forgot PIN" reset (data intact). Only prompted on app launch (never on resume/sleep). Gated behind Experimental Features.
-- **Settings Security Tab:** PIN setup, change, disable flows. Full modal re-render when Experimental Features toggled to show/hide tab.
-- **Messages from other accounts no longer leak:** `reloadDataForCurrentUser()` auto-track now only includes friends/groups with `accountOwnerId === uid`. `renderList()` filters displayed DMs by `_userChatIds`. `renderGroups()` only shows groups where current user is a member.
-- **Closing DMs doesn't affect other accounts:** `closeDM()` no longer calls `dbDeleteFriend` (was deleting globally). `closedDMs` and `pinnedDMs` stored per-account in settings (`userClosedDMs`, `userPinnedDMs`). Loaded/saved per user on account switch.
-- **Leaving groups correctly hides the group:** `removeGroupMember()` untracks chat from `userChatIds` when current user leaves. `renderGroups()` checks membership before showing group. Group removed from current account's list.
-- **"User"#0000 placeholder leaking:** `identity.js:getAll()` filters out entries without valid `userId/usertag/username`. Store placeholder changed from `id: null` to `userId: null`. Profile frame migration guarded with `userId` check and moved after `Identity.init()`.
-- **Profile frame migration not triggering:** Migration condition changed from `currentUser.profileFrame == null && pf` to `pf && pf !== cur` — handles the case where `Identity.init()`'s `save()` converted `null` to `0` via `dbSaveUser`.
-- **SidebarLeft.renderAvatar crash before init:** Added `if (!this.container) return;` guard to prevent TypeError when called before `SidebarLeft.init()`.
-- **Store.js syntax error:** Removed trailing commas between class methods that caused "Unexpected token ','".
-- **`window.ChatPanel.showChat is not a function`:** Removed premature `ChatPanel.showChat()` call from `reloadDataForCurrentUser()`.
-- **`require('crypto')` in renderer:** Changed to `window.crypto` for invite code generation.
-- **Migration v11 robustness:** Column-existence checks before `ALTER TABLE`. Guard in `migrations.run()` handles non-transactional `user_version` — if version ≥ 11 but columns missing, resets to 10 and re-runs.
+- **Android Foreground Service:** P2P networking runs in a persistent Android Foreground Service with persistent notification, WakeLock, START_STICKY survival. Messages received even when app is backgrounded or killed. BootReceiver restarts on device boot.
+- **P2P Connectivity Audit (9 fixes):** Desktop auto-connect now uses peer's TCP port; mobile disconnect handler fixed (critical — friend lookup by connectionId); mobile TCP/UDP beacon handlers store tcpPort/connectionId/ip; mobile auto-reconnect uses peer's port, not own; mobile Echo stays online.
+- **Message Editing Round-Trip:** Desktop edit broadcast loop eliminated (echo fix); desktop context menu "Edit Message" now wired; mobile edits broadcast over P2P with chatId for group routing; mobile `edited` flag set on incoming edits.
+- **Mobile Reactions Added:** Reaction button, floating picker (6 emojis), toggle on pills, instant local state + P2P broadcast. Matches existing desktop REACTION protocol.
+- **Silent Bug Fixes (7 found):** sendFailed/connectFailed events no longer dropped; serverSocket volatile; PeerConnection stale map entries cleaned; executor shutdown on destroy; eventQueue cleared; SO_REUSEADDR on multicast; joinGroup with explicit interface for Android 10+.
 
 ## Version History
 <details>
@@ -302,6 +294,15 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Network Restart:** Account switch calls `networkStop` (nullifies all instances) → `Identity.switchTo()` → `networkStart` (re-creates with new identity). All TCP connections drop and re-establish.
 - **Migration Rollback Guard:** `db.pragma('user_version')` is non-transactional. Added column-existence check at start of `migrations.run()` to detect partial migration state and recover.
 </details>
+<details open>
+<summary>v0.1.6-beta</summary>
+
+- **Android Foreground Service (Background Execution):** P2P networking extracted into persistent Foreground Service with notification, WakeLock, START_STICKY. BootReceiver restarts on device boot. Service survives Activity/WebView destruction.
+- **P2P Connectivity Fixes:** Desktop auto-connect port fixed (was hardcoded 46000); reconnect now uses per-peer stored TCP port; mobile disconnect handler fixed (connectionId→friend lookup); mobile beacon handlers store tcpPort/connectionId/ip; mobile auto-reconnect uses peer's port.
+- **Message Editing & Reactions:** Desktop edit broadcast loop eliminated; mobile edits broadcast over P2P to DMs and groups; mobile reaction UI (6 emojis, toggle, P2P broadcast).
+- **OrbitForegroundService:** Full P2P engine (TCP server, UDP multicast, connection map, thread pool) as Android Service. Plugin proxies via Binder. Event queue drained every 100ms.
+- **Silent Bug Fixes:** 7 fixes from service audit — sendFailed/connectFailed events, serverSocket volatile, PeerConnection map leak, executor shutdown, eventQueue clear, SO_REUSEADDR, Android 10+ joinGroup fix.
+</details>
 
 See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
@@ -366,7 +367,7 @@ Or let GitHub Actions build it automatically — push a `v*` tag or trigger the 
 ## How it works
 
 ```
-  	    Desktop Orbit            Android Orbit
+  	 Desktop Orbit            Android Orbit
        	      │                        │
        	      │        TCP P2P         │
        	      ├────────────────────────┤
@@ -460,22 +461,17 @@ Transparency matters in beta. Current constraints include:
 
 ## Roadmap
 
-### Shipped (v0.1.5-beta)
+### Shipped (v0.1.6-beta)
 
-- **Account Switcher (Experimental):** Right-click avatar → panel to add/switch/logout accounts. Logout quits app (accounts persist in DB). Last active user auto-loaded on launch. Gated behind Experimental Features toggle in Advanced settings.
-- **PIN Lock Screen (2FA Experimental):** 4-8 digit numeric PIN with SHA-256 hashing (Node `crypto` on main process). Numpad UI, 5-attempt cooldown (30s), "Forgot PIN" reset (data intact). Only prompted on app launch (never on resume/sleep). Gated behind Experimental Features.
-- **Settings Security Tab:** PIN setup, change, disable flows. Full modal re-render when Experimental Features toggled to show/hide tab.
-- **Orbit Echo Welcome Sequence:** 4 welcome messages with 5-8s typing indicator delays. Fires only when echo chat is empty. Echo excepted from all offline checks.
-- **Per-Account Message Isolation:** Messages stored per-user via `userChatIds` settings map. DB migration v11 adds `accountOwnerId` to friends/groups/group_members. `reloadDataForCurrentUser()` re-reads filtered messages on account switch. Friends and groups remain shared; messages filtered by tracked chat IDs per user.
-- **Per-Account Avatar Frames:** v10 migration adds `profileFrame` column to users table. Frame loaded from user record (not shared settings). `getFrameForUser()` reads from `currentUser.profileFrame`. Settings handler syncs frame selection to identity.
-- **Avatar Frames in Account Switcher:** Both current account (36px) and other account rows (32px) render profile frame overlay at `top:-16%;left:-17%;width:133%;height:133%`, matching sidebar-left styling.
-- **Profile Frame Migration:** Existing settings-based frames migrated to per-account on first boot after v10. Runs after `Identity.init()` so `currentUser` is real (not placeholder). `SidebarLeft.renderAvatar()` called after migration for immediate display.
-- **Desktop Beacon Payload Enriched:** Both UDP (`discovery.js`) and TCP (`socket.js`) beacons now transmit `avatar`, `banner`, `bio`, `profileFrame`, `publicKey`. Incoming BEACON handler stores full profile on peers.
-- **Friend Status Starts Offline:** Friends load with `lastSeen=0` and `status='offline'` (except `local-echo` which stays online). Offline check threshold reduced to 45s with 15s check interval. Discovery emits `peer-gone` callback → IPC → marks friend offline.
-- **Group Avatar Backfill:** Async fetch of `orbit-avatar://` for groups with `avatarPath` but no `avatarDataUrl` on store init + group info open. Non-blocking, errors silently caught.
+- **Android Foreground Service (Background Execution):** P2P networking extracted into persistent Foreground Service with notification, WakeLock, START_STICKY. BootReceiver restarts on device boot. Service survives Activity/WebView destruction.
+- **P2P Connectivity Fixes:** Desktop auto-connect port fixed (was hardcoded 46000); reconnect now uses per-peer stored TCP port; mobile disconnect handler fixed (connectionId→friend lookup); mobile beacon handlers store tcpPort/connectionId/ip; mobile auto-reconnect uses peer's port.
+- **Message Editing & Reactions:** Desktop edit broadcast loop eliminated; mobile edits broadcast over P2P to DMs and groups; mobile reaction UI (6 emojis, toggle, P2P broadcast).
+- **OrbitForegroundService:** Full P2P engine (TCP server, UDP multicast, connection map, thread pool) as Android Service. Plugin proxies via Binder. Event queue drained every 100ms.
+- **Silent Bug Fixes:** 7 fixes from service audit — sendFailed/connectFailed events, serverSocket volatile, PeerConnection map leak, executor shutdown, eventQueue clear, SO_REUSEADDR, Android 10+ joinGroup fix.
 
 ### In Progress / Planned
 
+- **Mobile Account Switcher** — Multi-account support on Android (desktop done in v0.1.5-beta)
 - **E2EE cross-platform unification** — Align key derivation (SHA-256 vs HKDF) so desktop and mobile can exchange encrypted DMs and group messages
 - **Group E2EE** — Extend end-to-end encryption to group chats (currently DM-only)
 - **Mobile UI redesign** — Modernized touch interface
@@ -501,7 +497,7 @@ Transparency matters in beta. Current constraints include:
 ```bash
 # In the app folder
 cd desktop
-npm install		            # Install requirements
+npm install		  # Install requirements
 npm start                 # Launch Electron
 npm run build:win         # Build Windows installer
 npm run build:mac         # Build macOS .dmg (macOS host required)
@@ -513,7 +509,7 @@ npm run build:linux       # Build Linux .AppImage + .deb
 ```bash
 # In the app folder
 cd mobile
-npm install		            # Install requirements
+npm install		  # Install requirements
 npm run shared:sync       # Copy shared modules into mobile/src/
 npx cap sync android      # Sync Capacitor Android project
 npx cap open android      # Open in Android Studio

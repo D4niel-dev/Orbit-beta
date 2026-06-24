@@ -31,6 +31,7 @@ class SocketManager extends EventEmitter {
     this._reconnectEnabled = true;
     this._reconnectInterval = 10000;
     this._peerIps = new Map();
+    this._peerPorts = new Map();
   }
 
   setReconnect(enabled, intervalMs) {
@@ -86,8 +87,9 @@ class SocketManager extends EventEmitter {
     var timer = setTimeout(() => {
       this._reconnectTimers.delete(peerId);
       var savedIp = this._peerIps.get(peerId) || ip;
+      var savedPort = this._peerPorts.get(peerId) || port || 46000;
       if (savedIp) {
-        this.connectToPeer(peerId, savedIp, port || 46000).catch(function(err) {
+        this.connectToPeer(peerId, savedIp, savedPort).catch(function(err) {
           console.error('[Reconnect] Connection to', peerId, 'failed:', err && err.message);
         });
       }
@@ -189,8 +191,9 @@ class SocketManager extends EventEmitter {
       return this._pendingConnects.get(peerId);
     }
 
-    // Save IP for reconnect
+    // Save IP and port for reconnect
     if (ip) this._peerIps.set(peerId, ip);
+    this._peerPorts.set(peerId, port || 46000);
 
     const promise = new Promise((resolve, reject) => {
       const socket = new net.Socket();
@@ -284,6 +287,11 @@ class SocketManager extends EventEmitter {
               this._startHeartbeat(currentPeerId, socket);
             }
 
+            // Store peer's TCP port from beacon for reconnect
+            if (packet.payload && packet.payload.tcpPort && currentPeerId) {
+              this._peerPorts.set(currentPeerId, packet.payload.tcpPort);
+            }
+
             // Attach sender IP for BEACON IP fallback (Bug #1)
             packet._fromIp = socket.remoteAddress;
 
@@ -331,7 +339,8 @@ class SocketManager extends EventEmitter {
       }
       // Schedule reconnect if enabled
       if (currentPeerId && savedIp) {
-        this._scheduleReconnect(currentPeerId, savedIp);
+        var savedPort = this._peerPorts.get(currentPeerId);
+        this._scheduleReconnect(currentPeerId, savedIp, savedPort);
       }
     });
 
@@ -438,6 +447,7 @@ class SocketManager extends EventEmitter {
     this._reconnectTimers.clear();
     this._reconnectAttempts.clear();
     this._peerIps.clear();
+    this._peerPorts.clear();
   }
 }
 

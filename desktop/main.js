@@ -136,8 +136,8 @@ function startNetworkMonitor() {
             var alreadyConnected = socketInstance.connections.has(peer.userId) ||
               socketInstance._pendingConnects.has(peer.userId);
             if (alreadyConnected) return;
-            console.log('[AutoConnect] Initiating TCP connect to', peer.userId, peer.ip + ':46000');
-            socketInstance.connectToPeer(peer.userId, peer.ip, 46000).catch(function(err) {
+            console.log('[AutoConnect] Initiating TCP connect to', peer.userId, peer.ip + ':' + (peer.tcpPort || 46000));
+            socketInstance.connectToPeer(peer.userId, peer.ip, peer.tcpPort || 46000).catch(function(err) {
               console.error('[AutoConnect] Connection to', peer.userId, 'failed:', err && err.message);
             });
           }
@@ -236,7 +236,11 @@ app.whenReady().then(() => {
       var mimeMap = { jpeg: 'image/jpeg', jpg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml', bmp: 'image/bmp', ico: 'image/x-icon' };
       return mimeMap[ext] || 'image/png';
     }
-    if (att.type === 'audio') return 'audio/webm';
+    if (att.type === 'audio') {
+      var ext = (att.name || '').split('.').pop().toLowerCase();
+      var audioMimeMap = { mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', flac: 'audio/flac', aac: 'audio/aac', m4a: 'audio/mp4', wma: 'audio/x-ms-wma', webm: 'audio/webm' };
+      return audioMimeMap[ext] || 'audio/webm';
+    }
     return 'application/octet-stream';
   }
 
@@ -285,8 +289,13 @@ app.whenReady().then(() => {
           if (globalDb) {
             const att = globalDb.getAttachment(id);
             if (att && att.data && att.data.length > 0) {
+              var ct = contentTypeFromAtt(att);
+              var extraHeaders = { 'Content-Type': ct, 'Content-Length': String(att.data.length) };
+              if (ct.startsWith('audio/') || ct.startsWith('video/')) {
+                extraHeaders['Accept-Ranges'] = 'bytes';
+              }
               resolve(new Response(att.data, {
-                headers: cacheHeaders({ 'Content-Type': contentTypeFromAtt(att) })
+                headers: cacheHeaders(extraHeaders)
               }));
               return;
             }
@@ -857,8 +866,8 @@ app.whenReady().then(() => {
             console.log('[AutoConnect] Already connected or connecting to', peer.userId);
             return;
           }
-          console.log('[AutoConnect] Initiating TCP connect to', peer.userId, peer.ip + ':46000');
-          socketInstance.connectToPeer(peer.userId, peer.ip, 46000).then(function() {
+          console.log('[AutoConnect] Initiating TCP connect to', peer.userId, peer.ip + ':' + (peer.tcpPort || 46000));
+          socketInstance.connectToPeer(peer.userId, peer.ip, peer.tcpPort || 46000).then(function() {
             console.log('[AutoConnect] Connected to', peer.userId);
           }).catch(function(err) {
             console.error('[AutoConnect] Connection to', peer.userId, 'failed:', err && err.message);
@@ -909,9 +918,9 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.on('network-connect', (event, ip) => {
+  ipcMain.on('network-connect', (event, ip, port) => {
     if (socketInstance) {
-      socketInstance.connectToPeer('manual', ip, 46000);
+      socketInstance.connectToPeer('manual', ip, port || 46000);
     }
   });
 

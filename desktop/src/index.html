@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- Content Security Policy to allow external fonts and scripts safely -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;     img-src 'self' data: blob: orbit-db: orbit-file: orbit-avatar: https://media.giphy.com https://opengraph.githubassets.com; media-src 'self' blob: orbit-db: orbit-file: orbit-avatar:; connect-src 'self' https://cdn.jsdelivr.net https://api.mymemory.translated.net;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;     img-src 'self' data: blob: orbit-db: orbit-file: orbit-avatar: https://media.giphy.com https://opengraph.githubassets.com; media-src 'self' data: blob: orbit-db: orbit-file: orbit-avatar:; connect-src 'self' https://cdn.jsdelivr.net https://api.mymemory.translated.net;">
   
   <link rel="icon" type="image/x-icon" href="/favicon.ico">
   <title>Orbit</title>
@@ -132,6 +132,7 @@
   <script src="js/components/webrtc-call.js"></script>
   <script src="js/components/pin-lock-screen.js"></script>
   <script src="js/components/account-switcher.js"></script>
+  <script src="../../shared/ui/audio-player.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

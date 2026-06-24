@@ -1,6 +1,56 @@
 # Orbit Changelog
 
-## v0.1.5-beta **(Latest Version)**
+## v0.1.6-beta **(Latest Version)**
+
+> **Note:** This is not a stable release — latest development version with experimental features.
+
+### P2P Connectivity & Bug Fixes
+
+- **Desktop Auto-Connect Port Fix:** AutoConnect now uses `peer.tcpPort || 46000` instead of hardcoded 46000. Per-peer TCP ports stored in `SocketManager._peerPorts` map from connect and TCP beacon processing. Reconnect uses stored port.
+- **Desktop Manual Connect Port Fix:** Connect accepts `port` parameter (defaults 46000) via preload bridge.
+- **Desktop P2P Edit Broadcast Loop Fixed:** `store.editMessage` no longer re-broadcasts to group members (caused echo loop). Single broadcast from `chat-panel.js:sendToAll`.
+- **Desktop Context Menu "Edit Message" Wired:** No-op log replaced with proper editingMsg flow.
+- **Mobile Disconnect Handler Fixed (CRITICAL):** Friend lookup by `connectionId` (native `ip:port`) now works — `connectionId` stored on friend objects from connect and TCP beacon events. Falls back to IP from `connectionId.split(':')`.
+- **Mobile TCP Beacon Handler Fixed:** Stores `tcpPort`, `ip`, and `connectionId` on friends in both new-friend and existing-friend paths.
+- **Mobile UDP Beacon Handler Fixed:** Stores `tcpPort` from beacon payload on both new-friend and existing-friend paths.
+- **Mobile Auto-Reconnect Port Fixed:** Uses peer's `tcpPort` (not own port) for reconnection.
+- **Mobile Orbit Echo Stays Online:** Echo friend's status now correctly reset to `'online'` on friend load.
+
+### Message Editing & Reactions
+
+- **Mobile Edit P2P Broadcast:** Edits now broadcast over P2P to both DMs and group members (with `chatId` for group routing).
+- **Mobile `edited` Flag:** Incoming MESSAGE_EDIT packets set `msg.edited = true`.
+- **Mobile Reaction UI:** Reaction button with `smile-plus` icon, floating reaction picker (👍❤️😂😮😢🙏), click-to-toggle on reaction pills, instant local state + P2P broadcast via REACTION protocol.
+- **Desktop Changelog Restored:** v0.1.4-beta content restored (was blank between header and v0.1.3-beta block). v0.1.5-beta added as Latest.
+
+### Android Foreground Service (Background Execution)
+
+- **OrbitForegroundService Created:** Full P2P networking extracted into Android Foreground Service — TCP server, UDP multicast discovery, connection map, thread pool, WakeLock, persistent notification. `START_STICKY` ensures survival after process kill.
+- **OrbitP2PPlugin Refactored:** Thin proxy that starts/stops foreground service, forwards plugin calls via Binder, drains event queue every 100ms via Handler.
+- **BootReceiver:** Restarts foreground service on `BOOT_COMPLETED`.
+- **MainActivity:** Starts foreground service immediately on launch.
+- **JS Lifecycle Handlers:** `visibilitychange`, Capacitor `appStateChange`, and `pageshow` listeners re-render UI and restart discovery on foreground.
+- **Event Queue Drainer:** 100ms poll of `ConcurrentLinkedQueue` with `notifyListeners` for 4 event types (message, connection, disconnect, peerFound) plus sendFailed/connectFailed.
+- **ServiceBinder:** Proper IBinder implementation exposing service instance to plugin.
+- **Battery Optimization Exemption:** `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` permission and JS bridge method for best-effort exemption request.
+
+### Silent Bug Fixes (Foreground Service Audit)
+
+- **sendFailed/connectFailed Events No Longer Dropped:** drainEvents now handles both event types and notifies JS listeners.
+- **serverSocket Made Volatile:** Prevents stale null read in stopServer from closing wrong socket.
+- **PeerConnection Stale Map Entry Eliminated:** originalPeerId field ensures both original and updated peerId keys are cleaned up on disconnect.
+- **Executor Shutdown on Destroy:** `executor.shutdownNow()` called in onDestroy to prevent thread leaks on START_STICKY recreation.
+- **Static eventQueue Cleared on Destroy:** Prevents stale events from old instance polluting new plugin.
+- **SO_REUSEADDR on MulticastSocket:** Prevents "Address already in use" on discovery restart after network change.
+- **joinGroup with Explicit Interface:** Uses `joinGroup(group, ni)` for Android 10+ compatibility.
+
+### Technical
+
+- **Architecture:** P2P networking lives in persistent `OrbitForegroundService` independent of Activity/WebView lifecycle. Plugin proxies calls via Binder with intent-based fallback for calls before bind completes.
+- **Event Ordering:** drainHandler starts in `onServiceConnected` (after bind completes) which runs after JS listener registration (same main-thread queue). No events lost before listener registration.
+- **Version:** Bumped to v0.1.6-beta across all manifests, About tabs, and changelogs.
+
+## v0.1.5-beta
 
 > **Note:** This is not a stable release — latest development version with experimental features.
 

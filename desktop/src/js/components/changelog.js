@@ -14,7 +14,39 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.1.5-beta', 'Latest', [
+        versionBlock('0.1.6-beta', 'Latest', [
+          ['P2P Connectivity & Bug Fixes', [
+            'Desktop Auto-Connect Port: Uses peer.tcpPort instead of hardcoded 46000. Per-peer ports stored in SocketManager._peerPorts map.',
+            'Desktop Manual Connect: Connect accepts port parameter (default 46000) via preload bridge.',
+            'Desktop P2P Edit Broadcast Loop Fixed: store.editMessage no longer re-broadcasts (caused echo). Single broadcast from chat-panel.js:sendToAll.',
+            'Desktop Context Menu "Edit Message": No-op log replaced with proper editingMsg flow.',
+            'Mobile Disconnect Handler Fixed (Critical): Friend lookup by connectionId (native ip:port) works — connectionId stored on connect + beacon. Falls back to IP split.',
+            'Mobile TCP/UDP Beacon Handlers: Store tcpPort, connectionId, ip on friends. Auto-reconnect uses peer\'s port, not own.',
+            'Mobile Orbit Echo Stays Online: Status correctly reset to online on friend load.'
+          ]],
+          ['Message Editing & Reactions', [
+            'Mobile Edit P2P Broadcast: Edits broadcast to DMs and group members with chatId for group routing.',
+            'Mobile edited Flag: Incoming MESSAGE_EDIT sets msg.edited = true.',
+            'Mobile Reaction UI: Reaction button, floating picker (6 emojis), toggle on pills, instant local state + P2P broadcast via REACTION protocol.'
+          ]],
+          ['Android Foreground Service', [
+            'OrbitForegroundService: Full P2P engine as persistent Android Service — TCP server, UDP multicast, WakeLock, START_STICKY.',
+            'OrbitP2PPlugin: Thin proxy forwarding calls via Binder. Event queue drained every 100ms via Handler.',
+            'BootReceiver: Restarts foreground service on BOOT_COMPLETED.',
+            'JS Lifecycle: visibilitychange, appStateChange, pageshow re-render UI and restart discovery on foreground.',
+            'sendFailed/connectFailed events delivered to JS listeners (were silently dropped).',
+            'Battery Optimization: REQUEST_IGNORE_BATTERY_OPTIMIZATIONS permission + JS bridge method.'
+          ]],
+          ['Silent Bug Fixes', [
+            'serverSocket made volatile — prevents stale null on stopServer',
+            'PeerConnection stale map entry eliminated — both original + updated peerId keys cleaned on disconnect',
+            'Executor shutdownNow on destroy — prevents thread leaks on START_STICKY recreation',
+            'Static eventQueue cleared on destroy — prevents stale events from old instance',
+            'SO_REUSEADDR on MulticastSocket — prevents bind failure on discovery restart after network change',
+            'joinGroup with explicit NetworkInterface — Android 10+ compatibility'
+          ]]
+        ]) +
+        versionBlock('0.1.5-beta', '', [
           ['New Features', [
             'Account Switcher (Experimental): Right-click avatar → panel to add/switch/logout accounts. Last active user auto-loaded. Gated behind Experimental Features.',
             'PIN Lock Screen (2FA Experimental): 4-8 digit PIN, SHA-256 hashed on main process, numpad UI, 5-attempt cooldown, Forgot PIN reset. Gated behind Experimental Features.',

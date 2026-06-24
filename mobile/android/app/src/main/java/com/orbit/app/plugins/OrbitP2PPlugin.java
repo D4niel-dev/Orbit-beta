@@ -6,83 +6,181 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+import android.content.ComponentName;
 import android.content.Context;
-import android.net.wifi.WifiManager;
-import android.os.AsyncTask;
+import android.content.Intent;
+import android.content.ServiceConnection;
+import android.os.Handler;
+import android.os.IBinder;
+import android.os.Looper;
 import android.util.Log;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.MulticastSocket;
-import java.net.NetworkInterface;
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.util.Collections;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import com.orbit.app.services.OrbitForegroundService;
+import com.orbit.app.services.OrbitForegroundService.FgEvent;
 
 @CapacitorPlugin(name = "OrbitP2P")
 public class OrbitP2PPlugin extends Plugin {
 
     private static final String TAG = "OrbitP2P";
-    private static final int TCP_BUFFER_SIZE = 4194304; // 4 MB — raised from 64 KB
-    private static final String MULTICAST_ADDR = "224.0.0.251";
-    private static final int DISCOVERY_PORT = 45678;
-    private static final int BEACON_INTERVAL_MS = 10000;
+    private final Handler drainHandler = new Handler(Looper.getMainLooper());
+    private volatile OrbitForegroundService boundService = null;
+    private boolean serviceBound = false;
+    private boolean serviceStarting = false;
+    private final Runnable drainRunnable = new Runnable() {
+        @Override
+        public void run() {
+            drainEvents();
+            drainHandler.postDelayed(this, 100);
+        }
+    };
 
-    private ServerSocket serverSocket;
-    private volatile MulticastSocket multicastSocket;
-    private final ExecutorService executor = Executors.newCachedThreadPool();
-    private final Map<String, PeerConnection> connections = new ConcurrentHashMap<>();
-    private volatile boolean serverRunning = false;
-    private volatile boolean discoveryRunning = false;
-    private WifiManager.MulticastLock multicastLock;
+    // ── Service lifecycle ──
 
-    // ── TCP Server ──
+    private final ServiceConnection connection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            Log.d(TAG, "Service connected");
+            if (service instanceof OrbitForegroundService.ServiceBinder) {
+                boundService = ((OrbitForegroundService.ServiceBinder) service).getService();
+            }
+            serviceBound = true;
+            startDraining();
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            Log.d(TAG, "Service disconnected");
+            serviceBound = false;
+            boundService = null;
+            stopDraining();
+        }
+    };
+
+    private void ensureServiceRunning() {
+        Context ctx = getContext();
+        if (ctx == null) return;
+        if (boundService != null) return;
+        if (serviceStarting) return;
+        serviceStarting = true;
+        Intent intent = new Intent(ctx, OrbitForegroundService.class);
+        ctx.startForegroundService(intent);
+        ctx.bindService(intent, connection, Context.BIND_AUTO_CREATE);
+    }
+
+    private void stopService() {
+        Context ctx = getContext();
+        if (ctx == null) return;
+        stopDraining();
+        if (serviceBound) {
+            try { ctx.unbindService(connection); } catch (Exception ignored) {}
+            serviceBound = false;
+        }
+        Intent intent = new Intent(ctx, OrbitForegroundService.class);
+        ctx.stopService(intent);
+        serviceStarting = false;
+    }
+
+    // ── Event draining ──
+
+    private void startDraining() {
+        drainHandler.removeCallbacks(drainRunnable);
+        drainHandler.post(drainRunnable);
+    }
+
+    private void stopDraining() {
+        drainHandler.removeCallbacks(drainRunnable);
+    }
+
+    private void drainEvents() {
+        FgEvent ev;
+        while ((ev = OrbitForegroundService.eventQueue.poll()) != null) {
+            if (ev == null) continue;
+            try {
+                switch (ev.type) {
+                    case "message":
+                        JSObject msgObj = new JSObject();
+                        msgObj.put("connectionId", ev.connectionId);
+                        msgObj.put("data", ev.data);
+                        notifyListeners("onMessage", msgObj);
+                        break;
+                    case "connection":
+                        JSObject connObj = new JSObject();
+                        connObj.put("connectionId", ev.connectionId);
+                        connObj.put("host", ev.host != null ? ev.host : "");
+                        notifyListeners("onConnection", connObj);
+                        break;
+                    case "disconnect":
+                        JSObject discObj = new JSObject();
+                        discObj.put("connectionId", ev.connectionId);
+                        notifyListeners("onDisconnect", discObj);
+                        break;
+                    case "peerFound":
+                        JSObject peerObj = new JSObject();
+                        peerObj.put("host", ev.host);
+                        peerObj.put("beacon", ev.data);
+                        notifyListeners("onPeerFound", peerObj);
+                        break;
+                    case "sendFailed":
+                    case "connectFailed":
+                        JSObject errObj = new JSObject();
+                        errObj.put("connectionId", ev.connectionId);
+                        errObj.put("error", ev.data);
+                        errObj.put("host", ev.host != null ? ev.host : "");
+                        notifyListeners("on" + Character.toUpperCase(ev.type.charAt(0)) + ev.type.substring(1), errObj);
+                        break;
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error draining event: " + e.getMessage());
+            }
+        }
+    }
+
+    // ── Plugin lifecycle ──
+
+    @Override
+    public void load() {
+        super.load();
+        Log.d(TAG, "Plugin load");
+    }
+
+    @Override
+    protected void handleOnDestroy() {
+        super.handleOnDestroy();
+        Log.d(TAG, "handleOnDestroy — stopping service drain only, service keeps running");
+        stopDraining();
+        try {
+            Context ctx = getContext();
+            if (ctx != null && serviceBound) {
+                ctx.unbindService(connection);
+                serviceBound = false;
+            }
+        } catch (Exception ignored) {}
+    }
+
+    // ── Plugin methods ──
 
     @PluginMethod
     public void startServer(PluginCall call) {
         int port = call.getInt("port", 46000);
-
-        executor.execute(() -> {
-            try {
-                serverSocket = new ServerSocket(port);
-                serverRunning = true;
-                call.resolve(new JSObject().put("port", port));
-
-                while (serverRunning && !serverSocket.isClosed()) {
-                    Socket client = serverSocket.accept();
-                    String peerId = client.getInetAddress().getHostAddress() + ":" + client.getPort();
-                    PeerConnection conn = new PeerConnection(peerId, client);
-                    connections.put(peerId, conn);
-                    notifyConnection(peerId);
-                    conn.startReading();
-                }
-            } catch (IOException e) {
-                if (serverRunning) {
-                    call.reject("Server error: " + e.getMessage());
-                }
-            }
-        });
+        ensureServiceRunning();
+        // Pass port to service via intent extra
+        Context ctx = getContext();
+        if (ctx != null) {
+            Intent intent = new Intent(ctx, OrbitForegroundService.class);
+            intent.putExtra("tcpPort", port);
+            intent.putExtra("startNetworking", true);
+            ctx.startForegroundService(intent);
+        }
+        call.resolve(new JSObject().put("port", port));
     }
 
     @PluginMethod
     public void stopServer(PluginCall call) {
-        serverRunning = false;
-        try {
-            if (serverSocket != null) serverSocket.close();
-        } catch (IOException ignored) {}
+        if (boundService != null) {
+            boundService.stopServer();
+        }
         call.resolve();
     }
-
-    // ── TCP Client ──
 
     @PluginMethod
     public void connect(PluginCall call) {
@@ -90,329 +188,112 @@ public class OrbitP2PPlugin extends Plugin {
         int port = call.getInt("port", 46000);
         String peerId = call.getString("peerId", host + ":" + port);
         int timeoutMs = call.getInt("timeout", 30000);
-
-        executor.execute(() -> {
-            try {
-                Socket socket = new Socket();
-                socket.connect(new InetSocketAddress(host, port), timeoutMs);
-                PeerConnection conn = new PeerConnection(peerId, socket);
-                connections.put(peerId, conn);
-                notifyConnection(peerId);  // track outbound connections for JS
-                call.resolve(new JSObject().put("connectionId", peerId));
-                conn.startReading();
-            } catch (IOException e) {
-                call.reject("Connection failed: " + e.getMessage());
+        ensureServiceRunning();
+        if (boundService != null) {
+            boundService.connectToPeer(host, port, peerId, timeoutMs);
+            call.resolve(new JSObject().put("connectionId", peerId));
+        } else {
+            // Service not yet bound — queue connection via intent
+            Context ctx = getContext();
+            if (ctx != null) {
+                Intent intent = new Intent(ctx, OrbitForegroundService.class);
+                intent.putExtra("connectHost", host);
+                intent.putExtra("connectPort", port);
+                intent.putExtra("connectPeerId", peerId);
+                intent.putExtra("connectTimeout", timeoutMs);
+                ctx.startForegroundService(intent);
             }
-        });
+            call.resolve(new JSObject().put("connectionId", peerId));
+        }
     }
 
     @PluginMethod
     public void disconnect(PluginCall call) {
         String connectionId = call.getString("connectionId");
-        PeerConnection conn = connections.remove(connectionId);
-        if (conn != null) {
-            conn.close();
+        if (boundService != null) {
+            boundService.disconnectPeer(connectionId);
         }
         call.resolve();
     }
-
-    // ── Send ──
 
     @PluginMethod
     public void send(PluginCall call) {
         String connectionId = call.getString("connectionId");
         String data = call.getString("data");
-
-        PeerConnection conn = connections.get(connectionId);
-        if (conn == null) {
-            call.reject("No connection: " + connectionId);
-            return;
+        if (boundService != null) {
+            boundService.sendData(connectionId, data);
+            call.resolve();
+        } else {
+            call.reject("Service not available");
         }
-
-        executor.execute(() -> {
-            try {
-                conn.send(data);
-                call.resolve();
-            } catch (IOException e) {
-                call.reject("Send failed: " + e.getMessage());
-            }
-        });
     }
-
-    // ── UDP Discovery ──
 
     @PluginMethod
     public void startDiscovery(PluginCall call) {
         JSObject beacon = call.getObject("beacon", new JSObject());
-        int discoveryPort = call.getInt("discoveryPort", DISCOVERY_PORT);
+        int discoveryPort = call.getInt("discoveryPort", 45678);
+        ensureServiceRunning();
 
-        executor.execute(() -> {
-            try {
-                acquireMulticastLock();
+        // Store beacon data on service
+        if (boundService != null) {
+            boundService.updateBeacon(beacon.toString());
+        }
 
-                MulticastSocket ms = new MulticastSocket(discoveryPort);
-                multicastSocket = ms;
-                NetworkInterface ni = getWiFiNetworkInterface();
-                if (ni != null) {
-                    ms.setNetworkInterface(ni);
-                }
-                InetAddress group = InetAddress.getByName(MULTICAST_ADDR);
-                ms.joinGroup(group);
-
-                // Resolve promise immediately (BUG-1 fix)
-                call.resolve();
-
-                byte[] beaconData = beacon.toString().getBytes("UTF-8");
-                DatagramPacket outPacket = new DatagramPacket(beaconData, beaconData.length, group, discoveryPort);
-
-                // Local IPs for self-filtering (BUG-6)
-                java.util.Set<String> localIps = getLocalIPAddresses();
-
-                discoveryRunning = true;
-                long lastBeaconTime = 0;
-
-                while (discoveryRunning && ms != null && !ms.isClosed()) {
-                    long now = System.currentTimeMillis();
-
-                    // Send beacon every BEACON_INTERVAL_MS (BUG-7)
-                    if (now - lastBeaconTime >= BEACON_INTERVAL_MS) {
-                        ms.send(outPacket);
-                        lastBeaconTime = now;
-                    }
-
-                    // Listen for incoming beacons (non-blocking)
-                    byte[] buf = new byte[4096];
-                    DatagramPacket inPacket = new DatagramPacket(buf, buf.length);
-                    ms.setSoTimeout(1000);
-                    try {
-                        ms.receive(inPacket);
-                        String peerHost = inPacket.getAddress().getHostAddress();
-                        // Filter self-beacon (BUG-6)
-                        if (localIps.contains(peerHost)) continue;
-                        int dataLen = inPacket.getLength();
-                        int offset = 0;
-                        // Strip desktop-compatible 4-byte length prefix
-                        if (dataLen > 4) {
-                            try {
-                                int prefixLen = ((inPacket.getData()[0] & 0xFF) << 24) |
-                                                 ((inPacket.getData()[1] & 0xFF) << 16) |
-                                                 ((inPacket.getData()[2] & 0xFF) << 8)  |
-                                                 (inPacket.getData()[3] & 0xFF);
-                                if (prefixLen == dataLen - 4) {
-                                    offset = 4;
-                                }
-                            } catch (Exception ignored) {}
-                        }
-                        String msg = new String(inPacket.getData(), offset, dataLen - offset, "UTF-8");
-                        Log.d(TAG, "Raw beacon from " + peerHost + " (offset=" + offset + "): " + msg);
-                        notifyPeerFound(peerHost, msg);
-                    } catch (java.net.SocketTimeoutException ignored) {
-                        // No beacon this cycle, continue
-                    }
-                }
-            } catch (IOException e) {
-                call.reject("Discovery error: " + e.getMessage());
-            } finally {
-                releaseMulticastLock();
-            }
-        });
+        Context ctx = getContext();
+        if (ctx != null) {
+            Intent intent = new Intent(ctx, OrbitForegroundService.class);
+            intent.putExtra("udpPort", discoveryPort);
+            intent.putExtra("beaconJson", beacon.toString());
+            intent.putExtra("startNetworking", true);
+            ctx.startForegroundService(intent);
+        }
+        call.resolve();
     }
 
     @PluginMethod
     public void stopDiscovery(PluginCall call) {
-        discoveryRunning = false;
-        try {
-            if (multicastSocket != null) {
-                multicastSocket.close();
-                multicastSocket = null;
-            }
-        } catch (Exception ignored) {}
-        releaseMulticastLock();
+        if (boundService != null) {
+            boundService.stopDiscovery();
+        }
         call.resolve();
     }
 
-    // ── Helpers ──
-
-    private NetworkInterface getWiFiNetworkInterface() {
-        try {
-            for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
-                if (ni.isUp() && !ni.isLoopback() && ni.getName().startsWith("wlan")) {
-                    return ni;
-                }
-            }
-            // Fallback: first non-loopback interface
-            for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
-                if (ni.isUp() && !ni.isLoopback()) {
-                    return ni;
-                }
-            }
-        } catch (Exception ignored) {}
-        return null;
-    }
-
-    private void acquireMulticastLock() {
-        try {
-            Context ctx = getContext();
-            if (ctx == null) return;
-            WifiManager wm = (WifiManager) ctx.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
-            if (wm == null) return;
-            multicastLock = wm.createMulticastLock("OrbitP2P-MulticastLock");
-            multicastLock.setReferenceCounted(true);
-            multicastLock.acquire();
-            Log.d(TAG, "MulticastLock acquired");
-        } catch (Exception e) {
-            Log.e(TAG, "Failed to acquire MulticastLock", e);
+    @PluginMethod
+    public void startNetwork(PluginCall call) {
+        ensureServiceRunning();
+        Context ctx = getContext();
+        if (ctx != null) {
+            Intent intent = new Intent(ctx, OrbitForegroundService.class);
+            intent.putExtra("startNetworking", true);
+            ctx.startForegroundService(intent);
         }
+        call.resolve();
     }
 
-    private void releaseMulticastLock() {
-        try {
-            if (multicastLock != null && multicastLock.isHeld()) {
-                multicastLock.release();
-                multicastLock = null;
-                Log.d(TAG, "MulticastLock released");
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Failed to release MulticastLock", e);
-        }
+    @PluginMethod
+    public void stopNetwork(PluginCall call) {
+        stopService();
+        call.resolve();
     }
 
-    private java.util.Set<String> getLocalIPAddresses() {
-        java.util.Set<String> ips = new java.util.HashSet<>();
-        ips.add("127.0.0.1");
-        ips.add("0.0.0.0");
-        try {
-            for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
-                if (ni.isUp()) {
-                    for (java.net.InetAddress addr : Collections.list(ni.getInetAddresses())) {
-                        String host = addr.getHostAddress();
-                        if (host != null) {
-                            ips.add(host);
-                            // Also add the raw address without zone index
-                            int idx = host.indexOf('%');
-                            if (idx > 0) ips.add(host.substring(0, idx));
-                        }
-                    }
-                }
-            }
-        } catch (Exception ignored) {}
-        return ips;
+    @PluginMethod
+    public void isPeerConnected(PluginCall call) {
+        String peerId = call.getString("peerId");
+        boolean connected = boundService != null && boundService.isConnected(peerId);
+        call.resolve(new JSObject().put("connected", connected));
     }
 
-    private void notifyConnection(String peerId) {
-        JSObject data = new JSObject();
-        data.put("connectionId", peerId);
-        notifyListeners("onConnection", data);
+    @PluginMethod
+    public void getConnections(PluginCall call) {
+        String[] conns = boundService != null ? boundService.getConnectionIds() : new String[0];
+        JSObject result = new JSObject();
+        result.put("connections", conns);
+        call.resolve(result);
     }
 
-    private void notifyMessage(String peerId, String data) {
-        Log.d(TAG, "notifyMessage: peerId=" + peerId + " data(len=" + (data != null ? data.length() : 0) + "): " + (data != null ? data.substring(0, Math.min(data.length(), 120)) : "null"));
-        JSObject obj = new JSObject();
-        obj.put("connectionId", peerId);
-        obj.put("data", data);
-        notifyListeners("onMessage", obj);
-    }
-
-    private void notifyDisconnect(String peerId) {
-        JSObject obj = new JSObject();
-        obj.put("connectionId", peerId);
-        notifyListeners("onDisconnect", obj);
-    }
-
-    private void notifyPeerFound(String host, String beaconJson) {
-        JSObject obj = new JSObject();
-        obj.put("host", host);
-        obj.put("beacon", beaconJson);
-        notifyListeners("onPeerFound", obj);
-    }
-
-    @Override
-    protected void handleOnDestroy() {
-        super.handleOnDestroy();
-        serverRunning = false;
-        discoveryRunning = false;
-        for (PeerConnection conn : connections.values()) {
-            conn.close();
-        }
-        connections.clear();
-        try {
-            if (serverSocket != null) serverSocket.close();
-        } catch (Exception ignored) {}
-        try {
-            if (multicastSocket != null) multicastSocket.close();
-        } catch (Exception ignored) {}
-        releaseMulticastLock();
-        executor.shutdownNow();
-    }
-
-    // ── Connection Handler ──
-
-    private class PeerConnection {
-        String peerId;
-        final Socket socket;
-        final DataInputStream input;
-        final DataOutputStream output;
-        final Object sendLock = new Object();
-
-        PeerConnection(String peerId, Socket socket) throws IOException {
-            this.peerId = peerId;
-            this.socket = socket;
-            this.input = new DataInputStream(socket.getInputStream());
-            this.output = new DataOutputStream(socket.getOutputStream());
-        }
-
-        private boolean firstPacket = true;
-
-        void startReading() {
-            executor.execute(() -> {
-                try {
-                    while (serverRunning && !socket.isClosed()) {
-                        int len = input.readInt();
-                        if (len <= 0 || len > TCP_BUFFER_SIZE) break;
-                        byte[] buf = new byte[len];
-                        input.readFully(buf);
-                        String msg = new String(buf, "UTF-8");
-
-                        // Remap inbound connection from ip:port to userId (matching desktop socket.js:149-156)
-                        if (firstPacket) {
-                            firstPacket = false;
-                            try {
-                                org.json.JSONObject pkt = new org.json.JSONObject(msg);
-                                String senderId = pkt.optString("from");
-                                if (senderId == null || senderId.isEmpty()) {
-                                    senderId = pkt.optString("senderId");
-                                }
-                                if (senderId != null && !senderId.isEmpty() && !senderId.equals(peerId)) {
-                                    Log.d(TAG, "Dual mapping connection: " + peerId + " + " + senderId);
-                                    connections.put(senderId, this);
-                                    peerId = senderId;
-                                }
-                            } catch (Exception ignored) {}
-                        }
-
-                        notifyMessage(peerId, msg);
-                    }
-                } catch (IOException e) {
-                    Log.d(TAG, "Connection closed: " + peerId);
-                } finally {
-                    connections.remove(peerId);
-                    notifyDisconnect(peerId);
-                    close();
-                }
-            });
-        }
-
-        void send(String data) throws IOException {
-            synchronized (sendLock) {
-                byte[] buf = data.getBytes("UTF-8");
-                output.writeInt(buf.length);
-                output.write(buf);
-                output.flush();
-            }
-        }
-
-        void close() {
-            try { socket.close(); } catch (Exception ignored) {}
-        }
+    @PluginMethod
+    public void cleanup(PluginCall call) {
+        stopService();
+        call.resolve();
     }
 }
