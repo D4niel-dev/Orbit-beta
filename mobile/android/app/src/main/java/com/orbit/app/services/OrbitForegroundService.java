@@ -228,7 +228,7 @@ public class OrbitForegroundService extends Service {
                 InetAddress group = InetAddress.getByName(MULTICAST_ADDR);
                 if (ni != null) {
                     ms.setNetworkInterface(ni);
-                    ms.joinGroup(group, ni);
+                    ms.joinGroup(new InetSocketAddress(group, 0), ni);
                 } else {
                     ms.joinGroup(group);
                 }
