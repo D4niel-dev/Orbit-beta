@@ -6,10 +6,50 @@ console.log('[APP] app.js loaded at', new Date().toISOString());
 /* ---- Data Store ---- */
 var MStore = {
   get(key, fallback) {
+    if (key.indexOf('msg_') === 0) {
+      try { var d = JSON.parse(localStorage.getItem('orbit_' + key)); return d !== null ? d : fallback; }
+      catch(e) { return fallback; }
+    }
     try { var d = JSON.parse(localStorage.getItem('orbit_' + key)); return d !== null ? d : fallback; }
     catch(e) { return fallback; }
   },
   set(key, val) { 
+    // Messages stored per-chat under orbit_msg_{chatId} — never combined
+    if (key === 'messages') {
+      for (var cid in val) {
+        if (val.hasOwnProperty(cid)) {
+          this.set('msg_' + cid, val[cid]);
+        }
+      }
+      try { localStorage.removeItem('orbit_messages'); } catch(_) {}
+      return;
+    }
+    if (key.indexOf('msg_') === 0) {
+      var chatId = key.substring(4);
+      try {
+        localStorage.setItem('orbit_' + key, JSON.stringify(val));
+      } catch(e) {
+        if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+          console.error('Storage quota exceeded for messages of', chatId);
+          if (typeof showToast === 'function') {
+            showToast('Storage full! Old messages trimmed for this chat.', 'warning');
+          }
+          var limits = [30, 15, 5];
+          for (var li = 0; li < limits.length; li++) {
+            var trimmed = val.slice(-limits[li]);
+            try {
+              localStorage.setItem('orbit_' + key, JSON.stringify(trimmed));
+              if (this.messages) this.messages[chatId] = trimmed;
+              return;
+            } catch(e2) {}
+          }
+          console.error('Failed to save messages for', chatId);
+          try { localStorage.removeItem('orbit_' + key); } catch(_) {}
+          if (this.messages) delete this.messages[chatId];
+        }
+      }
+      return;
+    }
     try {
       localStorage.setItem('orbit_' + key, JSON.stringify(val)); 
     } catch(e) {
@@ -18,35 +58,32 @@ var MStore = {
         if (typeof showToast === 'function') {
           showToast('Storage full! Clear some chat history or use smaller images.', 'error');
         }
-        
-        // Emergency cleanup: if saving messages failed, progressively trim old messages
-        if (key === 'messages') {
-          var limits = [50, 30, 15, 5];
-          for (var li = 0; li < limits.length; li++) {
-            var limit = limits[li];
-            var trimmed = {};
-            for (var c in val) {
-              if (val[c] && val[c].length > limit) {
-                trimmed[c] = val[c].slice(-limit);
-              } else {
-                trimmed[c] = val[c];
-              }
-            }
-            try {
-              localStorage.setItem('orbit_' + key, JSON.stringify(trimmed));
-              this.messages = trimmed;
-              if (typeof showToast === 'function') {
-                showToast('Storage trimmed: kept last ' + limit + ' messages per chat.', 'warning');
-              }
-              return;
-            } catch(e2) {
-              // Still exceeded, try with a lower limit
-            }
-          }
-          console.error('Failed to save messages even after aggressive trimming');
-        }
       }
     }
+  },
+
+  // Migrate old combined orbit_messages key to per-chat keys
+  _migrateOldMessages() {
+    try {
+      var old = JSON.parse(localStorage.getItem('orbit_messages'));
+      if (old && typeof old === 'object') {
+        console.log('[MStore] Migrating old combined messages to per-chat keys');
+        for (var cid in old) {
+          if (old.hasOwnProperty(cid) && old[cid]) {
+            this.set('msg_' + cid, old[cid]);
+          }
+        }
+        localStorage.removeItem('orbit_messages');
+      }
+    } catch(e) {}
+  },
+
+  // Lazy-load messages for a chatId. Returns the cached array.
+  getMessages(chatId) {
+    if (!this.messages[chatId]) {
+      this.messages[chatId] = this.get('msg_' + chatId, []);
+    }
+    return this.messages[chatId];
   },
 
   // Compress large images before storing
@@ -143,7 +180,9 @@ var MStore = {
     this.friends = this.get('friends', []).map(function(f) { f.lastSeen = 0; f.status = 'offline'; return f; });
     this.chats = this.get('chats', []);
     this.groups = this.get('groups', []);
-    this.messages = this.get('messages', {});
+    // Messages loaded per-chat on demand — no combined key
+    this.messages = {};
+    this._migrateOldMessages();
     this.blockedUsers = this.get('blockedUsers', []);
     this.settings = Object.assign(this.settings, this.get('settings', {}));
     this.user = this.get('user', null);
@@ -197,13 +236,14 @@ var MStore = {
       echoChat.avatar = 'icons/app/orbit_1024.png';
     }
     // Add default messages for echo
-    if (!this.messages['echo'] || this.messages['echo'].length === 0) {
+    if (this.getMessages('echo').length === 0) {
       this.messages['echo'] = [
         { id: 'e1', from: 'echo', text: "Hi! I'm Orbit Echo! You can call me Bit if you want.", time: new Date().toISOString() },
         { id: 'e2', from: 'echo', text: "You can send messages in here and i'll echo it back at you! (except for images, files, folders and sounds files)", time: new Date().toISOString() },
         { id: 'e3', from: 'echo', text: 'THIS MESSAGE WILL SELF-DESTRUCT AFTER 5s', time: new Date().toISOString() },
         { id: 'e4', from: 'echo', text: 'Just kidding..', time: new Date().toISOString() }
       ];
+      this._saveMsgs('echo');
     }
     this.save();
   },
@@ -212,10 +252,15 @@ var MStore = {
     this.set('friends', this.friends);
     this.set('chats', this.chats);
     this.set('groups', this.groups);
-    this.set('messages', this.messages);
     this.set('blockedUsers', this.blockedUsers);
     this.set('settings', this.settings);
     this.set('user', this.user);
+  },
+
+  _saveMsgs(chatId) {
+    if (this.messages[chatId]) {
+      this.set('msg_' + chatId, this.messages[chatId]);
+    }
   },
 
   _migrateGroups() {
@@ -250,7 +295,7 @@ var MStore = {
   getChats() {
     var self = this;
     return this.chats.map(function(c) {
-      var msgs = self.messages[c.id] || [];
+      var msgs = self.getMessages(c.id);
       var last = msgs.length > 0 ? msgs[msgs.length - 1] : null;
       var friend = self.friends.find(function(f) { return f.id === c.id; });
       return {
@@ -273,7 +318,8 @@ var MStore = {
       chat.lastMessage = msg.text;
       chat.lastTime = msg.time;
     }
-    this.save();
+    this._saveMsgs(chatId);
+    this.set('chats', this.chats);
   },
 
   sendMessage(chatId, text) {
@@ -297,14 +343,14 @@ var MStore = {
         break;
       }
     }
-    this.save();
+    this._saveMsgs(chatId);
   },
 
   deleteMessage(chatId, msgId) {
     var msgs = this.messages[chatId];
     if (!msgs) return;
     this.messages[chatId] = msgs.filter(function(m) { return String(m.id) !== String(msgId); });
-    this.save();
+    this._saveMsgs(chatId);
   }
 };
 
@@ -440,8 +486,8 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       // Check if last message has attachments
       var hasAtt = false;
-      var chatMsgs = MStore.messages[c.id];
-      if (chatMsgs && chatMsgs.length > 0) {
+      var chatMsgs = MStore.getMessages(c.id);
+      if (chatMsgs.length > 0) {
         var last = chatMsgs[chatMsgs.length - 1];
         hasAtt = last && last.attachments && last.attachments.length > 0;
       }
@@ -754,7 +800,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function startReply(msgId) {
-    var msgs = MStore.messages[activeChatId] || [];
+    var msgs = MStore.getMessages(activeChatId);
     var msg = msgs.find(function(m) { return String(m.id) === String(msgId); });
     if (!msg) return;
     var senderName = 'Unknown';
@@ -774,7 +820,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function startEdit(msgId) {
-    var msgs = MStore.messages[activeChatId] || [];
+    var msgs = MStore.getMessages(activeChatId);
     var msg = msgs.find(function(m) { return String(m.id) === String(msgId); });
     if (!msg) return;
     editingMsg = { id: msg.id, chatId: activeChatId, text: msg.text };
@@ -796,7 +842,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function translateMessage(msgId) {
-    var msgs = MStore.messages[activeChatId] || [];
+    var msgs = MStore.getMessages(activeChatId);
     var msg = msgs.find(function(m) { return String(m.id) === String(msgId); });
     if (!msg || !msg.text) return;
     var bubble = document.querySelector('.message-row[data-msg-id="' + msgId + '"] .message-bubble');
@@ -851,8 +897,8 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function applyReactionLocally(chatId, msgId, emoji, action) {
-    var msgs = MStore.messages[chatId];
-    if (!msgs) return;
+    var msgs = MStore.getMessages(chatId);
+    if (!msgs.length) return;
     var myId = MStore.user ? MStore.user.id : '';
     for (var i = 0; i < msgs.length; i++) {
       if (String(msgs[i].id) === String(msgId)) {
@@ -867,13 +913,13 @@ document.addEventListener('DOMContentLoaded', function() {
         break;
       }
     }
-    MStore.save();
+    MStore._saveMsgs(chatId);
     if (activeChatId === chatId) renderMessages(chatId);
   }
 
   function toggleReaction(msgId, pillEl) {
     if (!activeChatId) return;
-    var msgs = MStore.messages[activeChatId] || [];
+    var msgs = MStore.getMessages(activeChatId);
     var msg = msgs.find(function(m) { return String(m.id) === String(msgId); });
     if (!msg) return;
     var emoji = pillEl.querySelector('span') ? pillEl.querySelector('span').textContent : '';
@@ -890,7 +936,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (_reactionPickerEl) { _reactionPickerEl.remove(); _reactionPickerEl = null; return; }
     var emojis = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
     var myId = MStore.user ? MStore.user.id : '';
-    var msgs = MStore.messages[activeChatId] || [];
+    var msgs = MStore.getMessages(activeChatId);
     var msg = msgs.find(function(m) { return String(m.id) === String(msgId); });
     var picker = document.createElement('div');
     picker.className = 'reaction-picker';
@@ -932,7 +978,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function showForwardModal(msgId) {
-    var msgs = MStore.messages[activeChatId] || [];
+    var msgs = MStore.getMessages(activeChatId);
     var msg = msgs.find(function(m) { return String(m.id) === String(msgId); });
     if (!msg) return;
 
@@ -1113,7 +1159,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function renderMessages(chatId) {
     var feed = document.getElementById('message-feed');
-    var msgs = MStore.messages[chatId] || [];
+    var msgs = MStore.getMessages(chatId);
     if (chatSearchFilter) {
       var cl = chatSearchFilter.toLowerCase();
       msgs = msgs.filter(function(m) { return (m.text || '').toLowerCase().indexOf(cl) !== -1; });
@@ -1207,10 +1253,7 @@ document.addEventListener('DOMContentLoaded', function() {
               '<img src="' + escapeHtml(a.url) + '" style="width:100%;height:100%;object-fit:cover;" loading="lazy">' +
             '</div>';
           } else if (a.type === 'video' && a.url) {
-            gridHtml += '<div class="att-grid-cell" data-open-video="' + safeAttId + '" data-msg-id="' + m.id + '" style="position:relative;">' +
-              '<video src="' + escapeHtml(a.url) + '" style="width:100%;height:100%;object-fit:cover;display:block;" preload="metadata"></video>' +
-              '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:40px;height:40px;border-radius:50%;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;pointer-events:none;"><svg viewBox="0 0 24 24" width="20" height="20" fill="white"><polygon points="8,5 19,12 8,19"/></svg></div>' +
-            '</div>';
+            gridHtml += '<div class="att-grid-cell att-video-cell ovp-placeholder" data-ovp-url="' + escapeHtml(a.url) + '" data-open-video="' + safeAttId + '" data-msg-id="' + m.id + '"></div>';
           } else if (a.type === 'audio' && a.url) {
             gridHtml += '<div class="att-grid-cell att-audio-cell oap-placeholder" data-oap-url="' + escapeHtml(a.url) + '"></div>';
           } else {
@@ -1276,6 +1319,21 @@ document.addEventListener('DOMContentLoaded', function() {
     feed.innerHTML = html;
     freezeGifImages(feed);
     if (window.OrbitAudioPlayer) OrbitAudioPlayer.init(feed);
+    if (window.OrbitVideoPlayer) OrbitVideoPlayer.init(feed);
+    // Fallback: convert raw video data URLs in case any <video> tags bypass the player
+    feed.querySelectorAll('video[src^="data:"]').forEach(function(v) {
+      var url = v.getAttribute('src');
+      try {
+        var m = url.match(/^data:(video\/\w+|application\/octet-stream);base64,(.+)$/);
+        if (m) {
+          var raw = atob(m[2]);
+          var buf = new ArrayBuffer(raw.length);
+          var bytes = new Uint8Array(buf);
+          for (var bi = 0; bi < raw.length; bi++) bytes[bi] = raw.charCodeAt(bi);
+          v.src = URL.createObjectURL(new Blob([buf], { type: m[1] }));
+        }
+      } catch(e) {}
+    });
     requestAnimationFrame(function() { feed.removeAttribute('data-refreshing'); });
     // Bind action buttons
     feed.querySelectorAll('.msg-reply-btn').forEach(function(btn) {
@@ -1311,7 +1369,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (idx >= 0) {
           group.pinnedMessages.splice(idx, 1);
         } else {
-          var msgs = MStore.messages[activeChatId] || [];
+          var msgs = MStore.getMessages(activeChatId);
           var msg = msgs.find(function(m) { return String(m.id) === String(msgId); });
           group.pinnedMessages.push({
             msgId: msgId,
@@ -1370,7 +1428,7 @@ document.addEventListener('DOMContentLoaded', function() {
         e.stopPropagation();
         var msgId = this.getAttribute('data-msg-id');
         var attId = this.getAttribute('data-open-image');
-        var msgs = MStore.messages[activeChatId] || [];
+        var msgs = MStore.getMessages(activeChatId);
         var msg = msgs.find(function(m) { return String(m.id) === String(msgId); });
         if (msg && msg.attachments) {
           var att = msg.attachments.find(function(a) { return String(a.id) === attId; });
@@ -1387,13 +1445,26 @@ document.addEventListener('DOMContentLoaded', function() {
         e.stopPropagation();
         var msgId = this.getAttribute('data-msg-id');
         var attId = this.getAttribute('data-open-video');
-        var msgs = MStore.messages[activeChatId] || [];
+        var msgs = MStore.getMessages(activeChatId);
         var msg = msgs.find(function(m) { return String(m.id) === String(msgId); });
         if (msg && msg.attachments) {
           var att = msg.attachments.find(function(a) { return String(a.id) === attId; });
           if (att && att.url) {
             var player = document.getElementById('video-preview-player');
-            player.src = att.url;
+            var vidUrl = att.url;
+            if (vidUrl.indexOf('data:') === 0) {
+              try {
+                var vm = vidUrl.match(/^data:(video\/[^;]+|application\/octet-stream);base64,(.+)$/);
+                if (vm) {
+                  var raw = atob(vm[2]);
+                  var buf = new ArrayBuffer(raw.length);
+                  var bytes = new Uint8Array(buf);
+                  for (var bi = 0; bi < raw.length; bi++) bytes[bi] = raw.charCodeAt(bi);
+                  vidUrl = URL.createObjectURL(new Blob([buf], { type: vm[1] }));
+                }
+              } catch(e) {}
+            }
+            player.src = vidUrl;
             player.load();
             document.getElementById('video-preview-overlay').classList.add('open');
           }
@@ -1805,9 +1876,13 @@ document.addEventListener('DOMContentLoaded', function() {
           if (done === total) renderFilePreview();
           return;
         }
-    var isImage = file.type.startsWith('image/');
-    var isVideo = file.type.startsWith('video/');
-    var isAudio = file.type.startsWith('audio/');
+    var ext = file.name.split('.').pop().toLowerCase();
+    var imgExts = ['jpg','jpeg','png','gif','webp','bmp','svg'];
+    var vidExts = ['mp4','mov','avi','mkv','webm','3gp','m4v','wmv','flv'];
+    var audExts = ['mp3','wav','ogg','flac','aac','m4a','wma','webm'];
+    var isImage = file.type.startsWith('image/') || imgExts.indexOf(ext) !== -1;
+    var isVideo = file.type.startsWith('video/') || vidExts.indexOf(ext) !== -1;
+    var isAudio = file.type.startsWith('audio/') || audExts.indexOf(ext) !== -1;
         if (isImage) {
           var reader = new FileReader();
           reader.onload = function(ev) {
@@ -1891,6 +1966,10 @@ document.addEventListener('DOMContentLoaded', function() {
       if (s.type === 'image' && s.url) {
         html += '<div class="file-preview-item">' +
           '<img src="' + s.url + '" loading="lazy">' +
+          '<button class="file-preview-remove" data-index="' + i + '">&times;</button></div>';
+      } else if (s.type === 'video') {
+        html += '<div class="file-preview-item">' +
+          '<div class="file-icon" style="color:#a855f7;"><i data-lucide="video"></i></div>' +
           '<button class="file-preview-remove" data-index="' + i + '">&times;</button></div>';
       } else if (s.type === 'audio') {
         html += '<div class="file-preview-item">' +
@@ -2623,7 +2702,21 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button id="changelog-close-mobile" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;font-size:20px;">✕</button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
-        vBlock('0.1.6-beta', 'Latest', [
+        vBlock('0.1.7-beta', 'Latest', [
+          ['Video Playback Fixes', [
+            'PIPELINE_ERROR_DECODE Root Cause Fixed: Audio packet decode errors in fMP4 files resolved via Content-Type fix in main.js. Videos play continuously.',
+            'Re-render Guard: Store subscription blocks re-renders while video plays (except chat switches). Handles notify() without changedState.',
+            'Decode Error Retry: On PIPELINE_ERROR_DECODE, source reloads and skips forward +2s (up to 3 attempts).',
+            'Removed Forced Seeking: Eliminated currentTime = 1e10 hack for orbit-db:// / orbit-file:// URLs.'
+          ]],
+          ['Media Player UX Improvements', [
+            'Larger Video Player: Display increased to 720x600 in messages. Fullscreen has shadow + theme-matched letterbox.',
+            'Larger Audio Player: Waveform canvas height increased to 200px, full-width container (720px).',
+            'Separated Media Layout: Video and audio removed from image grid — standalone blocks at full width.',
+            'Fullscreen uses var(--bg-surface) — blends with active UI theme.'
+          ]]
+        ]) +
+        vBlock('0.1.6-beta', '', [
           ['P2P Connectivity & Bug Fixes', [
             'Desktop Auto-Connect Port: Uses peer.tcpPort instead of hardcoded 46000. Per-peer ports stored in SocketManager._peerPorts.',
             'Desktop P2P Edit Loop Fixed: store.editMessage no longer re-broadcasts (caused echo). Single broadcast from chat-panel.js.',
@@ -2901,7 +2994,9 @@ document.addEventListener('DOMContentLoaded', function() {
         var friends = MStore.friends.length;
         var chats = MStore.chats.length;
         var msgs = 0;
-        for (var k in MStore.messages) { if (MStore.messages.hasOwnProperty(k)) msgs += MStore.messages[k].length; }
+        var allKeys = [];
+        for (var _i = 0; _i < localStorage.length; _i++) { var _k = localStorage.key(_i); if (_k.indexOf('orbit_msg_') === 0) { allKeys.push(_k.substring(9)); } }
+        allKeys.forEach(function(k) { msgs += (MStore.messages[k] || MStore.getMessages(k)).length; });
         _devOverlayEl.innerHTML = 'Friends: ' + friends + '<br>Chats: ' + chats + '<br>Messages: ' + msgs + '<br>P2P Conns: ' + conns;
         if (MStore.settings.experimentalDevOverlay && !window._stopDevOverlay) requestAnimationFrame(update);
       };
@@ -2981,7 +3076,9 @@ document.addEventListener('DOMContentLoaded', function() {
       var online = MStore.friends.filter(function(f) { return f.status && f.status !== 'offline'; }).length;
       var chatCount = MStore.chats.length;
       var msgCount = 0;
-      Object.keys(MStore.messages).forEach(function(k) { msgCount += MStore.messages[k].length; });
+      var allKeys = [];
+      for (var _i = 0; _i < localStorage.length; _i++) { var _k = localStorage.key(_i); if (_k.indexOf('orbit_msg_') === 0) { allKeys.push(_k.substring(9)); } }
+      allKeys.forEach(function(k) { msgCount += (MStore.messages[k] || MStore.getMessages(k)).length; });
       lines.push('friends=' + MStore.friends.length + ' online=' + online + ' chats=' + chatCount + ' msgs=' + msgCount);
       if (window.Orbit && window.Orbit.P2P) {
         lines.push('p2p=' + (Orbit.P2P.isAvailable() ? 'avail' : 'unavail'));
@@ -3301,7 +3398,7 @@ document.addEventListener('DOMContentLoaded', function() {
       renderLucide({ root: container });
       return;
     }
-    var msgs = MStore.messages[activeChatId] || [];
+    var msgs = MStore.getMessages(activeChatId);
     var images = msgs.filter(function(m) {
       return m.attachments && m.attachments.some(function(a) { return a.type === 'image'; });
     });
@@ -3576,7 +3673,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     var html = '';
     sorted.forEach(function(c) {
-      var msgs = MStore.messages[c.id] || [];
+      var msgs = MStore.getMessages(c.id);
       if (msgs.length === 0) return;
 
       // Filter messages by search term
@@ -3693,6 +3790,12 @@ document.addEventListener('DOMContentLoaded', function() {
     var host = parts[0];
     var port = parseInt(parts[1], 10) || 46000;
     var peerId = host + ':' + port;
+
+    // Prevent connecting to self
+    if (host === '127.0.0.1' || host === 'localhost' || host === '0.0.0.0' || host === '::1') {
+      showToast('Cannot connect to yourself', 'error');
+      return;
+    }
 
     // Add as friend
     var existing = MStore.friends.find(function(f) { return f.id === peerId; });
@@ -4167,6 +4270,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Custom simple modal or confirm
         if (confirm('Are you sure you want to clear this chat?')) {
           MStore.messages[activeChatId] = [];
+          MStore._saveMsgs(activeChatId);
           MStore.save();
           renderMessages(activeChatId);
           renderChatList();
@@ -4472,6 +4576,7 @@ document.addEventListener('DOMContentLoaded', function() {
           MStore.groups = MStore.groups.filter(function(g) { return g.id !== activeChatId; });
           MStore.chats = MStore.chats.filter(function(c) { return c.id !== activeChatId; });
           delete MStore.messages[activeChatId];
+          localStorage.removeItem('orbit_msg_' + activeChatId);
           MStore.save();
           hideGroupInfo();
           closeChat();
@@ -4502,6 +4607,7 @@ document.addEventListener('DOMContentLoaded', function() {
           MStore.groups = MStore.groups.filter(function(g) { return g.id !== activeChatId; });
           MStore.chats = MStore.chats.filter(function(c) { return c.id !== activeChatId; });
           delete MStore.messages[activeChatId];
+          localStorage.removeItem('orbit_msg_' + activeChatId);
           MStore.save();
           hideGroupInfo();
           closeChat();
@@ -4808,6 +4914,7 @@ document.addEventListener('DOMContentLoaded', function() {
     addMenuItem('Close DM', 'x', function() {
       MStore.chats = MStore.chats.filter(function(c) { return c.id !== friend.id; });
       delete MStore.messages[friend.id];
+      localStorage.removeItem('orbit_msg_' + friend.id);
       MStore.friends = MStore.friends.filter(function(f) { return f.id !== friend.id; });
       MStore.save();
       if (activeChatId === friend.id) closeChat();
@@ -4987,6 +5094,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (activeChatId === chat.id) closeChat();
       MStore.chats = MStore.chats.filter(function(c) { return c.id !== chat.id; });
       delete MStore.messages[chat.id];
+      localStorage.removeItem('orbit_msg_' + chat.id);
       MStore.save();
       renderChatList();
       showToast('Chat deleted', 'info');
@@ -5031,7 +5139,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (friend) showFriendContextMenu(friend, e.touches ? e.touches[0].clientX : 0, e.touches ? e.touches[0].clientY : 0);
       } else if (type === 'message') {
         if (!activeChatId) return;
-        var msgs = MStore.messages[activeChatId] || [];
+        var msgs = MStore.getMessages(activeChatId);
         var msg = msgs.find(function(m) { return String(m.id) === String(id); });
         if (msg) showMessageContextMenu(msg, activeChatId, e.touches ? e.touches[0].clientX : 0, e.touches ? e.touches[0].clientY : 0);
       } else if (type === 'chat') {
@@ -5297,12 +5405,14 @@ document.addEventListener('DOMContentLoaded', function() {
             debugLog('P2P', 'Merging TCP peer: ' + connFriend.id + ' → ' + peerId, { name: peerName });
             var oldChatId = connFriend.id;
             if (oldChatId !== peerId) {
-              if (MStore.messages[oldChatId]) {
-                MStore.messages[peerId] = (MStore.messages[oldChatId] || []).map(function(m) {
+              if (MStore.messages[oldChatId] && MStore.messages[oldChatId].length) {
+                MStore.messages[peerId] = MStore.messages[oldChatId].map(function(m) {
                   if (m.from === oldChatId) m.from = peerId;
                   return m;
                 });
+                MStore._saveMsgs(peerId);
                 delete MStore.messages[oldChatId];
+                localStorage.removeItem('orbit_msg_' + oldChatId);
               }
               MStore.chats = MStore.chats.filter(function(c) { return c.id !== oldChatId; });
             }
@@ -5354,6 +5464,7 @@ document.addEventListener('DOMContentLoaded', function() {
           if (ipChat) {
             MStore.chats = MStore.chats.filter(function(c) { return c.id !== ipChat.id; });
             delete MStore.messages[ipChat.id];
+            localStorage.removeItem('orbit_msg_' + ipChat.id);
           }
         }
         MStore.save();
@@ -5445,7 +5556,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (packet.type === Orbit.Protocol.Types.REACTION) {
         var rPayload = packet.payload;
         if (rPayload && rPayload.msgId) {
-          var msgs = MStore.messages[chatId] || [];
+          var msgs = MStore.getMessages(chatId);
           var msgIdx = msgs.findIndex(function(m) { return String(m.id) === String(rPayload.msgId); });
           if (msgIdx >= 0) {
             var msg = msgs[msgIdx];
@@ -5458,7 +5569,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             msgs[msgIdx].reactions = reactions;
             MStore.messages[chatId] = msgs;
-            MStore.save();
+            MStore._saveMsgs(chatId);
             if (activeChatId === chatId) renderMessages(activeChatId);
           }
         }
@@ -5507,9 +5618,11 @@ document.addEventListener('DOMContentLoaded', function() {
           var base64Data = txEnd.chunks.join('');
           var extMatch = txEnd.fileName.match(/\.(png|jpe?g|gif|webp)$/i);
           var audioMatch = txEnd.fileName.match(/\.(mp3|wav|ogg|flac|aac|m4a|wma|webm)$/i);
+          var videoMatch = txEnd.fileName.match(/\.(mp4|mov|avi|mkv|webm|3gp)$/i);
           var mimeType = 'application/octet-stream';
           var isImage = false;
           var isAudio = false;
+          var isVideo = false;
           if (extMatch) {
             mimeType = 'image/' + extMatch[1].replace('jpg','jpeg').toLowerCase();
             isImage = true;
@@ -5517,6 +5630,10 @@ document.addEventListener('DOMContentLoaded', function() {
             var audioExtMap = { mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', flac: 'audio/flac', aac: 'audio/aac', m4a: 'audio/mp4', wma: 'audio/x-ms-wma', webm: 'audio/webm' };
             mimeType = audioExtMap[audioMatch[1].toLowerCase()] || 'audio/mpeg';
             isAudio = true;
+          } else if (videoMatch) {
+            var videoExtMap = { mp4: 'video/mp4', mov: 'video/quicktime', avi: 'video/x-msvideo', mkv: 'video/x-matroska', webm: 'video/webm', '3gp': 'video/3gpp' };
+            mimeType = videoExtMap[videoMatch[1].toLowerCase()] || 'video/mp4';
+            isVideo = true;
           }
           
           var fileDataUrl = 'data:' + mimeType + ';base64,' + base64Data;
@@ -5529,7 +5646,7 @@ document.addEventListener('DOMContentLoaded', function() {
             attachments: [{
               id: packet.payload.fileId,
               name: txEnd.fileName,
-              type: isImage ? 'image' : (isAudio ? 'audio' : 'file'),
+              type: isImage ? 'image' : (isAudio ? 'audio' : (isVideo ? 'video' : 'file')),
               url: fileDataUrl
             }]
           });
@@ -5552,12 +5669,12 @@ document.addEventListener('DOMContentLoaded', function() {
       // Handle MESSAGE_EDIT — desktop sends edited messages
       if (packet.type === Orbit.Protocol.Types.MESSAGE_EDIT) {
         var me = packet.payload || {};
-        if (me.msgId && MStore.messages[chatId]) {
-          var msgIdx = MStore.messages[chatId].findIndex(function(m) { return String(m.id) === String(me.msgId); });
+        if (me.msgId && MStore.getMessages(chatId).length) {
+          var msgIdx = MStore.getMessages(chatId).findIndex(function(m) { return String(m.id) === String(me.msgId); });
           if (msgIdx !== -1) {
             MStore.messages[chatId][msgIdx].text = me.newText || me.text;
             MStore.messages[chatId][msgIdx].edited = true;
-            MStore.save();
+            MStore._saveMsgs(chatId);
             if (activeChatId === chatId) renderMessages(chatId);
           }
         }
@@ -5567,11 +5684,11 @@ document.addEventListener('DOMContentLoaded', function() {
       // Handle READ — desktop sends read receipts
       if (packet.type === Orbit.Protocol.Types.READ) {
         var rr = packet.payload || {};
-        if (rr.chatId && MStore.messages[rr.chatId]) {
-          MStore.messages[rr.chatId].forEach(function(m) {
+        if (rr.chatId && MStore.getMessages(rr.chatId).length) {
+          MStore.getMessages(rr.chatId).forEach(function(m) {
             if (m.id <= rr.lastReadMsgId && !m.read) m.read = true;
           });
-          MStore.save();
+          MStore._saveMsgs(rr.chatId);
         }
         return;
       }
@@ -5579,9 +5696,9 @@ document.addEventListener('DOMContentLoaded', function() {
       // Handle MESSAGE_DELETE — desktop deletes messages
       if (packet.type === Orbit.Protocol.Types.MESSAGE_DELETE) {
         var md = packet.payload || {};
-        if (md.msgId && MStore.messages[chatId]) {
-          MStore.messages[chatId] = MStore.messages[chatId].filter(function(m) { return String(m.id) !== String(md.msgId); });
-          MStore.save();
+        if (md.msgId && MStore.getMessages(chatId).length) {
+          MStore.messages[chatId] = MStore.getMessages(chatId).filter(function(m) { return String(m.id) !== String(md.msgId); });
+          MStore._saveMsgs(chatId);
           if (activeChatId === chatId) renderMessages(chatId);
         }
         return;
@@ -5780,6 +5897,14 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
 
+    // Listen for connection failures (clean up phantom connections)
+    Orbit.P2P.onConnectFailed(function(data) {
+      debugLog('P2P', 'Connection failed', { connectionId: data.connectionId, host: data.host, error: data.error });
+    });
+    Orbit.P2P.onSendFailed(function(data) {
+      debugLog('P2P', 'Send failed', { connectionId: data.connectionId, error: data.error });
+    });
+
     // Listen for disconnections
     Orbit.P2P.onDisconnect(function(data) {
       debugLog('P2P', 'Disconnected', { connectionId: data.connectionId });
@@ -5876,9 +6001,11 @@ document.addEventListener('DOMContentLoaded', function() {
           // Move messages from old chat to new chat
           var oldChatId = ipFriend.id;
           if (oldChatId !== peerId) {
-            if (MStore.messages[oldChatId]) {
-              MStore.messages[peerId] = (MStore.messages[peerId] || []).concat(MStore.messages[oldChatId]);
+            if (MStore.messages[oldChatId] && MStore.messages[oldChatId].length) {
+              MStore.messages[peerId] = MStore.getMessages(peerId).concat(MStore.messages[oldChatId]);
+              MStore._saveMsgs(peerId);
               delete MStore.messages[oldChatId];
+              localStorage.removeItem('orbit_msg_' + oldChatId);
             }
             // Remove old chat
             MStore.chats = MStore.chats.filter(function(c) { return c.id !== oldChatId; });
@@ -5939,6 +6066,7 @@ document.addEventListener('DOMContentLoaded', function() {
           debugLog('P2P', 'Removing orphan chat: ' + ipChat.id);
           MStore.chats = MStore.chats.filter(function(c) { return c.id !== ipChat.id; });
           delete MStore.messages[ipChat.id];
+          localStorage.removeItem('orbit_msg_' + ipChat.id);
           MStore.save();
           renderChatList();
         }
@@ -6069,32 +6197,39 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     } catch(e) { console.log('[Lifecycle] Battery opt request skipped', e.message); }
 
-    // Handle visibility changes — when app comes to foreground, refresh UI
+    async function _foregroundRecovery() {
+      renderFriends();
+      renderChatList();
+      if (activeChatId) renderMessages(activeChatId);
+      if (!window.Orbit || !window.Orbit.P2P) return;
+      // Re-hydrate JS connection state from native service
+      try { if (Orbit.P2P.refreshConnections) await Orbit.P2P.refreshConnections(); } catch(e) {}
+      // Restart TCP server if it was killed (native is idempotent)
+      var tcpPort = MStore.settings.tcpPort || 46000;
+      Orbit.P2P.startServer(tcpPort);
+      // Restart discovery if inactive
+      if (!Orbit.P2P.isDiscoveryActive()) {
+        var beacon = buildBeacon();
+        var udpPort = MStore.settings.udpPort || 45678;
+        Orbit.P2P.startDiscovery(beacon, udpPort);
+      }
+    }
+
+    // Handle visibility changes
     document.addEventListener('visibilitychange', function() {
       if (!document.hidden) {
         console.log('[Lifecycle] App foregrounded (visibility)');
-        renderFriends();
-        renderChatList();
-        if (activeChatId) renderMessages(activeChatId);
-        // Service handles networking — JS just re-renders
+        _foregroundRecovery();
       }
     });
 
-    // Handle Capacitor appStateChange (more reliable than visibility on Android)
+    // Handle Capacitor appStateChange
     if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
       try {
         window.Capacitor.Plugins.App.addListener('appStateChange', function(state) {
           if (state.isActive) {
             console.log('[Lifecycle] App foregrounded (capacitor)');
-            renderFriends();
-            renderChatList();
-            if (activeChatId) renderMessages(activeChatId);
-            // If discovery/connections were stopped on background, restart
-            if (window.Orbit && window.Orbit.P2P && !Orbit.P2P.isDiscoveryActive()) {
-              var beacon = buildBeacon();
-              var udpPort = MStore.settings.udpPort || 45678;
-              Orbit.P2P.startDiscovery(beacon, udpPort);
-            }
+            _foregroundRecovery();
           } else {
             console.log('[Lifecycle] App backgrounded — service keeps running');
             MStore.save();
@@ -6103,7 +6238,7 @@ document.addEventListener('DOMContentLoaded', function() {
       } catch(e) { console.log('[Lifecycle] App plugin listener error', e.message); }
     }
 
-    // On page show (after background), service is already running — just refresh UI
+    // On page show
     window.addEventListener('pageshow', function() {
       console.log('[Lifecycle] Page shown');
       renderFriends();
@@ -6168,8 +6303,10 @@ document.addEventListener('DOMContentLoaded', function() {
     var interval = parseInt(MStore.settings.deleteAttachmentsAfter, 10);
     if (interval > 0) {
       var cutoff = Date.now() - interval * 60 * 1000;
-      Object.keys(MStore.messages).forEach(function(chatId) {
-        var msgs = MStore.messages[chatId];
+      var chatIds = [];
+      for (var _i2 = 0; _i2 < localStorage.length; _i2++) { var _k2 = localStorage.key(_i2); if (_k2.indexOf('orbit_msg_') === 0) { chatIds.push(_k2.substring(9)); } }
+      chatIds.forEach(function(chatId) {
+        var msgs = MStore.getMessages(chatId);
         if (!msgs) return;
         var changed = false;
         msgs.forEach(function(m) {
@@ -6181,7 +6318,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
           }
         });
-        if (changed) MStore.save();
+        if (changed) MStore._saveMsgs(chatId);
       });
     }
     if (interval > 0) setTimeout(runAutoDelete, interval * 60 * 1000);

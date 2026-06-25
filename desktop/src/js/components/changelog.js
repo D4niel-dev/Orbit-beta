@@ -14,7 +14,21 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.1.6-beta', 'Latest', [
+        versionBlock('0.1.7-beta', 'Latest', [
+          ['Video Playback Fixes', [
+            'PIPELINE_ERROR_DECODE Root Cause Fixed: Audio packet decode errors in fMP4 files resolved via Content-Type fix in main.js:contentTypeFromAtt(). Videos play continuously without stalling at ~16s.',
+            'Re-render Guard: Store subscription blocks message re-renders while any video is playing (except chat switches). Handles notify() without changedState.',
+            'Decode Error Retry: On PIPELINE_ERROR_DECODE, source reloads and skips forward +2s past corrupt packet (up to 3 attempts).',
+            'Removed Forced Seeking: Eliminated currentTime = 1e10 hack for orbit-db:// / orbit-file:// URLs that caused playback pauses.'
+          ]],
+          ['Media Player UX Improvements', [
+            'Larger Video Player: Display increased to 720x600 in message bubbles. Fullscreen includes box-shadow and theme-matched letterbox background.',
+            'Larger Audio Player: Waveform canvas height increased to 200px with full-width container (720px), matching video layout.',
+            'Separated Media Layout: Video and audio removed from image grid — rendered as standalone blocks at full width. Grid stays at 280px max-width.',
+            'Fullscreen Theme Integration: Letterbox uses var(--bg-surface) — blends with active UI theme instead of hard black.'
+          ]]
+        ]) +
+        versionBlock('0.1.6-beta', '', [
           ['P2P Connectivity & Bug Fixes', [
             'Desktop Auto-Connect Port: Uses peer.tcpPort instead of hardcoded 46000. Per-peer ports stored in SocketManager._peerPorts map.',
             'Desktop Manual Connect: Connect accepts port parameter (default 46000) via preload bridge.',

@@ -60,6 +60,9 @@ Orbit.P2P = (function() {
       if (eventName === 'onDisconnect') {
         delete connections[data.connectionId];
       }
+      if (eventName === 'onConnectFailed') {
+        delete connections[data.connectionId];
+      }
     });
     listeners[eventName].push(handler);
     return handler;
@@ -130,12 +133,10 @@ Orbit.P2P = (function() {
           timeout: connectTimeout
         });
         console.log('[P2P-Bridge] connect result', result);
-        // Track outbound connections in JS map (BUG-JS-1/2)
-        if (result.connectionId) {
-          connections[result.connectionId] = { status: 'connected' };
-          console.log('[P2P-Bridge] tracked connection ' + result.connectionId);
-          flushPending(result.connectionId);
-        }
+        // DO NOT add to connections here — TCP handshake may not have completed yet.
+        // The onConnection event (fired by native on success) handles tracking.
+        // Premature add causes phantom entries if the handshake fails.
+        if (result.connectionId) flushPending(result.connectionId);
         return { success: true, connectionId: result.connectionId };
       } catch(e) {
         console.log('[P2P-Bridge] connect error: ' + (e.message || String(e)));
@@ -216,6 +217,22 @@ Orbit.P2P = (function() {
       return Object.keys(connections);
     },
 
+    async refreshConnections() {
+      // Pull live connections from native service (survives Activity restart)
+      try {
+        var p = getPlugin();
+        if (p && p.getConnections) {
+          var nativeResult = await p.getConnections();
+          if (nativeResult && nativeResult.connections) {
+            nativeResult.connections.forEach(function(connId) {
+              if (!connections[connId]) connections[connId] = { status: 'connected' };
+            });
+          }
+        }
+      } catch(e) { console.log('[P2P-Bridge] refreshConnections error:', e.message); }
+      return Object.keys(connections);
+    },
+
     onConnection(callback) {
       return addListener('onConnection', callback);
     },
@@ -264,11 +281,12 @@ Orbit.P2P = (function() {
     },
 
     cleanup() {
+      // NOTE: do NOT remove native listeners here — onPeerFound / onDisconnect
+      // are registered once at top-level before initP2P. Removing them here
+      // means they are never re-registered after initP2P runs.
       console.log('[P2P-Bridge] cleanup called');
-      removeAllListeners();
       connections = {};
       lastConnectAttempt = {};
-      _pendingMessages = [];
     }
   };
 })();

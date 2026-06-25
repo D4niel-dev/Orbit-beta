@@ -177,6 +177,23 @@ public class OrbitForegroundService extends Service {
 
     public void connectToPeer(String host, int port, String peerId, int timeoutMs) {
         executor.execute(() -> {
+            // Dedup: skip if already connected to this peerId
+            PeerConnection existing = connections.get(peerId);
+            if (existing != null && existing.socket.isConnected() && !existing.socket.isClosed()) {
+                Log.d(TAG, "Already connected to " + peerId + ", skipping duplicate connect");
+                return;
+            }
+            // Also check by host:port (in case peerId differs but it's the same endpoint)
+            String hostPort = host + ":" + port;
+            if (!hostPort.equals(peerId)) {
+                PeerConnection existingByHost = connections.get(hostPort);
+                if (existingByHost != null && existingByHost.socket.isConnected() && !existingByHost.socket.isClosed()) {
+                    Log.d(TAG, "Already connected to " + hostPort + ", skipping duplicate connect");
+                    return;
+                }
+                if (existingByHost != null) { connections.remove(hostPort); existingByHost.close(); }
+            }
+            if (existing != null) { connections.remove(peerId); existing.close(); }
             try {
                 Socket socket = new Socket();
                 socket.connect(new InetSocketAddress(host, port), timeoutMs);
@@ -280,6 +297,7 @@ public class OrbitForegroundService extends Service {
 
     public void stopDiscovery() {
         discoveryRunning = false;
+        discoveryStarted = false;
         try { if (multicastSocket != null) { multicastSocket.close(); multicastSocket = null; } } catch (Exception ignored) {}
         releaseMulticastLock();
     }
@@ -441,6 +459,9 @@ public class OrbitForegroundService extends Service {
                     connections.remove(originalPeerId);
                     connections.remove(peerId);
                     eventQueue.add(new FgEvent("disconnect", originalPeerId, null, null));
+                    if (!originalPeerId.equals(peerId)) {
+                        eventQueue.add(new FgEvent("disconnect", peerId, null, null));
+                    }
                     close();
                 }
             });

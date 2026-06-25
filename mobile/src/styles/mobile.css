@@ -640,6 +640,7 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
+  grid-column: 1 / -1;
   aspect-ratio: auto;
   min-height: 140px;
   background: var(--bg-hover);
@@ -658,7 +659,7 @@ html, body {
 
 .oap-canvas {
   width: 100%;
-  height: 120px;
+  height: 200px;
   border-radius: 8px;
   background: rgba(0,0,0,0.08);
   display: block;
@@ -755,6 +756,150 @@ html, body {
 }
 
 .oap-seek-tip {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  transform: translateY(-4px);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-family: monospace;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  display: none;
+  z-index: 5;
+}
+
+/* ── Video Player (OrbitVideoPlayer) ── */
+.att-video-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  grid-column: 1 / -1;
+  aspect-ratio: auto;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ovp-wrap {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 100%;
+  position: relative;
+}
+
+.ovp-video {
+  width: 100%;
+  max-height: 300px;
+  display: block;
+  background: #000;
+}
+
+.ovp-ctrl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  flex-wrap: wrap;
+}
+
+.ovp-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+
+.ovp-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.ovp-btn:active {
+  opacity: 0.7;
+}
+
+.ovp-vol-slider {
+  width: 60px;
+  height: 4px;
+  accent-color: var(--accent-primary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.ovp-time {
+  font-size: 11px;
+  font-family: monospace;
+  color: var(--text-muted);
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.ovp-seek {
+  position: relative;
+  height: 24px;
+  padding: 0 8px;
+  cursor: pointer;
+}
+
+.ovp-seek-track {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+}
+
+.ovp-seek-track::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--bg-hover);
+  pointer-events: none;
+}
+
+.ovp-seek-fill {
+  position: absolute;
+  left: 0;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--accent-primary);
+  pointer-events: none;
+  transition: width 0.1s linear;
+}
+
+.ovp-seek-thumb {
+  position: absolute;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  transition: left 0.1s linear;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+.ovp-seek-tip {
   position: absolute;
   bottom: 100%;
   left: 0;

@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v016-beta-latest-version">v0.1.6-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v017-beta-latest-version">v0.1.7-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@
 
 | Channel | Version | Status |
 |---------|---------|--------|
-| *Development* | v0.1.6-beta | Latest build (unstable) |
+| *Development* | v0.1.7-beta | Latest build (unstable) |
 | **Stable** | v0.1.1-beta | Stable release |
 | Previous **Stable** | v0.0.5-beta | Legacy stable release |
 
@@ -90,13 +90,13 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage desktop app** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
-## Highlights (v0.1.6-beta)
+## Highlights (v0.1.7-beta)
 
-- **Android Foreground Service:** P2P networking runs in a persistent Android Foreground Service with persistent notification, WakeLock, START_STICKY survival. Messages received even when app is backgrounded or killed. BootReceiver restarts on device boot.
-- **P2P Connectivity Audit (9 fixes):** Desktop auto-connect now uses peer's TCP port; mobile disconnect handler fixed (critical — friend lookup by connectionId); mobile TCP/UDP beacon handlers store tcpPort/connectionId/ip; mobile auto-reconnect uses peer's port, not own; mobile Echo stays online.
-- **Message Editing Round-Trip:** Desktop edit broadcast loop eliminated (echo fix); desktop context menu "Edit Message" now wired; mobile edits broadcast over P2P with chatId for group routing; mobile `edited` flag set on incoming edits.
-- **Mobile Reactions Added:** Reaction button, floating picker (6 emojis), toggle on pills, instant local state + P2P broadcast. Matches existing desktop REACTION protocol.
-- **Silent Bug Fixes (7 found):** sendFailed/connectFailed events no longer dropped; serverSocket volatile; PeerConnection stale map entries cleaned; executor shutdown on destroy; eventQueue cleared; SO_REUSEADDR on multicast; joinGroup with explicit interface for Android 10+.
+- **fMP4 Video Playback Fixed:** PIPELINE_ERROR_DECODE root cause found and fixed — Content-Type serving in `main.js:contentTypeFromAtt()` now correctly serves video files. Videos play continuously without stalling at ~16s.
+- **Re-render Guard:** Store subscription blocks message re-renders during video playback (except chat switches). Prevents player destruction from `container.innerHTML` re-renders.
+- **Decode Error Retry:** On audio packet decode failure, source reloads and skips forward +2s past the corrupt packet (up to 3 attempts).
+- **Larger Media Players:** Video increased to 720×600, audio waveform canvas to 200px — both rendered outside the image grid as standalone blocks at full width.
+- **Fullscreen Theme Blend:** Letterbox background now uses `var(--bg-surface)` — matches active UI theme instead of hard black.
 
 ## Version History
 <details>
@@ -294,7 +294,7 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Network Restart:** Account switch calls `networkStop` (nullifies all instances) → `Identity.switchTo()` → `networkStart` (re-creates with new identity). All TCP connections drop and re-establish.
 - **Migration Rollback Guard:** `db.pragma('user_version')` is non-transactional. Added column-existence check at start of `migrations.run()` to detect partial migration state and recover.
 </details>
-<details open>
+<details>
 <summary>v0.1.6-beta</summary>
 
 - **Android Foreground Service (Background Execution):** P2P networking extracted into persistent Foreground Service with notification, WakeLock, START_STICKY. BootReceiver restarts on device boot. Service survives Activity/WebView destruction.
@@ -302,6 +302,15 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Message Editing & Reactions:** Desktop edit broadcast loop eliminated; mobile edits broadcast over P2P to DMs and groups; mobile reaction UI (6 emojis, toggle, P2P broadcast).
 - **OrbitForegroundService:** Full P2P engine (TCP server, UDP multicast, connection map, thread pool) as Android Service. Plugin proxies via Binder. Event queue drained every 100ms.
 - **Silent Bug Fixes:** 7 fixes from service audit — sendFailed/connectFailed events, serverSocket volatile, PeerConnection map leak, executor shutdown, eventQueue clear, SO_REUSEADDR, Android 10+ joinGroup fix.
+</details>
+<details open>
+<summary>v0.1.7-beta</summary>
+
+- **fMP4 Video Playback Fixed:** PIPELINE_ERROR_DECODE root cause fixed — Content-Type serving in main.js now correctly serves video files. Videos play continuously.
+- **Re-render Guard:** Message re-renders blocked during video playback (except chat switches). Prevents player destruction from innerHTML re-renders.
+- **Decode Error Retry:** On audio packet decode failure, source reloads and skips forward +2s (up to 3 attempts).
+- **Larger Media Players:** Video 720×600, audio waveform 200px — rendered outside image grid as standalone blocks at full width.
+- **Fullscreen Theme Blend:** Letterbox uses `var(--bg-surface)` — matches active UI theme.
 </details>
 
 See [CHANGELOG.md](CHANGELOG.md) for the full version history.

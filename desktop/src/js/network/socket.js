@@ -86,6 +86,13 @@ class SocketManager extends EventEmitter {
     console.log('[P2P] Reconnect to', peerId, 'in', delay, 'ms (attempt', attempts + 1, ')');
     var timer = setTimeout(() => {
       this._reconnectTimers.delete(peerId);
+      // Check peer didn't reconnect via another path while we waited
+      var reconnected = this.connections.get(peerId);
+      if (reconnected && !reconnected.destroyed) {
+        console.log('[P2P] Peer already reconnected, cancel scheduled reconnect');
+        this._reconnectAttempts.delete(peerId);
+        return;
+      }
       var savedIp = this._peerIps.get(peerId) || ip;
       var savedPort = this._peerPorts.get(peerId) || port || 46000;
       if (savedIp) {
@@ -183,7 +190,16 @@ class SocketManager extends EventEmitter {
   connectToPeer(peerId, ip, port = 46000) {
     const existing = this.connections.get(peerId);
     if (existing && !existing.destroyed) {
-      return Promise.resolve(existing);
+      // If IP changed, the old connection is likely dead (half-open).
+      // Destroy it and proceed with a fresh connection.
+      var oldIp = existing.remoteAddress;
+      if (oldIp && ip && oldIp !== ip) {
+        console.log('[P2P] IP changed for', peerId, '(' + oldIp, '->', ip + '), reconnecting');
+        existing.destroy();
+        this.connections.delete(peerId);
+      } else {
+        return Promise.resolve(existing);
+      }
     }
 
     // Reuse in-progress connection promise to avoid duplicates

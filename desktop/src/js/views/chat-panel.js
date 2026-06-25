@@ -23,6 +23,13 @@ window.ChatPanel = {
     this.unsubscribe = window.store.subscribe((state, changedState) => {
       var relevant = ['messages', 'activeChatId', 'activeTab', 'groups', 'currentUser', 'settings'];
       if (!changedState || relevant.some(function(k) { return k in changedState; })) {
+        // Block all re-renders during video playback except chat switches
+        if (window.OrbitVideoPlayer && window.OrbitVideoPlayer.isAnyPlaying && window.OrbitVideoPlayer.isAnyPlaying()) {
+          if (!changedState || !('activeChatId' in changedState)) {
+            console.log('[VIP] Guard blocked re-render, playing=' + window.OrbitVideoPlayer.isAnyPlaying() + ' changedKeys=' + (changedState ? Object.keys(changedState).join(',') : 'none') + ' activeChat=' + state.activeChatId);
+            return;
+          }
+        }
         if (changedState && 'activeChatId' in changedState && state.activeChatId) {
           window.store.loadFullChatMessages(state.activeChatId);
         }
@@ -660,10 +667,21 @@ window.ChatPanel = {
         var arStyle = imageAspectRatio ? 'aspect-ratio:' + imageAspectRatio + ';' : 'height:120px;';
 
         let gridHtml = '';
+        let largeHtml = '';
         msg.attachments.forEach(att => {
           const safeAttId = window.Sanitize.escapeHtml(String(att.id || ''));
           const deleteBtn = '<button class="att-delete-btn" data-att-id="' + safeAttId + '" data-msg-id="' + msg.id + '" style="position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,0.6);border:none;color:white;cursor:pointer;align-items:center;justify-content:center;font-size:14px;line-height:1;z-index:2;" title="Delete">×</button>';
-          if (att.type === 'image') {
+          if (att.type === 'video' || (att.mimeType && att.mimeType.startsWith('video/'))) {
+            const safeUrl = window.Sanitize.escapeHtml(att.url);
+            largeHtml += '<div class="att-thumb ovp-placeholder" data-ovp-url="' + safeUrl + '" style="position:relative;border-radius: 8px; border: 1px solid var(--border-subtle); background: var(--bg-hover); overflow: hidden; max-width:720px;">' +
+              deleteBtn +
+            '</div>';
+          } else if (att.type === 'audio' || (att.mimeType && att.mimeType.startsWith('audio/'))) {
+            const safeUrl = window.Sanitize.escapeHtml(att.url);
+            largeHtml += '<div class="att-thumb oap-placeholder" data-oap-url="' + safeUrl + '" style="position:relative;border-radius: 8px; border: 1px solid var(--border-subtle); background: var(--bg-hover); overflow: hidden; max-width:720px;">' +
+              deleteBtn +
+            '</div>';
+          } else if (att.type === 'image') {
             if (state.settings.showImagePreviews !== false) {
               const safeUrl = window.Sanitize.escapeHtml(att.url);
               const safeName = window.Sanitize.escapeHtml(String(att.name || 'Image'));
@@ -676,11 +694,6 @@ window.ChatPanel = {
                 '<div style="font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%;">' + window.Sanitize.escapeHtml(String(att.name || 'Image')) + '</div>' +
               '</div>';
             }
-          } else if (att.type === 'audio' || (att.mimeType && att.mimeType.startsWith('audio/'))) {
-            const safeUrl = window.Sanitize.escapeHtml(att.url);
-            gridHtml += '<div class="att-thumb oap-placeholder" data-oap-url="' + safeUrl + '" style="position:relative;border-radius: 8px; border: 1px solid var(--border-subtle); background: var(--bg-hover); padding: 4px;">' +
-              deleteBtn +
-            '</div>';
           } else {
             gridHtml += '<div class="att-thumb" style="position:relative;border-radius: 8px; height: 120px; border: 1px solid var(--border-subtle); display:flex; flex-direction:column; align-items:center; justify-content:center; background: rgba(0,0,0,0.1); padding: 8px; text-align:center;">' +
               deleteBtn +
@@ -689,7 +702,8 @@ window.ChatPanel = {
             '</div>';
           }
         });
-        attachmentsHtml = '<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-bottom: ' + (sanitizedText ? '8px' : '0') + '; width: 100%; min-width: 250px; max-width: 280px;">' + gridHtml + '</div>';
+        var gridSection = gridHtml ? '<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; width: 100%; min-width: 250px; max-width: 280px;">' + gridHtml + '</div>' : '';
+        attachmentsHtml = (gridSection ? gridSection + '<div style="height:8px;"></div>' : '') + largeHtml;
       }
 
       // Hover action bar
@@ -1086,6 +1100,7 @@ window.ChatPanel = {
 
     // Initialize audio player visualizers
     if (window.OrbitAudioPlayer) window.OrbitAudioPlayer.init(this.container);
+    if (window.OrbitVideoPlayer) window.OrbitVideoPlayer.init(this.container);
   },
 
   _positionMessageActions() {
@@ -1303,16 +1318,20 @@ window.ChatPanel = {
         
         for (let i = 0; i < e.target.files.length; i++) {
           const file = e.target.files[i];
+          const ext = file.name.split('.').pop().toLowerCase();
+          const vidExts = ['mp4','mov','avi','mkv','webm','3gp','m4v','wmv','flv'];
+          const audExts = ['mp3','wav','ogg','flac','aac','m4a','wma','webm'];
           const isImage = file.type.startsWith('image/');
-          const isAudio = file.type.startsWith('audio/');
+          const isVideo = file.type.startsWith('video/') || vidExts.indexOf(ext) !== -1;
+          const isAudio = file.type.startsWith('audio/') || audExts.indexOf(ext) !== -1;
           var entry = {
             file: file,
             path: file.path || file.name,
             name: file.name,
             size: file.size,
             mimeType: file.type,
-            type: isImage ? 'image' : (isAudio ? 'audio' : 'file'),
-            url: isImage || isAudio ? URL.createObjectURL(file) : null,
+            type: isImage ? 'image' : (isVideo ? 'video' : (isAudio ? 'audio' : 'file')),
+            url: isImage || isAudio || isVideo ? URL.createObjectURL(file) : null,
             width: 0,
             height: 0
           };
@@ -1418,16 +1437,20 @@ window.ChatPanel = {
 
       for (var i = 0; i < e.dataTransfer.files.length; i++) {
         var file = e.dataTransfer.files[i];
+        var ext = file.name.split('.').pop().toLowerCase();
+        var vidExts = ['mp4','mov','avi','mkv','webm','3gp','m4v','wmv','flv'];
+        var audExts = ['mp3','wav','ogg','flac','aac','m4a','wma','webm'];
         var isImage = file.type.startsWith('image/');
-        var isAudio = file.type.startsWith('audio/');
+        var isVideo = file.type.startsWith('video/') || vidExts.indexOf(ext) !== -1;
+        var isAudio = file.type.startsWith('audio/') || audExts.indexOf(ext) !== -1;
         self.stagedFiles.push({
           file: file,
           path: file.path || file.name,
           name: file.name,
           size: file.size,
           mimeType: file.type,
-          type: isImage ? 'image' : (isAudio ? 'audio' : 'file'),
-          url: isImage || isAudio ? URL.createObjectURL(file) : null,
+          type: isImage ? 'image' : (isVideo ? 'video' : (isAudio ? 'audio' : 'file')),
+          url: isImage || isAudio || isVideo ? URL.createObjectURL(file) : null,
           width: 0,
           height: 0
         });

@@ -60,7 +60,8 @@ function scanBatch(socketMgr, subnet, localIp, start, end, onDone) {
       if (completed === total && onDone) onDone();
     }
 
-    s.connect(46000, ip, function() {
+    var scanPort = socketMgr ? socketMgr.TCP_PORT : 46000;
+    s.connect(scanPort, ip, function() {
       // Dedup: skip if already connected to this IP
       for (var entry of socketMgr.connections.values()) {
         if (entry.remoteAddress === ip) {
@@ -142,6 +143,9 @@ function startNetworkMonitor() {
             });
           }
         });
+        if (socketInstance && socketInstance.TCP_PORT) {
+          discoveryInstance.TCP_PORT = socketInstance.TCP_PORT;
+        }
         discoveryInstance.onPeerGone = function(peerId) {
           console.log('[AutoConnect] Peer gone:', peerId);
           if (mainWindow) mainWindow.webContents.send('peer-gone', peerId);
@@ -226,7 +230,9 @@ app.whenReady().then(() => {
   protocol.handle('orbit-file', (request) => {
     const urlPath = request.url.replace('orbit-file://', '');
     const decodedPath = decodeURIComponent(urlPath).replace(/\\/g, '/');
-    return net.fetch('file:///' + decodedPath);
+    return net.fetch('file:///' + decodedPath).then(r => {
+      return new Response(r.body, { headers: cacheHeaders({ 'Content-Type': r.headers.get('Content-Type') || 'application/octet-stream' }) });
+    });
   });
   function contentTypeFromAtt(att) {
     if (!att) return 'application/octet-stream';
@@ -241,11 +247,16 @@ app.whenReady().then(() => {
       var audioMimeMap = { mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', flac: 'audio/flac', aac: 'audio/aac', m4a: 'audio/mp4', wma: 'audio/x-ms-wma', webm: 'audio/webm' };
       return audioMimeMap[ext] || 'audio/webm';
     }
+    if (att.type === 'video') {
+      var ext = (att.name || '').split('.').pop().toLowerCase();
+      var videoMimeMap = { mp4: 'video/mp4', webm: 'video/webm', ogg: 'video/ogg', ogv: 'video/ogg', mkv: 'video/x-matroska', avi: 'video/x-msvideo', mov: 'video/quicktime', m4v: 'video/mp4', '3gp': 'video/3gpp' };
+      return videoMimeMap[ext] || 'video/mp4';
+    }
     return 'application/octet-stream';
   }
 
   function cacheHeaders(extra) {
-    var h = { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache' };
+    var h = { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache', 'Access-Control-Allow-Origin': '*' };
     if (extra) Object.assign(h, extra);
     return h;
   }
@@ -294,6 +305,33 @@ app.whenReady().then(() => {
               if (ct.startsWith('audio/') || ct.startsWith('video/')) {
                 extraHeaders['Accept-Ranges'] = 'bytes';
               }
+              
+              const rangeHeader = request.headers.get('Range');
+              if (rangeHeader && (ct.startsWith('audio/') || ct.startsWith('video/'))) {
+                const parts = rangeHeader.replace(/bytes=/, '').split('-');
+                const start = parseInt(parts[0], 10);
+                const end = parts[1] && parts[1] !== '' ? parseInt(parts[1], 10) : att.data.length - 1;
+                const chunksize = (end - start) + 1;
+                extraHeaders['Content-Range'] = `bytes ${start}-${end}/${att.data.length}`;
+                extraHeaders['Content-Length'] = String(chunksize);
+                
+                let slicedData;
+                if (Buffer.isBuffer(att.data)) {
+                  slicedData = att.data.subarray(start, end + 1);
+                } else if (att.data.slice) {
+                  slicedData = att.data.slice(start, end + 1);
+                } else {
+                  slicedData = Buffer.from(att.data).subarray(start, end + 1);
+                }
+                
+                resolve(new Response(slicedData, {
+                  status: 206,
+                  headers: cacheHeaders(extraHeaders)
+                }));
+                return;
+              }
+
+
               resolve(new Response(att.data, {
                 headers: cacheHeaders(extraHeaders)
               }));
@@ -301,10 +339,12 @@ app.whenReady().then(() => {
             }
             // Fallback: serve from localPath (privacy mode temp files)
             if (att && att.localPath && fs.existsSync(att.localPath)) {
-              resolve(net.fetch('file:///' + att.localPath.replace(/\\/g, '/')).then(r => {
-                return new Response(r.body, {
-                  headers: cacheHeaders({ 'Content-Type': contentTypeFromAtt(att) })
+              resolve(net.fetch('file:///' + att.localPath.replace(/\\/g, '/'), { headers: request.headers }).then(r => {
+                const h = cacheHeaders({ 'Content-Type': contentTypeFromAtt(att) });
+                r.headers.forEach((v, k) => {
+                  if (k.toLowerCase() !== 'content-type') h[k] = v;
                 });
+                return new Response(r.body, { status: r.status, statusText: r.statusText, headers: h });
               }));
               return;
             }
@@ -331,7 +371,7 @@ app.whenReady().then(() => {
           const group = globalDb.getGroup(groupId);
           if (group && group.avatarPath && fs.existsSync(group.avatarPath)) {
             resolve(net.fetch('file:///' + group.avatarPath.replace(/\\/g, '/')).then(r => {
-              return new Response(r.body, { headers: { 'Content-Type': 'image/webp' } });
+              return new Response(r.body, { headers: cacheHeaders({ 'Content-Type': 'image/webp' }) });
             }));
             return;
           }
@@ -778,6 +818,11 @@ app.whenReady().then(() => {
     return globalDb.validateBackup(filePath);
   });
 
+  // Renderer → main process logging (appears in terminal)
+  ipcMain.on('log', (event, ...args) => {
+    console.log('[OVP-IPC]', ...args);
+  });
+
   // Networking IPC
   ipcMain.on('toggle-devtools', () => {
     if (mainWindow) {
@@ -876,6 +921,10 @@ app.whenReady().then(() => {
           console.log('[AutoConnect] Skipped — socket:', !!socketInstance, 'userId:', !!peer.userId, 'ip:', !!peer.ip);
         }
       });
+      // Sync TCP port from socket instance so beacon broadcasts the right port
+      if (socketInstance && socketInstance.TCP_PORT) {
+        discoveryInstance.TCP_PORT = socketInstance.TCP_PORT;
+      }
       discoveryInstance.onPeerGone = function(peerId) {
         console.log('[AutoConnect] Peer gone:', peerId);
         mainWindow.webContents.send('peer-gone', peerId);
@@ -920,6 +969,11 @@ app.whenReady().then(() => {
 
   ipcMain.on('network-connect', (event, ip, port) => {
     if (socketInstance) {
+      var localIp = getLocalIPv4();
+      if (ip === localIp || ip === '127.0.0.1' || ip === 'localhost' || ip === '0.0.0.0' || ip === '::1') {
+        if (mainWindow) mainWindow.webContents.send('toast', 'Cannot connect to yourself', 'error');
+        return;
+      }
       socketInstance.connectToPeer('manual', ip, port || 46000);
     }
   });
@@ -996,6 +1050,291 @@ app.whenReady().then(() => {
       return { ok: true, available };
     } catch (e) {
       return { ok: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle('get-attachment-duration', (event, url) => {
+    try {
+      console.log('[IPC-get-attachment-duration] url=' + url);
+      const u = new URL(url);
+      console.log('[IPC-get-attachment-duration] protocol=' + u.protocol + ' hostname=' + u.hostname + ' pathname=' + u.pathname);
+      if (u.protocol !== 'orbit-db:') { console.log('[IPC-get-attachment-duration] wrong protocol'); return null; }
+      if (u.hostname !== 'attachment' && !u.pathname.startsWith('/attachment/')) { console.log('[IPC-get-attachment-duration] wrong hostname/path'); return null; }
+      const id = u.hostname === 'attachment' ? u.pathname.slice(1) : u.pathname.replace('/attachment/', '');
+      console.log('[IPC-get-attachment-duration] id=' + id + ' globalDb=' + (globalDb ? 'yes' : 'no'));
+      if (!globalDb) { console.log('[IPC-get-attachment-duration] no globalDb'); return null; }
+      const att = globalDb.getAttachment(id);
+      console.log('[IPC-get-attachment-duration] att=' + (att ? 'found' : 'null') + ' data=' + (att && att.data ? att.data.length + ' bytes' : 'null') + ' localPath=' + (att && att.localPath ? att.localPath : 'null'));
+      if (!att || !att.data || att.data.length < 16) { console.log('[IPC-get-attachment-duration] no data'); return null; }
+      const buf = Buffer.isBuffer(att.data) ? att.data : Buffer.from(att.data);
+      const len = buf.length;
+      console.log('[IPC-get-attachment-duration] buf len=' + len);
+
+      // Unsigned 32-bit big-endian read (safe for MP4 atom sizes & durations)
+      function u32(o) {
+        if (o + 4 > len) return 0;
+        return buf.readUInt32BE(o);
+      }
+      function str4(o) {
+        return String.fromCharCode(buf[o], buf[o+1], buf[o+2], buf[o+3]);
+      }
+
+      // Find moov box
+      var moovStart = -1, moovEnd = -1;
+      var i = 0;
+      while (i < len - 8) {
+        var size = u32(i);
+        var type = str4(i + 4);
+        if (size === 0) { size = len - i; }
+        else if (size === 1) {
+          if (i + 16 > len) break;
+          // 64-bit extended size — read high 32 bits and low 32 bits
+          size = u32(i + 8) * 4294967296 + u32(i + 12);
+        }
+        if (size < 8) break;
+        if (type === 'moov') { moovStart = i; moovEnd = i + size; break; }
+        i += size;
+      }
+      if (moovStart < 0) { console.log('[IPC-get-attachment-duration] no moov found'); return null; }
+      console.log('[IPC-get-attachment-duration] found moov at ' + moovStart + ' size=' + (moovEnd - moovStart));
+
+      // Scan children of moov for mvhd, trak→tkhd, trak→mdia→mdhd
+      var mvhdDur = null, mvhdTs = 0;
+      var bestTrackDur = null;
+      var trexDefaultDurMap = null;
+      var trackTimescaleMap = {};
+
+      function scanBox(start, end, depth, currentTrackId) {
+        var p = start;
+        while (p < end - 8) {
+          var bSize = u32(p);
+          var bType = str4(p + 4);
+          if (bSize === 0) bSize = end - p;
+          else if (bSize === 1) {
+            if (p + 16 > end) break;
+            bSize = u32(p + 8) * 4294967296 + u32(p + 12);
+          }
+          if (bSize < 8) break;
+          var bEnd = p + bSize;
+          if (bEnd > end) bEnd = end;
+          console.log('[IPC-get-attachment-duration] moov child: ' + bType + ' size=' + bSize + ' offset=' + p);
+
+          if (bType === 'mvhd') {
+            var ver = buf[p + 8];
+            var ts, dur;
+            if (ver === 0) {
+              ts = u32(p + 20);
+              dur = u32(p + 24);
+            } else {
+              ts = u32(p + 28);
+              dur = u32(p + 32) * 4294967296 + u32(p + 36);
+            }
+            console.log('[IPC-get-attachment-duration] mvhd ver=' + ver + ' ts=' + ts + ' dur=' + dur);
+            mvhdTs = ts;
+            if (ts > 0 && dur > 0) {
+              mvhdDur = dur / ts;
+              console.log('[IPC-get-attachment-duration] mvhd duration=' + mvhdDur + 's');
+            }
+          } else if (bType === 'tkhd') {
+            var ver = buf[p + 8];
+            var tkDur, tkTs, tkId;
+            if (ver === 0) {
+              tkId = u32(p + 20);
+              tkTs = mvhdTs || 1000;
+              tkDur = u32(p + 28);
+            } else {
+              tkId = u32(p + 28);
+              tkTs = mvhdTs || 1000;
+              tkDur = u32(p + 36) * 4294967296 + u32(p + 40);
+            }
+            console.log('[IPC-get-attachment-duration] tkhd ver=' + ver + ' id=' + tkId + ' dur=' + tkDur + ' ts=' + tkTs + ' => ' + (tkTs > 0 && tkDur > 0 ? tkDur/tkTs + 's' : '0'));
+            if (tkTs > 0 && tkDur > 0) {
+              var d = tkDur / tkTs;
+              if (bestTrackDur === null || d > bestTrackDur) bestTrackDur = d;
+            }
+          } else if (bType === 'mdhd') {
+            if (currentTrackId !== undefined) {
+              var ver = buf[p + 8];
+              var mdTs, mdDur;
+              if (ver === 0) {
+                mdTs = u32(p + 20);
+                mdDur = u32(p + 24);
+              } else {
+                mdTs = u32(p + 28);
+                mdDur = u32(p + 32) * 4294967296 + u32(p + 36);
+              }
+              console.log('[IPC-get-attachment-duration] mdhd ver=' + ver + ' id=' + currentTrackId + ' ts=' + mdTs + ' dur=' + mdDur + ' => ' + (mdTs > 0 && mdDur > 0 ? mdDur/mdTs + 's' : '0'));
+              trackTimescaleMap[currentTrackId] = mdTs;
+              if (mdTs > 0 && mdDur > 0) {
+                var d = mdDur / mdTs;
+                if (bestTrackDur === null || d > bestTrackDur) bestTrackDur = d;
+              }
+            }
+          } else if (bType === 'mehd') {
+            var ver = buf[p + 8];
+            var meDur;
+            if (ver === 0) {
+              meDur = u32(p + 12);
+            } else {
+              meDur = u32(p + 12) * 4294967296 + u32(p + 16);
+            }
+            if (meDur > 0) {
+              var d = meDur / (mvhdTs || 1000);
+              console.log('[IPC-get-attachment-duration] mehd ver=' + ver + ' dur=' + meDur + ' ts=' + (mvhdTs || 1000) + ' => ' + d + 's');
+              if (bestTrackDur === null || d > bestTrackDur) bestTrackDur = d;
+            }
+          } else if (bType === 'trak') {
+            // Container — recurse and pass track ID from the tkhd inside
+            var trappedTrackId;
+            (function() {
+              var sp = p + 8;
+              while (sp < bEnd - 8) {
+                var sbSize = u32(sp);
+                var sbType = str4(sp + 4);
+                if (sbSize === 0) sbSize = bEnd - sp;
+                else if (sbSize === 1) { if (sp + 16 > bEnd) break; sbSize = u32(sp + 8) * 4294967296 + u32(sp + 12); }
+                if (sbSize < 8) break;
+                if (sbType === 'tkhd') {
+                  var tver = buf[sp + 8];
+                  trappedTrackId = tver === 0 ? u32(sp + 20) : u32(sp + 28);
+                  break;
+                }
+                sp += sbSize;
+              }
+            })();
+            console.log('[IPC-get-attachment-duration] trak id=' + trappedTrackId);
+            scanBox(p + 8, bEnd, depth + 1, trappedTrackId);
+          } else if (bType === 'mdia' || bType === 'minf' || bType === 'stbl') {
+            // Container boxes — recurse into children
+            scanBox(p + 8, bEnd, depth + 1, currentTrackId);
+          } else if (bType === 'mvex') {
+            // Parse trex children for default sample durations
+            scanBox(p + 8, bEnd, depth + 1, currentTrackId);
+            var trexMap = {};
+            var tx = p + 8;
+            while (tx < bEnd - 8) {
+              var txSize = u32(tx);
+              var txType = str4(tx + 4);
+              if (txSize === 0) txSize = bEnd - tx;
+              else if (txSize === 1) { if (tx + 16 > bEnd) break; txSize = u32(tx + 8) * 4294967296 + u32(tx + 12); }
+              if (txSize < 8) break;
+              if (txType === 'trex') {
+                var trackId = u32(tx + 12);
+                var defDur = u32(tx + 20);
+                if (defDur > 0) { trexMap[trackId] = defDur; }
+              }
+              tx += txSize;
+            }
+            if (Object.keys(trexMap).length > 0) trexDefaultDurMap = trexMap;
+          }
+          p += bSize;
+        }
+      }
+
+      scanBox(moovStart + 8, moovEnd, 0);
+
+      // If moov had no duration, scan the ENTIRE file for moof→traf→trun boxes
+      // (fragmented MP4 stores sample durations in movie fragments)
+      if (bestTrackDur === null || bestTrackDur <= 0) {
+        console.log('[IPC-get-attachment-duration] scanning entire file for moof fragments');
+        var trackFragDurs = {};
+        var i2 = 0;
+        while (i2 < len - 8) {
+          var fSize = u32(i2);
+          var fType = str4(i2 + 4);
+          if (fSize === 0) fSize = len - i2;
+          else if (fSize === 1) { if (i2 + 16 > len) break; fSize = u32(i2+8) * 4294967296 + u32(i2+12); }
+          if (fSize < 8) break;
+          var fEnd = Math.min(i2 + fSize, len);
+          if (fType === 'moof') {
+            // Scan traf→trun boxes inside this moof
+            var p = i2 + 8;
+            while (p < fEnd - 8) {
+              var tSize = u32(p);
+              var tType = str4(p + 4);
+              if (tSize === 0) tSize = fEnd - p;
+              else if (tSize === 1) { if (p + 16 > fEnd) break; tSize = u32(p+8)*4294967296 + u32(p+12); }
+              if (tSize < 8) break;
+              var tEnd = Math.min(p + tSize, fEnd);
+              if (tType === 'traf') {
+                // Scan children: tfhd (default duration) then trun (sample durations)
+                var defaultSampleDur = 0;
+                var trafTrackId;
+                var q = p + 8;
+                while (q < tEnd - 8) {
+                  var rSize = u32(q);
+                  var rType = str4(q + 4);
+                  if (rSize === 0) rSize = tEnd - q;
+                  else if (rSize === 1) { if (q + 16 > tEnd) break; rSize = u32(q+8)*4294967296 + u32(q+12); }
+                  if (rSize < 8) break;
+                  if (rType === 'tfhd') {
+                    var tfFlags = u32(q + 8) & 0x00FFFFFF;
+                    var tfOff = 12;
+                    trafTrackId = u32(q + tfOff); tfOff += 4;
+                    if (tfFlags & 0x000001) tfOff += 8;
+                    if (tfFlags & 0x000002) tfOff += 4;
+                    if (tfFlags & 0x000008) { defaultSampleDur = u32(q + tfOff); tfOff += 4; }
+                    else if (trexDefaultDurMap && trexDefaultDurMap[trafTrackId]) { defaultSampleDur = trexDefaultDurMap[trafTrackId]; }
+                    if (tfFlags & 0x000010) tfOff += 4;
+                    if (tfFlags & 0x000020) tfOff += 4;
+                  } else if (rType === 'trun') {
+                    var trFlags = u32(q + 8) & 0x00FFFFFF;
+                    var sampleCount = u32(q + 12);
+                    var offset = 16;
+                    if (trFlags & 0x000001) offset += 4;
+                    if (trFlags & 0x000004) offset += 4;
+                    var trackSum = 0;
+                    for (var s = 0; s < sampleCount; s++) {
+                      if (trFlags & 0x000100) { trackSum += u32(q + offset); offset += 4; }
+                      else if (defaultSampleDur > 0) { trackSum += defaultSampleDur; }
+                      if (trFlags & 0x000200) offset += 4;
+                      if (trFlags & 0x000400) offset += 4;
+                      if (trFlags & 0x000800) offset += 4;
+                    }
+                    if (trackSum > 0 && trafTrackId !== undefined) {
+                      if (!trackFragDurs[trafTrackId]) trackFragDurs[trafTrackId] = 0;
+                      trackFragDurs[trafTrackId] += trackSum;
+                    }
+                  }
+                  q += rSize;
+                }
+              }
+              p += tSize;
+            }
+          }
+          i2 += fSize;
+        }
+        // Convert per-track fragment sums to seconds using each track's timescale, take max
+        if (Object.keys(trackFragDurs).length > 0) {
+          var maxFragDur = 0;
+          for (var tid in trackFragDurs) {
+            var ts = trackTimescaleMap[tid] || mvhdTs || 1000;
+            var d = trackFragDurs[tid] / ts;
+            console.log('[IPC-get-attachment-duration] track ' + tid + ' fragment sum: ' + trackFragDurs[tid] + ' / ' + ts + ' = ' + d + 's');
+            if (d > maxFragDur) maxFragDur = d;
+          }
+          console.log('[IPC-get-attachment-duration] max per-track fragment duration: ' + maxFragDur + 's');
+          if (bestTrackDur === null || maxFragDur > bestTrackDur) bestTrackDur = maxFragDur;
+        } else {
+          console.log('[IPC-get-attachment-duration] no moof fragments found or all trun had no sample_duration flag');
+        }
+      }
+
+      // Priority: mvhd duration > tkhd/mdhd/mehd/fragment duration
+      if (mvhdDur !== null && mvhdDur > 0) {
+        console.log('[IPC-get-attachment-duration] RESULT (mvhd): ' + mvhdDur + 's');
+        return mvhdDur;
+      }
+      if (bestTrackDur !== null && bestTrackDur > 0) {
+        console.log('[IPC-get-attachment-duration] RESULT (tkhd/mdhd/fragment): ' + bestTrackDur + 's');
+        return bestTrackDur;
+      }
+
+      console.log('[IPC-get-attachment-duration] no valid duration found, returning null');
+      return null;
+    } catch (e) {
+      console.log('[IPC-get-attachment-duration] EXCEPTION: ' + e.message);
+      return null;
     }
   });
 });

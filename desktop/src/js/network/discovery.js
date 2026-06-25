@@ -5,6 +5,7 @@ const Protocol = require('./protocol');
 class Discovery {
   constructor(identityProvider, onPeerFound) {
     this.PORT = 45678;
+    this.TCP_PORT = 46000; // can be updated externally if server uses different port
     this.MULTICAST_ADDR = '224.0.0.251';
     this.socket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
     this.identityProvider = identityProvider;
@@ -127,7 +128,7 @@ class Discovery {
       banner: identity.banner || null,
       publicKey: identity.publicKey || null,
       profileFrame: identity.profileFrame || null,
-      tcpPort: 46000
+      tcpPort: this.TCP_PORT
     };
 
     if (avatarChanged) {

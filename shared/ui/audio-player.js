@@ -30,8 +30,23 @@
       var canvas = document.createElement('canvas');
       canvas.className = 'oap-canvas';
       canvas.width = 400;
-      canvas.height = 120;
+      canvas.height = 200;
 
+      var _blobUrl = null;
+      // Android WebView chokes on large data: URIs for <audio> — convert to blob
+      if (typeof url === 'string' && url.startsWith('data:')) {
+        try {
+          var m = url.match(/^data:(audio\/[^;]+|application\/octet-stream);base64,(.+)$/);
+          if (m) {
+            var raw = atob(m[2]);
+            var buf = new ArrayBuffer(raw.length);
+            var bytes = new Uint8Array(buf);
+            for (var bi = 0; bi < raw.length; bi++) bytes[bi] = raw.charCodeAt(bi);
+            _blobUrl = URL.createObjectURL(new Blob([buf], { type: m[1] }));
+            url = _blobUrl;
+          }
+        } catch(e) { /* silently keep original url */ }
+      }
       var audio = document.createElement('audio');
       audio.src = url;
       audio.preload = 'metadata';
@@ -219,6 +234,7 @@
           dead = true;
           audio.pause();
           audio.src = '';
+          if (_blobUrl) URL.revokeObjectURL(_blobUrl);
           if (animId) cancelAnimationFrame(animId);
           if (srcNode) { try { srcNode.disconnect(); } catch(e) {} }
           wrapper.remove();

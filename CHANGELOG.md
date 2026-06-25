@@ -1,6 +1,28 @@
 # Orbit Changelog
 
-## v0.1.6-beta **(Latest Version)**
+## v0.1.7-beta **(Latest Version)**
+
+> **Note:** This is not a stable release — latest development version with experimental features.
+
+### Video Playback Fixes
+
+- **PIPELINE_ERROR_DECODE Root Cause Fixed:** Audio packet decode errors in fMP4 files resolved via Content-Type fix in `main.js:contentTypeFromAtt()`. Video files now play continuously without stalling at ~16s.
+- **Re-render Guard During Playback:** Store subscription blocks message re-renders while any video is playing (except chat switches). Prevents player destruction during message updates. Handles `notify()` without `changedState` (previously bypassed guard).
+- **Decode Error Retry Mechanism:** On `PIPELINE_ERROR_DECODE`, source is reloaded and playback skips forward +2s past the corrupt packet (up to 3 attempts).
+- **Removed Forced Seeking:** Eliminated forced `currentTime = 1e10` hack for `orbit-db://` / `orbit-file://` URLs that was causing playback pauses.
+
+### Media Player UX Improvements
+
+- **Larger Video Player:** Video display increased to 720×600 in message bubbles. Full-screen player includes `box-shadow` and theme-matched background (`var(--bg-surface)`) for letterbox areas.
+- **Larger Audio Player:** Audio waveform canvas height increased to 200px with full-width containers (720px), matching video layout.
+- **Separated Media Layout:** Video and audio removed from the attachment image grid — rendered as standalone blocks with full width. Image grid stays compact at 280px max-width.
+- **Fullscreen Theme Integration:** Fullscreen video uses CSS variable `var(--bg-surface)` for letterbox background — blends with active UI theme instead of hard black.
+
+### Technical
+
+- **Version:** Bumped to v0.1.7-beta across all manifests, About tabs, and changelogs.
+
+## v0.1.6-beta
 
 > **Note:** This is not a stable release — latest development version with experimental features.
 

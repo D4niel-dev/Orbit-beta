@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('orbitAPI', {
   sendSync: (channel, ...args)=> ipcRenderer.sendSync(channel, ...args),
   on:       (channel, cb)     => ipcRenderer.on(channel, (e, data) => cb(data)),
   invoke:   (channel, data)   => ipcRenderer.invoke(channel, data),
+  log:      (...args)         => ipcRenderer.send('log', ...args),
   platform: process.platform,
   version:  process.env.npm_package_version ?? '0.1.2-beta',
   electronVersion: process.versions.electron,
