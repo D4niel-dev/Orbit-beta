@@ -635,6 +635,16 @@ html, body {
   margin-top: 4px;
 }
 
+/* ── Standalone media cells (outside grid) ── */
+.att-large-cell {
+  width: 100%;
+  min-width: 0;
+}
+
+.att-large-cell:not(:last-child) {
+  margin-bottom: 6px;
+}
+
 /* ── Audio Player (OrbitAudioPlayer) ── */
 .att-audio-cell {
   display: flex;
