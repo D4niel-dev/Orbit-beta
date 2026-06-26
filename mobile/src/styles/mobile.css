@@ -6,6 +6,11 @@
   --mobile-header-height: 48px;
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   --safe-area-top: env(safe-area-inset-top, 24px);
+  --bg-danger: rgba(239, 68, 68, 0.15);
+  --border-color: var(--border-subtle);
+  --surface-color: var(--bg-surface);
+  --accent-primary-alpha: rgba(10, 132, 255, 0.2);
+  --bg-hover: rgba(128, 128, 128, 0.35);
 }
 
 *, *::before, *::after {
@@ -276,9 +281,7 @@ html, body {
   background: var(--bg-hover);
 }
 
-.chat-row + .chat-row {
-  border-top: 1px solid var(--border-subtle);
-}
+/* border-bottom handled in premium section */
 
 .chat-row-avatar {
   width: 48px;
@@ -488,6 +491,7 @@ html, body {
   animation: fadeIn 0.2s ease;
   touch-action: pan-y;
   overflow: visible;
+  position: relative;
 }
 
 .swipe-reply-indicator {
@@ -665,6 +669,7 @@ html, body {
   gap: 6px;
   width: 100%;
   padding: 6px;
+  box-sizing: border-box;
 }
 
 .oap-canvas {
@@ -675,11 +680,27 @@ html, body {
   display: block;
 }
 
+.oap-canvas-box {
+  position: relative;
+}
+
+.oap-canvas-box::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  background: linear-gradient(to top, rgba(0,0,0,0.4) 0%, transparent 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+
 .oap-ctrl {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 2px 4px;
+  padding: 2px 12px;
 }
 
 .oap-btn {
@@ -712,13 +733,22 @@ html, body {
   color: var(--text-muted);
   margin-left: auto;
   white-space: nowrap;
+  padding-right: 2px;
+}
+
+.oap-vol-slider {
+  width: 60px;
+  height: 4px;
+  accent-color: var(--accent-primary);
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
 /* ── Seek Bar (mobile) ── */
 .oap-seek {
   position: relative;
   height: 24px;
-  padding: 0 4px;
+  padding: 0 14px;
   cursor: pointer;
 }
 
@@ -770,7 +800,7 @@ html, body {
   bottom: 100%;
   left: 0;
   transform: translateY(-4px);
-  background: var(--bg-surface);
+  background: var(--bg-hover);
   color: var(--text-primary);
   font-size: 11px;
   font-family: monospace;
@@ -793,7 +823,6 @@ html, body {
   background: var(--bg-hover);
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  overflow: hidden;
 }
 
 .ovp-wrap {
@@ -802,21 +831,41 @@ html, body {
   width: 100%;
   max-width: 100%;
   position: relative;
+  box-sizing: border-box;
 }
 
 .ovp-video {
   width: 100%;
   max-height: 300px;
   display: block;
-  background: #000;
+  border-radius: 8px 8px 0 0;
+  background: var(--accent-primary);
+}
+
+.ovp-video-box {
+  position: relative;
+}
+
+.ovp-video-box::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 80px;
+  background: linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 100%);
+  pointer-events: none;
+  z-index: 1;
 }
 
 .ovp-ctrl {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 8px;
+  padding: 6px 12px;
   flex-wrap: wrap;
+  position: relative;
+  z-index: 1;
 }
 
 .ovp-btn {
@@ -857,12 +906,13 @@ html, body {
   color: var(--text-muted);
   margin-left: auto;
   white-space: nowrap;
+  padding-right: 2px;
 }
 
 .ovp-seek {
   position: relative;
   height: 24px;
-  padding: 0 8px;
+  padding: 0 14px;
   cursor: pointer;
 }
 
@@ -882,8 +932,11 @@ html, body {
   right: 0;
   height: 5px;
   border-radius: 3px;
-  background: var(--bg-hover);
+  background: rgba(128, 128, 128, 0.35);
   pointer-events: none;
+}
+.ovp-seek-track {
+  z-index: 1;
 }
 
 .ovp-seek-fill {
@@ -1115,6 +1168,17 @@ html, body {
   color: var(--accent-primary);
 }
 
+.reaction-picker {
+  position: fixed;
+  z-index: 9999;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 6px;
+  display: flex;
+  gap: 4px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+}
 .reaction-picker span:hover {
   background: var(--hover-color, rgba(128,128,128,0.15));
 }
@@ -2899,14 +2963,6 @@ html, body {
 .link-preview-mob.mine .link-preview-mob-title {
   color: #fff;
 }
-.link-preview-mob:hover .link-preview-mob-title,
-.link-preview-mob.mine:hover .link-preview-mob-title {
-  color: #1a3a6b;
-}
-.link-preview-mob:active .link-preview-mob-title,
-.link-preview-mob.mine:active .link-preview-mob-title {
-  color: #2d7a2d;
-}
 .link-preview-mob-url {
   font-size: 11px;
   color: var(--text-muted);
@@ -2920,14 +2976,6 @@ html, body {
 .link-preview-mob.mine .link-preview-mob-url {
   color: rgba(255,255,255,0.65);
 }
-.link-preview-mob:hover .link-preview-mob-url,
-.link-preview-mob.mine:hover .link-preview-mob-url {
-  color: #1a3a6b;
-}
-.link-preview-mob:active .link-preview-mob-url,
-.link-preview-mob.mine:active .link-preview-mob-url {
-  color: #2d7a2d;
-}
 
 /* ─── Message Links (mobile) ─── */
 .msg-link-mob {
@@ -2938,18 +2986,7 @@ html, body {
 .message-row.mine .msg-link-mob {
   color: rgba(255,255,255,0.9);
 }
-.message-row.mine .msg-link-mob:hover {
-  color: #1a3a6b;
-}
-.message-row.mine .msg-link-mob:active {
-  color: #2d7a2d;
-}
-.message-row:not(.mine) .msg-link-mob:hover {
-  color: #1a3a6b;
-}
-.message-row:not(.mine) .msg-link-mob:active {
-  color: #2d7a2d;
-}
+
 
 /* ─── Font Size ─── */
 [data-font-size="small"] .message-bubble {
@@ -3137,7 +3174,7 @@ html, body {
   font-weight: bold;
   background: var(--bg-hover);
 }
-.profile-name {
+.profile-hero .profile-name {
   font-size: 26px;
   font-weight: 800;
   margin-bottom: 6px;
@@ -3208,3 +3245,6 @@ html, body {
   font-size: inherit;
   color: var(--text-primary);
 }
+
+
+

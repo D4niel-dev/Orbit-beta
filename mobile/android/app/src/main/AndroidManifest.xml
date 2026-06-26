@@ -25,12 +25,11 @@
         <service
             android:name=".services.OrbitForegroundService"
             android:foregroundServiceType="dataSync"
-            android:exported="false" />
+            android:exported="false"
+        />
 
         <!-- Boot receiver to restart service after reboot -->
-        <receiver
-            android:name=".receivers.BootReceiver"
-            android:exported="true">
+        <receiver android:name=".receivers.BootReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>

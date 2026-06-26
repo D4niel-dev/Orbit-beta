@@ -413,11 +413,27 @@ button:active,
   display: block;
 }
 
+.oap-canvas-box {
+  position: relative;
+}
+
+.oap-canvas-box::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  background: linear-gradient(to top, rgba(0,0,0,0.4) 0%, transparent 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+
 .oap-ctrl {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 2px 4px;
+  padding: 2px 12px;
 }
 
 .oap-btn {
@@ -449,13 +465,22 @@ button:active,
   color: var(--text-muted);
   margin-left: auto;
   white-space: nowrap;
+  padding-right: 2px;
+}
+
+.oap-vol-slider {
+  width: 60px;
+  height: 4px;
+  accent-color: var(--accent-primary);
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
 /* ── Seek Bar ── */
 .oap-seek {
   position: relative;
   height: 20px;
-  padding: 0 4px;
+  padding: 0 14px;
   cursor: pointer;
 }
 
@@ -475,7 +500,7 @@ button:active,
   right: 0;
   height: 4px;
   border-radius: 2px;
-  background: var(--bg-hover);
+  background: rgba(128, 128, 128, 0.35);
   pointer-events: none;
 }
 
@@ -507,7 +532,7 @@ button:active,
   bottom: 100%;
   left: 0;
   transform: translateY(-4px);
-  background: var(--bg-surface);
+  background: var(--bg-hover);
   color: var(--text-primary);
   font-size: 11px;
   font-family: var(--font-mono);
@@ -528,7 +553,6 @@ button:active,
   width: 100%;
   max-width: 720px;
   border-radius: 8px;
-  background: rgba(0,0,0,0.05);
   position: relative;
 }
 
@@ -537,14 +561,32 @@ button:active,
   max-height: 600px;
   display: block;
   border-radius: 8px 8px 0 0;
-  background: #000;
+  background: var(--accent-primary);
+}
+
+.ovp-video-box {
+  position: relative;
+}
+
+.ovp-video-box::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 80px;
+  background: linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 100%);
+  pointer-events: none;
+  z-index: 1;
 }
 
 .ovp-ctrl {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 2px 8px 6px;
+  padding: 2px 12px 6px;
+  position: relative;
+  z-index: 1;
 }
 
 .ovp-btn {
@@ -585,14 +627,17 @@ button:active,
   color: var(--text-muted);
   margin-left: auto;
   white-space: nowrap;
+  padding-right: 2px;
 }
 
 .ovp-seek {
   position: relative;
   height: 20px;
-  padding: 0 8px;
+  padding: 0 12px;
   cursor: pointer;
 }
+
+
 
 .ovp-seek-track {
   position: relative;
@@ -610,8 +655,11 @@ button:active,
   right: 0;
   height: 4px;
   border-radius: 2px;
-  background: var(--bg-hover);
+  background: rgba(128, 128, 128, 0.35);
   pointer-events: none;
+}
+.ovp-seek-track {
+  z-index: 1;
 }
 
 .ovp-seek-fill {

@@ -23,17 +23,23 @@ window.ChatPanel = {
     this.unsubscribe = window.store.subscribe((state, changedState) => {
       var relevant = ['messages', 'activeChatId', 'activeTab', 'groups', 'currentUser', 'settings'];
       if (!changedState || relevant.some(function(k) { return k in changedState; })) {
-        // Block all re-renders during video playback except chat switches
-        if (window.OrbitVideoPlayer && window.OrbitVideoPlayer.isAnyPlaying && window.OrbitVideoPlayer.isAnyPlaying()) {
+        // Prevent interrupting audio/video playback during re-renders
+        var savedAudio = null;
+        var savedVideo = null;
+        var isAudioPlaying = window.OrbitAudioPlayer && window.OrbitAudioPlayer.isAnyPlaying && window.OrbitAudioPlayer.isAnyPlaying();
+        var isVideoPlaying = window.OrbitVideoPlayer && window.OrbitVideoPlayer.isAnyPlaying && window.OrbitVideoPlayer.isAnyPlaying();
+        if (isAudioPlaying || isVideoPlaying) {
           if (!changedState || !('activeChatId' in changedState)) {
-            console.log('[VIP] Guard blocked re-render, playing=' + window.OrbitVideoPlayer.isAnyPlaying() + ' changedKeys=' + (changedState ? Object.keys(changedState).join(',') : 'none') + ' activeChat=' + state.activeChatId);
-            return;
+            if (isAudioPlaying && window.OrbitAudioPlayer.savePlaying) savedAudio = window.OrbitAudioPlayer.savePlaying();
+            if (isVideoPlaying && window.OrbitVideoPlayer.savePlaying) savedVideo = window.OrbitVideoPlayer.savePlaying();
           }
         }
         if (changedState && 'activeChatId' in changedState && state.activeChatId) {
           window.store.loadFullChatMessages(state.activeChatId);
         }
         this.renderChat(state);
+        if (savedAudio && window.OrbitAudioPlayer.restorePlaying) window.OrbitAudioPlayer.restorePlaying(savedAudio);
+        if (savedVideo && window.OrbitVideoPlayer.restorePlaying) window.OrbitVideoPlayer.restorePlaying(savedVideo);
       }
     });
 

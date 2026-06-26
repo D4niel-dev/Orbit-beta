@@ -75,7 +75,7 @@ var MStore = {
         }
         localStorage.removeItem('orbit_messages');
       }
-    } catch(e) {}
+    } catch(e) { console.warn('[MStore] migrateOldData failed', e); }
   },
 
   // Lazy-load messages for a chatId. Returns the cached array.
@@ -1113,14 +1113,14 @@ document.addEventListener('DOMContentLoaded', function() {
               (grp.members || []).forEach(function(m) {
                 var mid = typeof m === 'string' ? m : m.userId;
                 if (mid !== myId) {
-                  pkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.MESSAGE, payload, myId);
-                  Orbit.P2P.send(mid, pkt);
+                  var fwdPkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.MESSAGE, payload, myId);
+                  Orbit.P2P.send(mid, fwdPkt);
                 }
               });
             }
           } else {
-            var pkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.MESSAGE, payload, myId);
-            Orbit.P2P.send(targetId, pkt);
+            var dmPkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.MESSAGE, payload, myId);
+            Orbit.P2P.send(targetId, dmPkt);
           }
         }
 
@@ -1215,8 +1215,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       }
       // Action buttons
-      var isPinned = isGroup && (MStore.groups.find(function(g) { return g.id === chatId; }) || {}).pinnedMessages;
-      var msgPinned = isPinned && isPinned.some(function(p) { return String(p.msgId) === String(m.id); });
+      var isPinned = isGroup && ((MStore.groups.find(function(g) { return g.id === chatId; }) || {}).pinnedMessages || []);
+      var msgPinned = isPinned.some(function(p) { return String(p.msgId) === String(m.id); });
       var pinBtn = isGroup
         ? '<button class="msg-action-btn msg-pin-btn" data-msg-id="' + m.id + '" title="' + (msgPinned ? 'Unpin' : 'Pin') + '" style="color:' + (msgPinned ? 'var(--accent-primary)' : '') + ';">' +
           '<i data-lucide="pin" style="width:15px;height:15px;' + (msgPinned ? '' : 'transform:rotate(45deg);') + '"></i></button>'
@@ -1316,11 +1316,17 @@ document.addEventListener('DOMContentLoaded', function() {
         '</div>' +
       '</div>';
     });
+    var _savedAudio = null;
+    var _savedVideo = null;
+    if (window.OrbitAudioPlayer && typeof OrbitAudioPlayer.isAnyPlaying === 'function' && OrbitAudioPlayer.isAnyPlaying() && typeof OrbitAudioPlayer.savePlaying === 'function') _savedAudio = OrbitAudioPlayer.savePlaying();
+    if (window.OrbitVideoPlayer && typeof OrbitVideoPlayer.isAnyPlaying === 'function' && OrbitVideoPlayer.isAnyPlaying() && typeof OrbitVideoPlayer.savePlaying === 'function') _savedVideo = OrbitVideoPlayer.savePlaying();
     feed.setAttribute('data-refreshing', 'true');
     feed.innerHTML = html;
     freezeGifImages(feed);
     if (window.OrbitAudioPlayer) OrbitAudioPlayer.init(feed);
     if (window.OrbitVideoPlayer) OrbitVideoPlayer.init(feed);
+    if (_savedAudio && typeof OrbitAudioPlayer.restorePlaying === 'function') OrbitAudioPlayer.restorePlaying(_savedAudio);
+    if (_savedVideo && typeof OrbitVideoPlayer.restorePlaying === 'function') OrbitVideoPlayer.restorePlaying(_savedVideo);
     // Fallback: convert raw video data URLs in case any <video> tags bypass the player
     feed.querySelectorAll('video[src^="data:"]').forEach(function(v) {
       var url = v.getAttribute('src');
@@ -1333,7 +1339,7 @@ document.addEventListener('DOMContentLoaded', function() {
           for (var bi = 0; bi < raw.length; bi++) bytes[bi] = raw.charCodeAt(bi);
           v.src = URL.createObjectURL(new Blob([buf], { type: m[1] }));
         }
-      } catch(e) {}
+      } catch(e) { console.warn('[Messages] video data URL fallback failed', e); }
     });
     requestAnimationFrame(function() { feed.removeAttribute('data-refreshing'); });
     // Bind action buttons
@@ -1356,7 +1362,7 @@ document.addEventListener('DOMContentLoaded', function() {
       btn.addEventListener('click', function(e) { e.stopPropagation(); showReactionPicker(this, this.getAttribute('data-msg-id')); });
     });
     feed.querySelectorAll('.reaction-pill').forEach(function(pill) {
-      pill.addEventListener('click', function(e) { e.stopPropagation(); toggleReaction(this.parentElement.getAttribute('data-msg-id') || this.closest('[data-msg-id]').getAttribute('data-msg-id'), this); });
+      pill.addEventListener('click', function(e) { e.stopPropagation(); var rm = this.parentElement.getAttribute('data-msg-id') || (this.closest('[data-msg-id]') || {}).getAttribute('data-msg-id'); if (rm) toggleReaction(rm, this); });
     });
     feed.querySelectorAll('.msg-pin-btn').forEach(function(btn) {
       btn.addEventListener('click', function(e) {
@@ -1463,7 +1469,7 @@ document.addEventListener('DOMContentLoaded', function() {
                   for (var bi = 0; bi < raw.length; bi++) bytes[bi] = raw.charCodeAt(bi);
                   vidUrl = URL.createObjectURL(new Blob([buf], { type: vm[1] }));
                 }
-              } catch(e) {}
+              } catch(e) { console.warn('[Video] preview data URL failed', e); }
             }
             player.src = vidUrl;
             player.load();
@@ -2479,7 +2485,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var friendsCount = MStore ? MStore.friends.length : 0;
         var chatsCount = MStore ? MStore.chats.length : 0;
         return '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.1.6-beta · Capacitor Android</div></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.1.7-beta · Capacitor Android</div></div>' +
         '</div>' +
         '<div class="settings-row">' +
           '<div class="settings-row-content"><span class="settings-row-title">Statistics</span><div class="settings-row-desc">' + friendsCount + ' friends · ' + chatsCount + ' chats</div></div>' +
@@ -5452,10 +5458,12 @@ document.addEventListener('DOMContentLoaded', function() {
             var oldChatId = connFriend.id;
             if (oldChatId !== peerId) {
               if (MStore.messages[oldChatId] && MStore.messages[oldChatId].length) {
-                MStore.messages[peerId] = MStore.messages[oldChatId].map(function(m) {
+                var existingMsgs = MStore.getMessages(peerId);
+                var mergedMsgs = MStore.messages[oldChatId].map(function(m) {
                   if (m.from === oldChatId) m.from = peerId;
                   return m;
                 });
+                MStore.messages[peerId] = existingMsgs.concat(mergedMsgs);
                 MStore._saveMsgs(peerId);
                 delete MStore.messages[oldChatId];
                 localStorage.removeItem('orbit_msg_' + oldChatId);
@@ -5591,6 +5599,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (activeChatId === chatId) renderMessages(activeChatId);
         renderChatList();
         showIncomingNotification(chatId, msgFrom, msgText);
+        return;
       }
 
       // Handle typing indicators
@@ -5731,9 +5740,14 @@ document.addEventListener('DOMContentLoaded', function() {
       if (packet.type === Orbit.Protocol.Types.READ) {
         var rr = packet.payload || {};
         if (rr.chatId && MStore.getMessages(rr.chatId).length) {
-          MStore.getMessages(rr.chatId).forEach(function(m) {
-            if (m.id <= rr.lastReadMsgId && !m.read) m.read = true;
-          });
+          var readMsgs = MStore.getMessages(rr.chatId);
+          var foundIdx = -1;
+          for (var ri = 0; ri < readMsgs.length; ri++) {
+            if (String(readMsgs[ri].id) === String(rr.lastReadMsgId)) { foundIdx = ri; break; }
+          }
+          if (foundIdx >= 0) {
+            for (var rj = 0; rj <= foundIdx; rj++) { if (!readMsgs[rj].read) readMsgs[rj].read = true; }
+          }
           MStore._saveMsgs(rr.chatId);
         }
         return;
@@ -5809,7 +5823,10 @@ document.addEventListener('DOMContentLoaded', function() {
               avatar: gjr.groupAvatar || null,
               ownerId: msgFrom,
               members: gjrMembers,
-              createdAt: new Date().toISOString()
+              createdAt: new Date().toISOString(),
+              pinnedMessages: [],
+              notificationMuted: false,
+              inviteCode: null
             });
             var gjrChatExists = MStore.chats.find(function(c) { return c.id === gjr.groupId; });
             if (!gjrChatExists) {
@@ -6249,7 +6266,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (activeChatId) renderMessages(activeChatId);
       if (!window.Orbit || !window.Orbit.P2P) return;
       // Re-hydrate JS connection state from native service
-      try { if (Orbit.P2P.refreshConnections) await Orbit.P2P.refreshConnections(); } catch(e) {}
+      try { if (Orbit.P2P.refreshConnections) await Orbit.P2P.refreshConnections(); } catch(e) { console.warn('[Lifecycle] refreshConnections failed', e); }
       // Restart TCP server if it was killed (native is idempotent)
       var tcpPort = MStore.settings.tcpPort || 46000;
       Orbit.P2P.startServer(tcpPort);
@@ -6386,7 +6403,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   // Request notification permissions
-  try { requestNotificationPermission(); } catch(e) {}
+  try { requestNotificationPermission(); } catch(e) { console.warn('[Startup] requestNotificationPermission failed', e); }
 
   console.log('[Orbit Mobile] Started');
 
