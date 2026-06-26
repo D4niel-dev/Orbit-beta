@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="desktop/src/icons/app/orbit_1024.png" alt="Orbit" width="128">
+  <img src="desktop/src/icons/app/orbit_banner.png" alt="Orbit" width="50%">
 </p>
 
 <h1 align="center">Orbit</h1>
@@ -34,7 +34,7 @@
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
 
-## Preview
+## Windows Preview (Old)
 
 <p align="center">
   <img src="desktop/src/icons/screenshots/preview-darkmode.png" alt="Orbit dark mode" width="720"><br>
@@ -64,7 +64,7 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
   <em>Group chat</em>
 </p>
 
-## Mobile Preview
+## Mobile Preview (Old)
 
 <p align="center">
   <img src="desktop/src/icons/screenshots/preview-chat-dark-M.png" alt="Mobile chat screen" width="200">
