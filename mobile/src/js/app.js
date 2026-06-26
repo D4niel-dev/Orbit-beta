@@ -1215,8 +1215,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       }
       // Action buttons
-      var isPinned = isGroup && ((MStore.groups.find(function(g) { return g.id === chatId; }) || {}).pinnedMessages || []);
-      var msgPinned = isPinned.some(function(p) { return String(p.msgId) === String(m.id); });
+      var grpPinned = isGroup ? ((MStore.groups.find(function(g) { return g.id === chatId; }) || {}).pinnedMessages || []) : [];
+      var msgPinned = grpPinned.some(function(p) { return String(p.msgId) === String(m.id); });
       var pinBtn = isGroup
         ? '<button class="msg-action-btn msg-pin-btn" data-msg-id="' + m.id + '" title="' + (msgPinned ? 'Unpin' : 'Pin') + '" style="color:' + (msgPinned ? 'var(--accent-primary)' : '') + ';">' +
           '<i data-lucide="pin" style="width:15px;height:15px;' + (msgPinned ? '' : 'transform:rotate(45deg);') + '"></i></button>'
@@ -2175,13 +2175,22 @@ document.addEventListener('DOMContentLoaded', function() {
 
   /* ─── Settings Panel (simplified main view) ─── */
   function renderSettings() {
-    updateNavAvatar();
+    try { updateNavAvatar(); } catch(e) { console.error('[Orbit] updateNavAvatar error:', e); }
+    
     var container = document.getElementById('settings-content');
+    if (!container) {
+      console.error('[Orbit] settings-content not found');
+      return;
+    }
+    
     var u = MStore.user;
     var initial = u && u.name ? u.name.charAt(0).toUpperCase() : '?';
 
-    var sPfNum = getProfileFrame(MStore.settings);
+    var sPfNum = 0;
+    try { sPfNum = getProfileFrame(MStore.settings); } catch(e) {}
+    
     var sPfHtml = sPfNum > 0 ? '<img src="icons/frames/pfp_frame_' + sPfNum + '.png" class="pfp-frame" style="position:absolute;top:-15%;left:-17%;pointer-events:none;" draggable="false" alt="">' : '';
+    
     container.innerHTML =
       '<div class="settings-profile-card" id="settings-profile-card">' +
         '<div style="position:relative;display:inline-flex;">' +
@@ -2189,8 +2198,8 @@ document.addEventListener('DOMContentLoaded', function() {
           sPfHtml +
         '</div>' +
         '<div class="settings-profile-info">' +
-          '<div class="settings-profile-name">' + escapeHtml(u ? u.name : 'User') + '</div>' +
-          '<div class="settings-profile-tag">#' + escapeHtml(u ? u.tag : '0000') + '</div>' +
+          '<div class="settings-profile-name">' + escapeHtml(u && u.name ? u.name : 'User') + '</div>' +
+          '<div class="settings-profile-tag">#' + escapeHtml(u && u.tag ? u.tag : '0000') + '</div>' +
         '</div>' +
         '<i data-lucide="chevron-right" class="settings-profile-arrow"></i>' +
       '</div>' +
@@ -2200,9 +2209,13 @@ document.addEventListener('DOMContentLoaded', function() {
         '<i data-lucide="chevron-right" class="settings-link-arrow"></i>' +
       '</div>';
 
-    document.getElementById('settings-profile-card').addEventListener('click', showProfile);
-    document.getElementById('open-settings-overlay').addEventListener('click', showSettingsOverlay);
-    renderLucide({ root: container });
+    try {
+      document.getElementById('settings-profile-card').addEventListener('click', showProfile);
+      document.getElementById('open-settings-overlay').addEventListener('click', showSettingsOverlay);
+      renderLucide({ root: container });
+    } catch(e) {
+      console.error('[Orbit] settings listeners error:', e);
+    }
   }
 
   /* ─── Settings Overlay ─── */
@@ -6312,7 +6325,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   /* -- Init -- */
   debugLog('P2P', 'App initialization starting');
-  initEmojiPicker();
+  try { initEmojiPicker(); } catch(e) { console.error('[Orbit] initEmojiPicker error:', e); showToast('Emoji picker init failed: ' + (e.message || e), 'error'); }
 
   // Process static HTML icons (nav, headers, etc.)
   if (typeof lucide !== 'undefined' && renderLucide) {
@@ -6327,17 +6340,24 @@ document.addEventListener('DOMContentLoaded', function() {
     showToast('Icons not loaded — check console', 'info');
   }
 
-  try {
-    initP2P();
-    renderChatList();
-    renderFriends();
-    renderSettings();
-    renderActivity();
-    setupMessageSwipe();
-  } catch(e) {
-    console.error('[Orbit] Init error:', e);
-    showToast('Startup error — check console', 'error');
-  }
+  var initSteps = [
+    { name: 'P2P', fn: initP2P },
+    { name: 'ChatList', fn: renderChatList },
+    { name: 'Friends', fn: renderFriends },
+    { name: 'Settings', fn: renderSettings },
+    { name: 'Activity', fn: renderActivity },
+    { name: 'MessageSwipe', fn: setupMessageSwipe }
+  ];
+
+  initSteps.forEach(function(step) {
+    try {
+      step.fn();
+    } catch(e) {
+      var msg = e && e.message ? e.message : String(e);
+      console.error('[Orbit] Init error in ' + step.name + ':', e);
+      showToast(step.name + ' failed: ' + msg, 'error');
+    }
+  });
 
   // Init debug overlay
   updateDebugOverlay();
