@@ -8,13 +8,43 @@ Orbit.P2P = (function() {
   var listeners = {};
   var connections = {};
   var discoveryActive = false;
+  var lastConnectAttempt = {};
+  var _pluginChecked = false;
+  var _pendingMessages = [];
+  var _maxPendingAge = 30000; // drop pending older than 30s
 
   function getPlugin() {
     if (plugin) return plugin;
+    if (_pluginChecked) {
+      if (window.MStore && window.MStore.settings && window.MStore.settings.logNetworkPackets) console.log('[P2P-Bridge] getPlugin: already checked, returning null');
+      return null;
+    }
     if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.OrbitP2P) {
       plugin = window.Capacitor.Plugins.OrbitP2P;
+      _pluginChecked = true;
+      console.log('[P2P-Bridge] Plugin acquired successfully');
+    } else {
+      console.log('[P2P-Bridge] Plugin not available yet', { hasCapacitor: !!window.Capacitor, hasPlugins: !!(window.Capacitor && window.Capacitor.Plugins) });
     }
     return plugin;
+  }
+
+  function flushPending(connectionId) {
+    var remaining = [];
+    _pendingMessages.forEach(function(q) {
+      if (q.connectionId === connectionId || q.connectionId.indexOf(connectionId) >= 0 || connectionId.indexOf(q.connectionId) >= 0) {
+        console.log('[P2P-Bridge] flushing pending message to ' + connectionId);
+        (async function() {
+          try {
+            var p = getPlugin();
+            if (p) await p.send({ connectionId: connectionId, data: q.data });
+          } catch(e) { console.log('[P2P-Bridge] flush failed for ' + connectionId, e.message); }
+        })();
+      } else {
+        remaining.push(q);
+      }
+    });
+    _pendingMessages = remaining;
   }
 
   function addListener(eventName, callback) {
@@ -25,8 +55,12 @@ Orbit.P2P = (function() {
       if (callback) callback(data);
       if (eventName === 'onConnection') {
         connections[data.connectionId] = { status: 'connected' };
+        flushPending(data.connectionId);
       }
       if (eventName === 'onDisconnect') {
+        delete connections[data.connectionId];
+      }
+      if (eventName === 'onConnectFailed') {
         delete connections[data.connectionId];
       }
     });
@@ -38,9 +72,11 @@ Orbit.P2P = (function() {
     var p = getPlugin();
     if (!p) return;
     for (var name in listeners) {
-      listeners[name].forEach(function(h) {
-        if (h && h.remove) h.remove();
-      });
+      if (listeners.hasOwnProperty(name)) {
+        listeners[name].forEach(function(h) {
+          if (h && h.remove) h.remove();
+        });
+      }
     }
     listeners = {};
   }
@@ -52,11 +88,14 @@ Orbit.P2P = (function() {
 
     async startServer(port) {
       var p = getPlugin();
-      if (!p) return { success: false, error: 'Plugin not available' };
+      if (!p) { console.log('[P2P-Bridge] startServer: plugin not available'); return { success: false, error: 'Plugin not available' }; }
+      console.log('[P2P-Bridge] startServer port=' + (port || 46000));
       try {
         var result = await p.startServer({ port: port || 46000 });
+        console.log('[P2P-Bridge] Server started on port ' + (result.port || '?'));
         return { success: true, port: result.port };
       } catch(e) {
+        console.log('[P2P-Bridge] startServer error: ' + (e.message || String(e)));
         return { success: false, error: e.message || String(e) };
       }
     },
@@ -64,54 +103,88 @@ Orbit.P2P = (function() {
     async stopServer() {
       var p = getPlugin();
       if (!p) return;
+      console.log('[P2P-Bridge] stopServer');
       try {
         await p.stopServer();
-      } catch(e) {}
+      } catch(e) { console.log('[P2P-Bridge] stopServer error: ' + (e.message || String(e))); }
     },
 
-    async connect(host, port, peerId) {
+    async connect(host, port, peerId, timeout) {
       var p = getPlugin();
-      if (!p) return { success: false, error: 'Plugin not available' };
+      if (!p) { console.log('[P2P-Bridge] connect: plugin not available'); return { success: false, error: 'Plugin not available' }; }
+
+      // Reconnect cooldown (BUG-JS-3): skip if we tried within 3s
+      var key = peerId || (host + ':' + (port || 46000));
+      var now = Date.now();
+      var last = lastConnectAttempt[key] || 0;
+      if (now - last < 3000) {
+        console.log('[P2P-Bridge] connect cooldown hit for ' + key);
+        return { success: false, error: 'Reconnect cooldown' };
+      }
+      lastConnectAttempt[key] = now;
+
+      var connectTimeout = timeout || (window.MStore && window.MStore.settings && (window.MStore.settings.netTimeout || 30) * 1000) || 30000;
+      console.log('[P2P-Bridge] connecting to ' + host + ':' + (port || 46000) + ' key=' + key + ' timeout=' + connectTimeout + 'ms');
       try {
         var result = await p.connect({
           host: host,
           port: port || 46000,
-          peerId: peerId || (host + ':' + (port || 46000))
+          peerId: key,
+          timeout: connectTimeout
         });
+        console.log('[P2P-Bridge] connect result', result);
+        // DO NOT add to connections here — TCP handshake may not have completed yet.
+        // The onConnection event (fired by native on success) handles tracking.
+        // Premature add causes phantom entries if the handshake fails.
+        if (result.connectionId) flushPending(result.connectionId);
         return { success: true, connectionId: result.connectionId };
       } catch(e) {
+        console.log('[P2P-Bridge] connect error: ' + (e.message || String(e)));
         return { success: false, error: e.message || String(e) };
       }
     },
 
     async disconnect(connectionId) {
       var p = getPlugin();
-      if (!p || !connectionId) return;
+      if (!p || !connectionId) { console.log('[P2P-Bridge] disconnect: skipped (no plugin or connectionId)'); return; }
+      console.log('[P2P-Bridge] disconnect ' + connectionId);
       try {
         await p.disconnect({ connectionId: connectionId });
-      } catch(e) {}
+      } catch(e) { console.log('[P2P-Bridge] disconnect error: ' + (e.message || String(e))); }
+      delete connections[connectionId];
     },
 
     async send(connectionId, data) {
       var p = getPlugin();
-      if (!p) return { success: false, error: 'Plugin not available' };
+      if (!p) { console.log('[P2P-Bridge] send: plugin not available'); return { success: false, error: 'Plugin not available' }; }
+      console.log('[P2P-Bridge] send to ' + connectionId + ' (' + (data ? data.length : 0) + ' bytes)');
+      // Purge stale pending messages
+      var cutoff = Date.now() - _maxPendingAge;
+      _pendingMessages = _pendingMessages.filter(function(q) { return q.time > cutoff; });
       try {
         await p.send({ connectionId: connectionId, data: data });
         return { success: true };
       } catch(e) {
-        return { success: false, error: e.message || String(e) };
+        console.log('[P2P-Bridge] send error: ' + (e.message || String(e)) + ' — queuing for retry');
+        _pendingMessages.push({ connectionId: connectionId, data: data, time: Date.now() });
+        return { success: false, queued: true, error: e.message || String(e) };
       }
     },
 
-    async startDiscovery(beaconData) {
+    async startDiscovery(beaconData, discoveryPort) {
       var p = getPlugin();
-      if (!p) return { success: false, error: 'Plugin not available' };
+      if (!p) { console.log('[P2P-Bridge] startDiscovery: plugin not available'); return { success: false, error: 'Plugin not available' }; }
       discoveryActive = true;
+      var udpPort = discoveryPort || (window.MStore && window.MStore.settings && (window.MStore.settings.udpPort || 45678)) || 45678;
+      console.log('[P2P-Bridge] startDiscovery with beacon (udpPort=' + udpPort + ')', beaconData);
       try {
-        await p.startDiscovery({ beacon: beaconData || {} });
+        // BUG-1: startDiscovery now resolves immediately on the Java side
+        await p.startDiscovery({ beacon: beaconData || {}, discoveryPort: udpPort });
+        console.log('[P2P-Bridge] Discovery started');
         return { success: true };
       } catch(e) {
         discoveryActive = false;
+        console.log('[P2P-Bridge] startDiscovery error: ' + (e.message || String(e)));
         return { success: false, error: e.message || String(e) };
       }
     },
@@ -119,17 +192,44 @@ Orbit.P2P = (function() {
     async stopDiscovery() {
       var p = getPlugin();
       if (!p) return;
+      console.log('[P2P-Bridge] stopDiscovery');
       discoveryActive = false;
       try {
         await p.stopDiscovery();
-      } catch(e) {}
+      } catch(e) { console.log('[P2P-Bridge] stopDiscovery error: ' + (e.message || String(e))); }
     },
 
     isDiscoveryActive() {
       return discoveryActive;
     },
 
+    isPeerConnected(peerId) {
+      if (!peerId) return false;
+      if (connections[peerId]) return true;
+      // Broad search: connections keyed by "ip:port", but called with bare IP or userId
+      for (var key in connections) {
+        if (key.indexOf(peerId) === 0 || peerId.indexOf(key) === 0) return true;
+      }
+      return false;
+    },
+
     getConnections() {
+      return Object.keys(connections);
+    },
+
+    async refreshConnections() {
+      // Pull live connections from native service (survives Activity restart)
+      try {
+        var p = getPlugin();
+        if (p && p.getConnections) {
+          var nativeResult = await p.getConnections();
+          if (nativeResult && nativeResult.connections) {
+            nativeResult.connections.forEach(function(connId) {
+              if (!connections[connId]) connections[connId] = { status: 'connected' };
+            });
+          }
+        }
+      } catch(e) { console.log('[P2P-Bridge] refreshConnections error:', e.message); }
       return Object.keys(connections);
     },
 
@@ -149,11 +249,44 @@ Orbit.P2P = (function() {
       return addListener('onPeerFound', callback);
     },
 
+    onSendFailed(callback) {
+      return addListener('onSendFailed', callback);
+    },
+
+    onConnectFailed(callback) {
+      return addListener('onConnectFailed', callback);
+    },
+
+    async startNetwork() {
+      var p = getPlugin();
+      if (!p) return;
+      try { await p.startNetwork(); } catch(e) { console.log('[P2P-Bridge] startNetwork error: ' + e.message); }
+    },
+
+    async stopNetwork() {
+      var p = getPlugin();
+      if (!p) return;
+      try { await p.stopNetwork(); } catch(e) { console.log('[P2P-Bridge] stopNetwork error: ' + e.message); }
+    },
+
+    async requestIgnoreBatteryOptimizations() {
+      // Not all Android versions need this; best-effort
+      try {
+        if (navigator.battery) navigator.battery = null;
+        var p = getPlugin();
+        if (p && p.requestIgnoreBatteryOptimizations) {
+          await p.requestIgnoreBatteryOptimizations();
+        }
+      } catch(e) { /* silently ignore */ }
+    },
+
     cleanup() {
-      this.stopServer();
-      this.stopDiscovery();
-      removeAllListeners();
+      // NOTE: do NOT remove native listeners here — onPeerFound / onDisconnect
+      // are registered once at top-level before initP2P. Removing them here
+      // means they are never re-registered after initP2P runs.
+      console.log('[P2P-Bridge] cleanup called');
       connections = {};
+      lastConnectAttempt = {};
     }
   };
 })();
