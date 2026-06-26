@@ -6323,9 +6323,17 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   })();
 
+  function _errLoc(e) {
+    if (e && e.stack) {
+      var m = e.stack.match(/(?:\s+at\s+(?:\S+\s+)?\(?)([^:]+):(\d+):(\d+)\)?/);
+      if (m) return (m[1].split('\\').pop().split('/').pop()) + ':' + m[2] + ':' + m[3];
+    }
+    return '';
+  }
+
   /* -- Init -- */
   debugLog('P2P', 'App initialization starting');
-  try { initEmojiPicker(); } catch(e) { console.error('[Orbit] initEmojiPicker error:', e); showToast('Emoji picker init failed: ' + (e.message || e), 'error'); }
+  try { initEmojiPicker(); } catch(e) { console.error('[Orbit] initEmojiPicker error:', e); showToast('emoji:'+_errLoc(e)+' '+(e.message||e),'error'); }
 
   // Process static HTML icons (nav, headers, etc.)
   if (typeof lucide !== 'undefined' && renderLucide) {
@@ -6355,7 +6363,7 @@ document.addEventListener('DOMContentLoaded', function() {
     } catch(e) {
       var msg = e && e.message ? e.message : String(e);
       console.error('[Orbit] Init error in ' + step.name + ':', e);
-      showToast(step.name + ' failed: ' + msg, 'error');
+      showToast(step.name+':'+_errLoc(e)+' '+msg, 'error');
     }
   });
 
