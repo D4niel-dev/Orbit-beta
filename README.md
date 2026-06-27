@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="desktop/src/icons/app/orbit_banner.png" alt="Orbit" width="50%">
+  <img src="desktop/src/icons/app/orbit_banner.png" alt="Orbit" width="30%">
 </p>
 
 <h1 align="center">Orbit</h1>
@@ -376,15 +376,15 @@ Or let GitHub Actions build it automatically — push a `v*` tag or trigger the 
 ## How it works
 
 ```
-  	 Desktop Orbit            Android Orbit
-       	      │                        │
-       	      │        TCP P2P         │
-       	      ├────────────────────────┤
-       	      │                        │
-       	      │     UDP Discovery      │
-       	      │    (LAN multicast)     │
-       	      │                        │
-       	      └────  Local Network   ──┘
+  	    Desktop Orbit             Android Orbit
+       	      │                         │
+       	      │         TCP P2P         │
+       	      ├─────────────────────────┤
+       	      │                         │
+       	      │      UDP Discovery      │
+       	      │     (LAN multicast)     │
+       	      │                         │
+       	      └────  Local  Network   ──┘
 ```
 
 Orbit runs on two platforms with a shared cross-platform core:
