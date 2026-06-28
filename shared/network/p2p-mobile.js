@@ -281,12 +281,12 @@ Orbit.P2P = (function() {
     },
 
     cleanup() {
-      // NOTE: do NOT remove native listeners here — onPeerFound / onDisconnect
-      // are registered once at top-level before initP2P. Removing them here
-      // means they are never re-registered after initP2P runs.
+      // Remove native listeners to prevent duplicate registration on re-init (P2P-MOB-2)
+      removeAllListeners();
       console.log('[P2P-Bridge] cleanup called');
       connections = {};
       lastConnectAttempt = {};
+      _pendingMessages = [];
     }
   };
 })();

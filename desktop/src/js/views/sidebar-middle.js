@@ -17,6 +17,7 @@ window.SidebarMiddle = {
     });
 
     this.render();
+    this._initStatsOverlay();
     this.attachEvents();
     
     // Initial render
@@ -37,22 +38,6 @@ window.SidebarMiddle = {
           '<button id="btn-toggle-sidebar" title="Toggle Sidebar" style="background:transparent; border:none; cursor:pointer; color:var(--text-muted); padding:4px; margin-left:4px; flex-shrink:0;"><i data-lucide="chevrons-left" style="width:18px;height:18px;"></i></button>' +
         '</div>' +
       '</div>' +
-      '<div id="connection-stats-overlay" style="display:none;position:fixed;bottom:16px;right:16px;background:rgba(0,0,0,0.85);border:1px solid var(--border-subtle);border-radius:12px;z-index:9998;font-family:monospace;font-size:11px;flex-direction:column;min-width:200px;">' +
-        '<div id="conn-stats-drag" style="padding:8px 12px;border-bottom:1px solid rgba(255,255,255,0.1);cursor:grab;display:flex;align-items:center;justify-content:space-between;user-select:none;">' +
-          '<span style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Connection</span>' +
-          '<i data-lucide="grip-vertical" style="width:14px;height:14px;color:var(--text-muted);"></i>' +
-        '</div>' +
-        '<div style="padding:12px;display:flex;flex-direction:column;gap:5px;">' +
-          '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Status:</span><span id="conn-status" style="color:var(--accent-success);">Disconnected</span></div>' +
-          '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Peers:</span><span id="conn-peers" style="color:var(--accent-success);">0</span></div>' +
-          '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Uptime:</span><span id="conn-uptime" style="color:var(--accent-success);">--</span></div>' +
-          '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Sent:</span><span id="conn-sent" style="color:var(--accent-success);">0</span></div>' +
-          '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Recv:</span><span id="conn-recv" style="color:var(--accent-success);">0</span></div>' +
-          '<div style="margin-top:8px;border-top:1px solid rgba(255,255,255,0.1);padding-top:8px;text-align:center;">' +
-            '<button id="btn-p2p-diag" style="background:transparent;border:1px solid var(--border-subtle);color:var(--text-secondary);border-radius:6px;padding:4px 10px;font-size:10px;cursor:pointer;width:100%;">P2P Diagnostics</button>' +
-          '</div>' +
-        '</div>' +
-      '</div>' +
       '<div class="tabs-container" style="display:flex; padding: 0 var(--spacing-md); margin-bottom: var(--spacing-md); gap: 16px;">' +
         '<button class="tab active" style="flex:1; text-align:center; padding: 12px 4px; border-bottom: 3px solid var(--accent-primary); border-top: none; border-left: none; border-right: none; font-weight: 600; color: var(--text-primary); background: transparent; transition: var(--transition); cursor:pointer;">Friends</button>' +
         '<button class="tab" style="flex:1; text-align:center; padding: 12px 4px; border-bottom: 3px solid transparent; border-top: none; border-left: none; border-right: none; color: var(--text-muted); font-weight: 500; background: transparent; transition: var(--transition); cursor:pointer;">Groups</button>' +
@@ -61,17 +46,40 @@ window.SidebarMiddle = {
         '<!-- Dynamically rendered -->' +
       '</div>';
     lucide.createIcons({ root: this.container });
+  },
 
-    // Restore saved connection stats position
-    var statsOverlay = this.container.querySelector('#connection-stats-overlay');
-    if (statsOverlay) {
-      var savedPos = window.Storage ? window.Storage.get('connStatsPos', null) : null;
-      if (savedPos) {
-        statsOverlay.style.bottom = 'auto';
-        statsOverlay.style.right = 'auto';
-        statsOverlay.style.top = savedPos.top + 'px';
-        statsOverlay.style.left = savedPos.left + 'px';
-      }
+  _initStatsOverlay() {
+    // Create connection stats panel as direct child of body to avoid
+    // Chromium compositing bugs with position:fixed inside overflow:hidden containers
+    if (document.getElementById('connection-stats-overlay')) return;
+    var div = document.createElement('div');
+    div.id = 'connection-stats-overlay';
+    div.style.cssText = 'display:none;position:fixed;bottom:16px;right:16px;background:rgba(0,0,0,0.85);border:1px solid var(--border-subtle);border-radius:12px;z-index:9998;font-family:monospace;font-size:11px;flex-direction:column;min-width:200px;';
+    div.innerHTML =
+      '<div id="conn-stats-drag" style="padding:8px 12px;border-bottom:1px solid rgba(255,255,255,0.1);cursor:grab;display:flex;align-items:center;justify-content:space-between;user-select:none;">' +
+        '<span style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Connection</span>' +
+        '<i data-lucide="grip-vertical" style="width:14px;height:14px;color:var(--text-muted);"></i>' +
+      '</div>' +
+      '<div style="padding:12px;display:flex;flex-direction:column;gap:5px;">' +
+        '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Status:</span><span id="conn-status" style="color:var(--accent-success);">Disconnected</span></div>' +
+        '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Peers:</span><span id="conn-peers" style="color:var(--accent-success);">0</span></div>' +
+        '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Uptime:</span><span id="conn-uptime" style="color:var(--accent-success);">--</span></div>' +
+        '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Sent:</span><span id="conn-sent" style="color:var(--accent-success);">0</span></div>' +
+        '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Recv:</span><span id="conn-recv" style="color:var(--accent-success);">0</span></div>' +
+        '<div style="margin-top:8px;border-top:1px solid rgba(255,255,255,0.1);padding-top:8px;text-align:center;">' +
+          '<button id="btn-p2p-diag" style="background:transparent;border:1px solid var(--border-subtle);color:var(--text-secondary);border-radius:6px;padding:4px 10px;font-size:10px;cursor:pointer;width:100%;">P2P Diagnostics</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(div);
+    if (window.lucide) window.lucide.createIcons({ root: div });
+
+    // Restore saved position
+    var savedPos = window.Storage ? window.Storage.get('connStatsPos', null) : null;
+    if (savedPos) {
+      div.style.bottom = 'auto';
+      div.style.right = 'auto';
+      div.style.top = savedPos.top + 'px';
+      div.style.left = savedPos.left + 'px';
     }
   },
 
@@ -614,10 +622,29 @@ window.SidebarMiddle = {
 
     // Connection stats drag-to-move
     var statsOverlay = document.getElementById('connection-stats-overlay');
-    if (statsOverlay) {
+    if (statsOverlay && !statsOverlay._dragAttached) {
+      statsOverlay._dragAttached = true; // guard against duplicate attachment
       var dragHandle = statsOverlay.querySelector('#conn-stats-drag');
       if (dragHandle) {
         var isDragging = false, startX, startY, startLeft, startTop;
+        function _onDragMove(e) {
+          if (!isDragging) return;
+          var dx = e.clientX - startX;
+          var dy = e.clientY - startY;
+          statsOverlay.style.left = (startLeft + dx) + 'px';
+          statsOverlay.style.top = (startTop + dy) + 'px';
+        }
+        function _onDragEnd() {
+          if (!isDragging) return;
+          isDragging = false;
+          dragHandle.style.cursor = 'grab';
+          var rect = statsOverlay.getBoundingClientRect();
+          if (window.Storage) {
+            window.Storage.set('connStatsPos', { top: rect.top, left: rect.left });
+          }
+          document.removeEventListener('mousemove', _onDragMove);
+          document.removeEventListener('mouseup', _onDragEnd);
+        }
         dragHandle.addEventListener('mousedown', function(e) {
           isDragging = true;
           dragHandle.style.cursor = 'grabbing';
@@ -631,22 +658,8 @@ window.SidebarMiddle = {
           statsOverlay.style.left = startLeft + 'px';
           statsOverlay.style.top = startTop + 'px';
           e.preventDefault();
-        });
-        document.addEventListener('mousemove', function(e) {
-          if (!isDragging) return;
-          var dx = e.clientX - startX;
-          var dy = e.clientY - startY;
-          statsOverlay.style.left = (startLeft + dx) + 'px';
-          statsOverlay.style.top = (startTop + dy) + 'px';
-        });
-        document.addEventListener('mouseup', function() {
-          if (!isDragging) return;
-          isDragging = false;
-          dragHandle.style.cursor = 'grab';
-          var rect = statsOverlay.getBoundingClientRect();
-          if (window.Storage) {
-            window.Storage.set('connStatsPos', { top: rect.top, left: rect.left });
-          }
+          document.addEventListener('mousemove', _onDragMove);
+          document.addEventListener('mouseup', _onDragEnd);
         });
       }
 

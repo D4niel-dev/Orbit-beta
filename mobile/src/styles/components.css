@@ -322,6 +322,10 @@ button:active,
   transition: opacity 0.12s ease;
   box-shadow: 0 4px 12px rgba(0,0,0,0.3);
   letter-spacing: 0.01em;
+  /* OOB fix: clamp to viewport */
+  max-width: min(85vw, 360px);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Show on hover or when parent is hovered */
@@ -427,13 +431,18 @@ button:active,
   padding: 2px 7px;
   bottom: auto;
   top: -1px;
-  right: -1px;
+  left: -1px;
+  right: auto;
   border-radius: 0 8px 0 6px;
   background: var(--bg-base);
   border-color: var(--border-subtle);
   color: var(--text-muted);
   transition: opacity 0.15s ease;
   opacity: 0;
+  max-width: min(85vw, 280px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .debug-display .message-bubble:hover::after {
@@ -444,13 +453,18 @@ button:active,
 .debug-display .search-result-row::after {
   bottom: auto;
   top: 2px;
-  right: 2px;
+  left: 2px;
+  right: auto;
   font-size: 9px;
   padding: 2px 7px;
   opacity: 0;
   background: var(--bg-base);
   color: var(--text-muted);
   border-radius: 6px;
+  max-width: min(85vw, 280px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .debug-display .search-result-row:hover::after {
@@ -463,14 +477,15 @@ button:active,
   padding: 2px 7px;
   bottom: auto;
   top: 2px;
-  right: 2px;
+  left: 2px;
+  right: auto;
   background: var(--bg-base);
   color: var(--text-muted);
   opacity: 0;
-}
-
-.debug-display [data-debug^="ReplyTo"]:hover::after {
-  opacity: 1;
+  max-width: min(85vw, 280px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Dev Mode indicator */

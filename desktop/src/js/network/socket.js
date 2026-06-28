@@ -26,12 +26,16 @@ class SocketManager extends EventEmitter {
     this._heartbeatIntervals = new Map();
     this._lastDataTime = new Map();
     this._pongPending = new Map();
+    // Adaptive heartbeat: tracks consecutive missed PONGs per peer
+    // Higher count → network degraded → more tolerant thresholds
+    this._heartbeatQuality = new Map();
     this._reconnectTimers = new Map();
     this._reconnectAttempts = new Map();
     this._reconnectEnabled = true;
     this._reconnectInterval = 10000;
     this._peerIps = new Map();
     this._peerPorts = new Map();
+    this._shuttingDown = false;
   }
 
   setReconnect(enabled, intervalMs) {
@@ -44,6 +48,22 @@ class SocketManager extends EventEmitter {
     if (this._heartbeatIntervals.has(peerId)) {
       clearInterval(this._heartbeatIntervals.get(peerId));
     }
+
+    // Each peer gets its own adaptive heartbeat quality tracker
+    if (!this._heartbeatQuality.has(peerId)) {
+      this._heartbeatQuality.set(peerId, { missedPongs: 0, consecutiveSuccess: 0 });
+    }
+
+    // Adaptive idle threshold based on network quality
+    // Healthy (0 missed): 30s → Aggressive, catches dead connections fast
+    // Degraded (1 missed): 45s → More tolerant, gives peer more time
+    // Unstable (2 missed): 60s → Even more tolerant
+    // Bad (3+ missed): 120s → Very tolerant, avoids false drops on flaky networks
+    var idleThreshold = 30000 + Math.min(90000, (this._heartbeatQuality.get(peerId).missedPongs || 0) * 15000);
+
+    // Adaptive check interval: slower checks on degraded networks reduces overhead
+    var checkInterval = Math.min(30000, 15000 + (this._heartbeatQuality.get(peerId).missedPongs || 0) * 5000);
+
     var interval = setInterval(() => {
       if (socket.destroyed) {
         this._stopHeartbeat(peerId);
@@ -51,17 +71,27 @@ class SocketManager extends EventEmitter {
       }
       var lastData = this._lastDataTime.get(peerId) || 0;
       var idle = Date.now() - lastData;
-      if (idle > 30000) {
+      if (idle > idleThreshold) {
         if (this._pongPending.get(peerId)) {
-          console.log('[P2P] No PONG from', peerId, '— closing');
-          socket.destroy();
+          // PONG was expected but didn't arrive — network may be degraded
+          var quality = this._heartbeatQuality.get(peerId);
+          if (quality) {
+            quality.missedPongs = Math.min(10, (quality.missedPongs || 0) + 1);
+            quality.consecutiveSuccess = 0;
+          }
+          console.log('[P2P] No PONG from', peerId, '— missed total:', (quality ? quality.missedPongs : 0));
+          // Don't close immediately — send another PING and be more tolerant
+          this._pongPending.set(peerId, false);
+          var pingPacket = Protocol.createPacket(Protocol.Types.PING, 'system', peerId, { ts: Date.now() });
+          try { this._enqueueWrite(socket, Protocol.serialize(pingPacket)); } catch(e) {}
+          this._lastDataTime.set(peerId, Date.now());
           return;
         }
         this._pongPending.set(peerId, true);
         var pingPacket = Protocol.createPacket(Protocol.Types.PING, 'system', peerId, { ts: Date.now() });
         try { this._enqueueWrite(socket, Protocol.serialize(pingPacket)); } catch(e) {}
       }
-    }, 15000);
+    }, checkInterval);
     this._heartbeatIntervals.set(peerId, interval);
   }
 
@@ -72,6 +102,7 @@ class SocketManager extends EventEmitter {
     }
     this._lastDataTime.delete(peerId);
     this._pongPending.delete(peerId);
+    this._heartbeatQuality.delete(peerId);
   }
 
   _scheduleReconnect(peerId, ip, port) {
@@ -82,19 +113,38 @@ class SocketManager extends EventEmitter {
       this._reconnectAttempts.delete(peerId);
       return;
     }
-    var delay = Math.min(30000, (attempts + 1) * this._reconnectInterval);
-    console.log('[P2P] Reconnect to', peerId, 'in', delay, 'ms (attempt', attempts + 1, ')');
+    // Check peer didn't reconnect via another path while we waited
+    var reconnected = this.connections.get(peerId);
+    if (reconnected && !reconnected.destroyed) {
+      console.log('[P2P] Peer already reconnected, cancel scheduled reconnect');
+      this._reconnectAttempts.delete(peerId);
+      this._reconnectTimers.delete(peerId);
+      return;
+    }
+    // Cancel any existing reconnect timer to prevent duplicates
+    this._cancelReconnect(peerId);
+    
+    // Exponential backoff: baseDelay * 2^attempts, capped at 60s
+    // attempt 0: 10s, attempt 1: 20s, attempt 2: 40s, attempt 3+: 60s
+    var delay = Math.min(60000, this._reconnectInterval * Math.pow(2, attempts));
+    console.log('[P2P] Reconnect to', peerId, 'in', delay, 'ms (attempt', attempts + 1, ') - exponential backoff');
     var timer = setTimeout(() => {
       this._reconnectTimers.delete(peerId);
-      // Check peer didn't reconnect via another path while we waited
-      var reconnected = this.connections.get(peerId);
-      if (reconnected && !reconnected.destroyed) {
-        console.log('[P2P] Peer already reconnected, cancel scheduled reconnect');
+      // Double-check connection didn't establish while we waited
+      var reconnected2 = this.connections.get(peerId);
+      if (reconnected2 && !reconnected2.destroyed) {
+        console.log('[P2P] Peer reconnected before scheduled retry, cancel');
         this._reconnectAttempts.delete(peerId);
         return;
       }
-      var savedIp = this._peerIps.get(peerId) || ip;
-      var savedPort = this._peerPorts.get(peerId) || port || 46000;
+      // Use the IP/port passed in (mobile bridge updates)
+      if (ip) {
+        console.log('[P2P] Using updated IP from mobile bridge:', ip + ':' + (port || 46000));
+        this._peerIps.set(peerId, ip);
+        this._peerPorts.set(peerId, port || 46000);
+      }
+      var savedIp = ip || this._peerIps.get(peerId);
+      var savedPort = port || this._peerPorts.get(peerId) || 46000;
       if (savedIp) {
         this.connectToPeer(peerId, savedIp, savedPort).catch(function(err) {
           console.error('[Reconnect] Connection to', peerId, 'failed:', err && err.message);
@@ -175,9 +225,15 @@ class SocketManager extends EventEmitter {
       banner: identity.banner || null,
       publicKey: identity.publicKey || null,
       profileFrame: identity.profileFrame || null,
-      tcpPort: this.TCP_PORT,
+      tcpPort: this.TCP_PORT || 46000,
       device: 'desktop'
     };
+    
+    // Validate tcpPort is a valid number
+    if (typeof identity.tcpPort === 'number' && identity.tcpPort > 0) {
+      beaconData.tcpPort = identity.tcpPort;
+    }
+    
     const packet = Protocol.createPacket(Protocol.Types.BEACON, identity.userId, 'ALL', beaconData);
     const serialized = Protocol.serialize(packet);
     try {
@@ -188,6 +244,7 @@ class SocketManager extends EventEmitter {
   }
 
   connectToPeer(peerId, ip, port = 46000) {
+    if (this._shuttingDown) { return Promise.reject(new Error('Shutting down')); }
     const existing = this.connections.get(peerId);
     if (existing && !existing.destroyed) {
       // If IP changed, the old connection is likely dead (half-open).
@@ -219,7 +276,8 @@ class SocketManager extends EventEmitter {
       socket.setTimeout(8000);
 
       socket.on('timeout', () => {
-        socket.destroy();
+        this._pendingConnects.delete(peerId);
+        socket.destroy(new Error('Connection timeout'));
         reject(new Error('Connection timeout to ' + ip));
       });
 
@@ -253,9 +311,11 @@ class SocketManager extends EventEmitter {
   _flushPending(peerId, socket) {
     if (!this._pendingMessages.has(peerId)) return;
     const queue = this._pendingMessages.get(peerId);
-    queue.forEach((buffer) => {
-      this._enqueueWrite(socket, buffer);
-    });
+    if (socket && !socket.destroyed) {
+      queue.forEach((buffer) => {
+        this._enqueueWrite(socket, buffer);
+      });
+    }
     this._pendingMessages.delete(peerId);
   }
 
@@ -315,6 +375,12 @@ class SocketManager extends EventEmitter {
             if (currentPeerId) {
               this._lastDataTime.set(currentPeerId, Date.now());
               this._reconnectAttempts.delete(currentPeerId);
+              this._pongPending.delete(currentPeerId);
+              // Any data = connection alive → improve quality score
+              var quality = this._heartbeatQuality.get(currentPeerId);
+              if (quality && quality.missedPongs > 0) {
+                quality.missedPongs = Math.max(0, quality.missedPongs - 1);
+              }
             }
 
             // Handle PING/PONG
@@ -324,7 +390,15 @@ class SocketManager extends EventEmitter {
               continue;
             }
             if (packet.type === Protocol.Types.PONG) {
-              if (currentPeerId) this._pongPending.delete(currentPeerId);
+              if (currentPeerId) {
+                this._pongPending.delete(currentPeerId);
+                // PONG received successfully — improve quality score
+                var quality = this._heartbeatQuality.get(currentPeerId);
+                if (quality) {
+                  quality.missedPongs = 0;
+                  quality.consecutiveSuccess = Math.min(10, (quality.consecutiveSuccess || 0) + 1);
+                }
+              }
               continue;
             }
 
@@ -349,7 +423,9 @@ class SocketManager extends EventEmitter {
       var savedIp = currentPeerId ? this._peerIps.get(currentPeerId) : null;
       if (currentPeerId) {
         this.connections.delete(currentPeerId);
-        this._writeQueues.delete(currentPeerId);
+        // Write queue is keyed by IP:port (or __orbitKey fallback) — compute the same key for cleanup
+        var writeKey = (socket.remoteAddress && socket.remotePort) ? socket.remoteAddress + ':' + socket.remotePort : socket.__orbitKey;
+        this._writeQueues.delete(writeKey);
         this._stopHeartbeat(currentPeerId);
         this.emit('peer-disconnected', currentPeerId);
       }
@@ -371,6 +447,7 @@ class SocketManager extends EventEmitter {
   }
 
   sendMessage(toPeerId, toIp, type, payload) {
+    if (this._shuttingDown) return false;
     const identity = this.identityProvider();
     if (!identity || !identity.userId) return false;
 
@@ -429,7 +506,9 @@ class SocketManager extends EventEmitter {
           // Fire-and-forget connect
           this.connectToPeer(m.userId, m.ip).then((s) => {
             this._enqueueWrite(s, serialized);
-          }).catch(() => {});
+          }).catch(function(err) {
+            console.error('[Broadcast] connect/send to', m.userId, 'failed:', (err && err.message) || err);
+          });
           sentCount++;
         } else if (socket && !socket.destroyed) {
           this._enqueueWrite(socket, serialized);
@@ -441,6 +520,7 @@ class SocketManager extends EventEmitter {
   }
 
   stop() {
+    this._shuttingDown = true;
     if (this.server) {
       this.server.close();
     }
@@ -462,6 +542,7 @@ class SocketManager extends EventEmitter {
     }
     this._reconnectTimers.clear();
     this._reconnectAttempts.clear();
+    this._heartbeatQuality.clear();
     this._peerIps.clear();
     this._peerPorts.clear();
   }

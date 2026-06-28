@@ -51,6 +51,7 @@
 
 /* App Grid Layout */
 #app-layout {
+  position: relative;
   display: grid;
   grid-template-columns: 64px 260px 1fr;
   grid-template-rows: 100vh;

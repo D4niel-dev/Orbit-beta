@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="dark" class="sk-loading">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- Content Security Policy to allow external fonts and scripts safely -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;     img-src 'self' data: blob: orbit-db: orbit-file: orbit-avatar: https://media.giphy.com https://opengraph.githubassets.com; media-src 'self' data: blob: orbit-db: orbit-file: orbit-avatar:; connect-src 'self' https://cdn.jsdelivr.net https://api.mymemory.translated.net;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com;     img-src 'self' data: blob: orbit-db: orbit-file: orbit-avatar: https://media.giphy.com https://opengraph.githubassets.com https://i.ytimg.com; media-src 'self' data: blob: orbit-db: orbit-file: orbit-avatar:; connect-src 'self' orbit-avatar: https://cdn.jsdelivr.net https://api.mymemory.translated.net;">
   
   <link rel="icon" type="image/x-icon" href="/favicon.ico">
   <title>Orbit</title>
@@ -30,6 +30,9 @@
   <link rel="stylesheet" href="styles/layout.css">
   <link rel="stylesheet" href="styles/components.css">
   <link rel="stylesheet" href="styles/animations.css">
+
+  <!-- Syntax Highlighting (Prism) -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
 
   <!-- Lucide Icons -->
   <script src="../node_modules/lucide/dist/umd/lucide.min.js"></script>
@@ -97,6 +100,53 @@
       </aside>
     </main>
 
+    <!-- App Skeleton (shown during boot, removed after UI initializes) -->
+    <div id="app-skeleton">
+      <div class="sk-titlebar">
+        <div class="sk-filler"></div>
+        <div class="sk-box sk-win-btn"></div>
+        <div class="sk-box sk-win-btn"></div>
+        <div class="sk-box sk-win-btn"></div>
+      </div>
+      <div class="sk-section sk-left">
+        <div class="sk-box sk-icon"></div>
+        <div class="sk-box sk-icon"></div>
+        <div class="sk-box sk-icon"></div>
+        <div class="sk-box sk-icon"></div>
+        <div class="sk-spacer"></div>
+        <div class="sk-box sk-icon"></div>
+      </div>
+      <div class="sk-section sk-mid">
+        <div class="sk-box sk-search"></div>
+        <div class="sk-tabs">
+          <div class="sk-box sk-tab"></div>
+          <div class="sk-box sk-tab"></div>
+        </div>
+        <div class="sk-list">
+          <div class="sk-row"><div class="sk-box sk-avatar"></div><div class="sk-lines"><div class="sk-box sk-line w-70"></div><div class="sk-box sk-line w-40"></div></div></div>
+          <div class="sk-row"><div class="sk-box sk-avatar"></div><div class="sk-lines"><div class="sk-box sk-line w-55"></div><div class="sk-box sk-line w-35"></div></div></div>
+          <div class="sk-row"><div class="sk-box sk-avatar"></div><div class="sk-lines"><div class="sk-box sk-line w-65"></div><div class="sk-box sk-line w-45"></div></div></div>
+          <div class="sk-row"><div class="sk-box sk-avatar"></div><div class="sk-lines"><div class="sk-box sk-line w-50"></div><div class="sk-box sk-line w-30"></div></div></div>
+          <div class="sk-row"><div class="sk-box sk-avatar"></div><div class="sk-lines"><div class="sk-box sk-line w-60"></div><div class="sk-box sk-line w-40"></div></div></div>
+          <div class="sk-row"><div class="sk-box sk-avatar"></div><div class="sk-lines"><div class="sk-box sk-line w-45"></div><div class="sk-box sk-line w-35"></div></div></div>
+        </div>
+      </div>
+      <div class="sk-section sk-main">
+        <div class="sk-header">
+          <div class="sk-box sk-avatar lg"></div>
+          <div class="sk-lines"><div class="sk-box sk-line w-30"></div><div class="sk-box sk-line w-15"></div></div>
+        </div>
+        <div class="sk-chat">
+          <div class="sk-msg rc"><div class="sk-box sk-bubble w-55"></div></div>
+          <div class="sk-msg sn"><div class="sk-box sk-bubble w-40"></div></div>
+          <div class="sk-msg rc"><div class="sk-box sk-bubble w-60"></div></div>
+          <div class="sk-msg sn"><div class="sk-box sk-bubble w-35"></div></div>
+          <div class="sk-msg rc"><div class="sk-box sk-bubble w-45"></div></div>
+        </div>
+        <div class="sk-box sk-input"></div>
+      </div>
+    </div>
+
   </div>
 
   <!-- Modals & Overlays -->
@@ -134,6 +184,11 @@
   <script src="js/components/account-switcher.js"></script>
   <script src="../../shared/ui/audio-player.js"></script>
   <script src="../../shared/ui/video-player.js"></script>
+
+  <!-- Syntax Highlighting (Prism) — loads before app.js so available on first render -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
   <script src="js/app.js"></script>
 </body>
 </html>

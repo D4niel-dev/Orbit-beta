@@ -77,7 +77,7 @@ window.ChatPanel = {
         e.stopPropagation();
         var msgId = reactBtn.getAttribute('data-msg-id');
         var rect = reactBtn.getBoundingClientRect();
-        self.showReactionPicker(rect.left, rect.bottom, msgId);
+        self.showReactionPicker(rect.right, rect.bottom, msgId);
         return;
       }
 
@@ -90,7 +90,7 @@ window.ChatPanel = {
         var msg = msgList.find(function(m) { return m.id == msgId; });
         if (msg) {
           var friendName = state.friends.find(function(f) { return f.userId === state.activeChatId; });
-          self.replyingTo = { id: msg.id, text: msg.text, senderName: msg.sender === state.currentUser.userId ? 'You' : (friendName ? friendName.username : 'User') };
+          self.replyingTo = { id: msg.id, text: msg.text, senderName: msg.sender === state.currentUser.userId ? 'You' : (friendName ? friendName.username : 'User'), attachments: msg.attachments || null };
           self.editingMsg = null;
           var inp = document.getElementById('chat-input');
           if (inp) inp.focus();
@@ -459,7 +459,7 @@ window.ChatPanel = {
       var items = [
         { label: 'Reply', action: 'reply', icon: 'corner-up-left', onClick: function() {
           var friendName = state.friends.find(function(f) { return f.userId === state.activeChatId; });
-          self.replyingTo = { id: msg.id, text: msg.text, senderName: msg.sender === state.currentUser.userId ? 'You' : (friendName ? friendName.username : 'User') };
+          self.replyingTo = { id: msg.id, text: msg.text, senderName: msg.sender === state.currentUser.userId ? 'You' : (friendName ? friendName.username : 'User'), attachments: msg.attachments || null };
           self.editingMsg = null;
           var input = document.getElementById('chat-input');
           if (input) input.focus();
@@ -642,7 +642,12 @@ window.ChatPanel = {
       if (msg.replyTo) {
         const origMsg = messages.find(m => m.id == msg.replyTo);
         if (origMsg) {
-          const replyPreview = (origMsg.text || '').substring(0, 60) + (origMsg.text && origMsg.text.length > 60 ? '...' : '');
+          var replyPreview = (origMsg.text || '').substring(0, 60) + (origMsg.text && origMsg.text.length > 60 ? '...' : '');
+          if (!replyPreview && origMsg.attachments && origMsg.attachments.length > 0) {
+            replyPreview = '(' + origMsg.attachments[0].name + ')';
+          } else if (!replyPreview) {
+            replyPreview = '(Attachment)';
+          }
           const replyUser = origMsg.sender === myId ? 'You' : window.Sanitize.escapeHtml(activeFriend.username);
           replyHtml = '<div data-reply-msg-id="' + origMsg.id + '" style="font-size:12px;padding:6px 10px;margin-bottom:6px;border-left:3px solid rgba(255,255,255,0.3);border-radius:4px;background:rgba(0,0,0,0.1);color:rgba(255,255,255,0.7);cursor:pointer;">' +
             '<span style="font-weight:600;">' + replyUser + '</span> ' + window.Sanitize.escapeHtml(replyPreview) +
@@ -957,13 +962,23 @@ window.ChatPanel = {
           '</button>' +
         '</div>' +
       '</div>';
+
+    // Syntax-highlight code blocks
+    if (window.Prism) setTimeout(function() { Prism.highlightAll(); }, 0);
+
     // Reply/Edit preview bar
     let replyEditBar = '';
     if (this.replyingTo) {
       const rText = (this.replyingTo.text || '').substring(0, 80);
+      var rFallback = '';
+      if (!rText && this.replyingTo.attachments && this.replyingTo.attachments.length > 0) {
+        rFallback = '(' + this.replyingTo.attachments[0].name + ')';
+      } else if (!rText) {
+        rFallback = '(Attachment)';
+      }
       replyEditBar = '<div id="reply-edit-bar" style="display:flex;align-items:center;gap:8px;padding:8px 12px;margin-bottom:4px;border-radius:12px;background:var(--bg-hover);border:1px solid var(--border-subtle);font-size:13px;color:var(--text-secondary);">' +
         '<i data-lucide="reply" style="width:14px;height:14px;flex-shrink:0;"></i>' +
-        '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Replying to <b>' + window.Sanitize.escapeHtml(this.replyingTo.senderName || 'message') + '</b>: ' + window.Sanitize.escapeHtml(rText) + '</span>' +
+        '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Replying to <b>' + window.Sanitize.escapeHtml(this.replyingTo.senderName || 'message') + '</b>: ' + window.Sanitize.escapeHtml(rText || rFallback) + '</span>' +
         '<button id="btn-cancel-reply" style="background:none;border:none;cursor:pointer;color:var(--text-muted);padding:2px;">✕</button>' +
       '</div>';
     } else if (this.editingMsg) {
@@ -990,7 +1005,7 @@ window.ChatPanel = {
         typingHtml +
         '<div class="chat-input-wrapper">' +
           '<button id="btn-plus"><i data-lucide="plus-circle"></i></button>' +
-          '<input type="text" id="chat-input" class="chat-input-field" placeholder="Message ' + window.Sanitize.escapeHtml(activeName) + '..."' + (this.editingMsg ? ' value="' + window.Sanitize.escapeHtml(this.editingMsg.text) + '"' : '') + '>' +
+          '<textarea id="chat-input" class="chat-input-field" placeholder="Message ' + window.Sanitize.escapeHtml(activeName) + '..." rows="1">' + (this.editingMsg ? window.Sanitize.escapeHtml(this.editingMsg.text) : '') + '</textarea>' +
           '<button id="btn-mic" title="Voice Memo (Click to start/stop)"><i data-lucide="mic"></i></button>' +
           '<button id="btn-emoji"><i data-lucide="smile"></i></button>' +
           '<button id="btn-send"><i data-lucide="send"></i></button>' +
@@ -1213,6 +1228,7 @@ window.ChatPanel = {
       input.addEventListener('keydown', async function(e) {
         var enterSends = window.store.getState().settings.enterToSend !== false;
         if (e.key === 'Enter' && (enterSends ? !e.shiftKey : e.ctrlKey || e.metaKey)) {
+          e.preventDefault();
           // Clear typing indicator when sending
           if (typingTimeout) {
             clearTimeout(typingTimeout);
@@ -1223,8 +1239,15 @@ window.ChatPanel = {
           if (text !== '' || self.stagedFiles.length > 0) {
             await self.sendMessage(text);
             input.value = '';
+            input.style.height = 'auto';
           }
         }
+      });
+
+      // Auto-resize textarea as content grows
+      input.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 200) + 'px';
       });
     }
 
@@ -1536,11 +1559,11 @@ window.ChatPanel = {
     var existing = document.querySelector('.reaction-picker');
     if (existing) { document.body.removeChild(existing); return; }
 
-    var emojis = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '🎉', '🥺', '👀', '💀', '✨', '⭐', '🤨', '😭', '😤', '😈', '💯', '👋', '🤝', '💪', '🫡', '👏', '🎊', '🚀'];
+    var emojis = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '🎉', '🥺', '👀', '💀', '✨', '⭐', '🤨', '😭', '😤', '😈', '💯', '👋', '🤝', '💪', '👏', '🎊', '🚀', '🎯', '💅', '🤔'];
     var self = this;
     var picker = document.createElement('div');
     picker.className = 'reaction-picker';
-    picker.style.cssText = 'position:fixed;left:' + Math.min(x, window.innerWidth - 360) + 'px;top:' + (y + 8) + 'px;z-index:9999;background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:24px;padding:8px 10px;box-shadow:var(--shadow-xl);display:flex;flex-wrap:wrap;gap:2px;max-width:360px;';
+    picker.style.cssText = 'position:fixed;left:' + Math.max(8, Math.min(x - 360, window.innerWidth - 360 - 8)) + 'px;top:' + (y + 8) + 'px;z-index:9999;background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:24px;padding:8px 10px;box-shadow:var(--shadow-xl);display:flex;flex-wrap:wrap;gap:2px;max-width:360px;';
 
     emojis.forEach(function(emoji) {
       var btn = document.createElement('button');
@@ -2393,16 +2416,23 @@ window.ChatPanel = {
         self.replyingTo = {
           id: msg.id,
           text: msg.text,
-          senderName: msg.sender === state.currentUser.userId ? 'You' : (friendName ? friendName.username : 'User')
+          senderName: msg.sender === state.currentUser.userId ? 'You' : (friendName ? friendName.username : 'User'),
+          attachments: msg.attachments || null
         };
         self.editingMsg = null;
         var existing = document.getElementById('reply-edit-bar');
         if (existing) existing.remove();
         if (!self.replyingTo) return;
         var rText = (self.replyingTo.text || '').substring(0, 80);
+        var rFallback = '';
+        if (!rText && self.replyingTo.attachments && self.replyingTo.attachments.length > 0) {
+          rFallback = '(' + self.replyingTo.attachments[0].name + ')';
+        } else if (!rText) {
+          rFallback = '(Attachment)';
+        }
         var barHtml = '<div id="reply-edit-bar" style="display:flex;align-items:center;gap:8px;padding:8px 12px;margin-bottom:4px;border-radius:12px;background:var(--bg-hover);border:1px solid var(--border-subtle);font-size:13px;color:var(--text-secondary);">' +
           '<i data-lucide="reply" style="width:14px;height:14px;flex-shrink:0;"></i>' +
-          '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Replying to <b>' + window.Sanitize.escapeHtml(self.replyingTo.senderName || 'message') + '</b>: ' + window.Sanitize.escapeHtml(rText) + '</span>' +
+          '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Replying to <b>' + window.Sanitize.escapeHtml(self.replyingTo.senderName || 'message') + '</b>: ' + window.Sanitize.escapeHtml(rText || rFallback) + '</span>' +
           '<button id="btn-cancel-reply" style="background:none;border:none;cursor:pointer;color:var(--text-muted);padding:2px;">✕</button>' +
         '</div>';
         var previewArea = document.getElementById('file-preview-area');

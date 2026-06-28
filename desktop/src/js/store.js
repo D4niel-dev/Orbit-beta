@@ -742,8 +742,9 @@ class Store {
     }
 
     if (packet.type === window.Protocol.Types.REACTION) {
-      const { msgId, emoji, action, userId, chatId: payloadChatId } = packet.payload;
-      const chatId = payloadChatId || packet.to || packet.from;
+      const { msgId, emoji, action, userId, chatId: payloadChatId, groupId } = packet.payload;
+      // Defensive: trust groupId for group reactions, otherwise fall back to packet.from (DM sender)
+      const chatId = groupId || payloadChatId || packet.to || packet.from;
       const msgs = { ...this.state.messages };
       if (msgs[chatId]) {
         msgs[chatId] = msgs[chatId].map(m => {
@@ -1015,13 +1016,14 @@ class Store {
       if (members.length > 0) {
         members.forEach(m => {
           if (m.userId !== state.currentUser.userId) {
-            window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.REACTION, { msgId, emoji, action, userId: state.currentUser.userId, chatId });
+            window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.REACTION, { msgId, emoji, action, userId: state.currentUser.userId, groupId: chatId });
           }
         });
       } else {
         const friend = state.friends.find(f => f.userId === chatId);
         if (friend) {
-          window.orbitAPI.networkSend(chatId, friend.ip || '', window.Protocol.Types.REACTION, { msgId, emoji, action, userId: state.currentUser.userId, chatId });
+          // DM reaction: NO chatId in payload (would overwrite receiver's chat lookup)
+          window.orbitAPI.networkSend(chatId, friend.ip || '', window.Protocol.Types.REACTION, { msgId, emoji, action, userId: state.currentUser.userId });
         }
       }
     }

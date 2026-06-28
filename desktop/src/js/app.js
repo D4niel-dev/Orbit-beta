@@ -882,6 +882,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Offline check is created in applySettings() — not duplicated here
 
+    // Hide and remove the boot skeleton
+    var skel = document.getElementById('app-skeleton');
+    if (skel) {
+      skel.classList.add('sk-hidden');
+      setTimeout(function() { if (skel.parentNode) skel.parentNode.removeChild(skel); }, 300);
+    }
+    document.documentElement.classList.remove('sk-loading');
+
     console.log('Orbit Shell Ready.');
   }, 0);
   }

@@ -72,7 +72,7 @@ const Protocol = {
       senderId: fromId,
       to: toId,
       timestamp: new Date().toISOString(),
-      payload: payload
+      payload: payload || {}
     };
   },
 

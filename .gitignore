@@ -4,6 +4,7 @@ release/
 build/
 plans/
 .agent/
+.opencode/
 .env
 *.sqlite
 *.db

@@ -165,6 +165,14 @@ const migrations = [
       db.prepare('UPDATE groups SET accountOwnerId = ? WHERE accountOwnerId IS NULL').run(uid);
       db.prepare('UPDATE group_members SET accountOwnerId = ? WHERE accountOwnerId IS NULL').run(uid);
     }
+  },
+  // v12 - Add avatarDataUrl column to groups table
+  (db) => {
+    var cols;
+    try { cols = db.pragma('table_info(groups)'); } catch(e) { cols = []; }
+    if (!cols.some(function(c) { return c.name === 'avatarDataUrl'; })) {
+      try { db.exec("ALTER TABLE groups ADD COLUMN avatarDataUrl TEXT"); } catch(e) {}
+    }
   }
 ];
 

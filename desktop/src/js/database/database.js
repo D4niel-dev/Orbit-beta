@@ -195,7 +195,7 @@ class OrbitDatabase {
   }
 
   updateGroupField(groupId, field, value) {
-    var allowed = ['groupName', 'avatar', 'description', 'inviteCode', 'ownerId', 'pinned', 'notificationMuted', 'pinnedMessages'];
+    var allowed = ['groupName', 'avatar', 'avatarDataUrl', 'avatarPath', 'avatarUpdatedAt', 'description', 'inviteCode', 'ownerId', 'pinned', 'notificationMuted', 'pinnedMessages'];
     if (allowed.indexOf(field) === -1) throw new Error('Invalid field: ' + field);
     this.db.prepare(`UPDATE groups SET ${field} = ? WHERE groupId = ?`).run(value, groupId);
   }

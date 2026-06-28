@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v017-beta-latest-version">v0.1.7-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v018-beta-latest-version">v0.1.8-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@
 
 | Channel | Version | Status |
 |---------|---------|--------|
-| *Development* | v0.1.7-beta | Latest build (unstable) |
+| *Development* | v0.1.8-beta | Latest build (unstable) |
 | **Stable** | v0.1.1-beta | Stable release |
 | Previous **Stable** | v0.0.5-beta | Legacy stable release |
 
@@ -90,13 +90,12 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage desktop app** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
-## Highlights (v0.1.7-beta)
+## Highlights (v0.1.8-beta)
 
-- **fMP4 Video Playback Fixed:** PIPELINE_ERROR_DECODE root cause found and fixed — Content-Type serving in `main.js:contentTypeFromAtt()` now correctly serves video files. Videos play continuously without stalling at ~16s.
-- **Re-render Guard:** Store subscription blocks message re-renders during video playback (except chat switches). Prevents player destruction from `container.innerHTML` re-renders.
-- **Decode Error Retry:** On audio packet decode failure, source reloads and skips forward +2s past the corrupt packet (up to 3 attempts).
-- **Larger Media Players:** Video increased to 720×600, audio waveform canvas to 200px — both rendered outside the image grid as standalone blocks at full width.
-- **Fullscreen Theme Blend:** Letterbox background now uses `var(--bg-surface)` — matches active UI theme instead of hard black.
+- **Store Class Ported to Mobile:** Inline MStore (~350 lines) extracted into `mobile/src/js/store.js` (760 lines) — full Store class with backward-compatible property-based access (532+ references) plus desktop-style `getState()`/`setState()`/`subscribe()` for future convergence.
+- **Desktop Parity Features:** `subscribe()`/`notify()`, `blockUser()`/`unblockUser()`, `pinMessage()`/`unpinMessage()`, `markAsRead()`, `toggleMute()`, group management, E2EE peer key storage, transfer tracking.
+- **Bug Fixes:** `addMessage()` unread tracking fixed (was counting every message as unread), `mutedChats` property aliased to `settings.mutedChats` (mobile read path), `setState()` now handles `currentUser` key.
+- **CSP & Prism.js Fixes:** Desktop CSP updated for Prism.js (cdnjs.cloudflare.com); Prism moved to load before `app.js` on both platforms; `language-*` class added to `<pre>` elements for immediate syntax highlighting.
 
 ## Version History
 <details>
@@ -304,6 +303,14 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Silent Bug Fixes:** 7 fixes from service audit — sendFailed/connectFailed events, serverSocket volatile, PeerConnection map leak, executor shutdown, eventQueue clear, SO_REUSEADDR, Android 10+ joinGroup fix.
 </details>
 <details open>
+<summary>v0.1.8-beta</summary>
+
+- **Store Class Ported to Mobile:** Inline MStore (~350 lines) extracted into dedicated `store.js` (760 lines) — full Store class with backward-compatible property-based access (532+ references) plus desktop-style getState()/setState()/subscribe().
+- **Desktop Parity Features:** subscribe/notify, blockUser/unblockUser, pinMessage/unpinMessage, markAsRead, toggleMute, group management (addGroup/removeGroup/addMemberToGroup), DM management (closeDM/togglePinDM/reopenDM), E2EE key storage, transfer tracking, addOrUpdatePeer.
+- **Bug Fixes:** addMessage() unread tracking fixed (counted every message as unread — removed); mutedChats aliased to settings.mutedChats for mobile read path; setState() now handles currentUser key.
+- **CSP & Prism.js Fixes:** Desktop CSP updated for Prism.js (cdnjs.cloudflare.com); Prism loaded before app.js on both platforms; language-* class on pre elements for immediate syntax highlighting.
+</details>
+<details>
 <summary>v0.1.7-beta</summary>
 
 - **fMP4 Video Playback Fixed:** PIPELINE_ERROR_DECODE root cause fixed — Content-Type serving in main.js now correctly serves video files. Videos play continuously.
@@ -470,13 +477,17 @@ Transparency matters in beta. Current constraints include:
 
 ## Roadmap
 
-### Shipped (v0.1.6-beta)
+### Shipped (v0.1.8-beta)
 
+- **Store Class Ported to Mobile:** Inline MStore (~350 lines) extracted into dedicated `store.js` (760 lines) — full Store class with backward-compatible property-based access plus desktop-style getState()/setState()/subscribe() for future convergence.
+- **Desktop Parity Features:** subscribe/notify, blockUser/unblockUser, pinMessage/unpinMessage, markAsRead, toggleMute, group management, DM management, E2EE key storage, transfer tracking.
+- **Bug Fixes:** addMessage() unread tracking fixed (counted every message as unread); mutedChats aliased to settings.mutedChats; setState() now handles currentUser.
+- **CSP & Prism.js Fixes:** Desktop CSP updated for Prism.js; Prism loads before app.js on both platforms.
 - **Android Foreground Service (Background Execution):** P2P networking extracted into persistent Foreground Service with notification, WakeLock, START_STICKY. BootReceiver restarts on device boot. Service survives Activity/WebView destruction.
-- **P2P Connectivity Fixes:** Desktop auto-connect port fixed (was hardcoded 46000); reconnect now uses per-peer stored TCP port; mobile disconnect handler fixed (connectionId→friend lookup); mobile beacon handlers store tcpPort/connectionId/ip; mobile auto-reconnect uses peer's port.
-- **Message Editing & Reactions:** Desktop edit broadcast loop eliminated; mobile edits broadcast over P2P to DMs and groups; mobile reaction UI (6 emojis, toggle, P2P broadcast).
-- **OrbitForegroundService:** Full P2P engine (TCP server, UDP multicast, connection map, thread pool) as Android Service. Plugin proxies via Binder. Event queue drained every 100ms.
-- **Silent Bug Fixes:** 7 fixes from service audit — sendFailed/connectFailed events, serverSocket volatile, PeerConnection map leak, executor shutdown, eventQueue clear, SO_REUSEADDR, Android 10+ joinGroup fix.
+- **P2P Connectivity Fixes:** Desktop auto-connect port fixed; reconnect uses per-peer stored TCP port; mobile disconnect handler fixed; mobile beacon handlers store tcpPort/connectionId/ip.
+- **Message Editing & Reactions:** Desktop edit broadcast loop eliminated; mobile edits broadcast over P2P; mobile reaction UI (6 emojis, toggle, P2P broadcast).
+- **fMP4 Video Playback Fixed:** PIPELINE_ERROR_DECODE root cause fixed — videos play continuously without stalling.
+- **Larger Media Players:** Video 720×600, audio waveform 200px — standalone blocks at full width with theme-matched letterbox.
 
 ### In Progress / Planned
 

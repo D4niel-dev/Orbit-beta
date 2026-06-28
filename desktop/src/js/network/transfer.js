@@ -90,15 +90,19 @@ class TransferManager {
     const fileId = require('crypto').randomUUID();
     const totalChunks = Math.ceil(stats.size / this.CHUNK_SIZE);
 
-    this.socketManager.sendMessage(toPeerId, toIp, Protocol.Types.FILE_TRANSFER_START, {
-      fileId, fileName: basename, fileSize: stats.size, totalChunks, hash: fileHash
-    });
-
     const readStream = fs.createReadStream(filePath, { highWaterMark: this.CHUNK_SIZE });
+    const _sm = this.socketManager;
+
+    // Send START only after file read stream opens successfully (XFER-1)
+    readStream.on('open', function() {
+      _sm.sendMessage(toPeerId, toIp, Protocol.Types.FILE_TRANSFER_START, {
+        fileId, fileName: basename, fileSize: stats.size, totalChunks, hash: fileHash
+      });
+    });
 
     // Handle read stream errors
     readStream.on('error', (err) => {
-      this.socketManager.sendMessage(toPeerId, toIp, Protocol.Types.FILE_TRANSFER_CANCEL, { fileId, error: err.message });
+      _sm.sendMessage(toPeerId, toIp, Protocol.Types.FILE_TRANSFER_CANCEL, { fileId, error: err.message });
     });
 
     let chunkIndex = 0;
@@ -107,14 +111,14 @@ class TransferManager {
       if (this.cancelledSends.has(fileId)) {
         this.cancelledSends.delete(fileId);
         readStream.destroy();
-        this.socketManager.sendMessage(toPeerId, toIp, Protocol.Types.FILE_TRANSFER_CANCEL, { fileId });
+        _sm.sendMessage(toPeerId, toIp, Protocol.Types.FILE_TRANSFER_CANCEL, { fileId });
         throw new Error('Send cancelled');
       }
 
       const payload = { fileId, chunkIndex, data: chunk.toString('base64') };
       let sent = false;
       for (let retry = 0; retry < MAX_CHUNK_RETRIES; retry++) {
-        sent = this.socketManager.sendMessage(toPeerId, toIp, Protocol.Types.FILE_CHUNK, payload);
+        sent = _sm.sendMessage(toPeerId, toIp, Protocol.Types.FILE_CHUNK, payload);
         if (sent) break;
         await new Promise(r => setTimeout(r, Math.min(200 * Math.pow(2, retry), 5000)));
       }
@@ -132,7 +136,7 @@ class TransferManager {
       chunkIndex++;
     }
     
-    this.socketManager.sendMessage(toPeerId, toIp, Protocol.Types.FILE_TRANSFER_END, { fileId, hash: fileHash });
+    _sm.sendMessage(toPeerId, toIp, Protocol.Types.FILE_TRANSFER_END, { fileId, hash: fileHash });
     return fileId;
   }
 
@@ -199,22 +203,35 @@ class TransferManager {
     const payload = packet.payload;
     const transfer = this.activeReceives.get(payload.fileId);
     if (!transfer) return;
-    
-    transfer.stream.end();
-    const finalHash = transfer.sha256.digest('hex');
-    this.activeReceives.delete(payload.fileId);
-    
-    if (finalHash !== transfer.hash) {
-      if (onError) onError('Hash mismatch! Transfer corrupted.', payload.fileId);
-      if (fs.existsSync(transfer.tempPath)) fs.unlinkSync(transfer.tempPath);
-    } else {
-      if (onComplete) onComplete(transfer.tempPath, transfer.fileName, payload.fileId, transfer.fileSize);
+
+    // Validate that the sender matches the transfer owner (XFER-4)
+    if (packet.from && transfer.senderId && packet.from !== transfer.senderId) {
+      if (onError) onError('Received FILE_TRANSFER_END from non-owner', payload.fileId);
+      return;
+    }
+
+    try {
+      transfer.stream.end();
+      const finalHash = transfer.sha256.digest('hex');
+      this.activeReceives.delete(payload.fileId);
+
+      if (finalHash !== transfer.hash) {
+        if (onError) onError('Hash mismatch! Transfer corrupted.', payload.fileId);
+        if (fs.existsSync(transfer.tempPath)) fs.unlinkSync(transfer.tempPath);
+      } else {
+        if (onComplete) onComplete(transfer.tempPath, transfer.fileName, payload.fileId, transfer.fileSize);
+      }
+    } catch (err) {
+      this.activeReceives.delete(payload.fileId);
+      if (onError) onError('handleEnd error: ' + (err && err.message), payload.fileId);
     }
   }
 
   handleCancel(packet) {
     if (!packet || !packet.payload) return;
     const payload = packet.payload;
+    var transfer = this.activeReceives.get(payload.fileId);
+    if (transfer && packet.from && transfer.senderId && packet.from !== transfer.senderId) return;
     this.cancelReceive(payload.fileId);
   }
 }

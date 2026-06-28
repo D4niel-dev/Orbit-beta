@@ -1,6 +1,28 @@
 # Orbit Changelog
 
-## v0.1.7-beta **(Latest Version)**
+## v0.1.8-beta **(Latest Version)**
+
+> **Note:** This is not a stable release — latest development version with experimental features.
+
+### Store Class Ported to Mobile
+
+- **Dedicated Store Class Created:** Inline MStore (~350 lines) extracted into `mobile/src/js/store.js` (760 lines) — a full Store class with property-based access (`MStore.friends`, `MStore.settings.*`) for backward compatibility (532+ mobile references), plus desktop-style `getState()`/`setState()`/`subscribe()` for future cross-platform convergence.
+- **Desktop Parity Features:** `subscribe()`/`notify()`, `blockUser()`/`unblockUser()`, `pinMessage()`/`unpinMessage()`, `markAsRead()`, `toggleMute()`, `addGroup()`/`removeGroup()`/`addMemberToGroup()`, `closeDM()`/`togglePinDM()`/`reopenDM()`, E2EE peer key storage, transfer tracking, `addOrUpdatePeer()`.
+
+### Bug Fixes
+
+- **addMessage() Unread Tracking Fixed (HIGH):** Unread tracking block removed from `addMessage()` — mobile manages unreads via `chat.unread` on chat objects, not via Store's internal `unreadCounts`. Every message was previously counted as unread because `this.activeChatId` is never set by mobile (mobile uses local `var activeChatId`).
+- **mutedChats Property Misalignment Fixed (HIGH):** `this.mutedChats` now aliases `this.settings.mutedChats` (same object reference) — synced in constructor, `load()`, and `save()`. All mute/unmute operations update the same underlying object that mobile app reads via `MStore.settings.mutedChats`. Added `mutedChats: {}` to settings defaults.
+- **setState() currentUser Ignored Fixed (MEDIUM):** `setState()` now explicitly maps `newState.currentUser` to `this.user` — previously this key was silently dropped.
+
+### Technical
+
+- **Architecture:** MStore API fully backward-compatible — `window.MStore = new Store()` declared at end of `store.js`, loaded via `<script src="js/store.js">` before `app.js` in mobile `index.html`.
+- **CSP Updates:** Desktop `index.html` updated to allow `https://cdnjs.cloudflare.com` in both `script-src` and `style-src` for Prism.js syntax highlighting.
+- **Prism.js Loading Fixed:** Moved Prism JS to load before `app.js` on both desktop and mobile. Added `language-*` class to `<pre>` elements in all 3 copies of `sanitize.js` for immediate CSS theme matching.
+- **Version:** Bumped to v0.1.8-beta across all manifests, About tabs, and changelogs.
+
+## v0.1.7-beta
 
 > **Note:** This is not a stable release — latest development version with experimental features.
 

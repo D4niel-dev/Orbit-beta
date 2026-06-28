@@ -3,357 +3,6 @@
 
 console.log('[APP] app.js loaded at', new Date().toISOString());
 
-/* ---- Data Store ---- */
-var MStore = {
-  get(key, fallback) {
-    if (key.indexOf('msg_') === 0) {
-      try { var d = JSON.parse(localStorage.getItem('orbit_' + key)); return d !== null ? d : fallback; }
-      catch(e) { return fallback; }
-    }
-    try { var d = JSON.parse(localStorage.getItem('orbit_' + key)); return d !== null ? d : fallback; }
-    catch(e) { return fallback; }
-  },
-  set(key, val) { 
-    // Messages stored per-chat under orbit_msg_{chatId} — never combined
-    if (key === 'messages') {
-      for (var cid in val) {
-        if (val.hasOwnProperty(cid)) {
-          this.set('msg_' + cid, val[cid]);
-        }
-      }
-      try { localStorage.removeItem('orbit_messages'); } catch(_) {}
-      return;
-    }
-    if (key.indexOf('msg_') === 0) {
-      var chatId = key.substring(4);
-      try {
-        localStorage.setItem('orbit_' + key, JSON.stringify(val));
-      } catch(e) {
-        if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
-          console.error('Storage quota exceeded for messages of', chatId);
-          if (typeof showToast === 'function') {
-            showToast('Storage full! Old messages trimmed for this chat.', 'warning');
-          }
-          var limits = [30, 15, 5];
-          for (var li = 0; li < limits.length; li++) {
-            var trimmed = val.slice(-limits[li]);
-            try {
-              localStorage.setItem('orbit_' + key, JSON.stringify(trimmed));
-              if (this.messages) this.messages[chatId] = trimmed;
-              return;
-            } catch(e2) {}
-          }
-          console.error('Failed to save messages for', chatId);
-          try { localStorage.removeItem('orbit_' + key); } catch(_) {}
-          if (this.messages) delete this.messages[chatId];
-        }
-      }
-      return;
-    }
-    try {
-      localStorage.setItem('orbit_' + key, JSON.stringify(val)); 
-    } catch(e) {
-      if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
-        console.error('Storage quota exceeded for', key);
-        if (typeof showToast === 'function') {
-          showToast('Storage full! Clear some chat history or use smaller images.', 'error');
-        }
-      }
-    }
-  },
-
-  // Migrate old combined orbit_messages key to per-chat keys
-  _migrateOldMessages() {
-    try {
-      var old = JSON.parse(localStorage.getItem('orbit_messages'));
-      if (old && typeof old === 'object') {
-        console.log('[MStore] Migrating old combined messages to per-chat keys');
-        for (var cid in old) {
-          if (old.hasOwnProperty(cid) && old[cid]) {
-            this.set('msg_' + cid, old[cid]);
-          }
-        }
-        localStorage.removeItem('orbit_messages');
-      }
-    } catch(e) { console.warn('[MStore] migrateOldData failed', e); }
-  },
-
-  // Lazy-load messages for a chatId. Returns the cached array.
-  getMessages(chatId) {
-    if (!this.messages[chatId]) {
-      this.messages[chatId] = this.get('msg_' + chatId, []);
-    }
-    return this.messages[chatId];
-  },
-
-  // Compress large images before storing
-  compressImage(dataUrl, maxWidth, maxHeight, quality, callback) {
-    if (!dataUrl || !dataUrl.startsWith('data:image')) {
-      return callback(dataUrl);
-    }
-    var img = new Image();
-    img.onload = function() {
-      var canvas = document.createElement('canvas');
-      var w = img.width;
-      var h = img.height;
-      if (w > maxWidth || h > maxHeight) {
-        if (w / h > maxWidth / maxHeight) {
-          h = Math.round(h * maxWidth / w);
-          w = maxWidth;
-        } else {
-          w = Math.round(w * maxHeight / h);
-          h = maxHeight;
-        }
-      }
-      canvas.width = w;
-      canvas.height = h;
-      var ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, w, h);
-      callback(canvas.toDataURL('image/jpeg', quality));
-    };
-    img.onerror = function() {
-      callback(dataUrl);
-    };
-    img.src = dataUrl;
-  },
-  friends: [],
-  chats: [],
-  groups: [],
-  messages: {},
-  blockedUsers: [],
-  user: null,
-  settings: {
-    theme: 'dark',
-    enterToSend: true,
-    swipeToReply: true,
-    privacyMode: false,
-    e2eeEnabled: false,
-    timeFormat24: true,
-    messageBubbles: 'Modern',
-    showChatAvatars: true,
-    showImagePreviews: true,
-    showLinkPreviews: true,
-    bgPattern: 'None',
-    animations: true,
-    animSpeed: 'normal',
-    reduceMotion: false,
-    devMode: false,
-    debugDisplay: false,
-    showMessageIds: false,
-    logNetworkPackets: false,
-    showConnectionStats: false,
-    enableExperimental: false,
-    experimentalProfileFrames: false,
-    experimentalAnimatedAvatars: false,
-    experimentalMessageFx: false,
-    messageTranslate: true,
-    experimentalCompactSpacing: false,
-    enableCustomColors: false,
-    experimentalPerformanceMode: false,
-    notifyPreview: true,
-    notifySound: true,
-    notifyVolume: 80,
-    notifySoundType: 'chime',
-    notifyDnd: false,
-    notifyGroupMentions: false,
-    translateTargetLang: '',
-    autoDetectSource: true,
-    deleteAttachmentsAfter: 0,
-    networkMode: 'LAN Auto-Discovery',
-    udpPort: 45678,
-    tcpPort: 46000,
-    maxFileSize: 500,
-    fontSize: 'Medium',
-    messageAnim: 'slide',
-    netAutoReconnect: true,
-    netReconnectInterval: 10,
-    netTimeout: 30,
-    netKeepAlive: 30,
-    webrtcFallback: true,
-    logLevel: 'None',
-    netBandwidthLimit: 0,
-    experimentalFpsMonitor: false,
-    experimentalDevOverlay: false
-  },
-
-  load() {
-    this.friends = this.get('friends', []).map(function(f) { f.lastSeen = 0; f.status = 'offline'; return f; });
-    this.chats = this.get('chats', []);
-    this.groups = this.get('groups', []);
-    // Messages loaded per-chat on demand — no combined key
-    this.messages = {};
-    this._migrateOldMessages();
-    this.blockedUsers = this.get('blockedUsers', []);
-    this.settings = Object.assign(this.settings, this.get('settings', {}));
-    this.user = this.get('user', null);
-    this._migrateGroups(); // must be after user is loaded
-
-    // Generate default user identity if missing
-    if (!this.user) {
-      this.user = {
-        id: 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-        name: 'User',
-        tag: Math.floor(1000 + Math.random() * 9000).toString(),
-        status: 'online',
-        avatar: null,
-        banner: null,
-        bio: '',
-        publicKey: null
-      };
-      this.save();
-    }
-
-    // Ensure default profile frame setting
-    if (this.settings.profileFrame === undefined) this.settings.profileFrame = 0;
-
-    // Ensure echo bot exists and update avatar
-    var echoFriend = this.friends.find(function(f) { return f.id === 'echo'; });
-    if (!echoFriend) {
-      this.friends.unshift({
-        id: 'echo',
-        name: 'Orbit Echo',
-        tag: 'BOT',
-        status: 'online',
-        avatar: 'icons/app/orbit_1024.png',
-        bio: 'Local echo channel for testing'
-      });
-    } else {
-      echoFriend.avatar = 'icons/app/orbit_1024.png';
-      echoFriend.status = 'online';
-    }
-    // Ensure echo chat exists and update avatar
-    var echoChat = this.chats.find(function(c) { return c.id === 'echo'; });
-    if (!echoChat) {
-      this.chats.unshift({
-        id: 'echo',
-        name: 'Orbit Echo',
-        avatar: 'icons/app/orbit_1024.png',
-        lastMessage: '',
-        lastTime: '',
-        unread: 0
-      });
-    } else {
-      echoChat.avatar = 'icons/app/orbit_1024.png';
-    }
-    // Add default messages for echo
-    if (this.getMessages('echo').length === 0) {
-      this.messages['echo'] = [
-        { id: 'e1', from: 'echo', text: "Hi! I'm Orbit Echo! You can call me Bit if you want.", time: new Date().toISOString() },
-        { id: 'e2', from: 'echo', text: "You can send messages in here and i'll echo it back at you! (except for images, files, folders and sounds files)", time: new Date().toISOString() },
-        { id: 'e3', from: 'echo', text: 'THIS MESSAGE WILL SELF-DESTRUCT AFTER 5s', time: new Date().toISOString() },
-        { id: 'e4', from: 'echo', text: 'Just kidding..', time: new Date().toISOString() }
-      ];
-      this._saveMsgs('echo');
-    }
-    this.save();
-  },
-
-  save() {
-    this.set('friends', this.friends);
-    this.set('chats', this.chats);
-    this.set('groups', this.groups);
-    this.set('blockedUsers', this.blockedUsers);
-    this.set('settings', this.settings);
-    this.set('user', this.user);
-  },
-
-  _saveMsgs(chatId) {
-    if (this.messages[chatId]) {
-      this.set('msg_' + chatId, this.messages[chatId]);
-    }
-  },
-
-  _migrateGroups() {
-    var changed = false;
-    var self = this;
-    this.groups.forEach(function(g) {
-      if (!g.ownerId) { g.ownerId = (self.user ? self.user.id : ''); changed = true; }
-      if (g.description === undefined) { g.description = ''; changed = true; }
-      if (!g.inviteCode) {
-        var arr = new Uint8Array(4);
-        if (window.crypto) window.crypto.getRandomValues(arr);
-        g.inviteCode = Array.from(arr, function(b) { return b.toString(16).padStart(2, '0'); }).join('');
-        changed = true;
-      }
-      if (g.pinned === undefined) { g.pinned = false; changed = true; }
-      if (g.notificationMuted === undefined) { g.notificationMuted = false; changed = true; }
-      if (g.pinnedMessages === undefined) { g.pinnedMessages = []; changed = true; }
-      // Upgrade members from string[] to object[] with roles
-      if (g.members && g.members.length > 0 && typeof g.members[0] === 'string') {
-        g.members = g.members.map(function(id) {
-          return { userId: id, role: 'member', joinedAt: g.createdAt || new Date().toISOString() };
-        });
-        // Ensure owner has owner role
-        var ownerEntry = g.members.find(function(m) { return m.userId === g.ownerId; });
-        if (ownerEntry) ownerEntry.role = 'owner';
-        changed = true;
-      }
-    });
-    if (changed) { console.log('[Orbit] Migrated ' + this.groups.length + ' group(s) — added missing fields'); this.save(); }
-  },
-
-  getChats() {
-    var self = this;
-    return this.chats.map(function(c) {
-      var msgs = self.getMessages(c.id);
-      var last = msgs.length > 0 ? msgs[msgs.length - 1] : null;
-      var friend = self.friends.find(function(f) { return f.id === c.id; });
-      return {
-        id: c.id,
-        name: c.name,
-        avatar: c.avatar || (friend ? friend.avatar : null),
-        status: friend ? friend.status : null,
-        lastMessage: last ? last.text : '',
-        lastTime: last ? last.time : '',
-        unread: c.unread || 0
-      };
-    });
-  },
-
-  addMessage(chatId, msg) {
-    if (!this.messages[chatId]) this.messages[chatId] = [];
-    this.messages[chatId].push(msg);
-    var chat = this.chats.find(function(c) { return c.id === chatId; });
-    if (chat) {
-      chat.lastMessage = msg.text;
-      chat.lastTime = msg.time;
-    }
-    this._saveMsgs(chatId);
-    this.set('chats', this.chats);
-  },
-
-  sendMessage(chatId, text) {
-    var msg = {
-      id: 'm' + Date.now() + Math.random().toString(36).slice(2, 6),
-      from: 'me',
-      text: text,
-      time: new Date().toISOString()
-    };
-    this.addMessage(chatId, msg);
-    return msg;
-  },
-
-  editMessage(chatId, msgId, newText) {
-    var msgs = this.messages[chatId];
-    if (!msgs) return;
-    for (var i = 0; i < msgs.length; i++) {
-      if (String(msgs[i].id) === String(msgId)) {
-        msgs[i].text = newText;
-        msgs[i].edited = true;
-        break;
-      }
-    }
-    this._saveMsgs(chatId);
-  },
-
-  deleteMessage(chatId, msgId) {
-    var msgs = this.messages[chatId];
-    if (!msgs) return;
-    this.messages[chatId] = msgs.filter(function(m) { return String(m.id) !== String(msgId); });
-    this._saveMsgs(chatId);
-  }
-};
-
 /* ---- Message Action State ---- */
 var editingMsg = null;
 var replyingTo = null;
@@ -789,9 +438,15 @@ document.addEventListener('DOMContentLoaded', function() {
       bar.style.background = 'var(--bg-hover)';
       bar.style.border = '1px solid var(--border-subtle)';
       var rText = (replyingTo.text || '').substring(0, 80);
+      var rFallback = '';
+      if (!rText && replyingTo.attachments && replyingTo.attachments.length > 0) {
+        rFallback = '(' + replyingTo.attachments[0].name + ')';
+      } else if (!rText) {
+        rFallback = '(Attachment)';
+      }
       bar.innerHTML =
         '<i data-lucide="reply" style="width:14px;height:14px;flex-shrink:0;"></i>' +
-        '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Replying to <b>' + escapeHtml(replyingTo.senderName || 'message') + '</b>: ' + escapeHtml(rText) + '</span>' +
+        '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Replying to <b>' + escapeHtml(replyingTo.senderName || 'message') + '</b>: ' + escapeHtml(rText || rFallback) + '</span>' +
         '<button id="btn-cancel-edit-reply" style="background:none;border:none;cursor:pointer;color:var(--text-muted);padding:2px;font-size:16px;">&times;</button>';
       renderLucide({ root: bar });
     } else {
@@ -812,7 +467,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var friend = MStore.friends.find(function(f) { return f.id === msg.from; });
       senderName = friend ? friend.name : msg.from;
     }
-    replyingTo = { id: msg.id, text: msg.text, senderName: senderName };
+    replyingTo = { id: msg.id, text: msg.text, senderName: senderName, attachments: msg.attachments || msg.fileAttachments || null };
     editingMsg = null;
     updateReplyEditBar();
     var inp = document.getElementById('chat-input');
@@ -879,7 +534,7 @@ document.addEventListener('DOMContentLoaded', function() {
           if (mid !== myId) {
             var pkt = Orbit.Protocol.createPacket(
               Orbit.Protocol.Types.REACTION,
-              { msgId: msgId, emoji: emoji, action: action, userId: myId, chatId: chatId },
+              { msgId: msgId, emoji: emoji, action: action, userId: myId, groupId: chatId },
               myId
             );
             Orbit.P2P.send(mid, pkt);
@@ -887,9 +542,10 @@ document.addEventListener('DOMContentLoaded', function() {
         });
       }
     } else {
+      // DM reaction: NO chatId in payload (would overwrite receiver's chat lookup)
       var pkt = Orbit.Protocol.createPacket(
         Orbit.Protocol.Types.REACTION,
-        { msgId: msgId, emoji: emoji, action: action, userId: myId, chatId: chatId },
+        { msgId: msgId, emoji: emoji, action: action, userId: myId },
         myId
       );
       Orbit.P2P.send(chatId, pkt);
@@ -1160,6 +816,19 @@ document.addEventListener('DOMContentLoaded', function() {
   function renderMessages(chatId) {
     var feed = document.getElementById('message-feed');
     var msgs = MStore.getMessages(chatId);
+    // Convert stale data: URLs to blob URLs (once per session, cached)
+    window._dataUrlCache = window._dataUrlCache || {};
+    for (var mi = 0; mi < msgs.length; mi++) {
+      var atts = msgs[mi].attachments;
+      if (atts) {
+        for (var aj = 0; aj < atts.length; aj++) {
+          if (atts[aj].url && atts[aj].url.indexOf('data:') === 0) {
+            if (!window._dataUrlCache[atts[aj].url]) window._dataUrlCache[atts[aj].url] = _dataUrlToBlobUrl(atts[aj].url);
+            atts[aj].url = window._dataUrlCache[atts[aj].url];
+          }
+        }
+      }
+    }
     if (chatSearchFilter) {
       var cl = chatSearchFilter.toLowerCase();
       msgs = msgs.filter(function(m) { return (m.text || '').toLowerCase().indexOf(cl) !== -1; });
@@ -1204,6 +873,11 @@ document.addEventListener('DOMContentLoaded', function() {
         var origMsg = msgs.find(function(o) { return o.id === m.replyTo; });
         if (origMsg) {
           var rpText = (origMsg.text || '').substring(0, 60) + ((origMsg.text || '').length > 60 ? '...' : '');
+          if (!rpText && origMsg.attachments && origMsg.attachments.length > 0) {
+            rpText = '(' + origMsg.attachments[0].name + ')';
+          } else if (!rpText) {
+            rpText = '(Attachment)';
+          }
           var rpUser = origMsg.from === 'me' ? 'You' : 'Unknown';
           if (origMsg.from !== 'me') {
             var rpFriend = MStore.friends.find(function(f) { return f.id === origMsg.from; });
@@ -1263,7 +937,7 @@ document.addEventListener('DOMContentLoaded', function() {
             '</div>';
           }
         });
-        var gridSection = gridHtml ? '<div class="att-grid">' + gridHtml + '</div>' : '';
+        var gridSection = gridHtml ? '<div class="att-grid" data-count="' + (m.attachments.filter(function(x){return x.type!=='video'&&x.type!=='audio';}).length) + '">' + gridHtml + '</div>' : '';
         attachmentsHtml = (gridSection ? gridSection + '<div style="height:6px;"></div>' : '') + largeHtml;
       }
       // Link Preview detection (mobile — basic card without OG fetch)
@@ -1307,7 +981,7 @@ document.addEventListener('DOMContentLoaded', function() {
           actionsHtml +
           senderLabel +
           replyHtml +
-          '<div>' + linkifyText(m.text) + editedBadge + '</div>' +
+          '<div class="msg-text-mob">' + (window.Sanitize ? window.Sanitize.markdown(m.text) : escapeHtml(m.text)) + editedBadge + '</div>' +
           attachmentsHtml +
           linkPreviewHtml +
           reactionsHtml +
@@ -1322,24 +996,18 @@ document.addEventListener('DOMContentLoaded', function() {
     if (window.OrbitVideoPlayer && typeof OrbitVideoPlayer.isAnyPlaying === 'function' && OrbitVideoPlayer.isAnyPlaying() && typeof OrbitVideoPlayer.savePlaying === 'function') _savedVideo = OrbitVideoPlayer.savePlaying();
     feed.setAttribute('data-refreshing', 'true');
     feed.innerHTML = html;
+    if (window.Prism) setTimeout(function() { Prism.highlightAll(); }, 0);
     freezeGifImages(feed);
     if (window.OrbitAudioPlayer) OrbitAudioPlayer.init(feed);
     if (window.OrbitVideoPlayer) OrbitVideoPlayer.init(feed);
     if (_savedAudio && typeof OrbitAudioPlayer.restorePlaying === 'function') OrbitAudioPlayer.restorePlaying(_savedAudio);
     if (_savedVideo && typeof OrbitVideoPlayer.restorePlaying === 'function') OrbitVideoPlayer.restorePlaying(_savedVideo);
-    // Fallback: convert raw video data URLs in case any <video> tags bypass the player
-    feed.querySelectorAll('video[src^="data:"]').forEach(function(v) {
-      var url = v.getAttribute('src');
+    // Fallback: convert raw video/audio data URLs in case any elements bypass the player
+    feed.querySelectorAll('video[src^="data:"], audio[src^="data:"]').forEach(function(el) {
       try {
-        var m = url.match(/^data:(video\/\w+|application\/octet-stream);base64,(.+)$/);
-        if (m) {
-          var raw = atob(m[2]);
-          var buf = new ArrayBuffer(raw.length);
-          var bytes = new Uint8Array(buf);
-          for (var bi = 0; bi < raw.length; bi++) bytes[bi] = raw.charCodeAt(bi);
-          v.src = URL.createObjectURL(new Blob([buf], { type: m[1] }));
-        }
-      } catch(e) { console.warn('[Messages] video data URL fallback failed', e); }
+        var newUrl = _dataUrlToBlobUrl(el.getAttribute('src'));
+        if (newUrl && newUrl.indexOf('blob:') === 0) el.src = newUrl;
+      } catch(e) { console.warn('[Messages] data URL fallback failed', e); }
     });
     requestAnimationFrame(function() { feed.removeAttribute('data-refreshing'); });
     // Bind action buttons
@@ -1704,6 +1372,7 @@ document.addEventListener('DOMContentLoaded', function() {
       renderMessages(activeChatId);
       renderChatList();
       input.value = '';
+      input.style.height = 'auto';
       return;
     }
 
@@ -1750,6 +1419,7 @@ document.addEventListener('DOMContentLoaded', function() {
     renderMessages(activeChatId);
     renderChatList();
     input.value = '';
+    input.style.height = 'auto';
     replyingTo = null;
     updateReplyEditBar();
 
@@ -2765,7 +2435,24 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button id="changelog-close-mobile" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;font-size:20px;">✕</button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
-        vBlock('0.1.7-beta', 'Latest', [
+        vBlock('0.1.8-beta', 'Latest', [
+          ['Store Class Ported to Mobile', [
+            'Dedicated Store class created: Inline MStore (~350 lines) extracted into store.js (760 lines) — full class with property-based access (MStore.friends, MStore.settings.*) for backward compatibility plus getState()/setState()/subscribe() for convergence.',
+            'Desktop parity features added: subscribe/notify, blockUser/unblockUser, pinMessage/unpinMessage, markAsRead, toggleMute, group management (addGroup/removeGroup/addMemberToGroup), DM management (closeDM/togglePinDM/reopenDM), E2EE key storage, transfer tracking, addOrUpdatePeer.'
+          ]],
+          ['Bug Fixes', [
+            'addMessage() unread tracking fixed (HIGH): Removed — mobile manages unreads via chat.unread. Every message was previously counted as unread.',
+            'mutedChats misalignment fixed (HIGH): Now aliases settings.mutedChats — all mute/unmute ops update same object mobile reads via MStore.settings.mutedChats.',
+            'setState() currentUser fixed (MEDIUM): now maps to this.user — previously silently dropped.'
+          ]],
+          ['Technical', [
+            'MStore API fully backward-compatible — 532+ references preserved.',
+            'Desktop CSP updated for Prism.js (cdnjs.cloudflare.com).',
+            'Prism.js loading fixed: loads before app.js on both platforms.',
+            'Version bumped to v0.1.8-beta.'
+          ]]
+        ]) +
+        vBlock('0.1.7-beta', '', [
           ['Video Playback Fixes', [
             'PIPELINE_ERROR_DECODE Root Cause Fixed: Audio packet decode errors in fMP4 files resolved via Content-Type fix in main.js. Videos play continuously.',
             'Re-render Guard: Store subscription blocks re-renders while video plays (except chat switches). Handles notify() without changedState.',
@@ -3420,7 +3107,7 @@ document.addEventListener('DOMContentLoaded', function() {
       '</div>' +
       (friend.bio ? '<div style="padding:0 16px 12px;">' +
         '<div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">About Me</div>' +
-        '<div style="font-size:14px;color:var(--text-secondary);line-height:1.4;">' + escapeHtml(friend.bio) + '</div>' +
+        '<div style="font-size:14px;color:var(--text-secondary);line-height:1.4;">' + (window.Sanitize ? window.Sanitize.markdown(friend.bio) : escapeHtml(friend.bio)) + '</div>' +
       '</div>' : '') +
       '<div style="padding:0 16px 12px;">' +
         '<div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Mutual</div>' +
@@ -4098,6 +3785,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function showToast(msg, type) {
     var container = document.getElementById('toast-container');
+    if (!container) { console.warn('[Orbit] toast-container missing'); return; }
     var el = document.createElement('div');
     el.className = 'toast-mobile' + (type && type !== 'info' ? ' toast-' + type : '');
 
@@ -4186,6 +3874,18 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
+  function _dataUrlToBlobUrl(dataUrl) {
+    try {
+      var m = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (m) {
+        var raw = atob(m[2]), buf = new ArrayBuffer(raw.length), bytes = new Uint8Array(buf);
+        for (var bi = 0; bi < raw.length; bi++) bytes[bi] = raw.charCodeAt(bi);
+        return URL.createObjectURL(new Blob([buf], { type: m[1] }));
+      }
+    } catch(e) { console.warn('[Orbit] data:→blob failed', e.message); }
+    return dataUrl;
+  }
+
   function escapeHtml(str) {
     if (!str) return '';
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -4228,6 +3928,12 @@ document.addEventListener('DOMContentLoaded', function() {
       e.preventDefault();
       sendMessage();
     }
+  });
+
+  // Auto-resize textarea as content grows
+  document.getElementById('chat-input').addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 150) + 'px';
   });
 
   // Search inputs
@@ -5373,7 +5079,8 @@ document.addEventListener('DOMContentLoaded', function() {
       var udpPort = MStore.settings.udpPort || 45678;
       debugLog('P2P', 'Starting LAN discovery on UDP port ' + udpPort);
       Orbit.P2P.startDiscovery(beacon, udpPort).then(function(r) {
-        debugLog('P2P', 'Discovery start result', r);
+        if (r && !r.success) debugLog('P2P', 'Discovery start failed: ' + (r.error || 'unknown'));
+        else debugLog('P2P', 'Discovery started');
       });
     } else {
       debugLog('P2P', 'Custom IP mode — UDP discovery skipped');
@@ -5381,7 +5088,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Start P2P heartbeat (sends PING at netKeepAlive interval)
     if (window._heartbeatInterval) clearInterval(window._heartbeatInterval);
-    window._heartbeatPingCount = window._heartbeatPingCount || {};
+    window._heartbeatPingCount = {};
     var keepAliveSec = Math.max(10, (MStore.settings.netKeepAlive || 30));
     window._heartbeatInterval = setInterval(function() {
       if (!window.Orbit || !Orbit.P2P) return;
@@ -5399,8 +5106,23 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     }, keepAliveSec * 1000);
 
+    // Reap stale activeTransfers every 30s (CROSS-4)
+    if (window._transferReapInterval) clearInterval(window._transferReapInterval);
+    window._transferReapInterval = setInterval(function() {
+      if (!window.activeTransfers) return;
+      var now = Date.now();
+      Object.keys(window.activeTransfers).forEach(function(fileId) {
+        var tx = window.activeTransfers[fileId];
+        if (tx._startTime && now - tx._startTime > 120000) {
+          console.warn('[P2P] Reaping stalled transfer:', fileId, tx.fileName);
+          delete window.activeTransfers[fileId];
+        }
+      });
+    }, 30000);
+
     // Listen for incoming connections — send identity beacon over TCP
     Orbit.P2P.onConnection(function(data) {
+      if (!data || !data.connectionId) { debugLog('P2P', 'onConnection: invalid data'); return; }
       debugLog('P2P', 'Incoming connection', { connectionId: data.connectionId, host: data.host });
       var cur = MStore.user;
       if (cur && data.connectionId) {
@@ -5424,7 +5146,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Listen for messages
-    Orbit.P2P.onMessage(function(data) {
+    Orbit.P2P.onMessage(function(data) { try {
       if (!data || !data.data) {
         debugLog('P2P', 'onMessage received empty data');
         return;
@@ -5472,9 +5194,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if (oldChatId !== peerId) {
               if (MStore.messages[oldChatId] && MStore.messages[oldChatId].length) {
                 var existingMsgs = MStore.getMessages(peerId);
-                var mergedMsgs = MStore.messages[oldChatId].map(function(m) {
-                  if (m.from === oldChatId) m.from = peerId;
-                  return m;
+                var mergedMsgs = (MStore.messages[oldChatId] || []).map(function(m) {
+                  var clone = JSON.parse(JSON.stringify(m));
+                  if (clone.from === oldChatId) clone.from = peerId;
+                  return clone;
                 });
                 MStore.messages[peerId] = existingMsgs.concat(mergedMsgs);
                 MStore._saveMsgs(peerId);
@@ -5543,6 +5266,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
 
       var msgFrom = packet.from || packet.senderId || data.connectionId;
+      if (!msgFrom) { debugLog('P2P', 'Cannot determine sender — dropping'); return; }
 
       // Blocked user check
       if (MStore.blockedUsers && MStore.blockedUsers.indexOf(msgFrom) !== -1) {
@@ -5554,7 +5278,9 @@ document.addEventListener('DOMContentLoaded', function() {
       // Group messages carry the group ID in payload
       if (packet.payload && packet.payload.groupId) {
         chatId = packet.payload.groupId;
-      } else if (packet.payload && packet.payload.chatId) {
+      } else if (packet.payload && packet.payload.chatId && packet.type !== Orbit.Protocol.Types.REACTION) {
+        // REACTION packets must NOT use payload.chatId — it's the sender's activeChatId,
+        // which would be the receiver's own userId for DM, causing chat lookup to fail
         chatId = packet.payload.chatId;
       }
 
@@ -5567,9 +5293,30 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       }
 
+      // Global payload null guard (MSG-1)
+      if (!packet.payload) {
+        debugLog('P2P', 'Packet missing payload — dropping');
+        return;
+      }
+
       if (packet.type === Orbit.Protocol.Types.MESSAGE) {
         var msgText = packet.payload.text || '';
-        var msgAttachments = packet.payload.attachments || undefined;
+        var msgAttachmentsRaw = packet.payload.attachments || undefined;
+        // Convert inline data: URLs to blob: URLs before storing
+        if (msgAttachmentsRaw) {
+          for (var ai = 0; ai < msgAttachmentsRaw.length; ai++) {
+            var aa = msgAttachmentsRaw[ai];
+            if (aa.url && aa.url.indexOf('data:') === 0) {
+              var blobUrl = _dataUrlToBlobUrl(aa.url);
+              if (blobUrl !== aa.url) {
+                window._orbitFileCache = window._orbitFileCache || {};
+                window._orbitFileCache[aa.id || blobUrl] = aa.url;
+                aa.url = blobUrl;
+              }
+            }
+          }
+        }
+        var msgAttachments = msgAttachmentsRaw;
         var msgReplyTo = packet.payload.replyTo || undefined;
 
         var senderName = packet.payload.fromName || (function() { var sf = MStore.friends.find(function(f) { return f.id === msgFrom; }); return sf ? sf.name : null; })();
@@ -5618,51 +5365,64 @@ document.addEventListener('DOMContentLoaded', function() {
       // Handle typing indicators
       if (packet.type === Orbit.Protocol.Types.TYPING) {
         console.log('[P2P] Typing:', msgFrom, packet.payload && packet.payload.isTyping ? 'started' : 'stopped');
+        return;
       }
 
       // Handle reactions
       if (packet.type === Orbit.Protocol.Types.REACTION) {
         var rPayload = packet.payload;
-        if (rPayload && rPayload.msgId) {
-          var msgs = MStore.getMessages(chatId);
-          var msgIdx = msgs.findIndex(function(m) { return String(m.id) === String(rPayload.msgId); });
-          if (msgIdx >= 0) {
-            var msg = msgs[msgIdx];
-            var reactions = msg.reactions ? msg.reactions.slice() : [];
-            var existingIdx = reactions.findIndex(function(r) { return r.emoji === rPayload.emoji && r.userId === rPayload.userId; });
-            if (rPayload.action === 'add' && existingIdx < 0) {
-              reactions.push({ emoji: rPayload.emoji, userId: rPayload.userId });
-            } else if (rPayload.action === 'remove' && existingIdx >= 0) {
-              reactions.splice(existingIdx, 1);
+        if (rPayload && rPayload.msgId && rPayload.emoji && rPayload.userId) {
+          if (rPayload.action !== 'add' && rPayload.action !== 'remove') return;
+          // Defensive: recompute chatId — never trust payload.chatId for REACTION
+          // (legacy clients may include it, overwriting the correct msgFrom-based chatId)
+          var reactChatId = rPayload.groupId || msgFrom;
+          var reactMsgs = MStore.getMessages(reactChatId);
+          var reactMsgIdx = reactMsgs.findIndex(function(m) { return String(m.id) === String(rPayload.msgId); });
+          if (reactMsgIdx >= 0) {
+            var reactMsg = reactMsgs[reactMsgIdx];
+            var reactReactions = reactMsg.reactions ? reactMsg.reactions.slice() : [];
+            var reactExistingIdx = reactReactions.findIndex(function(r) { return r.emoji === rPayload.emoji && r.userId === rPayload.userId; });
+            if (rPayload.action === 'add' && reactExistingIdx < 0) {
+              reactReactions.push({ emoji: rPayload.emoji, userId: rPayload.userId });
+            } else if (rPayload.action === 'remove' && reactExistingIdx >= 0) {
+              reactReactions.splice(reactExistingIdx, 1);
             }
-            msgs[msgIdx].reactions = reactions;
-            MStore.messages[chatId] = msgs;
-            MStore._saveMsgs(chatId);
-            if (activeChatId === chatId) renderMessages(activeChatId);
+            reactMsgs[reactMsgIdx].reactions = reactReactions;
+            MStore.messages[reactChatId] = reactMsgs;
+            MStore._saveMsgs(reactChatId);
+            if (activeChatId === reactChatId) renderMessages(activeChatId);
           }
         }
       }
 
       // File transfers (Receive from Desktop)
       if (packet.type === Orbit.Protocol.Types.FILE_TRANSFER_START) {
+        if (!packet.payload || !packet.payload.fileId) return;
+        var totalChunks = Math.min(packet.payload.totalChunks || 0, 5000);
+        if (totalChunks <= 0) return;
         window.activeTransfers = window.activeTransfers || {};
         window.activeTransfers[packet.payload.fileId] = {
-          chunks: new Array(packet.payload.totalChunks),
-          fileName: packet.payload.fileName,
-          total: packet.payload.totalChunks,
+          chunks: new Array(totalChunks),
+          fileName: packet.payload.fileName || 'unknown',
+          total: totalChunks,
           received: 0,
-          senderId: msgFrom
+          senderId: msgFrom,
+          _startTime: Date.now()
         };
-        debugLog('P2P', 'Started receiving file ' + packet.payload.fileName);
+        debugLog('P2P', 'Started receiving file ' + (packet.payload.fileName || '?'));
         return;
       }
       
       if (packet.type === Orbit.Protocol.Types.FILE_CHUNK) {
+        if (!packet.payload || !packet.payload.fileId) return;
         window.activeTransfers = window.activeTransfers || {};
         var tx = window.activeTransfers[packet.payload.fileId];
         if (tx) {
-          tx.chunks[packet.payload.chunkIndex] = packet.payload.data;
-          tx.received++;
+          var chunkIdx = parseInt(packet.payload.chunkIndex, 10);
+          if (!isNaN(chunkIdx) && chunkIdx >= 0 && chunkIdx < tx.chunks.length) {
+            tx.chunks[chunkIdx] = packet.payload.data;
+            tx.received++;
+          }
           var bwLimit = MStore.settings.netBandwidthLimit || 0;
           if (bwLimit > 0 && tx.received < tx.total) {
             tx._lastChunkTime = tx._lastChunkTime || 0;
@@ -5680,9 +5440,20 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       
       if (packet.type === Orbit.Protocol.Types.FILE_TRANSFER_END) {
+        if (!packet.payload || !packet.payload.fileId) return;
         window.activeTransfers = window.activeTransfers || {};
         var txEnd = window.activeTransfers[packet.payload.fileId];
         if (txEnd) {
+          // Validate all chunks received before assembly (MSG-8)
+          var allReceived = true;
+          for (var ci = 0; ci < txEnd.chunks.length; ci++) {
+            if (txEnd.chunks[ci] === undefined) { allReceived = false; break; }
+          }
+          if (!allReceived) {
+            console.warn('[P2P] File transfer incomplete — missing chunks for', txEnd.fileName);
+            delete window.activeTransfers[packet.payload.fileId];
+            return;
+          }
           var base64Data = txEnd.chunks.join('');
           var extMatch = txEnd.fileName.match(/\.(png|jpe?g|gif|webp)$/i);
           var audioMatch = txEnd.fileName.match(/\.(mp3|wav|ogg|flac|aac|m4a|wma|webm)$/i);
@@ -5704,7 +5475,16 @@ document.addEventListener('DOMContentLoaded', function() {
             isVideo = true;
           }
           
-          var fileDataUrl = 'data:' + mimeType + ';base64,' + base64Data;
+          // Build blob URL directly from base64 (avoids 32MB data: URL string)
+          var attUrl = (function(base64, mime) {
+            try {
+              var raw = atob(base64), buf = new ArrayBuffer(raw.length), bytes = new Uint8Array(buf);
+              for (var bi = 0; bi < raw.length; bi++) bytes[bi] = raw.charCodeAt(bi);
+              return URL.createObjectURL(new Blob([buf], { type: mime }));
+            } catch(e) { console.warn('[P2P] blob from file failed', e.message); return ''; }
+          })(base64Data, mimeType);
+          window._orbitFileCache = window._orbitFileCache || {};
+          window._orbitFileCache[packet.payload.fileId] = base64Data;
           
           MStore.addMessage(chatId, {
             id: 'p2p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
@@ -5715,7 +5495,8 @@ document.addEventListener('DOMContentLoaded', function() {
               id: packet.payload.fileId,
               name: txEnd.fileName,
               type: isImage ? 'image' : (isAudio ? 'audio' : (isVideo ? 'video' : 'file')),
-              url: fileDataUrl
+              url: attUrl,
+              _fileId: packet.payload.fileId
             }]
           });
           
@@ -5971,20 +5752,26 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         return;
       }
+    } catch(e) { console.error('[P2P] onMessage crash:', e); if (typeof showToast === 'function') showToast('P2P crash:'+_errLoc(e)+' '+e.message,'error'); }
     });
 
     // Listen for connection failures (clean up phantom connections)
     Orbit.P2P.onConnectFailed(function(data) {
+      if (!data) return;
       debugLog('P2P', 'Connection failed', { connectionId: data.connectionId, host: data.host, error: data.error });
     });
     Orbit.P2P.onSendFailed(function(data) {
+      if (!data) return;
       debugLog('P2P', 'Send failed', { connectionId: data.connectionId, error: data.error });
     });
 
     // Listen for disconnections
     Orbit.P2P.onDisconnect(function(data) {
+      if (!data) return;
       debugLog('P2P', 'Disconnected', { connectionId: data.connectionId });
-      showConnectionStatus('disconnected', 'Disconnected');
+      // Only show disconnected if no other connections remain (DISC-3)
+      var remainingConns = Orbit.P2P.getConnections ? Orbit.P2P.getConnections() : [];
+      if (remainingConns.length === 0) showConnectionStatus('disconnected', 'Disconnected');
       var friend = MStore.friends.find(function(f) { return f.connectionId === data.connectionId; });
       if (!friend && data.connectionId) {
         var discIp = data.connectionId.split(':')[0];
@@ -6000,14 +5787,16 @@ document.addEventListener('DOMContentLoaded', function() {
         if (MStore.settings.netAutoReconnect !== false && friend.ip) {
           debugLog('P2P', 'Auto-reconnect scheduled in 5s for ' + friend.name);
           var reconnectDelay = (MStore.settings.netReconnectInterval || 10) * 1000;
+          var _savedId = friend.id, _savedIp = friend.ip, _savedTcpPort = friend.tcpPort || MStore.settings.tcpPort || 46000, _savedName = friend.name;
           setTimeout(function() {
-            if (friend.status === 'offline') {
-              var tcpPort = friend.tcpPort || MStore.settings.tcpPort || 46000;
-              debugLog('P2P', 'Auto-reconnecting to ' + friend.name + ' at ' + friend.ip + ':' + tcpPort + ' (delay=' + (reconnectDelay / 1000) + 's)');
+            var curFriend = MStore.friends.find(function(f) { return f.id === _savedId; });
+            if (curFriend && curFriend.status === 'offline') {
+              var tcpPort2 = _savedTcpPort;
+              debugLog('P2P', 'Auto-reconnecting to ' + _savedName + ' at ' + _savedIp + ':' + tcpPort2 + ' (delay=' + (reconnectDelay / 1000) + 's)');
               var timeoutMs = (MStore.settings.netTimeout || 30) * 1000;
-              Orbit.P2P.connect(friend.ip, tcpPort, friend.id, timeoutMs).then(function(r) {
-                if (r.success) debugLog('P2P', 'Auto-reconnect OK', { name: friend.name, connectionId: r.connectionId });
-                else debugLog('P2P', 'Auto-reconnect failed for ' + friend.name, { error: r.error });
+              Orbit.P2P.connect(_savedIp, tcpPort2, _savedId, timeoutMs).then(function(r) {
+                if (r.success) debugLog('P2P', 'Auto-reconnect OK', { name: _savedName, connectionId: r.connectionId });
+                else debugLog('P2P', 'Auto-reconnect failed for ' + _savedName, { error: r.error });
               });
             }
           }, reconnectDelay);
@@ -6149,18 +5938,22 @@ document.addEventListener('DOMContentLoaded', function() {
       }
 
       // Auto-connect to peer (skip if already connected) (Bug #2)
+      window._p2pConnecting = window._p2pConnecting || {};
+      if (window._p2pConnecting[peerId]) { debugLog('P2P', 'Already connecting to ' + peerName + ', skipping'); return; }
       var existingConn = Orbit.P2P.isPeerConnected(peerId) || Orbit.P2P.isPeerConnected(data.host);
       debugLog('P2P', 'Checking connection status for ' + peerName, { connected: !!existingConn });
       if (!existingConn) {
         var port = pPayload.tcpPort || 46000;
         debugLog('P2P', 'Auto-connecting to ' + peerName + ' at ' + data.host + ':' + port);
+        window._p2pConnecting[peerId] = true;
         Orbit.P2P.connect(data.host, port, peerId).then(function(result) {
+          delete window._p2pConnecting[peerId];
           if (result.success) {
             debugLog('P2P', 'Connected to', { name: peerName, id: peerId, connectionId: result.connectionId });
             var friend = MStore.friends.find(function(f) { return f.id === peerId; });
             if (friend) {
               friend.status = 'online';
-              friend.connectionId = result.connectionId;
+              if (result.connectionId && result.connectionId !== friend.connectionId) friend.connectionId = result.connectionId;
               MStore.save();
               renderFriends();
             }
@@ -6369,6 +6162,30 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Init debug overlay
   updateDebugOverlay();
+
+  // Restore dev mode on restart: if user had devMode enabled before restart,
+  // re-init eruda, data attribute, P2P log button, and log buffer
+  if (MStore.settings.devMode) {
+    document.documentElement.setAttribute('data-dev-mode', 'true');
+    if (!window.eruda) {
+      var sc = document.createElement('script');
+      sc.src = 'https://cdn.jsdelivr.net/npm/eruda';
+      sc.onload = function() { eruda.init(); };
+      sc.onerror = function() { /* chrome://inspect fallback */ };
+      document.body.appendChild(sc);
+    } else {
+      eruda.init();
+    }
+    if (!document.getElementById('p2p-log-btn')) {
+      var btn = document.createElement('button');
+      btn.id = 'p2p-log-btn';
+      btn.textContent = 'P2P Log';
+      btn.style.cssText = 'position:fixed;bottom:100px;right:16px;z-index:99998;background:#0a0;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-family:monospace;cursor:pointer;opacity:0.85;box-shadow:0 2px 8px rgba(0,0,0,0.3);';
+      btn.addEventListener('click', showLogOverlay);
+      document.body.appendChild(btn);
+    }
+    renderLogBuffer();
+  }
 
   // Init compact spacing from saved preference
   if (MStore.settings.experimentalCompactSpacing) {

@@ -14,7 +14,24 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.1.7-beta', 'Latest', [
+        versionBlock('0.1.8-beta', 'Latest', [
+          ['Store Class Ported to Mobile', [
+            'Dedicated Store class created: Inline MStore (~350 lines) extracted into mobile/src/js/store.js (760 lines) — full Store class with property-based access (MStore.friends, MStore.settings.*) for backward compatibility (532+ mobile references) plus desktop-style getState()/setState()/subscribe() for future convergence.',
+            'Desktop parity features added to mobile: subscribe()/notify(), blockUser()/unblockUser(), pinMessage()/unpinMessage(), markAsRead(), toggleMute(), addGroup()/removeGroup()/addMemberToGroup(), closeDM()/togglePinDM()/reopenDM(), E2EE peer key storage, transfer tracking, addOrUpdatePeer().'
+          ]],
+          ['Bug Fixes', [
+            'addMessage() unread tracking fixed (HIGH): Unread block removed — mobile manages unreads via chat.unread, not Store\'s internal counts. Every message was previously counted as unread because this.activeChatId is never set by mobile.',
+            'mutedChats property misalignment fixed (HIGH): this.mutedChats now aliases this.settings.mutedChats (same object reference) — synced in constructor, load(), and save(). All mute/unmute operations update the same object mobile reads via MStore.settings.mutedChats.',
+            'setState() currentUser ignored fixed (MEDIUM): setState() now maps newState.currentUser to this.user — previously silently dropped.'
+          ]],
+          ['Technical', [
+            'MStore API fully backward-compatible — window.MStore = new Store() loaded via script tag before app.js in mobile index.html.',
+            'Desktop CSP updated to allow https://cdnjs.cloudflare.com for Prism.js syntax highlighting (script-src + style-src).',
+            'Prism.js loading fixed: moved to load before app.js on both platforms. Language-* class added to pre elements in sanitize.js for immediate CSS theming.',
+            'Version bumped to v0.1.8-beta across all manifests, About tabs, and changelogs.'
+          ]]
+        ]) +
+        versionBlock('0.1.7-beta', '', [
           ['Video Playback Fixes', [
             'PIPELINE_ERROR_DECODE Root Cause Fixed: Audio packet decode errors in fMP4 files resolved via Content-Type fix in main.js:contentTypeFromAtt(). Videos play continuously without stalling at ~16s.',
             'Re-render Guard: Store subscription blocks message re-renders while any video is playing (except chat switches). Handles notify() without changedState.',
