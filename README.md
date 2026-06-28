@@ -302,14 +302,6 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **OrbitForegroundService:** Full P2P engine (TCP server, UDP multicast, connection map, thread pool) as Android Service. Plugin proxies via Binder. Event queue drained every 100ms.
 - **Silent Bug Fixes:** 7 fixes from service audit — sendFailed/connectFailed events, serverSocket volatile, PeerConnection map leak, executor shutdown, eventQueue clear, SO_REUSEADDR, Android 10+ joinGroup fix.
 </details>
-<details open>
-<summary>v0.1.8-beta</summary>
-
-- **Store Class Ported to Mobile:** Inline MStore (~350 lines) extracted into dedicated `store.js` (760 lines) — full Store class with backward-compatible property-based access (532+ references) plus desktop-style getState()/setState()/subscribe().
-- **Desktop Parity Features:** subscribe/notify, blockUser/unblockUser, pinMessage/unpinMessage, markAsRead, toggleMute, group management (addGroup/removeGroup/addMemberToGroup), DM management (closeDM/togglePinDM/reopenDM), E2EE key storage, transfer tracking, addOrUpdatePeer.
-- **Bug Fixes:** addMessage() unread tracking fixed (counted every message as unread — removed); mutedChats aliased to settings.mutedChats for mobile read path; setState() now handles currentUser key.
-- **CSP & Prism.js Fixes:** Desktop CSP updated for Prism.js (cdnjs.cloudflare.com); Prism loaded before app.js on both platforms; language-* class on pre elements for immediate syntax highlighting.
-</details>
 <details>
 <summary>v0.1.7-beta</summary>
 
@@ -318,6 +310,14 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Decode Error Retry:** On audio packet decode failure, source reloads and skips forward +2s (up to 3 attempts).
 - **Larger Media Players:** Video 720×600, audio waveform 200px — rendered outside image grid as standalone blocks at full width.
 - **Fullscreen Theme Blend:** Letterbox uses `var(--bg-surface)` — matches active UI theme.
+</details>
+<details open>
+<summary>v0.1.8-beta</summary>
+
+- **Store Class Ported to Mobile:** Inline MStore (~350 lines) extracted into dedicated `store.js` (760 lines) — full Store class with backward-compatible property-based access (532+ references) plus desktop-style getState()/setState()/subscribe().
+- **Desktop Parity Features:** subscribe/notify, blockUser/unblockUser, pinMessage/unpinMessage, markAsRead, toggleMute, group management (addGroup/removeGroup/addMemberToGroup), DM management (closeDM/togglePinDM/reopenDM), E2EE key storage, transfer tracking, addOrUpdatePeer.
+- **Bug Fixes:** addMessage() unread tracking fixed (counted every message as unread — removed); mutedChats aliased to settings.mutedChats for mobile read path; setState() now handles currentUser key.
+- **CSP & Prism.js Fixes:** Desktop CSP updated for Prism.js (cdnjs.cloudflare.com); Prism loaded before app.js on both platforms; language-* class on pre elements for immediate syntax highlighting.
 </details>
 
 See [CHANGELOG.md](CHANGELOG.md) for the full version history.
