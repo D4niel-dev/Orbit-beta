@@ -215,7 +215,8 @@ class TransferManager {
       const finalHash = transfer.sha256.digest('hex');
       this.activeReceives.delete(payload.fileId);
 
-      if (finalHash !== transfer.hash) {
+      // Skip hash check when sender omitted hash (mobile sends without hash in some cases) — CRIT-1
+      if (transfer.hash && finalHash !== transfer.hash) {
         if (onError) onError('Hash mismatch! Transfer corrupted.', payload.fileId);
         if (fs.existsSync(transfer.tempPath)) fs.unlinkSync(transfer.tempPath);
       } else {

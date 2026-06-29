@@ -374,7 +374,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (window.Orbit && window.Orbit.P2P && Orbit.P2P.isAvailable()) {
         memberList.forEach(function(m) {
           if (m.userId !== myId) {
-            var packet = Orbit.Protocol.createPacket(Orbit.Protocol.Types.GROUP_CREATE, {
+            var packet = Orbit.Protocol.createPacket(Orbit.Protocol.Types.GROUP_CREATE, myId, m.userId, {
               groupId: groupId,
               groupName: name,
               groupAvatar: groupAvatar,
@@ -382,7 +382,7 @@ document.addEventListener('DOMContentLoaded', function() {
               members: memberList,
               inviteCode: inviteCode,
               description: ''
-            }, myId);
+            });
             Orbit.P2P.send(m.userId, packet);
           }
         });
@@ -533,9 +533,8 @@ document.addEventListener('DOMContentLoaded', function() {
           var mid = typeof m === 'string' ? m : m.userId;
           if (mid !== myId) {
             var pkt = Orbit.Protocol.createPacket(
-              Orbit.Protocol.Types.REACTION,
-              { msgId: msgId, emoji: emoji, action: action, userId: myId, groupId: chatId },
-              myId
+              Orbit.Protocol.Types.REACTION, myId, mid,
+              { msgId: msgId, emoji: emoji, action: action, userId: myId, groupId: chatId }
             );
             Orbit.P2P.send(mid, pkt);
           }
@@ -544,9 +543,8 @@ document.addEventListener('DOMContentLoaded', function() {
     } else {
       // DM reaction: NO chatId in payload (would overwrite receiver's chat lookup)
       var pkt = Orbit.Protocol.createPacket(
-        Orbit.Protocol.Types.REACTION,
-        { msgId: msgId, emoji: emoji, action: action, userId: myId },
-        myId
+        Orbit.Protocol.Types.REACTION, myId, chatId,
+        { msgId: msgId, emoji: emoji, action: action, userId: myId }
       );
       Orbit.P2P.send(chatId, pkt);
     }
@@ -769,13 +767,13 @@ document.addEventListener('DOMContentLoaded', function() {
               (grp.members || []).forEach(function(m) {
                 var mid = typeof m === 'string' ? m : m.userId;
                 if (mid !== myId) {
-                  var fwdPkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.MESSAGE, payload, myId);
+                  var fwdPkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.MESSAGE, myId, mid, payload);
                   Orbit.P2P.send(mid, fwdPkt);
                 }
               });
             }
           } else {
-            var dmPkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.MESSAGE, payload, myId);
+            var dmPkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.MESSAGE, myId, targetId, payload);
             Orbit.P2P.send(targetId, dmPkt);
           }
         }
@@ -816,18 +814,22 @@ document.addEventListener('DOMContentLoaded', function() {
   function renderMessages(chatId) {
     var feed = document.getElementById('message-feed');
     var msgs = MStore.getMessages(chatId);
-    // Convert stale data: URLs to blob URLs (once per session, cached)
+    // Resolve attachment URLs without mutating store objects (avoids silent data loss)
     window._dataUrlCache = window._dataUrlCache || {};
-    for (var mi = 0; mi < msgs.length; mi++) {
-      var atts = msgs[mi].attachments;
-      if (atts) {
-        for (var aj = 0; aj < atts.length; aj++) {
-          if (atts[aj].url && atts[aj].url.indexOf('data:') === 0) {
-            if (!window._dataUrlCache[atts[aj].url]) window._dataUrlCache[atts[aj].url] = _dataUrlToBlobUrl(atts[aj].url);
-            atts[aj].url = window._dataUrlCache[atts[aj].url];
-          }
-        }
+    function _resUrl(a) {
+      var u = a && a.url;
+      if (!u) return '';
+      // data: URL → blob: URL (performance, cached)
+      if (u.indexOf('data:') === 0) {
+        if (!window._dataUrlCache[u]) window._dataUrlCache[u] = _dataUrlToBlobUrl(u);
+        return window._dataUrlCache[u];
       }
+      // Dead blob: URL → reconstruct from persisted _dataUrl
+      if (u.indexOf('blob:') === 0 && a._dataUrl) {
+        if (!window._dataUrlCache[a._dataUrl]) window._dataUrlCache[a._dataUrl] = _dataUrlToBlobUrl(a._dataUrl);
+        return window._dataUrlCache[a._dataUrl];
+      }
+      return u;
     }
     if (chatSearchFilter) {
       var cl = chatSearchFilter.toLowerCase();
@@ -921,14 +923,15 @@ document.addEventListener('DOMContentLoaded', function() {
         var showImages = MStore.settings.showImagePreviews !== false;
         m.attachments.forEach(function(a) {
           var safeAttId = escapeHtml(String(a.id || ''));
-          if (a.type === 'video' && a.url) {
-            largeHtml += '<div class="att-large-cell att-video-cell ovp-placeholder" data-ovp-url="' + escapeHtml(a.url) + '" data-open-video="' + safeAttId + '" data-msg-id="' + m.id + '"></div>';
-          } else if (a.type === 'audio' && a.url) {
-            largeHtml += '<div class="att-large-cell att-audio-cell oap-placeholder" data-oap-url="' + escapeHtml(a.url) + '"></div>';
-          } else if (a.type === 'image' && a.url) {
+          var attUrl = _resUrl(a);
+          if (a.type === 'video' && attUrl) {
+            largeHtml += '<div class="att-large-cell att-video-cell ovp-placeholder" data-ovp-url="' + escapeHtml(attUrl) + '" data-open-video="' + safeAttId + '" data-msg-id="' + m.id + '"></div>';
+          } else if (a.type === 'audio' && attUrl) {
+            largeHtml += '<div class="att-large-cell att-audio-cell oap-placeholder" data-oap-url="' + escapeHtml(attUrl) + '"></div>';
+          } else if (a.type === 'image' && attUrl) {
             if (!showImages) return;
             gridHtml += '<div class="att-grid-cell" data-open-image="' + safeAttId + '" data-msg-id="' + m.id + '">' +
-              '<img src="' + escapeHtml(a.url) + '" style="width:100%;height:100%;object-fit:cover;" loading="lazy">' +
+              '<img src="' + escapeHtml(attUrl) + '" style="width:100%;height:100%;object-fit:cover;" loading="lazy">' +
             '</div>';
           } else {
             gridHtml += '<div class="att-grid-cell att-file-cell">' +
@@ -1066,7 +1069,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 pktPayload.text = (msg.text || '(attachment)').substring(0, 100);
                 pktPayload.pinnedAt = new Date().toISOString();
               }
-              var pkt = Orbit.Protocol.createPacket(pktType, pktPayload, MStore.user ? MStore.user.id : '');
+              var pkt = Orbit.Protocol.createPacket(pktType, MStore.user ? MStore.user.id : '', mid, pktPayload);
               Orbit.P2P.send(mid, pkt);
             }
           });
@@ -1349,9 +1352,8 @@ document.addEventListener('DOMContentLoaded', function() {
               var mid = typeof m === 'string' ? m : m.userId;
               if (mid !== myId) {
                 var pkt = Orbit.Protocol.createPacket(
-                  Orbit.Protocol.Types.MESSAGE_EDIT,
-                  { msgId: editingMsg.id, newText: text, chatId: editingMsg.chatId },
-                  myId
+                  Orbit.Protocol.Types.MESSAGE_EDIT, myId, mid,
+                  { msgId: editingMsg.id, newText: text, chatId: editingMsg.chatId }
                 );
                 Orbit.P2P.send(mid, pkt);
               }
@@ -1359,9 +1361,8 @@ document.addEventListener('DOMContentLoaded', function() {
           }
         } else {
           var pkt = Orbit.Protocol.createPacket(
-            Orbit.Protocol.Types.MESSAGE_EDIT,
-            { msgId: editingMsg.id, newText: text },
-            myId
+            Orbit.Protocol.Types.MESSAGE_EDIT, myId, editingMsg.chatId,
+            { msgId: editingMsg.id, newText: text }
           );
           Orbit.P2P.send(editingMsg.chatId, pkt);
         }
@@ -1446,9 +1447,11 @@ document.addEventListener('DOMContentLoaded', function() {
         if (memberId === (MStore.user ? MStore.user.id : '')) return;
         var memberFriend = MStore.friends.find(function(f) { return f.id === memberId; });
         var memberKey = memberFriend ? memberFriend.publicKey : (typeof m !== 'string' ? m.publicKey : null);
+        var grpAttachments = inlineAttachments.length > 0 ? inlineAttachments.slice() : [];
+        largeFiles.forEach(function(lf) { grpAttachments.push({ id: lf.id, _fileId: lf.id, name: lf.name, type: lf.type, _pending: true }); });
         var payload = {
           text: textToSend, groupId: groupId, msgId: newMsg.id, replyTo: newMsg.replyTo,
-          attachments: inlineAttachments.length > 0 ? inlineAttachments : undefined,
+          attachments: grpAttachments.length > 0 ? grpAttachments : undefined,
           fromName: newMsg.fromName
         };
         if (isE2EE && memberKey) {
@@ -1457,11 +1460,11 @@ document.addEventListener('DOMContentLoaded', function() {
               payload.e2ee = true;
               payload.ciphertext = encrypted.ciphertext;
               payload.nonce = encrypted.nonce;
-              Orbit.P2P.send(memberId, Orbit.Protocol.createPacket(Orbit.Protocol.Types.MESSAGE, payload, MStore.user.id));
+              Orbit.P2P.send(memberId, Orbit.Protocol.createPacket(Orbit.Protocol.Types.MESSAGE, MStore.user.id, memberId, payload));
             }
           });
         } else {
-          Orbit.P2P.send(memberId, Orbit.Protocol.createPacket(Orbit.Protocol.Types.MESSAGE, payload, MStore.user ? MStore.user.id : 'mobile'));
+          Orbit.P2P.send(memberId, Orbit.Protocol.createPacket(Orbit.Protocol.Types.MESSAGE, MStore.user ? MStore.user.id : 'mobile', memberId, payload));
         }
       });
     }
@@ -1470,26 +1473,50 @@ document.addEventListener('DOMContentLoaded', function() {
       if (!att.url || att.url.indexOf('data:') !== 0) return;
       var b64 = att.url.substring(att.url.indexOf(',') + 1);
       var totalChunks = Math.ceil(b64.length / CHUNK_SIZE);
-      var fileId = 'f' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+      // Use att.id as fileId so MESSAGE _fileId markers match (CRIT-4)
+      var fileId = att.id;
+      var myId = MStore.user ? MStore.user.id : 'mobile';
 
-      Orbit.P2P.send(peerId, Orbit.Protocol.createPacket(Orbit.Protocol.Types.FILE_TRANSFER_START, {
-        fileId: fileId, fileName: att.name, fileSize: Math.round(b64.length * 3 / 4), totalChunks: totalChunks, hash: ''
-      }));
-
-      var ci = 0;
-      function sendNextChunk() {
-        if (ci >= totalChunks) {
-          Orbit.P2P.send(peerId, Orbit.Protocol.createPacket(Orbit.Protocol.Types.FILE_TRANSFER_END, { fileId: fileId, hash: '' }));
-          return;
-        }
-        var chunk = b64.substring(ci * CHUNK_SIZE, (ci + 1) * CHUNK_SIZE);
-        Orbit.P2P.send(peerId, Orbit.Protocol.createPacket(Orbit.Protocol.Types.FILE_CHUNK, {
-          fileId: fileId, chunkIndex: ci, data: chunk
-        }));
-        ci++;
-        setTimeout(sendNextChunk, 0);
+      // Compute SHA-256 hash for integrity verification (CRIT-1)
+      function _computeFileHash(b64str, callback) {
+        try {
+          var bin = atob(b64str);
+          var buf = new ArrayBuffer(bin.length);
+          var bytes = new Uint8Array(buf);
+          for (var hi = 0; hi < bin.length; hi++) bytes[hi] = bin.charCodeAt(hi);
+          crypto.subtle.digest('SHA-256', buf).then(function(hashBuf) {
+            var hashArr = Array.from(new Uint8Array(hashBuf));
+            var hex = hashArr.map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+            callback(hex);
+          }).catch(function() { callback(''); });
+        } catch(e) { callback(''); }
       }
-      sendNextChunk();
+
+      _computeFileHash(b64, function(fileHash) {
+        Orbit.P2P.send(peerId, Orbit.Protocol.createPacket(
+          Orbit.Protocol.Types.FILE_TRANSFER_START, myId, peerId,
+          { fileId: fileId, fileName: att.name, fileSize: Math.round(b64.length * 3 / 4), totalChunks: totalChunks, hash: fileHash }
+        ));
+
+        var ci = 0;
+        function sendNextChunk() {
+          if (ci >= totalChunks) {
+            Orbit.P2P.send(peerId, Orbit.Protocol.createPacket(
+              Orbit.Protocol.Types.FILE_TRANSFER_END, myId, peerId,
+              { fileId: fileId, hash: fileHash }
+            ));
+            return;
+          }
+          var chunk = b64.substring(ci * CHUNK_SIZE, (ci + 1) * CHUNK_SIZE);
+          Orbit.P2P.send(peerId, Orbit.Protocol.createPacket(
+            Orbit.Protocol.Types.FILE_CHUNK, myId, peerId,
+            { fileId: fileId, chunkIndex: ci, data: chunk }
+          ));
+          ci++;
+          setTimeout(sendNextChunk, 0);
+        }
+        sendNextChunk();
+      });
     }
 
     if (window.Orbit && window.Orbit.P2P && Orbit.P2P.isAvailable()) {
@@ -1517,10 +1544,12 @@ document.addEventListener('DOMContentLoaded', function() {
         if (friend && friend.publicKey) {
           Orbit.E2EE.encrypt(text, friend.publicKey).then(function(encrypted) {
             if (encrypted) {
+              // Include large file metadata so receiver can merge text+file into one message (CRIT-4)
+              var e2eeAttachments = inlineAttachments.length > 0 ? inlineAttachments.slice() : [];
+              largeFiles.forEach(function(lf) { e2eeAttachments.push({ id: lf.id, _fileId: lf.id, name: lf.name, type: lf.type, _pending: true }); });
               Orbit.P2P.send(activeChatId, Orbit.Protocol.createPacket(
-                Orbit.Protocol.Types.MESSAGE,
-                { e2ee: true, ciphertext: encrypted.ciphertext, nonce: encrypted.nonce, msgId: newMsg.id, replyTo: newMsg.replyTo, attachments: inlineAttachments.length > 0 ? inlineAttachments : undefined, fromName: newMsg.fromName },
-                myId
+                Orbit.Protocol.Types.MESSAGE, myId, activeChatId,
+                { e2ee: true, ciphertext: encrypted.ciphertext, nonce: encrypted.nonce, msgId: newMsg.id, replyTo: newMsg.replyTo, attachments: e2eeAttachments.length > 0 ? e2eeAttachments : undefined, fromName: newMsg.fromName }
               ));
             }
           });
@@ -1531,10 +1560,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       }
 
+      // Include large file metadata so receiver can merge text+file into one message (CRIT-4)
+      var msgAttachments = inlineAttachments.length > 0 ? inlineAttachments.slice() : [];
+      largeFiles.forEach(function(lf) { msgAttachments.push({ id: lf.id, _fileId: lf.id, name: lf.name, type: lf.type, _pending: true }); });
       Orbit.P2P.send(activeChatId, Orbit.Protocol.createPacket(
-        Orbit.Protocol.Types.MESSAGE,
-        { text: text, msgId: newMsg.id, replyTo: newMsg.replyTo, attachments: inlineAttachments.length > 0 ? inlineAttachments : undefined, fromName: newMsg.fromName },
-        myId
+        Orbit.Protocol.Types.MESSAGE, myId, activeChatId,
+        { text: text, msgId: newMsg.id, replyTo: newMsg.replyTo, attachments: msgAttachments.length > 0 ? msgAttachments : undefined, fromName: newMsg.fromName }
       ));
       if (largeFiles.length > 0) {
         largeFiles.forEach(function(att) { _sendLargeFileToPeer(att, activeChatId); });
@@ -2435,7 +2466,28 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button id="changelog-close-mobile" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;font-size:20px;">✕</button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
-        vBlock('0.1.8-beta', 'Latest', [
+        vBlock('0.1.8.1-beta', 'Latest', [
+          ['CRITICAL: P2P Cross-Platform Fixes', [
+            'Mobile→Desktop File Transfers Silently Deleted (CRITICAL): hash was empty — desktop always deleted file. Fixed: real SHA-256 computed via crypto.subtle; desktop skips hash check when omitted.',
+            'FILE_TRANSFER Packets Had Empty Sender (CRITICAL): from/senderId was \'\'. Fixed: passes userId + peerId to createPacket.',
+            'createPacket Signature Aligned to Desktop (CRITICAL): changed from (type,payload,senderId) to (type,fromId,toId,payload). Added packetId and to fields. Updated all 28 call sites.',
+            'Duplicate Messages for Large Files Fixed (CRITICAL): _fileId markers in MESSAGE attachment — receiver merges into existing message instead of creating second entry.'
+          ]],
+          ['High-Impact Fixes', [
+            'Missing File Extensions Added (HIGH): video (m4v,wmv,flv,f4v,ts,mts,m2ts), image (svg,tiff,bmp,heic,heif,avif), audio (opus,mka) — correct MIME mappings.',
+            'Media Persistence Fixed: Received files survive restart — _dataUrl stored alongside blob URL for recovery.',
+            'renderMessages No Longer Mutates Store: data:→blob conversion no longer corrupts MStore.messages.',
+            '.webm Misclassification Fixed: .webm removed from audioMatch — video checked first.',
+            'Desktop isVideo Added: file-received handler now classifies videos with proper MIME.'
+          ]],
+          ['Video Player', [
+            'Mobile Video Aspect Ratio Fixed: object-fit: contain, max-height 50vh (was 300px), #000 letterbox background.'
+          ]],
+          ['Technical', [
+            'Version bumped to v0.1.8.1-beta.'
+          ]]
+        ]) +
+        vBlock('0.1.8-beta', '', [
           ['Store Class Ported to Mobile', [
             'Dedicated Store class created: Inline MStore (~350 lines) extracted into store.js (760 lines) — full class with property-based access (MStore.friends, MStore.settings.*) for backward compatibility plus getState()/setState()/subscribe() for convergence.',
             'Desktop parity features added: subscribe/notify, blockUser/unblockUser, pinMessage/unpinMessage, markAsRead, toggleMute, group management (addGroup/removeGroup/addMemberToGroup), DM management (closeDM/togglePinDM/reopenDM), E2EE key storage, transfer tracking, addOrUpdatePeer.'
@@ -4172,12 +4224,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 (sg.members || []).forEach(function(m) {
                   var mid = typeof m === 'string' ? m : m.userId;
                   if (mid !== (MStore.user ? MStore.user.id : '')) {
-                    var pkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.MESSAGE, { text: shareText, msgId: shareMsgId, chatId: activeChatId }, MStore.user ? MStore.user.id : '');
+                    var pkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.MESSAGE, MStore.user ? MStore.user.id : '', mid, { text: shareText, msgId: shareMsgId, chatId: activeChatId });
                     Orbit.P2P.send(mid, pkt);
                   }
                 });
               } else {
-                var pkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.MESSAGE, { text: shareText, msgId: shareMsgId, chatId: activeChatId }, MStore.user ? MStore.user.id : '');
+                var pkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.MESSAGE, MStore.user ? MStore.user.id : '', activeChatId, { text: shareText, msgId: shareMsgId, chatId: activeChatId });
                 Orbit.P2P.send(activeChatId, pkt);
               }
             }
@@ -4225,7 +4277,7 @@ document.addEventListener('DOMContentLoaded', function() {
               }
               return { ...origin };
             });
-            var invitePkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.GROUP_CREATE, {
+            var invitePkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.GROUP_CREATE, MStore.user ? MStore.user.id : '', friend.id, {
               groupId: activeChatId,
               groupName: grp.name,
               groupAvatar: grp.avatar || null,
@@ -4234,7 +4286,7 @@ document.addEventListener('DOMContentLoaded', function() {
               inviteCode: grp.inviteCode,
               description: grp.description || '',
               publicKey: MStore.user ? MStore.user.publicKey || null : null
-            }, MStore.user ? MStore.user.id : '');
+            });
             Orbit.P2P.send(friend.id, invitePkt);
           }
           // Notify existing members about the new member
@@ -4242,10 +4294,10 @@ document.addEventListener('DOMContentLoaded', function() {
             (grp.members || []).forEach(function(m) {
               var mid = typeof m === 'string' ? m : m.userId;
               if (mid !== friend.id && mid !== (MStore.user ? MStore.user.id : '')) {
-                var memberAddPkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.GROUP_MEMBER_ADDED, {
+                var memberAddPkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.GROUP_MEMBER_ADDED, MStore.user ? MStore.user.id : '', mid, {
                   groupId: activeChatId,
                   user: { userId: friend.id, name: friend.name, username: friend.name, usertag: friend.tag || '', avatar: friend.avatar || null, status: 'online', role: 'member', joinedAt: new Date().toISOString(), publicKey: friend.publicKey || null }
-                }, MStore.user ? MStore.user.id : '');
+                });
                 Orbit.P2P.send(mid, memberAddPkt);
               }
             });
@@ -4276,9 +4328,9 @@ document.addEventListener('DOMContentLoaded', function() {
           (grp2.members || []).forEach(function(m) {
             var mid = typeof m === 'string' ? m : m.userId;
             if (mid !== (MStore.user ? MStore.user.id : '')) {
-              var leavePkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.GROUP_LEAVE, {
+              var leavePkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.GROUP_LEAVE, MStore.user ? MStore.user.id : '', mid, {
                 groupId: activeChatId, userId: removeUserId
-              }, MStore.user ? MStore.user.id : '');
+              });
               Orbit.P2P.send(mid, leavePkt);
             }
           });
@@ -4337,9 +4389,9 @@ document.addEventListener('DOMContentLoaded', function() {
             (grp5.members || []).forEach(function(m) {
               var mid = typeof m === 'string' ? m : m.userId;
               if (mid !== (MStore.user ? MStore.user.id : '')) {
-                var leavePkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.GROUP_LEAVE, {
+                var leavePkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.GROUP_LEAVE, MStore.user ? MStore.user.id : '', mid, {
                   groupId: activeChatId, userId: MStore.user ? MStore.user.id : ''
-                }, MStore.user ? MStore.user.id : '');
+                });
                 Orbit.P2P.send(mid, leavePkt);
               }
             });
@@ -4368,9 +4420,9 @@ document.addEventListener('DOMContentLoaded', function() {
             (grp6.members || []).forEach(function(m) {
               var mid = typeof m === 'string' ? m : m.userId;
               if (mid !== (MStore.user ? MStore.user.id : '')) {
-                var removePkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.GROUP_LEAVE, {
+                var removePkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.GROUP_LEAVE, MStore.user ? MStore.user.id : '', mid, {
                   groupId: activeChatId, userId: mid
-                }, MStore.user ? MStore.user.id : '');
+                });
                 Orbit.P2P.send(mid, removePkt);
               }
             });
@@ -4438,7 +4490,7 @@ document.addEventListener('DOMContentLoaded', function() {
           (group.members || []).forEach(function(m) {
             var mid = typeof m === 'string' ? m : m.userId;
             if (mid !== _myId && mid !== '') {
-              var pkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.UNPIN_MESSAGE, { msgId: pinMsgId, groupId: activeChatId }, _myId);
+              var pkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.UNPIN_MESSAGE, _myId, mid, { msgId: pinMsgId, groupId: activeChatId });
               Orbit.P2P.send(mid, pkt);
             }
           });
@@ -4786,10 +4838,10 @@ document.addEventListener('DOMContentLoaded', function() {
       addItem(isPinned ? 'Unpin' : 'Pin', isPinned ? 'pin-off' : 'pin', function() {
         if (window.Orbit && window.Orbit.P2P && Orbit.P2P.isAvailable()) {
           if (isPinned) {
-            var upkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.UNPIN_MESSAGE, { groupId: chatId, msgId: msg.id }, MStore.user ? MStore.user.id : 'mobile');
+            var upkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.UNPIN_MESSAGE, MStore.user ? MStore.user.id : 'mobile', chatId, { groupId: chatId, msgId: msg.id });
             Orbit.P2P.send(chatId, upkt);
           } else {
-            var ppkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.PIN_MESSAGE, { groupId: chatId, msgId: msg.id, text: msg.text || '', pinnedAt: new Date().toISOString() }, MStore.user ? MStore.user.id : 'mobile');
+            var ppkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.PIN_MESSAGE, MStore.user ? MStore.user.id : 'mobile', chatId, { groupId: chatId, msgId: msg.id, text: msg.text || '', pinnedAt: new Date().toISOString() });
             Orbit.P2P.send(chatId, ppkt);
           }
         }
@@ -5094,7 +5146,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (!window.Orbit || !Orbit.P2P) return;
       var conns = Orbit.P2P.getConnections();
       conns.forEach(function(connId) {
-        var pingPkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.PING, { ts: Date.now() }, MStore.user ? MStore.user.id : '');
+        var pingPkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.PING, MStore.user ? MStore.user.id : '', connId, { ts: Date.now() });
         Orbit.P2P.send(connId, pingPkt).then(function(r) {
           if (!r.success) {
             window._heartbeatPingCount[connId] = (window._heartbeatPingCount[connId] || 0) + 1;
@@ -5126,7 +5178,7 @@ document.addEventListener('DOMContentLoaded', function() {
       debugLog('P2P', 'Incoming connection', { connectionId: data.connectionId, host: data.host });
       var cur = MStore.user;
       if (cur && data.connectionId) {
-        var beaconPacket = Orbit.Protocol.createPacket(Orbit.Protocol.Types.BEACON, {
+        var beaconPacket = Orbit.Protocol.createPacket(Orbit.Protocol.Types.BEACON, cur.id, data.connectionId, {
           userId: cur.id,
           username: cur.name,
           usertag: cur.tag,
@@ -5139,7 +5191,7 @@ document.addEventListener('DOMContentLoaded', function() {
           banner: cur.banner || null,
           tcpPort: MStore.settings.tcpPort || 46000,
           device: 'android'
-        }, cur.id);
+        });
         debugLog('P2P', 'Sending TCP beacon to', { connectionId: data.connectionId, target: cur.name });
         Orbit.P2P.send(data.connectionId, beaconPacket);
       }
@@ -5162,7 +5214,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
       // Handle PING — respond with PONG
       if (packet.type === Orbit.Protocol.Types.PING) {
-        var pongPkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.PONG, { ts: Date.now() }, MStore.user ? MStore.user.id : '');
+        var pongPkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.PONG, MStore.user ? MStore.user.id : '', data.connectionId, { ts: Date.now() });
         Orbit.P2P.send(data.connectionId, pongPkt).catch(function() {});
         return;
       }
@@ -5302,15 +5354,14 @@ document.addEventListener('DOMContentLoaded', function() {
       if (packet.type === Orbit.Protocol.Types.MESSAGE) {
         var msgText = packet.payload.text || '';
         var msgAttachmentsRaw = packet.payload.attachments || undefined;
-        // Convert inline data: URLs to blob: URLs before storing
+        // Convert inline data: URLs to blob: URLs before storing (preserve original in _dataUrl for persistence)
         if (msgAttachmentsRaw) {
           for (var ai = 0; ai < msgAttachmentsRaw.length; ai++) {
             var aa = msgAttachmentsRaw[ai];
             if (aa.url && aa.url.indexOf('data:') === 0) {
               var blobUrl = _dataUrlToBlobUrl(aa.url);
               if (blobUrl !== aa.url) {
-                window._orbitFileCache = window._orbitFileCache || {};
-                window._orbitFileCache[aa.id || blobUrl] = aa.url;
+                aa._dataUrl = aa.url;   // preserve for restart recovery
                 aa.url = blobUrl;
               }
             }
@@ -5455,27 +5506,34 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
           }
           var base64Data = txEnd.chunks.join('');
-          var extMatch = txEnd.fileName.match(/\.(png|jpe?g|gif|webp)$/i);
-          var audioMatch = txEnd.fileName.match(/\.(mp3|wav|ogg|flac|aac|m4a|wma|webm)$/i);
-          var videoMatch = txEnd.fileName.match(/\.(mp4|mov|avi|mkv|webm|3gp)$/i);
+          // HIGH-5: Cover all common file extensions
+            // HIGH-5: Cover all common file extensions
+          var extMatch = txEnd.fileName.match(/\.(png|jpe?g|gif|webp|svg|tiff?|bmp|heic|heif|avif)$/i);
+          // NOTE: .webm intentionally only in videoMatch — do NOT add to audioMatch
+          var audioMatch = txEnd.fileName.match(/\.(mp3|wav|ogg|flac|aac|m4a|wma|opus|mka)$/i);
+          var videoMatch = txEnd.fileName.match(/\.(mp4|mov|avi|mkv|webm|3gp|m4v|wmv|flv|f4v|ts|mts|m2ts)$/i);
           var mimeType = 'application/octet-stream';
           var isImage = false;
           var isAudio = false;
           var isVideo = false;
           if (extMatch) {
-            mimeType = 'image/' + extMatch[1].replace('jpg','jpeg').toLowerCase();
+            var extLower = extMatch[1].toLowerCase();
+            if (extLower === 'svg') mimeType = 'image/svg+xml';
+            else if (extLower === 'tif' || extLower === 'tiff') mimeType = 'image/tiff';
+            else mimeType = 'image/' + extLower.replace('jpg','jpeg');
             isImage = true;
-          } else if (audioMatch) {
-            var audioExtMap = { mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', flac: 'audio/flac', aac: 'audio/aac', m4a: 'audio/mp4', wma: 'audio/x-ms-wma', webm: 'audio/webm' };
-            mimeType = audioExtMap[audioMatch[1].toLowerCase()] || 'audio/mpeg';
-            isAudio = true;
           } else if (videoMatch) {
-            var videoExtMap = { mp4: 'video/mp4', mov: 'video/quicktime', avi: 'video/x-msvideo', mkv: 'video/x-matroska', webm: 'video/webm', '3gp': 'video/3gpp' };
+            // Check video BEFORE audio — .webm is always video
+            var videoExtMap = { mp4: 'video/mp4', mov: 'video/quicktime', avi: 'video/x-msvideo', mkv: 'video/x-matroska', webm: 'video/webm', '3gp': 'video/3gpp', m4v: 'video/x-m4v', wmv: 'video/x-ms-wmv', flv: 'video/x-flv', f4v: 'video/x-f4v', ts: 'video/mp2t', mts: 'video/mp2t', m2ts: 'video/mp2t' };
             mimeType = videoExtMap[videoMatch[1].toLowerCase()] || 'video/mp4';
             isVideo = true;
+          } else if (audioMatch) {
+            var audioExtMap = { mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', flac: 'audio/flac', aac: 'audio/aac', m4a: 'audio/mp4', wma: 'audio/x-ms-wma', opus: 'audio/opus', mka: 'audio/x-matroska' };
+            mimeType = audioExtMap[audioMatch[1].toLowerCase()] || 'audio/mpeg';
+            isAudio = true;
           }
           
-          // Build blob URL directly from base64 (avoids 32MB data: URL string)
+          // Build blob URL for immediate use AND data URL for persistence across restarts
           var attUrl = (function(base64, mime) {
             try {
               var raw = atob(base64), buf = new ArrayBuffer(raw.length), bytes = new Uint8Array(buf);
@@ -5483,22 +5541,49 @@ document.addEventListener('DOMContentLoaded', function() {
               return URL.createObjectURL(new Blob([buf], { type: mime }));
             } catch(e) { console.warn('[P2P] blob from file failed', e.message); return ''; }
           })(base64Data, mimeType);
+          var dataUrl = 'data:' + mimeType + ';base64,' + base64Data;
           window._orbitFileCache = window._orbitFileCache || {};
           window._orbitFileCache[packet.payload.fileId] = base64Data;
-          
-          MStore.addMessage(chatId, {
-            id: 'p2p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-            from: msgFrom,
-            text: '',
-            time: new Date().toISOString(),
-            attachments: [{
-              id: packet.payload.fileId,
-              name: txEnd.fileName,
-              type: isImage ? 'image' : (isAudio ? 'audio' : (isVideo ? 'video' : 'file')),
-              url: attUrl,
-              _fileId: packet.payload.fileId
-            }]
-          });
+
+          // CRIT-4: Try to find existing message with matching _fileId attachment, update it instead of creating duplicate
+          var existingMsgs = MStore.getMessages(chatId);
+          var found = false;
+          for (var mi = 0; mi < existingMsgs.length; mi++) {
+            var atts = existingMsgs[mi].attachments;
+            if (atts && Array.isArray(atts)) {
+              for (var ai = 0; ai < atts.length; ai++) {
+                if (atts[ai]._fileId === packet.payload.fileId) {
+                  atts[ai].url = attUrl;
+                  atts[ai]._dataUrl = dataUrl;
+                  atts[ai].type = isImage ? 'image' : (isVideo ? 'video' : (isAudio ? 'audio' : 'file'));
+                  atts[ai]._pending = false;
+                  atts[ai].name = txEnd.fileName || atts[ai].name;
+                  MStore._saveMsgs(chatId);
+                  found = true;
+                  break;
+                }
+              }
+            }
+            if (found) break;
+          }
+
+          if (!found) {
+            // Fallback: create a new message entry if no matching _fileId found
+            MStore.addMessage(chatId, {
+              id: 'p2p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+              from: msgFrom,
+              text: '',
+              time: new Date().toISOString(),
+              attachments: [{
+                id: packet.payload.fileId,
+                name: txEnd.fileName,
+                type: isImage ? 'image' : (isVideo ? 'video' : (isAudio ? 'audio' : 'file')),
+                url: attUrl,
+                _dataUrl: dataUrl,
+                _fileId: packet.payload.fileId
+              }]
+            });
+          }
           
           delete window.activeTransfers[packet.payload.fileId];
           if (activeChatId === chatId) renderMessages(activeChatId);

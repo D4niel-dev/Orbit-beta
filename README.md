@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v018-beta-latest-version">v0.1.8-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v0181-beta-latest-version">v0.1.8.1-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@
 
 | Channel | Version | Status |
 |---------|---------|--------|
-| *Development* | v0.1.8-beta | Latest build (unstable) |
+| *Development* | v0.1.8.1-beta | Latest build (unstable) |
 | **Stable** | v0.1.1-beta | Stable release |
 | Previous **Stable** | v0.0.5-beta | Legacy stable release |
 
@@ -90,12 +90,17 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage desktop app** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
-## Highlights (v0.1.8-beta)
+## Highlights (v0.1.8.1-beta)
 
-- **Store Class Ported to Mobile:** Inline MStore (~350 lines) extracted into `mobile/src/js/store.js` (760 lines) — full Store class with backward-compatible property-based access (532+ references) plus desktop-style `getState()`/`setState()`/`subscribe()` for future convergence.
-- **Desktop Parity Features:** `subscribe()`/`notify()`, `blockUser()`/`unblockUser()`, `pinMessage()`/`unpinMessage()`, `markAsRead()`, `toggleMute()`, group management, E2EE peer key storage, transfer tracking.
-- **Bug Fixes:** `addMessage()` unread tracking fixed (was counting every message as unread), `mutedChats` property aliased to `settings.mutedChats` (mobile read path), `setState()` now handles `currentUser` key.
-- **CSP & Prism.js Fixes:** Desktop CSP updated for Prism.js (cdnjs.cloudflare.com); Prism moved to load before `app.js` on both platforms; `language-*` class added to `<pre>` elements for immediate syntax highlighting.
+- **CRITICAL: Mobile→Desktop File Transfers Fixed:** All mobile→desktop file transfers were silently deleted due to empty SHA-256 hash. Mobile now computes real hash via `crypto.subtle.digest()`; desktop skips hash check when omitted.
+- **CRITICAL: Cross-Platform createPacket Signature Aligned:** Mobile `createPacket(type, payload, senderId)` changed to match Desktop `createPacket(type, fromId, toId, payload)` — fixes `from`/`to`/`packetId` being empty or missing across all 28 call sites.
+- **CRITICAL: No More Duplicate Messages for Large Files:** Text and file attachments now merge into a single message bubble instead of creating two separate entries. All receive handlers (mobile + desktop) use `_fileId` markers to merge.
+- **Media Persistence Fixed:** Received files no longer lost after app restart. `_dataUrl` stored alongside blob URLs for restart recovery.
+- **renderMessages No Longer Corrupts Store:** Data URL → blob URL conversion no longer mutates `MStore.messages` in-place — eliminates silent data loss.
+- **.webm File Classification Fixed:** `.webm` videos no longer misclassified as audio. Video checked before audio.
+- **Missing File Extensions Added:** Video (`m4v`, `wmv`, `flv`, `f4v`, `ts`, `mts`, `m2ts`), Image (`svg`, `tiff`, `bmp`, `heic`, `heif`, `avif`), Audio (`opus`, `mka`) — all with correct MIME mappings.
+- **Desktop File Received isVideo Added:** Desktop now properly classifies incoming video files with correct MIME type.
+- **Mobile Video Aspect Ratio Fixed:** Added `object-fit: contain` and `max-height: 50vh` — videos now scale correctly to any aspect ratio.
 
 ## Version History
 <details>
@@ -311,13 +316,22 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Larger Media Players:** Video 720×600, audio waveform 200px — rendered outside image grid as standalone blocks at full width.
 - **Fullscreen Theme Blend:** Letterbox uses `var(--bg-surface)` — matches active UI theme.
 </details>
-<details open>
+<details>
 <summary>v0.1.8-beta</summary>
 
 - **Store Class Ported to Mobile:** Inline MStore (~350 lines) extracted into dedicated `store.js` (760 lines) — full Store class with backward-compatible property-based access (532+ references) plus desktop-style getState()/setState()/subscribe().
 - **Desktop Parity Features:** subscribe/notify, blockUser/unblockUser, pinMessage/unpinMessage, markAsRead, toggleMute, group management (addGroup/removeGroup/addMemberToGroup), DM management (closeDM/togglePinDM/reopenDM), E2EE key storage, transfer tracking, addOrUpdatePeer.
 - **Bug Fixes:** addMessage() unread tracking fixed (counted every message as unread — removed); mutedChats aliased to settings.mutedChats for mobile read path; setState() now handles currentUser key.
 - **CSP & Prism.js Fixes:** Desktop CSP updated for Prism.js (cdnjs.cloudflare.com); Prism loaded before app.js on both platforms; language-* class on pre elements for immediate syntax highlighting.
+</details>
+<details>
+<summary>v0.1.8.1-beta</summary>
+
+- **Media Persistence Fixed:** Received files (images, audio, video) no longer lost after app restart. _dataUrl stored alongside blob URL for recovery; incoming MESSAGE attachments preserve _dataUrl.
+- **renderMessages No Longer Corrupts Store:** data:→blob URL conversion no longer mutates MStore.messages in-place — eliminates silent data loss from subsequent saves (reactions, edits, deletes).
+- **.webm Misclassification Fixed:** Removed .webm from audioMatch regex — .webm videos no longer misclassified as audio. Video checked before audio in type detection.
+- **Desktop isVideo Added:** Desktop file-received handler now classifies incoming videos as type 'video' with correct MIME instead of 'file' / application/octet-stream.
+- **Mobile Video Aspect Ratio Fixed:** .ovp-video now has object-fit: contain, max-height: 50vh (was 300px), and #000 letterbox background — videos scale correctly to any aspect ratio.
 </details>
 
 See [CHANGELOG.md](CHANGELOG.md) for the full version history.
@@ -477,17 +491,17 @@ Transparency matters in beta. Current constraints include:
 
 ## Roadmap
 
-### Shipped (v0.1.8-beta)
+### Shipped (v0.1.8.1-beta)
 
-- **Store Class Ported to Mobile:** Inline MStore (~350 lines) extracted into dedicated `store.js` (760 lines) — full Store class with backward-compatible property-based access plus desktop-style getState()/setState()/subscribe() for future convergence.
-- **Desktop Parity Features:** subscribe/notify, blockUser/unblockUser, pinMessage/unpinMessage, markAsRead, toggleMute, group management, DM management, E2EE key storage, transfer tracking.
-- **Bug Fixes:** addMessage() unread tracking fixed (counted every message as unread); mutedChats aliased to settings.mutedChats; setState() now handles currentUser.
-- **CSP & Prism.js Fixes:** Desktop CSP updated for Prism.js; Prism loads before app.js on both platforms.
-- **Android Foreground Service (Background Execution):** P2P networking extracted into persistent Foreground Service with notification, WakeLock, START_STICKY. BootReceiver restarts on device boot. Service survives Activity/WebView destruction.
-- **P2P Connectivity Fixes:** Desktop auto-connect port fixed; reconnect uses per-peer stored TCP port; mobile disconnect handler fixed; mobile beacon handlers store tcpPort/connectionId/ip.
-- **Message Editing & Reactions:** Desktop edit broadcast loop eliminated; mobile edits broadcast over P2P; mobile reaction UI (6 emojis, toggle, P2P broadcast).
-- **fMP4 Video Playback Fixed:** PIPELINE_ERROR_DECODE root cause fixed — videos play continuously without stalling.
-- **Larger Media Players:** Video 720×600, audio waveform 200px — standalone blocks at full width with theme-matched letterbox.
+- **Media Persistence Fixed:** Received files no longer lost after restart — `_dataUrl` stored alongside blob URL for recovery. renderMessages no longer mutates store in-place (prevents silent data corruption on save).
+- **.webm Classification Fixed:** `.webm` removed from audioMatch — video checked before audio in type detection.
+- **Desktop isVideo Added:** file-received handler now classifies incoming videos correctly with proper MIME type.
+- **Mobile Video Aspect Ratio Fixed:** `object-fit: contain`, `max-height: 50vh`, `#000` letterbox — videos scale to any aspect ratio.
+- **Store Class Ported to Mobile:** Inline MStore extracted into `store.js` (760 lines) with backward-compatible property-based access.
+- **Android Foreground Service:** P2P networking in persistent Foreground Service with WakeLock, START_STICKY, BootReceiver.
+- **P2P Connectivity Fixes:** Desktop auto-connect port, per-peer TCP port, mobile disconnect/beacon/reconnect fixes.
+- **Message Editing & Reactions:** Mobile edit broadcast, reaction UI (6 emojis, toggle, P2P broadcast).
+- **fMP4 Video Playback Fixed:** PIPELINE_ERROR_DECODE root cause fixed — videos play continuously.
 
 ### In Progress / Planned
 
