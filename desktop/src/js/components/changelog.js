@@ -14,7 +14,28 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.1.8-beta', 'Latest', [
+        versionBlock('0.1.8.1-beta', 'Latest', [
+          ['CRITICAL: P2P Cross-Platform Fixes', [
+            'Mobile→Desktop File Transfers Silently Deleted (CRITICAL): Mobile sent hash: \'\' — desktop computed real SHA-256, always mismatched, deleted file. Fixed: mobile computes SHA-256 via crypto.subtle.digest() before sending; desktop skips hash check when omitted.',
+            'Mobile FILE_TRANSFER Packets Had Empty from/senderId (CRITICAL): _sendLargeFileToPeer called createPacket with 2 args — from was \'\'. Fixed: passes MStore.user.id + peerId as fromId/toId.',
+            'Mobile createPacket Signature Misaligned (CRITICAL): Mobile (type,payload,senderId) vs Desktop (type,fromId,toId,payload) — different arg order + missing packetId + missing to. Aligned to Desktop signature across all 28 call sites.',
+            'Duplicate Messages for Large File Transfers (CRITICAL): Text MESSAGE + FILE_TRANSFER sent separately — receiver created two bubbles. Fixed: _fileId markers in MESSAGE attachments; receive handlers merge into existing message by _fileId before falling back to new entry.'
+          ]],
+          ['High-Impact Fixes', [
+            'Missing File Extensions Added (HIGH): Video (m4v,wmv,flv,f4v,ts,mts,m2ts), Image (svg,tiff,bmp,heic,heif,avif), Audio (opus,mka) — all with correct MIME mappings.',
+            'Media Persistence Fixed (HIGH): Received files no longer lost after restart. FILE_TRANSFER_END stores _dataUrl; renderMessages() reconstructs blob URLs from persisted base64.',
+            'renderMessages No Longer Mutates Store (HIGH): Data URL→blob URL loop was mutating MStore.messages[chatId] in-place. Replaced with non-mutating _resUrl() helper.',
+            '.webm File Misclassification Fixed (HIGH): .webm removed from audioMatch; video checked before audio.',
+            'Desktop File Received isVideo Added (MEDIUM): Added isVideo detection with proper MIME mapping.'
+          ]],
+          ['Video Player', [
+            'Mobile Video Aspect Ratio Fixed: Added object-fit: contain, max-height: 50vh, background: #000 to .ovp-video.'
+          ]],
+          ['Technical', [
+            'Version bumped to v0.1.8.1-beta for hotfix release.'
+          ]]
+        ]) +
+        versionBlock('0.1.8-beta', '', [
           ['Store Class Ported to Mobile', [
             'Dedicated Store class created: Inline MStore (~350 lines) extracted into mobile/src/js/store.js (760 lines) — full Store class with property-based access (MStore.friends, MStore.settings.*) for backward compatibility (532+ mobile references) plus desktop-style getState()/setState()/subscribe() for future convergence.',
             'Desktop parity features added to mobile: subscribe()/notify(), blockUser()/unblockUser(), pinMessage()/unpinMessage(), markAsRead(), toggleMute(), addGroup()/removeGroup()/addMemberToGroup(), closeDM()/togglePinDM()/reopenDM(), E2EE peer key storage, transfer tracking, addOrUpdatePeer().'
