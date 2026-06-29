@@ -66,13 +66,11 @@ Orbit.Protocol = {
     E2EE_KEY_EXCHANGE: 'E2EE_KEY_EXCHANGE'
   },
 
-  createPacket(type, fromId, toId, payload) {
+  createPacket(type, payload, senderId) {
     return JSON.stringify({
-      packetId: null,
       type: type,
-      from: fromId || '',
-      senderId: fromId || '',
-      to: toId,
+      from: senderId || '',
+      senderId: senderId || '',
       timestamp: new Date().toISOString(),
       payload: payload || {}
     });

@@ -1,36 +1,6 @@
 # Orbit Changelog
 
-## v0.1.8.1-beta **(Latest Version)**
-
-> **Note:** This is not a stable release — latest development version with experimental features.
-
-### CRITICAL: P2P Cross-Platform File Transfer Fixes
-
-- **Mobile→Desktop File Transfers Silently Deleted (CRITICAL):** Mobile sent `hash: ''` in every FILE_TRANSFER_START/END packet — desktop's `transfer.js` computed the real SHA-256 and always found a mismatch, deleting the received file immediately after full transfer. Fixed two ways: (1) mobile now computes SHA-256 via `crypto.subtle.digest()` before chunking and sends the real hash; (2) desktop `transfer.js` skips hash check when sender omits the hash (safety net).
-- **Mobile FILE_TRANSFER Packets Had Empty `from`/`senderId` (CRITICAL):** `_sendLargeFileToPeer` called `createPacket(type, payload)` with only 2 args — `from` was `''`. Desktop couldn't identify the sender. Fixed: passes `MStore.user.id` as `fromId` and `peerId` as `toId`.
-- **Mobile `createPacket` Signature Misaligned with Desktop (CRITICAL):** Mobile: `createPacket(type, payload, senderId)` — Desktop: `createPacket(type, fromId, toId, payload)`. Different arg order + missing `packetId` + missing `to` field. Aligned mobile to desktop's `(type, fromId, toId, payload)` signature with matching return shape. Updated all 28 call sites.
-- **Duplicate Messages from Large File Transfers (CRITICAL):** Text MESSAGE and FILE_TRANSFER packets were sent independently — receiver created TWO message bubbles (one text, one file icon). Fixed: sender includes `_fileId` markers in MESSAGE packet attachments; all receive handlers (mobile FILE_TRANSFER_END, desktop `file-received`) search for existing message by `_fileId` and update the attachment in-place before falling back to creating a new entry.
-
-### High-Impact Fixes
-
-- **Missing File Extensions in Mobile File-Type Detection (HIGH):** Mobile's FILE_TRANSFER_END handler was missing many common extensions — videos (`m4v`, `wmv`, `flv`, `f4v`, `ts`, `mts`, `m2ts`), images (`svg`, `tif`/`tiff`, `bmp`, `heic`, `heif`, `avif`), audio (`opus`, `mka`). Added all with correct MIME mappings.
-
-### Critical Bug Fixes (Previous)
-
-- **Media Persistence Fixed (HIGH):** Received files no longer lost after app restart. FILE_TRANSFER_END handler stores `_dataUrl` alongside blob URL — `renderMessages()` reconstructs blob URLs from persisted base64 on restart. Incoming MESSAGE attachments preserve `_dataUrl`.
-- **renderMessages No Longer Mutates Store (HIGH):** Data URL → blob URL loop was mutating `MStore.messages[chatId]` in-place, causing subsequent saves to write dead blob URLs. Replaced with non-mutating `_resUrl()` helper.
-- **.webm File Misclassification Fixed (HIGH):** `.webm` was in both `audioMatch` and `videoMatch` — `audioMatch` checked first. Removed from `audioMatch`; video checked before audio.
-- **Desktop File Received Missing isVideo (MEDIUM):** Added `isVideo` detection with proper MIME mapping.
-
-### Video Player
-
-- **Mobile Video Aspect Ratio Fixed:** Added `object-fit: contain`, `max-height: 50vh`, `background: #000` to `.ovp-video`.
-
-### Technical
-
-- **Version:** v0.1.8.1-beta hotfix release.
-
-## v0.1.8-beta
+## v0.1.8-beta **(Latest Version)**
 
 > **Note:** This is not a stable release — latest development version with experimental features.
 

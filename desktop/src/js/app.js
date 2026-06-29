@@ -799,8 +799,7 @@ document.addEventListener('DOMContentLoaded', () => {
           window.orbitAPI.showNotification('File from ' + senderName, data.name, senderAvatar);
         }
         const isImage = data.name.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) != null;
-        const isVideo = data.name.match(/\.(mp4|mov|avi|mkv|webm|3gp)$/i) != null;
-        const isAudio = data.name.match(/\.(mp3|wav|ogg|flac|aac|m4a|wma)$/i) != null;
+        const isAudio = data.name.match(/\.(webm|mp3|wav|ogg|flac|aac|m4a|wma)$/i) != null;
         const attId = data.fileId || (window.orbitAPI ? window.orbitAPI.getUuid() : Date.now().toString());
         const fileSize = data.size || 0;
         var attType = 'file';
@@ -808,64 +807,28 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isImage) {
           attType = 'image';
           attMime = data.name.toLowerCase().endsWith('.gif') ? 'image/gif' : (data.name.toLowerCase().endsWith('.png') ? 'image/png' : (data.name.toLowerCase().endsWith('.webp') ? 'image/webp' : (data.name.toLowerCase().endsWith('.svg') ? 'image/svg+xml' : 'image/jpeg')));
-        } else if (isVideo) {
-          attType = 'video';
-          var videoExtMap = { mp4: 'video/mp4', mov: 'video/quicktime', avi: 'video/x-msvideo', mkv: 'video/x-matroska', webm: 'video/webm', '3gp': 'video/3gpp' };
-          var vext = data.name.split('.').pop().toLowerCase();
-          attMime = videoExtMap[vext] || 'video/mp4';
         } else if (isAudio) {
           attType = 'audio';
           var extMap = { webm: 'audio/webm', mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', flac: 'audio/flac', aac: 'audio/aac', m4a: 'audio/mp4', wma: 'audio/x-ms-wma' };
           var ext = data.name.split('.').pop().toLowerCase();
           attMime = extMap[ext] || 'audio/webm';
         }
-        // CRIT-4: Try to find existing message with matching _fileId attachment, update it
-        var stateMsgs = window.store.getState().messages || {};
-        var found = false;
-        for (var _chatId in stateMsgs) {
-          var msgs = stateMsgs[_chatId] || [];
-          for (var mi = 0; mi < msgs.length; mi++) {
-            var atts = msgs[mi].attachments;
-            if (atts && Array.isArray(atts)) {
-              for (var ai = 0; ai < atts.length; ai++) {
-                if (atts[ai]._fileId === data.fileId) {
-                  atts[ai].type = attType;
-                  atts[ai].mimeType = attMime;
-                  atts[ai].url = 'orbit-db://attachment/' + data.fileId;
-                  atts[ai].path = data.path;
-                  atts[ai].size = fileSize;
-                  atts[ai].name = data.name;
-                  atts[ai]._pending = false;
-                  window.store.notify();
-                  found = true;
-                  break;
-                }
-              }
-            }
-            if (found) break;
+        window.store.handleIncomingPacket({
+          type: window.Protocol.Types.MESSAGE,
+          from: data.sender,
+          payload: {
+            text: '',
+            attachments: [{
+              id: attId,
+              type: attType,
+              mimeType: attMime,
+              name: data.name,
+              size: fileSize,
+              path: data.path,
+              url: 'orbit-db://attachment/' + attId
+            }]
           }
-          if (found) break;
-        }
-
-        if (!found) {
-          // Fallback: create new message entry
-          window.store.handleIncomingPacket({
-            type: window.Protocol.Types.MESSAGE,
-            from: data.sender,
-            payload: {
-              text: '',
-              attachments: [{
-                id: attId,
-                type: attType,
-                mimeType: attMime,
-                name: data.name,
-                size: fileSize,
-                path: data.path,
-                url: 'orbit-db://attachment/' + attId
-              }]
-            }
-          });
-        }
+        });
       });
 
       window.orbitAPI.on('transfer-progress', (data) => {

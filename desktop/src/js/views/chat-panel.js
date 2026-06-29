@@ -2159,17 +2159,9 @@ window.ChatPanel = {
       }
     }
 
-    // ---- Pre-generate fileIds for large files (used in MESSAGE _fileId + FILE_TRANSFER) ----
-    var _largeFileIds = {};
-    largeFiles.forEach(function(lf) {
-      var fid = (window.orbitAPI && window.orbitAPI.getUuid) ? window.orbitAPI.getUuid() : (Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8));
-      _largeFileIds[lf.att.id] = fid;
-      lf._fileId = fid;
-    });
-
-    // ---- Send MESSAGE with text + small file data URLs (+ large file markers for CRIT-4) ----
+    // ---- Send MESSAGE with text + small file data URLs ----
     var msgId = Date.now() + 2;
-    if (text || inlineAttachments.length > 0 || largeFiles.length > 0) {
+    if (text || inlineAttachments.length > 0) {
       var payload = {
         text: text || '',
         msgId: msgId
@@ -2182,14 +2174,9 @@ window.ChatPanel = {
       if (this.replyingTo) {
         payload.replyTo = this.replyingTo.id;
       }
-      payload.attachments = [];
       if (inlineAttachments.length > 0) {
-        inlineAttachments.forEach(function(a) { payload.attachments.push(a); });
+        payload.attachments = inlineAttachments;
       }
-      // Add _fileId markers for large files so receiver can merge (CRIT-4)
-      largeFiles.forEach(function(lf) {
-        payload.attachments.push({ _fileId: lf._fileId, name: lf.staged.name, type: lf.staged.type, _pending: true });
-      });
 
       // E2EE: encrypt text for each recipient
       var settings = window.store.getState().settings;
@@ -2212,8 +2199,7 @@ window.ChatPanel = {
     for (var li = 0; li < largeFiles.length; li++) {
       var lf = largeFiles[li];
       var fileData = lf.data;
-      // Use pre-generated fileId from _fileId (matches MESSAGE attachment marker — CRIT-4)
-      var fileId = lf._fileId;
+      var fileId = (window.orbitAPI && window.orbitAPI.getUuid) ? window.orbitAPI.getUuid() : (Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8));
       sentFileIds.push(fileId);
       var totalChunks = Math.ceil(fileData.byteLength / CHUNK_SIZE);
 
