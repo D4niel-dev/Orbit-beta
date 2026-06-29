@@ -836,6 +836,16 @@ document.addEventListener('DOMContentLoaded', () => {
                   atts[ai].size = fileSize;
                   atts[ai].name = data.name;
                   atts[ai]._pending = false;
+                  // CRIT-5: Persist received file data into DB so orbit-db:// resolves after restart
+                  try {
+                    window.orbitAPI.dbSaveAttachment(msgs[mi].id, {
+                      id: atts[ai].id || data.fileId,
+                      type: attType,
+                      name: data.name,
+                      size: fileSize,
+                      path: data.path
+                    });
+                  } catch(e) { console.error('[file-received] dbSaveAttachment failed:', e); }
                   window.store.notify();
                   found = true;
                   break;

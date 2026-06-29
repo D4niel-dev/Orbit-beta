@@ -53,7 +53,7 @@ class OrbitDatabase {
       deleteMessage: this.db.prepare('DELETE FROM messages WHERE id = ? AND chatId = ?'),
       
       // Attachments
-      saveAttachment: this.db.prepare('INSERT INTO attachments (id, messageId, type, name, size, data, hash, localPath) VALUES (@id, @messageId, @type, @name, @size, @data, @hash, @localPath)'),
+      saveAttachment: this.db.prepare('INSERT OR REPLACE INTO attachments (id, messageId, type, name, size, data, hash, localPath) VALUES (@id, @messageId, @type, @name, @size, @data, @hash, @localPath)'),
       getAttachmentsForMessage: this.db.prepare('SELECT id, type, name, size, localPath FROM attachments WHERE messageId = ?'),
       getAttachmentData: this.db.prepare('SELECT type, name, data, localPath FROM attachments WHERE id = ?'),
       getAttachmentThumbnail: this.db.prepare('SELECT type, name, thumbnail, localPath FROM attachments WHERE id = ?'),

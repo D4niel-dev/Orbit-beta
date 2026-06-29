@@ -180,9 +180,12 @@ class TransferManager {
     const buffer = Buffer.from(payload.data, 'base64');
     try {
       const canContinue = transfer.stream.write(buffer);
-      // Apply backpressure if internal buffer is full
-      if (!canContinue) {
-        transfer.stream.once('drain', () => {});
+      // Apply backpressure if internal buffer is full (XFER-5: guard against listener pileup)
+      if (!canContinue && !transfer._backpressured) {
+        transfer._backpressured = true;
+        transfer.stream.once('drain', () => {
+          transfer._backpressured = false;
+        });
       }
     } catch (err) {
       this.cancelReceive(payload.fileId);

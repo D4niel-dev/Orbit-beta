@@ -10,6 +10,7 @@ class Discovery {
     this.socket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
     this.identityProvider = identityProvider;
     this.onPeerFound = onPeerFound;
+    this.onAnyBeacon = null; // fires on EVERY beacon (for auto-connect retry)
     this.beaconInterval = null;
     this.peers = new Map();
     this._started = false;
@@ -162,6 +163,11 @@ class Discovery {
     }
 
     this.peers.set(peerId, { ...peerData, ip, lastSeen: now });
+
+    // Fire on EVERY beacon so auto-connect can retry failed TCP connections
+    if (this.onAnyBeacon) {
+      this.onAnyBeacon({ ...peerData, ip: ip, lastSeen: now });
+    }
   }
 
   _pruneStalePeers() {

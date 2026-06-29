@@ -150,6 +150,7 @@ function startNetworkMonitor() {
           console.log('[AutoConnect] Peer gone:', peerId);
           if (mainWindow) mainWindow.webContents.send('peer-gone', peerId);
         };
+        discoveryInstance.onAnyBeacon = _tryAutoConnect;
         discoveryInstance.start();
       }
     }
@@ -173,6 +174,29 @@ let mainWindow = null;
 let tray = null;
 let tempDirPath = null;
 let e2eeKeyPair = null; // { publicKey, privateKey } hex strings
+const _autoConnectLastAttempt = new Map(); // peerId -> timestamp of last TCP attempt
+const AUTO_CONNECT_THROTTLE = 30000; // Don't retry same peer more than once per 30s
+
+// Throttled auto-connect: retries TCP on every beacon if not already connected
+function _tryAutoConnect(peer) {
+  if (!socketInstance || !peer.userId || !peer.ip) return;
+  var alreadyConnected = socketInstance.connections.has(peer.userId) ||
+    socketInstance._pendingConnects.has(peer.userId);
+  if (alreadyConnected) {
+    _autoConnectLastAttempt.delete(peer.userId);
+    return;
+  }
+  var last = _autoConnectLastAttempt.get(peer.userId) || 0;
+  if (Date.now() - last < AUTO_CONNECT_THROTTLE) return;
+  _autoConnectLastAttempt.set(peer.userId, Date.now());
+  console.log('[AutoConnect] Retry TCP to', peer.userId, peer.ip + ':' + (peer.tcpPort || 46000));
+  socketInstance.connectToPeer(peer.userId, peer.ip, peer.tcpPort || 46000).then(function() {
+    console.log('[AutoConnect] Connected to', peer.userId);
+    _autoConnectLastAttempt.delete(peer.userId);
+  }).catch(function(err) {
+    console.error('[AutoConnect] Retry failed for', peer.userId, ':', err && err.message);
+  });
+}
 
 // E2EE helpers using Node crypto
 function e2eeGetOrCreateKeyPair() {
@@ -929,6 +953,7 @@ app.whenReady().then(() => {
         console.log('[AutoConnect] Peer gone:', peerId);
         mainWindow.webContents.send('peer-gone', peerId);
       };
+      discoveryInstance.onAnyBeacon = _tryAutoConnect;
       discoveryInstance.start();
       tryAddFirewallRule();
       startLanScan(socketInstance);
