@@ -54,7 +54,7 @@ class Discovery {
       }
       console.log('[Discovery] Listening on ' + this.MULTICAST_ADDR + ':' + this.PORT);
 
-      this.beaconInterval = setInterval(() => this.broadcastBeacon(), 10000);
+      this.beaconInterval = setInterval(() => this.broadcastBeacon(), 5000);
       this.broadcastBeacon();
 
       // Prune stale peers every 60s

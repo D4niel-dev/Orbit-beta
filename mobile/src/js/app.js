@@ -1478,12 +1478,42 @@ document.addEventListener('DOMContentLoaded', function() {
       var myId = MStore.user ? MStore.user.id : 'mobile';
 
       // Compute SHA-256 hash for integrity verification (CRIT-1)
+      // NOTE: Uses manual base64 decoder — atob() on Android WebView corrupts bytes >127 (binary files)
+      var _b64Lookup = null;
+      function _base64ToBytes(b64str) {
+        if (!_b64Lookup) {
+          _b64Lookup = [];
+          var b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+          for (var li = 0; li < 64; li++) _b64Lookup[b64chars.charCodeAt(li)] = li;
+        }
+        // Strip non-base64 chars (whitespace, padding etc.) — only keep A-Z a-z 0-9 + /
+        var clean = '';
+        for (var si = 0; si < b64str.length; si++) {
+          var cc = b64str.charCodeAt(si);
+          if (_b64Lookup[cc] !== undefined) clean += b64str[si];
+        }
+        // Compute decoded binary length from clean base64 data
+        var binLen = Math.floor(clean.length * 3 / 4);
+        var buf = new ArrayBuffer(binLen);
+        var bytes = new Uint8Array(buf);
+        // Pad to multiple of 4 with 'A' (= 0) so final group decodes cleanly
+        while (clean.length % 4 !== 0) clean += 'A';
+        var p = 0;
+        for (var bi = 0; bi + 3 < clean.length; bi += 4) {
+          var a = _b64Lookup[clean.charCodeAt(bi)];
+          var b = _b64Lookup[clean.charCodeAt(bi + 1)];
+          var c = _b64Lookup[clean.charCodeAt(bi + 2)];
+          var d = _b64Lookup[clean.charCodeAt(bi + 3)];
+          if (p < binLen) bytes[p++] = (a << 2) | (b >> 4);
+          if (p < binLen) bytes[p++] = ((b & 0x0F) << 4) | (c >> 2);
+          if (p < binLen) bytes[p++] = ((c & 0x03) << 6) | d;
+        }
+        return buf;
+      }
+
       function _computeFileHash(b64str, callback) {
         try {
-          var bin = atob(b64str);
-          var buf = new ArrayBuffer(bin.length);
-          var bytes = new Uint8Array(buf);
-          for (var hi = 0; hi < bin.length; hi++) bytes[hi] = bin.charCodeAt(hi);
+          var buf = _base64ToBytes(b64str);
           crypto.subtle.digest('SHA-256', buf).then(function(hashBuf) {
             var hashArr = Array.from(new Uint8Array(hashBuf));
             var hex = hashArr.map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
@@ -1493,6 +1523,11 @@ document.addEventListener('DOMContentLoaded', function() {
       }
 
       _computeFileHash(b64, function(fileHash) {
+        if (fileHash) {
+          debugLog('P2P', 'Computed file hash for ' + att.name, { fileId: fileId, hash: fileHash, b64len: b64.length });
+        } else {
+          debugLog('P2P', 'crypto.subtle unavailable — sending without hash for ' + att.name, { fileId: fileId, b64len: b64.length });
+        }
         Orbit.P2P.send(peerId, Orbit.Protocol.createPacket(
           Orbit.Protocol.Types.FILE_TRANSFER_START, myId, peerId,
           { fileId: fileId, fileName: att.name, fileSize: Math.round(b64.length * 3 / 4), totalChunks: totalChunks, hash: fileHash }
@@ -3974,11 +4009,24 @@ document.addEventListener('DOMContentLoaded', function() {
   // Send button
   document.getElementById('btn-send').addEventListener('click', sendMessage);
 
-  // Enter to send
+  // Enter to send, Shift+Enter to insert newline
   document.getElementById('chat-input').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter' && !e.shiftKey && MStore.settings.enterToSend) {
-      e.preventDefault();
-      sendMessage();
+    if (e.key === 'Enter') {
+      if (e.shiftKey) {
+        // Insert newline at cursor — some Android keyboards don't default to this in textareas
+        e.preventDefault();
+        var start = this.selectionStart;
+        var end = this.selectionEnd;
+        this.value = this.value.substring(0, start) + '\n' + this.value.substring(end);
+        this.selectionStart = this.selectionEnd = start + 1;
+        var evt = new Event('input', { bubbles: true });
+        this.dispatchEvent(evt);
+        return;
+      }
+      if (MStore.settings.enterToSend) {
+        e.preventDefault();
+        sendMessage();
+      }
     }
   });
 

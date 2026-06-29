@@ -22,6 +22,14 @@
 
   var _players = [];
 
+  var _anyMenu = null;
+  var _menuCleanup = null;
+
+  function closeAnyMenu() {
+    if (_anyMenu) { _anyMenu.remove(); _anyMenu = null; }
+    if (_menuCleanup) { _menuCleanup(); _menuCleanup = null; }
+  }
+
   window.OrbitAudioPlayer = {
     create: function(container, url) {
       var wrapper = document.createElement('div');
@@ -78,10 +86,24 @@
       stopBtn.className = 'oap-btn oap-stop';
       stopBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg>';
 
-      var loopBtn = document.createElement('button');
-      loopBtn.className = 'oap-btn oap-loop';
-      loopBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>';
-      loopBtn.style.opacity = '0.4';
+      // Volume
+      var volBtn = document.createElement('button');
+      volBtn.className = 'oap-btn oap-vol';
+      volBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14" stroke="currentColor" stroke-width="2" fill="none"/></svg>';
+
+      var volSlider = document.createElement('input');
+      volSlider.type = 'range';
+      volSlider.className = 'oap-vol-slider';
+      volSlider.min = 0;
+      volSlider.max = 100;
+      volSlider.value = 100;
+      volSlider.style.display = 'none';
+
+      // More options button (⋮)
+      var moreBtn = document.createElement('button');
+      moreBtn.className = 'oap-btn oap-more';
+      moreBtn.title = 'More';
+      moreBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>';
 
       var timeEl = document.createElement('span');
       timeEl.className = 'oap-time';
@@ -89,9 +111,14 @@
 
       ctrl.appendChild(playBtn);
       ctrl.appendChild(stopBtn);
-      ctrl.appendChild(loopBtn);
+      ctrl.appendChild(volBtn);
+      ctrl.appendChild(volSlider);
+      ctrl.appendChild(moreBtn);
       ctrl.appendChild(timeEl);
-      wrapper.appendChild(canvas);
+      var canvasBox = document.createElement('div');
+      canvasBox.className = 'oap-canvas-box';
+      canvasBox.appendChild(canvas);
+      wrapper.appendChild(canvasBox);
       wrapper.appendChild(seek);
       wrapper.appendChild(audio);
       wrapper.appendChild(ctrl);
@@ -181,10 +208,125 @@
 
       playBtn.addEventListener('click', function(e) { e.stopPropagation(); if (audio.paused) doPlay(); else doPause(); });
       stopBtn.addEventListener('click', function(e) { e.stopPropagation(); doStop(); });
-      loopBtn.addEventListener('click', function(e) {
+
+      volBtn.addEventListener('click', function(e) {
         e.stopPropagation();
-        looping = !looping;
-        loopBtn.style.opacity = looping ? '1' : '0.4';
+        closeAnyMenu();
+        volSlider.style.display = volSlider.style.display === 'none' ? 'block' : 'none';
+      });
+      volSlider.addEventListener('input', function() {
+        audio.volume = this.value / 100;
+        volBtn.innerHTML = this.value == 0
+          ? '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>'
+          : '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14" stroke="currentColor" stroke-width="2" fill="none"/></svg>';
+      });
+
+      // ── More Options Menu ──
+      var speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
+      var currentSpeed = 1;
+
+      function menuCSS(z) {
+        var r = 'system-ui,-apple-system,sans-serif';
+        return 'position:fixed;top:auto;bottom:auto;left:auto;right:auto;background:var(--bg-surface,#222);border:1px solid var(--border-color,#333);border-radius:8px;padding:4px 0;min-width:180px;box-shadow:0 4px 16px rgba(0,0,0,0.4);box-shadow:var(--shadow-md, 0 4px 16px rgba(0,0,0,0.4));z-index:' + z + ';font-family:' + r + ';font-size:13px;overflow:hidden;';
+      }
+
+      function showMenu(rect) {
+        closeAnyMenu();
+        var menu = document.createElement('div');
+        menu.className = 'oap-menu';
+
+        function mi(label, iconSvg, onClick, disabled, active) {
+          var item = document.createElement('div');
+          var tc = disabled ? 'var(--text-muted,#666)' : 'var(--text-primary,#eee)';
+          item.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;font-size:13px;color:' + tc + ';cursor:' + (disabled ? 'default' : 'pointer') + ';transition:background 0.1s;';
+          if (active) item.style.background = 'rgba(255,255,255,0.08)';
+          if (!disabled) {
+            item.addEventListener('mouseenter', function() { if (!active) item.style.background = 'var(--bg-hover,#333)'; });
+            item.addEventListener('mouseleave', function() { if (!active) item.style.background = 'transparent'; });
+          }
+          item.innerHTML = iconSvg + '<span>' + label + '</span>';
+          if (!disabled) item.addEventListener('click', function(e) { e.stopPropagation(); closeAnyMenu(); onClick(); });
+          menu.appendChild(item);
+        }
+
+        function subMenu(title, items) {
+          closeAnyMenu();
+          var sub = document.createElement('div');
+          sub.className = 'oap-menu';
+          sub.style.cssText = menuCSS(100000) + 'min-width:160px;';
+
+          var back = document.createElement('div');
+          back.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;font-size:13px;color:var(--text-muted,#999);cursor:pointer;transition:background 0.1s;border-bottom:1px solid var(--border-color,#333);';
+          back.addEventListener('mouseenter', function() { back.style.background = 'var(--bg-hover,#333)'; });
+          back.addEventListener('mouseleave', function() { back.style.background = 'transparent'; });
+          back.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg><span>' + title + '</span>';
+          back.addEventListener('click', function(e) { e.stopPropagation(); closeAnyMenu(); showMenu(rect); });
+          sub.appendChild(back);
+
+          items.forEach(function(it) {
+            var sel = document.createElement('div');
+            var isActive = it.active;
+            sel.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;font-size:13px;color:var(--text-primary,#eee);cursor:pointer;transition:background 0.1s;';
+            if (isActive) sel.style.background = 'rgba(255,255,255,0.08)';
+            sel.addEventListener('mouseenter', function() { sel.style.background = isActive ? 'rgba(255,255,255,0.08)' : 'var(--bg-hover,#333)'; });
+            sel.addEventListener('mouseleave', function() { sel.style.background = isActive ? 'rgba(255,255,255,0.08)' : 'transparent'; });
+            sel.innerHTML = (isActive ? '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><polygon points="20,6 9,17 4,12"/></svg>' : '<span style="width:14px"></span>') + '<span>' + it.label + '</span>';
+            sel.addEventListener('click', function(e) { e.stopPropagation(); it.action(); closeAnyMenu(); });
+            sub.appendChild(sel);
+          });
+
+          positionAndShow(sub, rect);
+          _anyMenu = sub;
+          listenClose(sub);
+        }
+
+        mi(looping ? 'Loop: On' : 'Loop: Off',
+          looping
+            ? '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>'
+            : '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>',
+          function() { looping = !looping; }, false, looping
+        );
+
+        mi('Playback Speed', '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>', function() {
+          subMenu('Playback Speed', speeds.map(function(spd) {
+            return { label: spd + 'x', active: spd === currentSpeed, action: function() { currentSpeed = spd; audio.playbackRate = spd; } };
+          }));
+        });
+
+        positionAndShow(menu, rect);
+        _anyMenu = menu;
+        listenClose(menu);
+      }
+
+      function positionAndShow(el, rect) {
+        el.style.cssText = menuCSS(99999);
+        el.style.left = Math.min(rect.right + 4, window.innerWidth - 180) + 'px';
+        el.style.top = (rect.bottom + 4) + 'px';
+        el.style.visibility = 'visible';
+        document.body.appendChild(el);
+        var maxH = window.innerHeight - rect.bottom - 10;
+        if (maxH < 120) {
+          el.style.top = '';
+          el.style.bottom = '4px';
+          el.style.maxHeight = (rect.top - 10) + 'px';
+          el.style.overflowY = 'auto';
+        } else {
+          el.style.maxHeight = maxH + 'px';
+          el.style.overflowY = 'auto';
+        }
+      }
+
+      function listenClose(el) {
+        var fn = function(e2) { if (!el.contains(e2.target) && e2.target !== moreBtn) closeAnyMenu(); };
+        document.addEventListener('click', fn);
+        _menuCleanup = function() { document.removeEventListener('click', fn); };
+      }
+
+      moreBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        volSlider.style.display = 'none';
+        if (_anyMenu) { closeAnyMenu(); return; }
+        showMenu(moreBtn.getBoundingClientRect());
       });
 
       // Seek bar
@@ -233,6 +375,7 @@
         _a: audio,
         destroy: function() {
           dead = true;
+          closeAnyMenu();
           audio.pause();
           audio.src = '';
           if (_blobUrl) URL.revokeObjectURL(_blobUrl);
@@ -268,7 +411,7 @@
     },
     restorePlaying: function(saved) {
       if (!saved || !saved.length) return;
-      var feed = document.getElementById('message-feed');
+      var feed = document.getElementById('chat-message-feed');
       saved.forEach(function(p) {
         if (feed && p._msgId) {
           var row = feed.querySelector('.message-row[data-msg-id="' + p._msgId + '"]');

@@ -266,7 +266,10 @@
       ctrl.appendChild(fsBtn);
       ctrl.appendChild(moreBtn);
       ctrl.appendChild(timeEl);
-      wrapper.appendChild(video);
+      var videoBox = document.createElement('div');
+      videoBox.className = 'ovp-video-box';
+      videoBox.appendChild(video);
+      wrapper.appendChild(videoBox);
       wrapper.appendChild(seek);
       wrapper.appendChild(ctrl);
       container.appendChild(wrapper);
@@ -327,6 +330,13 @@
       // ── Fullscreen toggle ──
       var _inFS = false;
 
+      function updateFSButton() {
+        fsBtn.title = _inFS ? 'Exit Fullscreen' : 'Fullscreen';
+        fsBtn.innerHTML = _inFS
+          ? '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>'
+          : '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
+      }
+
       function onFSChange() {
         if (document.fullscreenElement === wrapper) {
           _inFS = true;
@@ -334,7 +344,8 @@
           wrapper.style.maxHeight = '100vh';
           wrapper.style.width = '100vw';
           wrapper.style.background = 'var(--bg-surface)';
-          video.style.maxHeight = 'calc(100vh - 48px)';
+          seek.style.marginTop = '14px';
+          video.style.maxHeight = 'calc(100vh - 62px)';
           video.style.objectFit = 'contain';
           video.style.width = '100%';
           video.style.background = 'var(--bg-surface)';
@@ -345,12 +356,14 @@
           wrapper.style.maxHeight = '';
           wrapper.style.width = '';
           wrapper.style.background = '';
+          seek.style.marginTop = '';
           video.style.maxHeight = '';
           video.style.objectFit = '';
           video.style.width = '';
           video.style.background = '';
           video.style.boxShadow = '';
         }
+        updateFSButton();
       }
 
       document.addEventListener('fullscreenchange', onFSChange);
@@ -375,7 +388,7 @@
 
       function menuCSS(z) {
         var r = 'system-ui,-apple-system,sans-serif';
-        return 'position:fixed;top:auto;bottom:auto;left:auto;right:auto;background:var(--bg-surface,#222);border:1px solid var(--border-color,#333);border-radius:8px;padding:4px 0;min-width:180px;box-shadow:0 4px 16px rgba(0,0,0,0.4);z-index:' + z + ';font-family:' + r + ';font-size:13px;overflow:hidden;';
+        return 'position:fixed;top:auto;bottom:auto;left:auto;right:auto;background:var(--bg-surface,#222);border:1px solid var(--border-color,#333);border-radius:8px;padding:4px 0;min-width:180px;box-shadow:0 4px 16px rgba(0,0,0,0.4);box-shadow:var(--shadow-md, 0 4px 16px rgba(0,0,0,0.4));z-index:' + z + ';font-family:' + r + ';font-size:13px;overflow:hidden;';
       }
 
       function menuParent() {
@@ -460,7 +473,11 @@
           }
         });
 
-        mi('Fullscreen', '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>', function() { toggleFS(); });
+        mi(_inFS ? 'Exit Fullscreen' : 'Fullscreen',
+          _inFS
+            ? '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>'
+            : '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>',
+          function() { toggleFS(); });
 
         positionAndShow(menu, rect, parent);
         _anyMenu = menu;
@@ -663,7 +680,7 @@
     },
     restorePlaying: function(saved) {
       if (!saved || !saved.length) return;
-      var feed = document.getElementById('message-feed');
+      var feed = document.getElementById('chat-message-feed');
       saved.forEach(function(p) {
         if (feed && p._msgId) {
           var row = feed.querySelector('.message-row[data-msg-id="' + p._msgId + '"]');
