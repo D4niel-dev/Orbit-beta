@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v0181-beta-latest-version">v0.1.8.1-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v019-beta-latest-version">v0.1.9-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@
 
 | Channel | Version | Status |
 |---------|---------|--------|
-| *Development* | v0.1.8.1-beta | Latest build (unstable) |
+| *Development* | v0.1.9-beta | Latest build (unstable) |
 | **Stable** | v0.1.1-beta | Stable release |
 | Previous **Stable** | v0.0.5-beta | Legacy stable release |
 
@@ -90,17 +90,18 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage desktop app** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
-## Highlights (v0.1.8.1-beta)
+## Highlights (v0.1.9-beta)
 
-- **CRITICAL: Mobile→Desktop File Transfers Fixed:** All mobile→desktop file transfers were silently deleted due to empty SHA-256 hash. Mobile now computes real hash via `crypto.subtle.digest()`; desktop skips hash check when omitted.
-- **CRITICAL: Cross-Platform createPacket Signature Aligned:** Mobile `createPacket(type, payload, senderId)` changed to match Desktop `createPacket(type, fromId, toId, payload)` — fixes `from`/`to`/`packetId` being empty or missing across all 28 call sites.
-- **CRITICAL: No More Duplicate Messages for Large Files:** Text and file attachments now merge into a single message bubble instead of creating two separate entries. All receive handlers (mobile + desktop) use `_fileId` markers to merge.
-- **Media Persistence Fixed:** Received files no longer lost after app restart. `_dataUrl` stored alongside blob URLs for restart recovery.
-- **renderMessages No Longer Corrupts Store:** Data URL → blob URL conversion no longer mutates `MStore.messages` in-place — eliminates silent data loss.
-- **.webm File Classification Fixed:** `.webm` videos no longer misclassified as audio. Video checked before audio.
-- **Missing File Extensions Added:** Video (`m4v`, `wmv`, `flv`, `f4v`, `ts`, `mts`, `m2ts`), Image (`svg`, `tiff`, `bmp`, `heic`, `heif`, `avif`), Audio (`opus`, `mka`) — all with correct MIME mappings.
-- **Desktop File Received isVideo Added:** Desktop now properly classifies incoming video files with correct MIME type.
-- **Mobile Video Aspect Ratio Fixed:** Added `object-fit: contain` and `max-height: 50vh` — videos now scale correctly to any aspect ratio.
+- **CRITICAL: Mobile base64 Decode Corruption Fixed:** `atob()` on Android WebView corrupts bytes >127 — all 7 binary decode sites replaced with safe manual lookup-table decoder.
+- **CRITICAL: Desktop→Mobile Chunk Joining Fixed:** Desktop `btoa()`'s each 64KB chunk independently (each with own padding); mobile was doing `chunks.join('')` producing invalid base64 at boundaries. Fixed: per-chunk independent decode + ArrayBuffer concatenation.
+- **CRITICAL: WriteStream Race Fixed:** Mobile→desktop transfers had truncated files — `stream.end()` async caused `onComplete` to fire before flush. Fixed: `stream.on('finish', ...)` wraps completion.
+- **CRITICAL: P2P cleanup() Race Fixed:** Android `cleanup()` called `stopService()` (async), then `startServer()` found `boundService` still non-null and skipped restart. Fixed: Java cleanup is a no-op.
+- **Mobile Video Type Override Fixed:** FILE_TRANSFER_END no longer overwrites correct video/audio type with regex extension fallback.
+- **Mobile Video Compression Dropped Audio Fixed:** `canvas.captureStream()` drops audio — disabled lossy compression; raw video with audio now sent.
+- **Group Chat File Routing Fixed:** `chatId` added to FILE_TRANSFER_START/END packets.
+- **Mobile Metadata Preload:** `muted=true` + `preload=metadata` forces mobile browsers to load duration immediately.
+- **Unstable AV Transfer Warning Modal:** Alert-triangle modal with "Don't show again" checkbox on audio/video send.
+- **Auto-Discovery Diagnostic Logging:** `[AutoConnect]` logs help diagnose firewall/network issues.
 
 ## Version History
 <details>
@@ -333,6 +334,20 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Desktop isVideo Added:** Desktop file-received handler now classifies incoming videos as type 'video' with correct MIME instead of 'file' / application/octet-stream.
 - **Mobile Video Aspect Ratio Fixed:** .ovp-video now has object-fit: contain, max-height: 50vh (was 300px), and #000 letterbox background — videos scale correctly to any aspect ratio.
 </details>
+<details open>
+<summary>v0.1.9-beta</summary>
+
+- **CRITICAL: Mobile base64 Decode Corruption Fixed** — atob() on Android WebView corrupts bytes >127 — all 7 binary decode sites replaced with safe manual decoder.
+- **CRITICAL: Desktop→Mobile Chunk Joining Fixed** — desktop btoa()'s each 64KB chunk independently; mobile chunks.join('') produced invalid base64. Per-chunk independent decode + ArrayBuffer concat.
+- **CRITICAL: WriteStream Race Fixed** — mobile→desktop truncated files due to async stream.end(). stream.on('finish') wraps completion.
+- **CRITICAL: P2P cleanup() Race Fixed** — Android stopService() async race skipped service restart on re-init. Java cleanup is now a no-op.
+- **Mobile Video Type Override Fixed** — FILE_TRANSFER_END no longer overwrites video/audio type with extension regex.
+- **Mobile Video Compression Dropped Audio Fixed** — disabled lossy compression; raw video with audio sent.
+- **Group Chat File Routing Fixed** — chatId added to FILE_TRANSFER_START/END packets.
+- **Mobile Metadata Preload** — muted=true + preload=metadata forces immediate duration display.
+- **Unstable AV Transfer Warning Modal** — alert-triangle modal with "Don't show again" checkbox.
+- **Auto-Discovery Diagnostic Logging** — [AutoConnect] logs for firewall debugging.
+</details>
 
 See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
@@ -491,17 +506,18 @@ Transparency matters in beta. Current constraints include:
 
 ## Roadmap
 
-### Shipped (v0.1.8.1-beta)
+### Shipped (v0.1.9-beta)
 
-- **Media Persistence Fixed:** Received files no longer lost after restart — `_dataUrl` stored alongside blob URL for recovery. renderMessages no longer mutates store in-place (prevents silent data corruption on save).
-- **.webm Classification Fixed:** `.webm` removed from audioMatch — video checked before audio in type detection.
-- **Desktop isVideo Added:** file-received handler now classifies incoming videos correctly with proper MIME type.
-- **Mobile Video Aspect Ratio Fixed:** `object-fit: contain`, `max-height: 50vh`, `#000` letterbox — videos scale to any aspect ratio.
-- **Store Class Ported to Mobile:** Inline MStore extracted into `store.js` (760 lines) with backward-compatible property-based access.
-- **Android Foreground Service:** P2P networking in persistent Foreground Service with WakeLock, START_STICKY, BootReceiver.
-- **P2P Connectivity Fixes:** Desktop auto-connect port, per-peer TCP port, mobile disconnect/beacon/reconnect fixes.
-- **Message Editing & Reactions:** Mobile edit broadcast, reaction UI (6 emojis, toggle, P2P broadcast).
-- **fMP4 Video Playback Fixed:** PIPELINE_ERROR_DECODE root cause fixed — videos play continuously.
+- **CRITICAL: Mobile base64 Decode Corruption** — all 7 binary atob() decode sites replaced with safe manual decoder
+- **CRITICAL: Desktop→Mobile Chunk Joining** — per-chunk independent decode + ArrayBuffer concatenation
+- **CRITICAL: WriteStream Race** — stream.on('finish') wraps hash check + completion
+- **CRITICAL: P2P cleanup() Race** — Java cleanup is a no-op (JS already clears listeners)
+- **Mobile Video Type Override Fixed** — FILE_TRANSFER_END preserves original video/audio type
+- **Mobile Video Compression Dropped Audio Fixed** — disabled lossy compression; raw video with audio
+- **Group Chat File Routing Fixed** — chatId in FILE_TRANSFER_START/END packets
+- **Mobile Metadata Preload** — muted=true forces immediate duration on mobile
+- **Unstable AV Transfer Warning Modal** — alert-triangle icon, "Don't show again" checkbox
+- **Auto-Discovery Diagnostic Logging** — [AutoConnect] logs in DevTools
 
 ### In Progress / Planned
 

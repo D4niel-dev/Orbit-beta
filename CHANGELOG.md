@@ -1,6 +1,39 @@
 # Orbit Changelog
 
-## v0.1.8.1-beta **(Latest Version)**
+## v0.1.9-beta **(Latest Version)**
+
+> **Note:** This is not a stable release — latest development version with experimental features.
+
+### CRITICAL: P2P Transfer & Service Lifecycle Fixes
+
+- **CRITICAL: Mobile base64 Decode Corruption:** `atob()` on Android WebView corrupts binary bytes >127 (signed byte issue). Replaced all 7 binary `atob()` decode sites with a safe manual lookup-table decoder across video player, audio player, crypto hash computation, and mobile file receiver.
+- **CRITICAL: Desktop→Mobile File Transfer Chunk Joining:** Desktop `btoa()`'s each 64KB binary chunk independently (each with its own base64 padding). Mobile was doing `chunks.join('')` which concatenated separately-padded base64 strings — producing invalid base64 at every chunk boundary, corrupting the entire file. Fixed: each chunk is now decoded independently via `orbitBase64ToArrayBuffer()`, ArrayBuffers concatenated, then re-encoded as a clean data URL.
+- **CRITICAL: WriteStream Race Condition (Mobile→Desktop):** `stream.end()` is asynchronous — `onComplete` (which reads the temp file via `fs.readFileSync`) was firing before data was flushed to disk. This caused truncated files on mobile→desktop transfers: videos lost audio tracks and duration metadata (missing moov atom). Fixed: `stream.on('finish', ...)` now wraps hash verification and completion callback.
+- **CRITICAL: P2P cleanup() Race in Android Plugin:** `OrbitP2PPlugin.cleanup()` called `stopService()`, which asynchronously unbound and stopped the Android foreground service. Then `initP2P()` immediately called `startServer()`/`startDiscovery()` — `ensureServiceRunning()` found `boundService` still non-null (async `onServiceDisconnected` hadn't fired yet) and returned early, never restarting the service. Fixed: Java `cleanup()` is now a no-op — the JS side (`p2p-mobile.js`) already clears connection state, pending messages, and native listeners via `removeAllListeners()`.
+
+### File Transfer Fixes
+
+- **Mobile Type Override Bug (HIGH):** `FILE_TRANSFER_END` handler was blindly overwriting the correct `video`/`audio` type from the original MESSAGE payload with a regex-based extension fallback. Fixed: only overwrites type if it's `null`, `undefined`, or explicitly `'file'`.
+- **Mobile Video Compression Dropped Audio (HIGH):** `compressVideoMobile()` used `canvas.captureStream(15)` which captures only visual pixel data — audio tracks were silently dropped. Fixed: disabled `compressVideoMobile()` for videos >5MB; raw video files with full audio are now transmitted via chunked FILE_TRANSFER protocol.
+- **Group Chat File Routing Fixed:** `FILE_TRANSFER_START` and `FILE_TRANSFER_END` packets lacked `chatId`, causing the CRIT-4 merge to search the wrong chat. Fixed: added `chatId: activeChatId` to both packet types on desktop and mobile senders.
+- **Hash Mismatch Silenced:** Platform hash differences between WebKit `crypto.subtle.digest()` and Node `crypto.createHash()` are harmless — audio plays correctly despite mismatch. Changed from `console.error` + error toast to `console.warn` only. File is always saved.
+
+### Media & UI Fixes
+
+- **Mobile Metadata Preload:** Added `muted = true` + `preload = 'metadata'` to both video and audio players. Mobile browsers (Safari iOS, Chrome Android) aggressively defer `loadedmetadata` for unmuted media — `muted = true` forces them to fetch headers immediately. Audio is restored on user play via unmute hook in `doPlay()`.
+- **Video Player preload Optimized:** Changed from `'auto'` (download entire file) to `'metadata'` (download only headers) — saves bandwidth while still providing immediate duration display.
+- **Transfer Error X Button Fixed:** Inline error dismiss button was not working — click events were swallowed by parent handlers. Fixed: added `e.preventDefault()` + `e.stopPropagation()` to the dismiss handler.
+- **Peer Status Dot After Auto-Connect:** Immediate IPC `peer-found` with `status:'online'` sent after auto-connect success, so the sidebar updates without waiting for the remote beacon response.
+
+### Quality of Life
+
+- **Unstable AV Transfer Warning Modal:** When sending audio or video files, both desktop and mobile show a warning modal before sending. Features an alert-triangle icon, "Don't show this warning again" checkbox (persists to `localStorage`), click-outside-to-dismiss, and Cancel/Send Anyway buttons.
+- **Auto-Discovery Diagnostic Logging:** `_tryAutoConnect` now emits `[AutoConnect] SKIP:` / `[AutoConnect] THROTTLED:` / `[AutoConnect] Retry TCP to:` messages in DevTools — helps users diagnose firewall/network issues preventing peer discovery.
+- **Audio/Video Warning Icon Updated:** Replaced thin circle-with-exclamation with cleaner alert-triangle icon (standard Lucide/Feather style).
+
+### Technical
+
+- **Version:** Bumped to v0.1.9-beta across all manifests, changelogs, and About tabs.
 
 > **Note:** This is not a stable release — latest development version with experimental features.
 

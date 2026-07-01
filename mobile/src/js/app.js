@@ -2597,7 +2597,34 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button id="changelog-close-mobile" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;font-size:20px;">✕</button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
-        vBlock('0.1.8.1-beta', 'Latest', [
+        vBlock('0.1.9-beta', 'Latest', [
+          ['CRITICAL: P2P Transfer & Service Lifecycle Fixes', [
+            'CRITICAL: Mobile base64 Decode Corruption — atob() corrupts bytes >127. All 7 binary decode sites replaced with safe manual decoder.',
+            'CRITICAL: Desktop→Mobile Chunk Joining — desktop btoa()\'s each chunk independently; mobile did chunks.join(\'\') → corrupt at padding boundaries. Fixed: per-chunk independent decode + ArrayBuffer concat.',
+            'CRITICAL: WriteStream Race (Mobile→Desktop) — stream.end() async; onComplete fired before flush → truncated files, lost audio/duration. Fixed: stream.on(\'finish\') wraps completion.',
+            'CRITICAL: P2P cleanup() Race in Android Plugin — cleanup() called stopService() then initP2P found boundService still non-null, skipped restart. Fixed: Java cleanup() is a no-op (JS already clears listeners).'
+          ]],
+          ['File Transfer Fixes', [
+            'Mobile Type Override Fixed (HIGH): FILE_TRANSFER_END no longer overwrites correct video/audio type — only overwrites if null/undefined/file.',
+            'Mobile Video Compression Dropped Audio (HIGH): canvas.captureStream(15) captures only pixels. Disabled compressVideoMobile — raw video with audio sent.',
+            'Group Chat File Routing Fixed: FILE_TRANSFER_START/END lacked chatId. Added to desktop + mobile packets.',
+            'Hash Mismatch Silenced: Platform hash diff is harmless — console.warn only, file always saved.'
+          ]],
+          ['Media & UI Fixes', [
+            'Mobile Metadata Preload: muted=true + preload=metadata forces mobile browsers to load duration immediately. Audio restored on play.',
+            'Video Player preload Changed to metadata — saves bandwidth.',
+            'Transfer Error X Button Fixed: preventDefault + stopPropagation on dismiss.',
+            'Peer Status Dot After Auto-Connect: Immediate online status update.'
+          ]],
+          ['Quality of Life', [
+            'Unstable AV Transfer Warning Modal: Shown on audio/video send. "Don\'t show again" checkbox, nicer alert-triangle icon.',
+            'Auto-Discovery Diagnostic Logging: [AutoConnect] logs in DevTools.'
+          ]],
+          ['Technical', [
+            'Version bumped to v0.1.9-beta.'
+          ]]
+        ]) +
+        vBlock('0.1.8.1-beta', '', [
           ['CRITICAL: P2P Cross-Platform Fixes', [
             'Mobile→Desktop File Transfers Silently Deleted (CRITICAL): hash was empty — desktop always deleted file. Fixed: real SHA-256 computed via crypto.subtle; desktop skips hash check when omitted.',
             'FILE_TRANSFER Packets Had Empty Sender (CRITICAL): from/senderId was \'\'. Fixed: passes userId + peerId to createPacket.',

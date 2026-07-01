@@ -14,7 +14,35 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.1.8.1-beta', 'Latest', [
+        versionBlock('0.1.9-beta', 'Latest', [
+          ['CRITICAL: P2P Transfer & Service Lifecycle Fixes', [
+            'CRITICAL: Mobile base64 Decode Corruption — atob() on Android WebView corrupts bytes >127. All 7 binary decode sites replaced with safe manual lookup-table decoder across video, audio, crypto, and file receiver.',
+            'CRITICAL: Desktop→Mobile Chunk Joining — desktop btoa()\'s each 64KB chunk independently (each with own padding); mobile did chunks.join(\'\') → corrupt base64 at boundaries. Fixed: per-chunk independent decode + ArrayBuffer concat.',
+            'CRITICAL: WriteStream Race (Mobile→Desktop) — stream.end() async; onComplete fired before flush → truncated files, lost audio/duration. Fixed: stream.on(\'finish\') wraps completion.',
+            'CRITICAL: P2P cleanup() Race in Android Plugin — cleanup() called stopService() (async), then initP2P() called startServer() — ensureServiceRunning() found boundService still non-null and skipped restart. Fixed: Java cleanup() is a no-op (JS already clears listeners).'
+          ]],
+          ['File Transfer Fixes', [
+            'Mobile Type Override Fixed (HIGH): FILE_TRANSFER_END no longer overwrites correct video/audio type with regex extension fallback — only overwrites if type is null/undefined/file.',
+            'Mobile Video Compression Dropped Audio (HIGH): canvas.captureStream(15) captures only pixels. Disabled compressVideoMobile() — raw video with full audio sent via chunked transfer.',
+            'Group Chat File Routing Fixed: FILE_TRANSFER_START/END lacked chatId — merge searched wrong chat. Added chatId to packets on desktop + mobile.',
+            'Hash Mismatch Silenced: Platform hash difference (WebKit vs Node crypto) is harmless. Changed to console.warn only — file always saved.'
+          ]],
+          ['Media & UI Fixes', [
+            'Mobile Metadata Preload: video/audio elements set muted=true + preload=metadata — forces mobile browsers to load duration headers. Audio restored on play via unmute hook in doPlay().',
+            'Video Player preload Optimized: Changed from auto to metadata — saves bandwidth while still showing duration immediately.',
+            'Transfer Error X Button Fixed: Added preventDefault + stopPropagation to dismiss handler.',
+            'Peer Status Dot After Auto-Connect: Immediate IPC peer-found with status=online sent on auto-connect success.'
+          ]],
+          ['Quality of Life', [
+            'Unstable AV Transfer Warning Modal: Shown when sending audio/video files (desktop + mobile). Alert-triangle icon, "Don\'t show again" checkbox (localStorage), click-outside-dismiss, Cancel/Send Anyway.',
+            'Auto-Discovery Diagnostic Logging: [AutoConnect] messages in DevTools to diagnose firewall/network issues.',
+            'Warning Icon Updated: Cleaner alert-triangle icon replaces old circle-with-exclamation.'
+          ]],
+          ['Technical', [
+            'Version bumped to v0.1.9-beta across all manifests and changelogs.'
+          ]]
+        ]) +
+        versionBlock('0.1.8.1-beta', '', [
           ['CRITICAL: P2P Cross-Platform Fixes', [
             'Mobile→Desktop File Transfers Silently Deleted (CRITICAL): Mobile sent hash: \'\' — desktop computed real SHA-256, always mismatched, deleted file. Fixed: mobile computes SHA-256 via crypto.subtle.digest() before sending; desktop skips hash check when omitted.',
             'Mobile FILE_TRANSFER Packets Had Empty from/senderId (CRITICAL): _sendLargeFileToPeer called createPacket with 2 args — from was \'\'. Fixed: passes MStore.user.id + peerId as fromId/toId.',
