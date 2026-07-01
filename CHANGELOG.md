@@ -35,6 +35,8 @@
 
 - **Version:** Bumped to v0.1.9-beta across all manifests, changelogs, and About tabs.
 
+## v0.1.8.1-beta
+
 > **Note:** This is not a stable release — latest development version with experimental features.
 
 ### CRITICAL: P2P Cross-Platform File Transfer Fixes
