@@ -21,6 +21,38 @@ document.addEventListener('DOMContentLoaded', function() {
     };
   }
 
+  // Safe base64→ArrayBuffer decoder (atob() on Android WebView corrupts bytes >127)
+  window.orbitBase64ToArrayBuffer = function orbitBase64ToArrayBuffer(b64) {
+    var lookup = [], chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    for (var li = 0; li < 64; li++) lookup[chars.charCodeAt(li)] = li;
+    var clean = '';
+    for (var si = 0; si < b64.length; si++) {
+      var cc = b64.charCodeAt(si);
+      if (lookup[cc] !== undefined) clean += b64[si];
+    }
+    var binLen = Math.floor(clean.length * 3 / 4);
+    if (binLen === 0) return new ArrayBuffer(0);
+    var buf = new ArrayBuffer(binLen);
+    var bytes = new Uint8Array(buf);
+    while (clean.length % 4 !== 0) clean += 'A';
+    var p = 0;
+    for (var bi = 0; bi + 3 < clean.length; bi += 4) {
+      var a = lookup[clean.charCodeAt(bi)];
+      var b = lookup[clean.charCodeAt(bi + 1)];
+      var c = lookup[clean.charCodeAt(bi + 2)];
+      var d = lookup[clean.charCodeAt(bi + 3)];
+      if (p < binLen) bytes[p++] = (a << 2) | (b >> 4);
+      if (p < binLen) bytes[p++] = ((b & 0x0F) << 4) | (c >> 2);
+      if (p < binLen) bytes[p++] = ((c & 0x03) << 6) | d;
+    }
+    return buf;
+  };
+  window.orbitBase64ToBlob = function orbitBase64ToBlob(b64, mime) {
+    var buf = window.orbitBase64ToArrayBuffer(b64);
+    if (!buf || buf.byteLength === 0) return null;
+    try { return URL.createObjectURL(new Blob([buf], { type: mime })); } catch(e) { return null; }
+  };
+
   migrateOldData(); // copy unprefixed keys before MStore reads orbit_* keys
   MStore.load();
 
@@ -1131,16 +1163,13 @@ document.addEventListener('DOMContentLoaded', function() {
             var player = document.getElementById('video-preview-player');
             var vidUrl = att.url;
             if (vidUrl.indexOf('data:') === 0) {
-              try {
-                var vm = vidUrl.match(/^data:(video\/[^;]+|application\/octet-stream);base64,(.+)$/);
-                if (vm) {
-                  var raw = atob(vm[2]);
-                  var buf = new ArrayBuffer(raw.length);
-                  var bytes = new Uint8Array(buf);
-                  for (var bi = 0; bi < raw.length; bi++) bytes[bi] = raw.charCodeAt(bi);
-                  vidUrl = URL.createObjectURL(new Blob([buf], { type: vm[1] }));
-                }
-              } catch(e) { console.warn('[Video] preview data URL failed', e); }
+    try {
+      var vm = vidUrl.match(/^data:(video\/[^;]+|application\/octet-stream);base64,(.+)$/);
+      if (vm) {
+        var blobUrl = window.orbitBase64ToBlob(vm[2], vm[1]);
+        if (blobUrl) vidUrl = blobUrl;
+      }
+    } catch(e) { console.warn('[Video] preview data URL failed', e); }
             }
             player.src = vidUrl;
             player.load();
@@ -3965,9 +3994,8 @@ document.addEventListener('DOMContentLoaded', function() {
     try {
       var m = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
       if (m) {
-        var raw = atob(m[2]), buf = new ArrayBuffer(raw.length), bytes = new Uint8Array(buf);
-        for (var bi = 0; bi < raw.length; bi++) bytes[bi] = raw.charCodeAt(bi);
-        return URL.createObjectURL(new Blob([buf], { type: m[1] }));
+        var blobUrl = window.orbitBase64ToBlob(m[2], m[1]);
+        if (blobUrl) return blobUrl;
       }
     } catch(e) { console.warn('[Orbit] data:→blob failed', e.message); }
     return dataUrl;
@@ -5582,13 +5610,7 @@ document.addEventListener('DOMContentLoaded', function() {
           }
           
           // Build blob URL for immediate use AND data URL for persistence across restarts
-          var attUrl = (function(base64, mime) {
-            try {
-              var raw = atob(base64), buf = new ArrayBuffer(raw.length), bytes = new Uint8Array(buf);
-              for (var bi = 0; bi < raw.length; bi++) bytes[bi] = raw.charCodeAt(bi);
-              return URL.createObjectURL(new Blob([buf], { type: mime }));
-            } catch(e) { console.warn('[P2P] blob from file failed', e.message); return ''; }
-          })(base64Data, mimeType);
+          var attUrl = window.orbitBase64ToBlob(base64Data, mimeType) || '';
           var dataUrl = 'data:' + mimeType + ';base64,' + base64Data;
           window._orbitFileCache = window._orbitFileCache || {};
           window._orbitFileCache[packet.payload.fileId] = base64Data;

@@ -9,6 +9,29 @@
     if (_menuCleanup) { _menuCleanup(); _menuCleanup = null; }
   }
 
+  function _safeB64ToArrayBuffer(b64) {
+    var lookup = [], chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    for (var li = 0; li < 64; li++) lookup[chars.charCodeAt(li)] = li;
+    var clean = '';
+    for (var si = 0; si < b64.length; si++) {
+      var cc = b64.charCodeAt(si);
+      if (lookup[cc] !== undefined) clean += b64[si];
+    }
+    var binLen = Math.floor(clean.length * 3 / 4);
+    if (binLen === 0) return new ArrayBuffer(0);
+    var buf = new ArrayBuffer(binLen), bytes = new Uint8Array(buf);
+    while (clean.length % 4 !== 0) clean += 'A';
+    var p = 0;
+    for (var bi = 0; bi + 3 < clean.length; bi += 4) {
+      var a = lookup[clean.charCodeAt(bi)], b = lookup[clean.charCodeAt(bi + 1)];
+      var c = lookup[clean.charCodeAt(bi + 2)], d = lookup[clean.charCodeAt(bi + 3)];
+      if (p < binLen) bytes[p++] = (a << 2) | (b >> 4);
+      if (p < binLen) bytes[p++] = ((b & 0x0F) << 4) | (c >> 2);
+      if (p < binLen) bytes[p++] = ((c & 0x03) << 6) | d;
+    }
+    return buf;
+  }
+
   function dbg() {
     var args = Array.prototype.slice.call(arguments);
     if (window.MStore && MStore.settings && MStore.settings.logNetworkPackets) {
@@ -33,7 +56,11 @@
     var m = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
     if (!m) return null;
     var raw;
-    try { raw = atob(m[2]); } catch(e) { return null; }
+    try {
+      var ab = _safeB64ToArrayBuffer(m[2]);
+      if (!ab || ab.byteLength === 0) return null;
+      raw = String.fromCharCode.apply(null, new Uint8Array(ab));
+    } catch(e) { return null; }
     var len = raw.length;
     function u32(o) {
       if (o + 4 > len) return 0;
@@ -175,13 +202,14 @@
           var m = url.match(/^data:(video\/[^;]+|application\/octet-stream);base64,(.+)$/);
           if (m) {
             dbg('[' + _logId + '] converting data: → blob:  mime=' + m[1] + '  rawLen=' + m[2].length);
-            var raw = atob(m[2]);
-            var buf = new ArrayBuffer(raw.length);
-            var bytes = new Uint8Array(buf);
-            for (var bi = 0; bi < raw.length; bi++) bytes[bi] = raw.charCodeAt(bi);
-            _blobUrl = URL.createObjectURL(new Blob([buf], { type: m[1] }));
-            url = _blobUrl;
-            dbg('[' + _logId + '] blobURL=' + url);
+            var ab = _safeB64ToArrayBuffer(m[2]);
+            if (ab && ab.byteLength > 0) {
+              _blobUrl = URL.createObjectURL(new Blob([ab], { type: m[1] }));
+              url = _blobUrl;
+              dbg('[' + _logId + '] blobURL=' + url);
+            } else {
+              dbg('[' + _logId + '] safe decoder produced empty buffer, using raw data: URL');
+            }
           } else {
             dbg('[' + _logId + '] data URL regex did NOT match — using raw data: URL');
           }
@@ -561,8 +589,8 @@
         dbg('[' + _logId + '] loadedmetadata  knownDuration=' + knownDuration + '  browserDuration=' + video.duration + ' (' + fmt(video.duration) + ')  readyState=' + video.readyState + '  vw=' + video.videoWidth + 'x' + video.videoHeight);
         updTime();
         if (!knownDuration && (!video.duration || video.duration < 0.5) && url && !url.startsWith('orbit-db://') && !url.startsWith('orbit-file://')) {
-          dbg('[' + _logId + '] no knownDuration and browser duration too small, seeking to 1e10 to force read');
-          video.currentTime = 1e10;
+          dbg('[' + _logId + '] no knownDuration and browser duration too small, seeking to force read');
+          video.currentTime = 1e7;
         }
       });
       video.addEventListener('durationchange', function() {

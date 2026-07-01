@@ -30,6 +30,29 @@
     if (_menuCleanup) { _menuCleanup(); _menuCleanup = null; }
   }
 
+  function _safeB64ToArrayBuffer(b64) {
+    var lookup = [], chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    for (var li = 0; li < 64; li++) lookup[chars.charCodeAt(li)] = li;
+    var clean = '';
+    for (var si = 0; si < b64.length; si++) {
+      var cc = b64.charCodeAt(si);
+      if (lookup[cc] !== undefined) clean += b64[si];
+    }
+    var binLen = Math.floor(clean.length * 3 / 4);
+    if (binLen === 0) return new ArrayBuffer(0);
+    var buf = new ArrayBuffer(binLen), bytes = new Uint8Array(buf);
+    while (clean.length % 4 !== 0) clean += 'A';
+    var p = 0;
+    for (var bi = 0; bi + 3 < clean.length; bi += 4) {
+      var a = lookup[clean.charCodeAt(bi)], b = lookup[clean.charCodeAt(bi + 1)];
+      var c = lookup[clean.charCodeAt(bi + 2)], d = lookup[clean.charCodeAt(bi + 3)];
+      if (p < binLen) bytes[p++] = (a << 2) | (b >> 4);
+      if (p < binLen) bytes[p++] = ((b & 0x0F) << 4) | (c >> 2);
+      if (p < binLen) bytes[p++] = ((c & 0x03) << 6) | d;
+    }
+    return buf;
+  }
+
   window.OrbitAudioPlayer = {
     create: function(container, url) {
       var wrapper = document.createElement('div');
@@ -46,12 +69,11 @@
         try {
           var m = url.match(/^data:(audio\/[^;]+|application\/octet-stream);base64,(.+)$/);
           if (m) {
-            var raw = atob(m[2]);
-            var buf = new ArrayBuffer(raw.length);
-            var bytes = new Uint8Array(buf);
-            for (var bi = 0; bi < raw.length; bi++) bytes[bi] = raw.charCodeAt(bi);
-            _blobUrl = URL.createObjectURL(new Blob([buf], { type: m[1] }));
-            url = _blobUrl;
+            var ab = _safeB64ToArrayBuffer(m[2]);
+            if (ab.byteLength > 0) {
+              _blobUrl = URL.createObjectURL(new Blob([ab], { type: m[1] }));
+              url = _blobUrl;
+            }
           }
         } catch(e) { /* silently keep original url */ }
       }

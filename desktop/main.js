@@ -193,6 +193,18 @@ function _tryAutoConnect(peer) {
   socketInstance.connectToPeer(peer.userId, peer.ip, peer.tcpPort || 46000).then(function() {
     console.log('[AutoConnect] Connected to', peer.userId);
     _autoConnectLastAttempt.delete(peer.userId);
+    // Immediately update peer status in UI (don't wait for remote's response beacon)
+    if (mainWindow) {
+      mainWindow.webContents.send('peer-found', {
+        userId: peer.userId,
+        username: peer.username || peer.userId,
+        avatar: peer.avatar || null,
+        status: 'online',
+        ip: peer.ip,
+        tcpPort: peer.tcpPort || 46000,
+        lastSeen: Date.now()
+      });
+    }
   }).catch(function(err) {
     console.error('[AutoConnect] Retry failed for', peer.userId, ':', err && err.message);
   });
