@@ -2241,7 +2241,8 @@ window.ChatPanel = {
         fileName: lf.staged.name,
         fileSize: fileData.byteLength,
         totalChunks: totalChunks,
-        hash: hash
+        hash: hash,
+        chatId: activeChatId
       });
 
       for (var ci = 0; ci < totalChunks; ci++) {
@@ -2277,7 +2278,8 @@ window.ChatPanel = {
       // Send FILE_TRANSFER_END
       sendToAll(window.Protocol.Types.FILE_TRANSFER_END, {
         fileId: fileId,
-        hash: hash
+        hash: hash,
+        chatId: activeChatId
       });
     }
 

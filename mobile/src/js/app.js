@@ -1559,7 +1559,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         Orbit.P2P.send(peerId, Orbit.Protocol.createPacket(
           Orbit.Protocol.Types.FILE_TRANSFER_START, myId, peerId,
-          { fileId: fileId, fileName: att.name, fileSize: Math.round(b64.length * 3 / 4), totalChunks: totalChunks, hash: fileHash }
+          { fileId: fileId, fileName: att.name, fileSize: Math.round(b64.length * 3 / 4), totalChunks: totalChunks, hash: fileHash, chatId: activeChatId }
         ));
 
         var ci = 0;
@@ -1567,7 +1567,7 @@ document.addEventListener('DOMContentLoaded', function() {
           if (ci >= totalChunks) {
             Orbit.P2P.send(peerId, Orbit.Protocol.createPacket(
               Orbit.Protocol.Types.FILE_TRANSFER_END, myId, peerId,
-              { fileId: fileId, hash: fileHash }
+              { fileId: fileId, hash: fileHash, chatId: activeChatId }
             ));
             return;
           }
@@ -5581,9 +5581,22 @@ document.addEventListener('DOMContentLoaded', function() {
             delete window.activeTransfers[packet.payload.fileId];
             return;
           }
-          var base64Data = txEnd.chunks.join('');
-          // HIGH-5: Cover all common file extensions
-            // HIGH-5: Cover all common file extensions
+          // CRIT-1: Decode each chunk independently and concatenate ArrayBuffers
+          // Desktop independently btoa()'s each 64KB binary chunk — joining as strings
+          // produces corrupted base64 at every padding boundary
+          var _totalByteLen = 0;
+          var _chunkBufs = [];
+          for (var _c = 0; _c < txEnd.chunks.length; _c++) {
+            var _cb = window.orbitBase64ToArrayBuffer(txEnd.chunks[_c]);
+            _chunkBufs.push(_cb);
+            _totalByteLen += _cb.byteLength;
+          }
+          var _mergedBuf = new Uint8Array(_totalByteLen);
+          var _off = 0;
+          for (var _c = 0; _c < _chunkBufs.length; _c++) {
+            _mergedBuf.set(new Uint8Array(_chunkBufs[_c]), _off);
+            _off += _chunkBufs[_c].byteLength;
+          }
           var extMatch = txEnd.fileName.match(/\.(png|jpe?g|gif|webp|svg|tiff?|bmp|heic|heif|avif)$/i);
           // NOTE: .webm intentionally only in videoMatch — do NOT add to audioMatch
           var audioMatch = txEnd.fileName.match(/\.(mp3|wav|ogg|flac|aac|m4a|wma|opus|mka)$/i);
@@ -5609,11 +5622,19 @@ document.addEventListener('DOMContentLoaded', function() {
             isAudio = true;
           }
           
-          // Build blob URL for immediate use AND data URL for persistence across restarts
-          var attUrl = window.orbitBase64ToBlob(base64Data, mimeType) || '';
-          var dataUrl = 'data:' + mimeType + ';base64,' + base64Data;
+          // Build blob URL from independently-decoded chunks
+          var attUrl = '';
+          try { attUrl = URL.createObjectURL(new Blob([_mergedBuf.buffer], { type: mimeType })); } catch(e) { attUrl = ''; }
+          // Re-encode merged buffer as data URL for persistence across restarts
+          // btoa() only encodes — not affected by Android's broken atob() decoding
+          var _dataUrlBytes = new Uint8Array(_mergedBuf.buffer);
+          var _dataUrlBinary = '';
+          for (var _du = 0; _du < _dataUrlBytes.length; _du++) {
+            _dataUrlBinary += String.fromCharCode(_dataUrlBytes[_du]);
+          }
+          var dataUrl = 'data:' + mimeType + ';base64,' + btoa(_dataUrlBinary);
           window._orbitFileCache = window._orbitFileCache || {};
-          window._orbitFileCache[packet.payload.fileId] = base64Data;
+          window._orbitFileCache[packet.payload.fileId] = _dataUrlBinary;
 
           // CRIT-4: Try to find existing message with matching _fileId attachment, update it instead of creating duplicate
           var existingMsgs = MStore.getMessages(chatId);

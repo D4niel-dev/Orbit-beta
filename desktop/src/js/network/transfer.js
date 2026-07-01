@@ -215,17 +215,27 @@ class TransferManager {
 
     try {
       transfer.stream.end();
-      const finalHash = transfer.sha256.digest('hex');
-      this.activeReceives.delete(payload.fileId);
+      // Wait for stream flush before finalizing (XFER-6: race condition fix)
+      // Without this, onComplete → dbSaveAttachment → fs.readFileSync may read an incomplete file
+      transfer.stream.on('finish', () => {
+        try {
+          const finalHash = transfer.sha256.digest('hex');
+          // Don't delete from activeReceives until after finish, to prevent races
 
-      // Skip hash check when sender omitted hash (mobile sends without hash in some cases) — CRIT-1
-      if (transfer.hash && finalHash !== transfer.hash) {
-        console.error('Hash mismatch! expected=' + transfer.hash + ' actual=' + finalHash + ' file=' + transfer.fileName + ' — saving anyway (non-fatal)');
-        if (onError) onError('Hash mismatch! Transfer corrupted (expected=' + transfer.hash.substring(0,8) + '… actual=' + finalHash.substring(0,8) + '…).', payload.fileId);
-        // File is likely intact despite platform hash differences (e.g. crypto.subtle on Android WebView);
-        // save it so the user doesn't lose the transfer (CRIT-1 fix: non-fatal)
-      }
-      if (onComplete) onComplete(transfer.tempPath, transfer.fileName, payload.fileId, transfer.fileSize);
+          // Skip hash check when sender omitted hash (mobile sends without hash in some cases) — CRIT-1
+          if (transfer.hash && finalHash !== transfer.hash) {
+            console.error('Hash mismatch! expected=' + transfer.hash + ' actual=' + finalHash + ' file=' + transfer.fileName + ' — saving anyway (non-fatal)');
+            if (onError) onError('Hash mismatch! Transfer corrupted (expected=' + transfer.hash.substring(0,8) + '… actual=' + finalHash.substring(0,8) + '…).', payload.fileId);
+            // File is likely intact despite platform hash differences (e.g. crypto.subtle on Android WebView);
+            // save it so the user doesn't lose the transfer (CRIT-1 fix: non-fatal)
+          }
+          this.activeReceives.delete(payload.fileId);
+          if (onComplete) onComplete(transfer.tempPath, transfer.fileName, payload.fileId, transfer.fileSize);
+        } catch (err) {
+          this.activeReceives.delete(payload.fileId);
+          if (onError) onError('handleEnd error: ' + (err && err.message), payload.fileId);
+        }
+      });
     } catch (err) {
       this.activeReceives.delete(payload.fileId);
       if (onError) onError('handleEnd error: ' + (err && err.message), payload.fileId);

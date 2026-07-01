@@ -179,7 +179,18 @@ const AUTO_CONNECT_THROTTLE = 30000; // Don't retry same peer more than once per
 
 // Throttled auto-connect: retries TCP on every beacon if not already connected
 function _tryAutoConnect(peer) {
-  if (!socketInstance || !peer.userId || !peer.ip) return;
+  if (!socketInstance) {
+    console.log('[AutoConnect] SKIP: socketInstance not ready');
+    return;
+  }
+  if (!peer.userId) {
+    console.log('[AutoConnect] SKIP: peer.userId missing', JSON.stringify(peer));
+    return;
+  }
+  if (!peer.ip) {
+    console.log('[AutoConnect] SKIP: peer.ip missing for', peer.userId);
+    return;
+  }
   var alreadyConnected = socketInstance.connections.has(peer.userId) ||
     socketInstance._pendingConnects.has(peer.userId);
   if (alreadyConnected) {
@@ -187,7 +198,10 @@ function _tryAutoConnect(peer) {
     return;
   }
   var last = _autoConnectLastAttempt.get(peer.userId) || 0;
-  if (Date.now() - last < AUTO_CONNECT_THROTTLE) return;
+  if (Date.now() - last < AUTO_CONNECT_THROTTLE) {
+    console.log('[AutoConnect] THROTTLED: skipping', peer.userId, 'last attempt was', (Date.now() - last) + 'ms ago');
+    return;
+  }
   _autoConnectLastAttempt.set(peer.userId, Date.now());
   console.log('[AutoConnect] Retry TCP to', peer.userId, peer.ip + ':' + (peer.tcpPort || 46000));
   socketInstance.connectToPeer(peer.userId, peer.ip, peer.tcpPort || 46000).then(function() {
