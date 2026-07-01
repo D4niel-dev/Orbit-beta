@@ -227,10 +227,11 @@
 
       var video = document.createElement('video');
       video.className = 'ovp-video';
-      video.preload = 'auto';
+      video.preload = 'metadata';
       video.playsInline = true;
+      video.muted = true; // Force mobile browsers to load metadata without interaction
       video.src = url;
-      dbg('[' + _logId + '] video.src set, preload=auto');
+      dbg('[' + _logId + '] video.src set, preload=metadata, muted=true');
 
       var seek = document.createElement('div');
       seek.className = 'ovp-seek';
@@ -318,6 +319,7 @@
       }
 
       function doPlay() {
+        if (video.muted && video.volume > 0) video.muted = false; // Restore audio on user interaction
         video.play().then(function() {
           playing = true;
           playBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';

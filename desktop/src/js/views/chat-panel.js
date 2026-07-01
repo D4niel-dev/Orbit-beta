@@ -2012,6 +2012,7 @@ window.ChatPanel = {
   },
 
   _showAvWarningModal() {
+    var _this = this;
     return new Promise(function(resolve) {
       var overlay = document.createElement('div');
       overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:9999;display:flex;align-items:center;justify-content:center;';
@@ -2021,15 +2022,20 @@ window.ChatPanel = {
 
       card.innerHTML =
         '<div style="text-align:center;margin-bottom:16px;">' +
-          '<svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="#f59e0b" stroke-width="1.5" style="display:block;margin:0 auto;">' +
-            '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16" x2="12.01" y2="16"/>' +
+          '<svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="#f59e0b" stroke-width="2" style="display:block;margin:0 auto;">' +
+            '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>' +
+            '<line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>' +
           '</svg>' +
           '<h3 style="margin:12px 0 8px 0;font-size:16px;font-weight:600;color:var(--text-normal);">Unstable Transfer Warning</h3>' +
           '<p style="margin:0;font-size:13px;color:var(--text-muted);line-height:1.5;">' +
             'Audio and video file transfers are still unstable. The file may not play correctly or the transfer may fail.' +
           '</p>' +
         '</div>' +
-        '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;">' +
+        '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 0;user-select:none;">' +
+          '<input type="checkbox" id="chk-av-warn-dismiss" style="width:16px;height:16px;accent-color:#f59e0b;cursor:pointer;">' +
+          '<span style="font-size:12px;color:var(--text-muted);">Don\'t show this warning again</span>' +
+        '</label>' +
+        '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px;">' +
           '<button class="btn-av-warning-cancel" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-surface);color:var(--text-normal);cursor:pointer;font-size:13px;">Cancel</button>' +
           '<button class="btn-av-warning-proceed" style="padding:8px 16px;border-radius:8px;border:none;background:#f59e0b;color:#fff;cursor:pointer;font-size:13px;font-weight:500;">Send Anyway</button>' +
         '</div>';
@@ -2041,11 +2047,19 @@ window.ChatPanel = {
         if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
       }
 
+      overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) { cleanup(); resolve(false); }
+      });
+
       overlay.querySelector('.btn-av-warning-cancel').addEventListener('click', function() {
         cleanup();
         resolve(false);
       });
       overlay.querySelector('.btn-av-warning-proceed').addEventListener('click', function() {
+        var dontShow = document.getElementById('chk-av-warn-dismiss').checked;
+        if (dontShow) {
+          try { localStorage.setItem('orbit_av_warn_hidden', '1'); } catch(e) {}
+        }
         cleanup();
         resolve(true);
       });
@@ -2064,8 +2078,13 @@ window.ChatPanel = {
     // Warn about unstable audio/video transfers before proceeding
     var hasAvFile = this.stagedFiles.some(function(s) { return s.type === 'audio' || s.type === 'video'; });
     if (hasAvFile) {
-      var proceed = await this._showAvWarningModal();
-      if (!proceed) { this._sending = false; return; }
+      try {
+        if (localStorage.getItem('orbit_av_warn_hidden') === '1') { /* skip */ }
+        else {
+          var proceed = await this._showAvWarningModal();
+          if (!proceed) { this._sending = false; return; }
+        }
+      } catch(e) { /* localStorage unavailable */ }
     }
 
     const friend = state.friends.find(function(f) { return f.userId === activeChatId; });

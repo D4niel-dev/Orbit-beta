@@ -293,7 +293,16 @@ public class OrbitP2PPlugin extends Plugin {
 
     @PluginMethod
     public void cleanup(PluginCall call) {
-        stopService();
+        // DO NOT call stopService() here! That would stop the Android foreground service
+        // asynchronously — onServiceDisconnected fires after a delay, so boundService is
+        // still non-null when initP2P() immediately calls startServer()/startDiscovery().
+        // Their ensureServiceRunning() sees boundService != null and skips re-starting,
+        // leaving the service dead with no networking.
+        //
+        // The JS side (p2p-mobile.js) already clears connections, pending messages, and
+        // removes native event listeners via removeAllListeners(). The Java side needs
+        // nothing more for a clean re-init.
+        Log.d(TAG, "cleanup called — JS listener reset only, service left running");
         call.resolve();
     }
 }

@@ -1376,14 +1376,19 @@ document.addEventListener('DOMContentLoaded', function() {
       content.style.textAlign = 'center';
 
       content.innerHTML =
-        '<svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="#f59e0b" stroke-width="1.5" style="display:block;margin:0 auto 12px auto;">' +
-          '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16" x2="12.01" y2="16"/>' +
+        '<svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="#f59e0b" stroke-width="2" style="display:block;margin:0 auto 12px auto;">' +
+          '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>' +
+          '<line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>' +
         '</svg>' +
         '<h3 style="margin:0 0 8px 0;font-size:16px;font-weight:600;">Unstable Transfer Warning</h3>' +
         '<p style="margin:0;font-size:13px;line-height:1.5;color:var(--text-muted);">' +
           'Audio and video file transfers are still unstable. The file may not play correctly or the transfer may fail.' +
         '</p>' +
-        '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;">' +
+        '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 0;user-select:none;text-align:left;">' +
+          '<input type="checkbox" id="chk-av-warn-dismiss" style="width:16px;height:16px;accent-color:#f59e0b;cursor:pointer;flex-shrink:0;">' +
+          '<span style="font-size:12px;color:var(--text-muted);">Don\'t show this warning again</span>' +
+        '</label>' +
+        '<div style="display:flex;gap:8px;margin-top:4px;">' +
           '<button id="btn-av-warn-cancel" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-surface);color:var(--text-normal);font-size:14px;">Cancel</button>' +
           '<button id="btn-av-warn-proceed" style="flex:1;padding:10px;border-radius:8px;border:none;background:#f59e0b;color:#fff;font-size:14px;font-weight:500;">Send Anyway</button>' +
         '</div>';
@@ -1395,11 +1400,19 @@ document.addEventListener('DOMContentLoaded', function() {
         if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
       }
 
+      overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) { cleanup(); resolve(false); }
+      });
+
       document.getElementById('btn-av-warn-cancel').addEventListener('click', function() {
         cleanup();
         resolve(false);
       });
       document.getElementById('btn-av-warn-proceed').addEventListener('click', function() {
+        var dontShow = document.getElementById('chk-av-warn-dismiss').checked;
+        if (dontShow) {
+          try { localStorage.setItem('orbit_av_warn_hidden', '1'); } catch(e) {}
+        }
         cleanup();
         resolve(true);
       });
@@ -1414,8 +1427,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // Warn about unstable audio/video transfers before proceeding
     var hasAvFile = stagedFiles.some(function(s) { return s.type === 'audio' || s.type === 'video'; });
     if (hasAvFile) {
-      var proceed = await _showAvWarningModal();
-      if (!proceed) return;
+      try {
+        if (localStorage.getItem('orbit_av_warn_hidden') === '1') { /* skip */ }
+        else {
+          var proceed = await _showAvWarningModal();
+          if (!proceed) return;
+        }
+      } catch(e) { /* localStorage unavailable */ }
     }
 
     if (editingMsg) {
@@ -1766,7 +1784,7 @@ document.addEventListener('DOMContentLoaded', function() {
           var reader = new FileReader();
           reader.onload = function(ev) {
             var videoUrl = ev.target.result;
-            if (file.size > 5 * 1024 * 1024) {
+            if (false) {
               compressVideoMobile(videoUrl, 1280, function(compressedUrl) {
                 stagedFiles.push({
                   name: file.name,
@@ -5695,7 +5713,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (atts[ai]._fileId === packet.payload.fileId) {
                   atts[ai].url = attUrl;
                   atts[ai]._dataUrl = dataUrl;
-                  atts[ai].type = isImage ? 'image' : (isVideo ? 'video' : (isAudio ? 'audio' : 'file'));
+                  if (!atts[ai].type || atts[ai].type === 'file') {
+                    atts[ai].type = isImage ? 'image' : (isVideo ? 'video' : (isAudio ? 'audio' : 'file'));
+                  }
                   atts[ai]._pending = false;
                   atts[ai].name = txEnd.fileName || atts[ai].name;
                   MStore._saveMsgs(chatId);

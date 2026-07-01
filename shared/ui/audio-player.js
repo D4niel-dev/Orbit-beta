@@ -80,6 +80,7 @@
       var audio = document.createElement('audio');
       audio.src = url;
       audio.preload = 'metadata';
+      audio.muted = true; // Force mobile browsers to load metadata without interaction
       audio.style.display = 'none';
 
       var seek = document.createElement('div');
@@ -199,6 +200,7 @@
       }
 
       function doPlay() {
+        if (audio.muted && audio.volume > 0) audio.muted = false; // Restore audio on user interaction
         connectSrc();
         var ctx = getCtx();
         if (ctx && ctx.state === 'suspended') ctx.resume();
