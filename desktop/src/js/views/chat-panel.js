@@ -418,6 +418,8 @@ window.ChatPanel = {
       // Dismiss error
       var dismissBtn = e.target.closest('.btn-dismiss-error');
       if (dismissBtn) {
+        e.preventDefault();
+        e.stopPropagation();
         var fid = dismissBtn.getAttribute('data-file-id');
         var errs = { ...window.store.getState().transferErrors };
         delete errs[fid];
@@ -2009,6 +2011,47 @@ window.ChatPanel = {
     });
   },
 
+  _showAvWarningModal() {
+    return new Promise(function(resolve) {
+      var overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:9999;display:flex;align-items:center;justify-content:center;';
+
+      var card = document.createElement('div');
+      card.style.cssText = 'background:var(--bg-surface);border-radius:16px;padding:24px;max-width:400px;width:90%;box-shadow:0 16px 48px rgba(0,0,0,0.3);';
+
+      card.innerHTML =
+        '<div style="text-align:center;margin-bottom:16px;">' +
+          '<svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="#f59e0b" stroke-width="1.5" style="display:block;margin:0 auto;">' +
+            '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16" x2="12.01" y2="16"/>' +
+          '</svg>' +
+          '<h3 style="margin:12px 0 8px 0;font-size:16px;font-weight:600;color:var(--text-normal);">Unstable Transfer Warning</h3>' +
+          '<p style="margin:0;font-size:13px;color:var(--text-muted);line-height:1.5;">' +
+            'Audio and video file transfers are still unstable. The file may not play correctly or the transfer may fail.' +
+          '</p>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;">' +
+          '<button class="btn-av-warning-cancel" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-surface);color:var(--text-normal);cursor:pointer;font-size:13px;">Cancel</button>' +
+          '<button class="btn-av-warning-proceed" style="padding:8px 16px;border-radius:8px;border:none;background:#f59e0b;color:#fff;cursor:pointer;font-size:13px;font-weight:500;">Send Anyway</button>' +
+        '</div>';
+
+      overlay.appendChild(card);
+      document.body.appendChild(overlay);
+
+      function cleanup() {
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      }
+
+      overlay.querySelector('.btn-av-warning-cancel').addEventListener('click', function() {
+        cleanup();
+        resolve(false);
+      });
+      overlay.querySelector('.btn-av-warning-proceed').addEventListener('click', function() {
+        cleanup();
+        resolve(true);
+      });
+    });
+  },
+
   async sendMessage(text) {
     if (this._sending) return;
     this._sending = true;
@@ -2017,6 +2060,13 @@ window.ChatPanel = {
     if (!activeChatId) { this._sending = false; return; }
 
     if (!text && this.stagedFiles.length === 0) { this._sending = false; return; }
+
+    // Warn about unstable audio/video transfers before proceeding
+    var hasAvFile = this.stagedFiles.some(function(s) { return s.type === 'audio' || s.type === 'video'; });
+    if (hasAvFile) {
+      var proceed = await this._showAvWarningModal();
+      if (!proceed) { this._sending = false; return; }
+    }
 
     const friend = state.friends.find(function(f) { return f.userId === activeChatId; });
     const activeGroup = state.groups.find(function(g) { return g.groupId === activeChatId; });

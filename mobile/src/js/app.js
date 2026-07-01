@@ -1364,10 +1364,59 @@ document.addEventListener('DOMContentLoaded', function() {
     root.querySelectorAll('img[src*=".gif"]:not([data-frozen]), img[src*="data:image/gif"]:not([data-frozen]), .avatar img:not([data-frozen])').forEach(freezeOne);
   }
 
-  function sendMessage() {
+  function _showAvWarningModal() {
+    return new Promise(function(resolve) {
+      var overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+      overlay.style.zIndex = '9999';
+
+      var content = document.createElement('div');
+      content.className = 'modal-content';
+      content.style.padding = '24px';
+      content.style.textAlign = 'center';
+
+      content.innerHTML =
+        '<svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="#f59e0b" stroke-width="1.5" style="display:block;margin:0 auto 12px auto;">' +
+          '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16" x2="12.01" y2="16"/>' +
+        '</svg>' +
+        '<h3 style="margin:0 0 8px 0;font-size:16px;font-weight:600;">Unstable Transfer Warning</h3>' +
+        '<p style="margin:0;font-size:13px;line-height:1.5;color:var(--text-muted);">' +
+          'Audio and video file transfers are still unstable. The file may not play correctly or the transfer may fail.' +
+        '</p>' +
+        '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;">' +
+          '<button id="btn-av-warn-cancel" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-surface);color:var(--text-normal);font-size:14px;">Cancel</button>' +
+          '<button id="btn-av-warn-proceed" style="flex:1;padding:10px;border-radius:8px;border:none;background:#f59e0b;color:#fff;font-size:14px;font-weight:500;">Send Anyway</button>' +
+        '</div>';
+
+      overlay.appendChild(content);
+      document.body.appendChild(overlay);
+
+      function cleanup() {
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      }
+
+      document.getElementById('btn-av-warn-cancel').addEventListener('click', function() {
+        cleanup();
+        resolve(false);
+      });
+      document.getElementById('btn-av-warn-proceed').addEventListener('click', function() {
+        cleanup();
+        resolve(true);
+      });
+    });
+  }
+
+  async function sendMessage() {
     var input = document.getElementById('chat-input');
     var text = input.value.trim();
     if ((!text && stagedFiles.length === 0) || !activeChatId) return;
+
+    // Warn about unstable audio/video transfers before proceeding
+    var hasAvFile = stagedFiles.some(function(s) { return s.type === 'audio' || s.type === 'video'; });
+    if (hasAvFile) {
+      var proceed = await _showAvWarningModal();
+      if (!proceed) return;
+    }
 
     if (editingMsg) {
       MStore.editMessage(editingMsg.chatId, editingMsg.id, text);
