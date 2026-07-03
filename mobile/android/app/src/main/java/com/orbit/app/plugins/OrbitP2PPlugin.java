@@ -6,10 +6,14 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+import android.app.Notification;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
@@ -33,6 +37,9 @@ public class OrbitP2PPlugin extends Plugin {
             drainHandler.postDelayed(this, 100);
         }
     };
+
+    // Foreground tracking — updated by JS via setForeground()
+    private volatile boolean _isForeground = true;
 
     // ── Service lifecycle ──
 
@@ -102,6 +109,11 @@ public class OrbitP2PPlugin extends Plugin {
                         msgObj.put("connectionId", ev.connectionId);
                         msgObj.put("data", ev.data);
                         notifyListeners("onMessage", msgObj);
+                        // Create native notification if app is in background
+                        // (JS WebView may be paused, so LocalNotifications.schedule() is unreliable)
+                        if (!_isForeground) {
+                            postMessageNotification(ev.data);
+                        }
                         break;
                     case "connection":
                         JSObject connObj = new JSObject();
@@ -135,6 +147,68 @@ public class OrbitP2PPlugin extends Plugin {
         }
     }
 
+    // ── Native background notification ──
+
+    private void postMessageNotification(String rawData) {
+        try {
+            org.json.JSONObject pkt = new org.json.JSONObject(rawData);
+            org.json.JSONObject payload = pkt.optJSONObject("payload");
+            if (payload == null) return;
+
+            String fromId = payload.optString("from", "");
+            String text = payload.optString("text", "");
+            String fromName = payload.optString("fromName", fromId);
+            String chatId = payload.optString("chatId", "");
+            String groupId = payload.optString("groupId", "");
+
+            if (fromId.isEmpty() && groupId.isEmpty()) return;
+            if (text.isEmpty()) text = "(media / attachment)";
+            if (fromName.isEmpty()) fromName = fromId;
+
+            Context ctx = getContext();
+            if (ctx == null) return;
+
+            NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm == null) return;
+
+            // Tap opens main activity
+            Intent intent = new Intent(ctx, com.orbit.app.MainActivity.class);
+            intent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            PendingIntent pendingIntent = PendingIntent.getActivity(
+                ctx, 0, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+            );
+
+            // Use notification builder matching SDK
+            Notification notification;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                notification = new Notification.Builder(ctx, "orbit_messages")
+                    .setContentTitle(fromName)
+                    .setContentText(text)
+                    .setSmallIcon(android.R.drawable.ic_dialog_info)
+                    .setContentIntent(pendingIntent)
+                    .setAutoCancel(true)
+                    .setPriority(Notification.PRIORITY_HIGH)
+                    .build();
+            } else {
+                notification = new Notification.Builder(ctx)
+                    .setContentTitle(fromName)
+                    .setContentText(text)
+                    .setSmallIcon(android.R.drawable.ic_dialog_info)
+                    .setContentIntent(pendingIntent)
+                    .setAutoCancel(true)
+                    .setPriority(Notification.PRIORITY_HIGH)
+                    .build();
+            }
+
+            int notifId = (int) (System.currentTimeMillis() & 0x7FFFFFFF);
+            nm.notify(notifId, notification);
+            Log.d(TAG, "Posted native notification from " + fromName);
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to post native notification", e);
+        }
+    }
+
     // ── Plugin lifecycle ──
 
     @Override
@@ -158,6 +232,12 @@ public class OrbitP2PPlugin extends Plugin {
     }
 
     // ── Plugin methods ──
+
+    @PluginMethod
+    public void setForeground(PluginCall call) {
+        _isForeground = call.getBoolean("isForeground", true);
+        call.resolve();
+    }
 
     @PluginMethod
     public void startServer(PluginCall call) {

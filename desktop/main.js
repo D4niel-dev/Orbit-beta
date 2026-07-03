@@ -277,6 +277,9 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 app.whenReady().then(() => {
+  // Windows App User Model ID — tells the taskbar to group this as "Orbit" instead of "Electron"
+  if (process.platform === 'win32') app.setAppUserModelId('com.orbit.desktop');
+
   protocol.handle('orbit-file', (request) => {
     const urlPath = request.url.replace('orbit-file://', '');
     const decodedPath = decodeURIComponent(urlPath).replace(/\\/g, '/');

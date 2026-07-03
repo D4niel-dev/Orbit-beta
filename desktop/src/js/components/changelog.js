@@ -14,7 +14,35 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.1.9-beta', 'Latest', [
+        versionBlock('0.2.0-beta', 'Latest', [
+          ['CRITICAL: Mobile Background Notifications & Large File Persistence', [
+            'CRITICAL: Mobile Background Notifications Fixed — document.hidden is unreliable in Capacitor WebView; notifications never appeared outside the app. Two-layer fix: JS tracks background via Capacitor appStateChange, and Java OrbitP2PPlugin creates notifications directly via NotificationManager, bypassing the paused WebView entirely.',
+            'CRITICAL: Large File Persistence on Mobile — Files >10MB in IndexedDB had blob: URLs die on restart. Added BlobStoreDB (IndexedDB wrapper) + _restoreAllBlobAttachments() on startup. "Restoring..." placeholders shown during recovery.'
+          ]],
+          ['Mobile base64 Streaming Optimizations', [
+            'All 7 binary base64 decode sites rewritten as single-pass streaming decoders — Int8Array(256) lookup, inline validity counting, 4-char group buffer. No intermediate string allocations. Includes orbitBase64ToArrayBuffer, _base64ToBytes, _safeB64ToArrayBuffer (shared audio/video players).'
+          ]],
+          ['Notification & Lifecycle Fixes', [
+            'Reliable App Background Detection: window._appIsBackgrounded maintained by Capacitor appStateChange listener instead of unreliable document.hidden.',
+            'Native Android Notifications from Plugin: OrbitP2PPlugin.postMessageNotification() parses MESSAGE JSON, creates notification on orbit_messages channel via NotificationManager. Works regardless of WebView JS state.',
+            'JS→Plugin Foreground Bridge: setForeground() plugin method ensures native notifications only fire when !_isForeground, preventing duplicates.'
+          ]],
+          ['Desktop File Transfer Fixes', [
+            'Desktop AV Type Honor Fix: file-received handler now respects the sender\'s original type classification (e.g., .webm audio) instead of blindly re-classifying by extension. Prevents audio files from being routed to video player (which would trigger decode errors and +2s seeking).'
+          ]],
+          ['Media Player Improvements', [
+            'muted=true Gated to Mobile Only: The muted preload hack (forces metadata loading on mobile) is now only applied on actual mobile devices. Desktop players no longer start muted.',
+            'Blob MP4 Duration Parsing: parseMp4Duration() accepts direct ArrayBuffer via fetch(blob:URL), uses Uint8Array byte access instead of failing String.fromCharCode.apply on large buffers.',
+            'Video Player Blob Duration Fallback: When blob: URL has no duration, fetches and parses MP4 header directly via moov→mvhd/mdhd atoms.'
+          ]],
+          ['Technical', [
+            'Version bumped to v0.2.0-beta across all manifests, About tabs, and changelogs.',
+            'Two-layer notification architecture: JS handles foreground (toast/sound); Java handles background via NotificationManager.',
+            'All 7 binary decode sites unified to streaming single-pass algorithm.',
+            'File persistence strategy: ≤10MB → data: URLs in localStorage; >10MB → IndexedDB via BlobStoreDB.'
+          ]]
+        ]) +
+        versionBlock('0.1.9-beta', '', [
           ['CRITICAL: P2P Transfer & Service Lifecycle Fixes', [
             'CRITICAL: Mobile base64 Decode Corruption — atob() on Android WebView corrupts bytes >127. All 7 binary decode sites replaced with safe manual lookup-table decoder across video, audio, crypto, and file receiver.',
             'CRITICAL: Desktop→Mobile Chunk Joining — desktop btoa()\'s each 64KB chunk independently (each with own padding); mobile did chunks.join(\'\') → corrupt base64 at boundaries. Fixed: per-chunk independent decode + ArrayBuffer concat.',
@@ -28,18 +56,17 @@ window.Changelog = {
             'Hash Mismatch Silenced: Platform hash difference (WebKit vs Node crypto) is harmless. Changed to console.warn only — file always saved.'
           ]],
           ['Media & UI Fixes', [
-            'Mobile Metadata Preload: video/audio elements set muted=true + preload=metadata — forces mobile browsers to load duration headers. Audio restored on play via unmute hook in doPlay().',
-            'Video Player preload Optimized: Changed from auto to metadata — saves bandwidth while still showing duration immediately.',
-            'Transfer Error X Button Fixed: Added preventDefault + stopPropagation to dismiss handler.',
-            'Peer Status Dot After Auto-Connect: Immediate IPC peer-found with status=online sent on auto-connect success.'
+            'Mobile Metadata Preload: muted=true + preload=metadata forces mobile browsers to load duration immediately. Audio restored on play.',
+            'Video Player preload Changed to metadata — saves bandwidth.',
+            'Transfer Error X Button Fixed: preventDefault + stopPropagation on dismiss.',
+            'Peer Status Dot After Auto-Connect: Immediate online status update.'
           ]],
           ['Quality of Life', [
-            'Unstable AV Transfer Warning Modal: Shown when sending audio/video files (desktop + mobile). Alert-triangle icon, "Don\'t show again" checkbox (localStorage), click-outside-dismiss, Cancel/Send Anyway.',
-            'Auto-Discovery Diagnostic Logging: [AutoConnect] messages in DevTools to diagnose firewall/network issues.',
-            'Warning Icon Updated: Cleaner alert-triangle icon replaces old circle-with-exclamation.'
+            'Unstable AV Transfer Warning Modal: Shown on audio/video send. "Don\'t show again" checkbox, nicer alert-triangle icon.',
+            'Auto-Discovery Diagnostic Logging: [AutoConnect] logs in DevTools.'
           ]],
           ['Technical', [
-            'Version bumped to v0.1.9-beta across all manifests and changelogs.'
+            'Version bumped to v0.1.9-beta.'
           ]]
         ]) +
         versionBlock('0.1.8.1-beta', '', [

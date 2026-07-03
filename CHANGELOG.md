@@ -1,12 +1,49 @@
 # Orbit Changelog
 
-## v0.1.9-beta **(Latest Version)**
+## v0.2.0-beta **(Latest Version)**
 
 > **Note:** This is not a stable release — latest development version with experimental features.
 
-### CRITICAL: P2P Transfer & Service Lifecycle Fixes
+### CRITICAL: Mobile Background Notifications & Large File Persistence
 
-- **CRITICAL: Mobile base64 Decode Corruption:** `atob()` on Android WebView corrupts binary bytes >127 (signed byte issue). Replaced all 7 binary `atob()` decode sites with a safe manual lookup-table decoder across video player, audio player, crypto hash computation, and mobile file receiver.
+- **CRITICAL: Mobile Background Notifications Fixed:** `showIncomingNotification()` used `document.hidden` to gate native notifications — but `document.hidden` is **unreliable in Capacitor WebView** (never set to `true` when app is backgrounded). Native notifications were never created outside the app. Fixed at two layers: (1) JS side now tracks background state via Capacitor's **`App.addListener('appStateChange', ...)`** instead of `document.hidden`; (2) **Java `OrbitP2PPlugin` now creates native Android notifications directly** via `NotificationManager` when the app is in background, bypassing the JS WebView entirely (which may be paused). The plugin parses incoming MESSAGE packets, extracts sender name and text, and posts to the `orbit_messages` channel (HIGH importance). `setForeground()` plugin method bridges JS foreground state to native side. DnD, group mention, and active-chat checks still handled by JS when running.
+- **CRITICAL: Large File Persistence on Mobile (IndexedDB Blob Store):** Files >10MB stored raw ArrayBuffer in IndexedDB via `_blobKey` — but `blob:` URLs created from these buffers die on app restart (blob URLs are per-session). Added `window.BlobStoreDB` — an IndexedDB-backed blob store with `put`/`get`/`delete` operations. `_restoreAllBlobAttachments()` runs on app start to reconstruct `blob:` URLs from persisted `_blobKey` data. `_resUrl()` fellback for dead `blob:` URLs in `renderMessages()` triggers async restore from IndexedDB. During restore, attachment placeholders show "Restoring..." indicator with hard-drive icon.
+
+### Mobile base64 Streaming Optimizations
+
+- **`orbitBase64ToArrayBuffer` Rewritten as Streaming Decoder:** Original created an intermediate `clean` string (filtering valid chars) then walked it in 4-char chunks — two passes over the data with a string allocation. New version: single streaming pass using `Int8Array(256)` lookups, inline validity counting, and a 4-element group buffer (`var b = [0,0,0,0]`). Decodes bytes on the fly as each group of 4 valid chars is filled. No intermediate string allocation, no padding manipulation. Handles trailing group correctly with zero-padding. Same optimization applied to all 7 binary decode sites including `_base64ToBytes` (mobile file receiver) and `_safeB64ToArrayBuffer` (shared audio/video players).
+
+### Notification & Lifecycle Fixes
+
+- **Reliable App Background Detection:** Replaced `document.hidden` with `window._appIsBackgrounded` — a boolean maintained by Capacitor's `appStateChange` listener. Falls back to `document.hidden` for non-Capacitor environments. When Capacitor state is available, skips JS-side `LocalNotifications.schedule()` (unreliable from background) and lets the native Java plugin handle notifications.
+- **Native Android Notifications from Plugin:** `OrbitP2PPlugin.postMessageNotification()` parses incoming `FgEvent` JSON, extracts sender name + message text, and posts to the `orbit_messages` channel via Android `NotificationManager`. Works regardless of WebView JavaScript engine state. Uses `PendingIntent` to open `MainActivity` on tap. Handles both API 26+ (with channel) and pre-26 (legacy builder).
+- **JS→Plugin Foreground Bridge:** `setForeground()` plugin method called from `appStateChange` listener keeps the native plugin informed of foreground/background transitions. Native notifications only created when `_isForeground === false`, preventing duplicates during normal in-app message handling.
+
+### Desktop File Transfer Fixes
+
+- **Desktop AV Type Honor Fix (desktop `file-received` handler):** Incoming file transfers with .webm, .mov, and other ambiguous extensions were being re-classified by the desktop receiver based solely on extension regex matching — overriding the sender's correct type classification (e.g., mobile sends a .webm audio-only file with `type: 'audio'`, but desktop's `isVideo` regex matched `.webm` and the handler overwrote it to `type: 'video'`). This caused audio-only files to be routed to the video player, triggering PIPELINE_ERROR_DECODE with +2s seeking retries. Fixed: the handler now checks the **sender's original type** from the pending MESSAGE attachment first — if the sender classified it as `'audio'`, `'video'`, or `'image'` (not `'file'`), the desktop receiver honors that classification and only derives the MIME from the extension. The extension-only fallback path remains when no sender type hint is available.
+
+### Media Player Improvements
+
+- **`muted=true` Gated to Mobile Only:** The `muted=true` preload hack (forces `loadedmetadata` on mobile browsers without user interaction) is now only applied on actual mobile devices (Android/Capacitor/iOS). Desktop players no longer start muted — audio and video play with sound immediately on desktop as expected.
+- **Blob MP4 Duration Parsing:** `parseMp4Duration()` rewritten to accept a direct `ArrayBuffer` parameter (via `fetch(blob:URL)`) in addition to the base64 data URL path. Uses `Uint8Array` byte access instead of `String.fromCharCode.apply(null, largeArray)` which fails on large buffers (>130MB). Fixes duration detection for blob: URLs too large for the charCode approach.
+- **Video Player Blob Duration Fallback:** When a blob: URL has no known duration and the browser reports duration < 0.5s, the video player now fetches the blob and parses the MP4 header directly to extract the duration from the `moov→mvhd`/`mdhd` atoms. Falls back to the existing `currentTime = 1e7` seek hack for non-blob URLs.
+
+### Quality of Life
+
+- **Desktop File Transfer Type Indicators:** Attachment classification in `file-received` handler now shows correct type badges even for sender-classified ambiguous extensions. Reducing video player misroutes reduces confusing decode errors.
+- **Mobile Restore Indicators:** Messages with attachments being restored from IndexedDB show "Restoring..." placeholder with hard-drive icon — visual feedback that large files are being recovered.
+
+### Technical
+
+- **Version:** Bumped to v0.2.0-beta across all manifests, About tabs, changelogs, and What's New modals.
+- **Architecture:** Native notification path added to `OrbitP2PPlugin.drainEvents()` — background notifications are now created directly from Java, independent of JS WebView state. Two-layer notification strategy: JS handles foreground (toast/sound) and non-Capacitor fallback; Java handles background via `NotificationManager`.
+- **base64 Decoder Unified:** All 7 binary decode functions across mobile app.js, shared audio-player.js, and shared video-player.js now use the same streaming single-pass algorithm with `Int8Array(256)` lookup and 4-char group buffer — consistent performance and behavior across all decode sites.
+- **File Persistence Strategy:** Files ≤10MB stored as data: URLs in localStorage (existing behavior). Files >10MB stored as raw ArrayBuffer in IndexedDB via `BlobStoreDB`. Both survive app restart via different mechanisms. Blob URL reconstruction on startup for IndexedDB-backed files via `_restoreAllBlobAttachments()`.
+
+## v0.1.9-beta
+
+> **Note:** This is not a stable release — latest development version with experimental features.
 - **CRITICAL: Desktop→Mobile File Transfer Chunk Joining:** Desktop `btoa()`'s each 64KB binary chunk independently (each with its own base64 padding). Mobile was doing `chunks.join('')` which concatenated separately-padded base64 strings — producing invalid base64 at every chunk boundary, corrupting the entire file. Fixed: each chunk is now decoded independently via `orbitBase64ToArrayBuffer()`, ArrayBuffers concatenated, then re-encoded as a clean data URL.
 - **CRITICAL: WriteStream Race Condition (Mobile→Desktop):** `stream.end()` is asynchronous — `onComplete` (which reads the temp file via `fs.readFileSync`) was firing before data was flushed to disk. This caused truncated files on mobile→desktop transfers: videos lost audio tracks and duration metadata (missing moov atom). Fixed: `stream.on('finish', ...)` now wraps hash verification and completion callback.
 - **CRITICAL: P2P cleanup() Race in Android Plugin:** `OrbitP2PPlugin.cleanup()` called `stopService()`, which asynchronously unbound and stopped the Android foreground service. Then `initP2P()` immediately called `startServer()`/`startDiscovery()` — `ensureServiceRunning()` found `boundService` still non-null (async `onServiceDisconnected` hadn't fired yet) and returned early, never restarting the service. Fixed: Java `cleanup()` is now a no-op — the JS side (`p2p-mobile.js`) already clears connection state, pending messages, and native listeners via `removeAllListeners()`.

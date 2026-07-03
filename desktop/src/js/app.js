@@ -803,22 +803,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const isAudio = data.name.match(/\.(mp3|wav|ogg|flac|aac|m4a|wma)$/i) != null;
         const attId = data.fileId || (window.orbitAPI ? window.orbitAPI.getUuid() : Date.now().toString());
         const fileSize = data.size || 0;
+        // Default type/MIME for the !found fallback (overridden inside the found loop if found)
         var attType = 'file';
         var attMime = 'application/octet-stream';
-        if (isImage) {
-          attType = 'image';
-          attMime = data.name.toLowerCase().endsWith('.gif') ? 'image/gif' : (data.name.toLowerCase().endsWith('.png') ? 'image/png' : (data.name.toLowerCase().endsWith('.webp') ? 'image/webp' : (data.name.toLowerCase().endsWith('.svg') ? 'image/svg+xml' : 'image/jpeg')));
-        } else if (isVideo) {
-          attType = 'video';
-          var videoExtMap = { mp4: 'video/mp4', mov: 'video/quicktime', avi: 'video/x-msvideo', mkv: 'video/x-matroska', webm: 'video/webm', '3gp': 'video/3gpp' };
-          var vext = data.name.split('.').pop().toLowerCase();
-          attMime = videoExtMap[vext] || 'video/mp4';
-        } else if (isAudio) {
-          attType = 'audio';
-          var extMap = { webm: 'audio/webm', mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', flac: 'audio/flac', aac: 'audio/aac', m4a: 'audio/mp4', wma: 'audio/x-ms-wma' };
-          var ext = data.name.split('.').pop().toLowerCase();
-          attMime = extMap[ext] || 'audio/webm';
-        }
         // CRIT-4: Try to find existing message with matching _fileId attachment, update it
         var stateMsgs = window.store.getState().messages || {};
         var found = false;
@@ -829,6 +816,48 @@ document.addEventListener('DOMContentLoaded', () => {
             if (atts && Array.isArray(atts)) {
               for (var ai = 0; ai < atts.length; ai++) {
                 if (atts[ai]._fileId === data.fileId) {
+                  // FIX (AV-2s-skip): Honor the sender's type classification from the pending
+                  // MESSAGE attachment rather than re-classifying by file extension alone.
+                  // Mobile correctly classifies .webm audio-only as 'audio', but the extension
+                  // heuristic below would force it to 'video' (since .webm is in isVideo regex),
+                  // routing it to the video player where decode errors trigger a +2s seek.
+                  var senderType = atts[ai].type;
+                  if (senderType && senderType !== 'file') {
+                    // Keep sender's type, derive MIME from extension
+                    attType = senderType;
+                    if (attType === 'audio') {
+                      var ext = data.name.split('.').pop().toLowerCase();
+                      var extMap = { webm: 'audio/webm', mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', flac: 'audio/flac', aac: 'audio/aac', m4a: 'audio/mp4', wma: 'audio/x-ms-wma' };
+                      attMime = extMap[ext] || 'audio/webm';
+                    } else if (attType === 'video') {
+                      var vext = data.name.split('.').pop().toLowerCase();
+                      var videoExtMap2 = { mp4: 'video/mp4', mov: 'video/quicktime', avi: 'video/x-msvideo', mkv: 'video/x-matroska', webm: 'video/webm', '3gp': 'video/3gpp' };
+                      attMime = videoExtMap2[vext] || 'video/mp4';
+                    } else if (attType === 'image') {
+                      attMime = data.name.toLowerCase().endsWith('.gif') ? 'image/gif' : (data.name.toLowerCase().endsWith('.png') ? 'image/png' : (data.name.toLowerCase().endsWith('.webp') ? 'image/webp' : (data.name.toLowerCase().endsWith('.svg') ? 'image/svg+xml' : 'image/jpeg')));
+                    } else {
+                      attMime = 'application/octet-stream';
+                    }
+                  } else {
+                    // No sender hint — fall back to extension-based classification
+                    if (isImage) {
+                      attType = 'image';
+                      attMime = data.name.toLowerCase().endsWith('.gif') ? 'image/gif' : (data.name.toLowerCase().endsWith('.png') ? 'image/png' : (data.name.toLowerCase().endsWith('.webp') ? 'image/webp' : (data.name.toLowerCase().endsWith('.svg') ? 'image/svg+xml' : 'image/jpeg')));
+                    } else if (isVideo) {
+                      attType = 'video';
+                      var videoExtMap = { mp4: 'video/mp4', mov: 'video/quicktime', avi: 'video/x-msvideo', mkv: 'video/x-matroska', webm: 'video/webm', '3gp': 'video/3gpp' };
+                      var vext = data.name.split('.').pop().toLowerCase();
+                      attMime = videoExtMap[vext] || 'video/mp4';
+                    } else if (isAudio) {
+                      attType = 'audio';
+                      var extMap = { webm: 'audio/webm', mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', flac: 'audio/flac', aac: 'audio/aac', m4a: 'audio/mp4', wma: 'audio/x-ms-wma' };
+                      var ext = data.name.split('.').pop().toLowerCase();
+                      attMime = extMap[ext] || 'audio/webm';
+                    } else {
+                      attType = 'file';
+                      attMime = 'application/octet-stream';
+                    }
+                  }
                   atts[ai].type = attType;
                   atts[ai].mimeType = attMime;
                   atts[ai].url = 'orbit-db://attachment/' + data.fileId;

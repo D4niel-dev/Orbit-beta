@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v019-beta-latest-version">v0.1.9-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v020-beta-latest-version">v0.2.0-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@
 
 | Channel | Version | Status |
 |---------|---------|--------|
-| *Development* | v0.1.9-beta | Latest build (unstable) |
+| *Development* | v0.2.0-beta | Latest build (unstable) |
 | **Stable** | v0.1.1-beta | Stable release |
 | Previous **Stable** | v0.0.5-beta | Legacy stable release |
 
@@ -90,18 +90,14 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage desktop app** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
-## Highlights (v0.1.9-beta)
+## Highlights (v0.2.0-beta)
 
-- **CRITICAL: Mobile base64 Decode Corruption Fixed:** `atob()` on Android WebView corrupts bytes >127 — all 7 binary decode sites replaced with safe manual lookup-table decoder.
-- **CRITICAL: Desktop→Mobile Chunk Joining Fixed:** Desktop `btoa()`'s each 64KB chunk independently (each with own padding); mobile was doing `chunks.join('')` producing invalid base64 at boundaries. Fixed: per-chunk independent decode + ArrayBuffer concatenation.
-- **CRITICAL: WriteStream Race Fixed:** Mobile→desktop transfers had truncated files — `stream.end()` async caused `onComplete` to fire before flush. Fixed: `stream.on('finish', ...)` wraps completion.
-- **CRITICAL: P2P cleanup() Race Fixed:** Android `cleanup()` called `stopService()` (async), then `startServer()` found `boundService` still non-null and skipped restart. Fixed: Java cleanup is a no-op.
-- **Mobile Video Type Override Fixed:** FILE_TRANSFER_END no longer overwrites correct video/audio type with regex extension fallback.
-- **Mobile Video Compression Dropped Audio Fixed:** `canvas.captureStream()` drops audio — disabled lossy compression; raw video with audio now sent.
-- **Group Chat File Routing Fixed:** `chatId` added to FILE_TRANSFER_START/END packets.
-- **Mobile Metadata Preload:** `muted=true` + `preload=metadata` forces mobile browsers to load duration immediately.
-- **Unstable AV Transfer Warning Modal:** Alert-triangle modal with "Don't show again" checkbox on audio/video send.
-- **Auto-Discovery Diagnostic Logging:** `[AutoConnect]` logs help diagnose firewall/network issues.
+- **CRITICAL: Mobile Background Notifications Fixed:** `document.hidden` is unreliable in Capacitor WebView — native notifications never appeared outside the app. Fixed at two layers: JS now tracks background via Capacitor's `appStateChange` listener, and the Java `OrbitP2PPlugin` creates notifications directly via `NotificationManager`, bypassing the paused WebView entirely.
+- **CRITICAL: Large File Persistence on Mobile:** Files >10MB stored in IndexedDB had `blob:` URLs die on restart. Added `BlobStoreDB` with `_restoreAllBlobAttachments()` to reconstruct URLs on startup. "Restoring..." placeholders shown during recovery.
+- **Mobile base64 Streaming Optimizations:** All 7 binary decode sites rewritten as single-pass streaming decoders — no intermediate string allocations, inline validity counting, 4-char group buffer. Faster and more memory-efficient.
+- **Desktop AV Type Honor Fix:** Desktop `file-received` handler now respects the sender's original type classification instead of blindly re-classifying by extension — .webm audio files no longer misrouted to the video player.
+- **`muted=true` Gated to Mobile Only:** Desktop players no longer start muted. The preload hack is now only applied on actual mobile devices.
+- **Blob MP4 Duration Parsing:** `parseMp4Duration()` now accepts direct ArrayBuffer via `fetch(blob:URL)` and uses `Uint8Array` byte access instead of failing `String.fromCharCode.apply` on large buffers.
 
 ## Version History
 <details>
@@ -335,6 +331,16 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Mobile Video Aspect Ratio Fixed:** .ovp-video now has object-fit: contain, max-height: 50vh (was 300px), and #000 letterbox background — videos scale correctly to any aspect ratio.
 </details>
 <details open>
+<summary>v0.2.0-beta</summary>
+
+- **CRITICAL: Mobile Background Notifications Fixed** — `document.hidden` unreliable in Capacitor WebView. Fixed: JS tracks background via `appStateChange`; Java plugin creates notifications directly via `NotificationManager`.
+- **CRITICAL: Large File Persistence on Mobile** — Files >10MB in IndexedDB lost blob: URLs on restart. Added `BlobStoreDB` + `_restoreAllBlobAttachments()`.
+- **Mobile base64 Streaming Optimizations** — All 7 binary decode sites rewritten as single-pass streaming decoders (no intermediate strings).
+- **Desktop AV Type Honor Fix** — Desktop honors sender's type classification; .webm audio no longer misrouted to video player.
+- **`muted=true` Gated to Mobile Only** — Desktop players no longer start muted.
+- **Blob MP4 Duration Parsing** — fetch(blob:) + Uint8Array byte access for duration detection on large blob URLs.
+</details>
+<details>
 <summary>v0.1.9-beta</summary>
 
 - **CRITICAL: Mobile base64 Decode Corruption Fixed** — atob() on Android WebView corrupts bytes >127 — all 7 binary decode sites replaced with safe manual decoder.
@@ -506,18 +512,14 @@ Transparency matters in beta. Current constraints include:
 
 ## Roadmap
 
-### Shipped (v0.1.9-beta)
+### Shipped (v0.2.0-beta)
 
-- **CRITICAL: Mobile base64 Decode Corruption** — all 7 binary atob() decode sites replaced with safe manual decoder
-- **CRITICAL: Desktop→Mobile Chunk Joining** — per-chunk independent decode + ArrayBuffer concatenation
-- **CRITICAL: WriteStream Race** — stream.on('finish') wraps hash check + completion
-- **CRITICAL: P2P cleanup() Race** — Java cleanup is a no-op (JS already clears listeners)
-- **Mobile Video Type Override Fixed** — FILE_TRANSFER_END preserves original video/audio type
-- **Mobile Video Compression Dropped Audio Fixed** — disabled lossy compression; raw video with audio
-- **Group Chat File Routing Fixed** — chatId in FILE_TRANSFER_START/END packets
-- **Mobile Metadata Preload** — muted=true forces immediate duration on mobile
-- **Unstable AV Transfer Warning Modal** — alert-triangle icon, "Don't show again" checkbox
-- **Auto-Discovery Diagnostic Logging** — [AutoConnect] logs in DevTools
+- **CRITICAL: Mobile Background Notifications Fixed** — two-layer fix: JS `appStateChange` + native Java `NotificationManager`
+- **CRITICAL: Large File Persistence on Mobile** — IndexedDB BlobStore with restart recovery
+- **Mobile base64 Streaming Optimizations** — single-pass decoders, no intermediate strings
+- **Desktop AV Type Honor Fix** — sender type classification respected over extension matching
+- **`muted=true` Gated to Mobile Only** — desktop players no longer start muted
+- **Blob MP4 Duration Parsing** — direct ArrayBuffer parsing via fetch(blob:) for large files
 
 ### In Progress / Planned
 

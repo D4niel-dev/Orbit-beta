@@ -1,6 +1,14 @@
 (function() {
   if (window.OrbitAudioPlayer) return;
 
+  // Inject spinner keyframe once
+  if (!document.getElementById('oap-spinner-style')) {
+    var os = document.createElement('style');
+    os.id = 'oap-spinner-style';
+    os.textContent = '@keyframes oap-spin{to{transform:rotate(360deg)}}.oap-loading{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.45);z-index:5;border-radius:8px}.oap-spinner{width:32px;height:32px;border:3px solid rgba(255,255,255,0.2);border-top-color:#fff;border-radius:50%;animation:oap-spin .8s linear infinite}';
+    document.head.appendChild(os);
+  }
+
   var _audioCtx = null;
 
   function getCtx() {
@@ -31,24 +39,41 @@
   }
 
   function _safeB64ToArrayBuffer(b64) {
-    var lookup = [], chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-    for (var li = 0; li < 64; li++) lookup[chars.charCodeAt(li)] = li;
-    var clean = '';
-    for (var si = 0; si < b64.length; si++) {
-      var cc = b64.charCodeAt(si);
-      if (lookup[cc] !== undefined) clean += b64[si];
+    var lookup = new Int8Array(256);
+    for (var i = 0; i < 256; i++) lookup[i] = -1;
+    var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    for (var i = 0; i < 64; i++) lookup[chars.charCodeAt(i)] = i;
+
+    var validLen = 0;
+    for (var i = 0; i < b64.length; i++) {
+      if (lookup[b64.charCodeAt(i)] !== -1) validLen++;
     }
-    var binLen = Math.floor(clean.length * 3 / 4);
+
+    var binLen = Math.floor(validLen * 3 / 4);
     if (binLen === 0) return new ArrayBuffer(0);
-    var buf = new ArrayBuffer(binLen), bytes = new Uint8Array(buf);
-    while (clean.length % 4 !== 0) clean += 'A';
+
+    var buf = new ArrayBuffer(binLen);
+    var bytes = new Uint8Array(buf);
+
     var p = 0;
-    for (var bi = 0; bi + 3 < clean.length; bi += 4) {
-      var a = lookup[clean.charCodeAt(bi)], b = lookup[clean.charCodeAt(bi + 1)];
-      var c = lookup[clean.charCodeAt(bi + 2)], d = lookup[clean.charCodeAt(bi + 3)];
-      if (p < binLen) bytes[p++] = (a << 2) | (b >> 4);
-      if (p < binLen) bytes[p++] = ((b & 0x0F) << 4) | (c >> 2);
-      if (p < binLen) bytes[p++] = ((c & 0x03) << 6) | d;
+    var b = [0,0,0,0];
+    var bi = 0;
+    for (var i = 0; i < b64.length; i++) {
+      var val = lookup[b64.charCodeAt(i)];
+      if (val === -1 || val === void 0) continue;
+      b[bi++] = val;
+      if (bi === 4) {
+        if (p < binLen) bytes[p++] = (b[0] << 2) | (b[1] >> 4);
+        if (p < binLen) bytes[p++] = ((b[1] & 15) << 4) | (b[2] >> 2);
+        if (p < binLen) bytes[p++] = ((b[2] & 3) << 6) | b[3];
+        bi = 0;
+      }
+    }
+    if (bi > 0) {
+      while (bi < 4) b[bi++] = 0;
+      if (p < binLen) bytes[p++] = (b[0] << 2) | (b[1] >> 4);
+      if (p < binLen) bytes[p++] = ((b[1] & 15) << 4) | (b[2] >> 2);
+      if (p < binLen) bytes[p++] = ((b[2] & 3) << 6) | b[3];
     }
     return buf;
   }
@@ -63,25 +88,81 @@
       canvas.width = 400;
       canvas.height = 200;
 
+      var _pendingDataUrl = (typeof url === 'string' && url.startsWith('data:')) ? url : null;
       var _blobUrl = null;
-      // Android WebView chokes on large data: URIs for <audio> — convert to blob
-      if (typeof url === 'string' && url.startsWith('data:')) {
-        try {
-          var m = url.match(/^data:(audio\/[^;]+|application\/octet-stream);base64,(.+)$/);
-          if (m) {
-            var ab = _safeB64ToArrayBuffer(m[2]);
-            if (ab.byteLength > 0) {
-              _blobUrl = URL.createObjectURL(new Blob([ab], { type: m[1] }));
-              url = _blobUrl;
-            }
+      var audio = null; // Created lazily for data: URLs
+      var _audioReady = !_pendingDataUrl; // Non-data URLs are ready immediately
+      var _loadingLazy = false;
+
+      // Loading overlay shown during lazy decode
+      var loadingOverlay = document.createElement('div');
+      loadingOverlay.className = 'oap-loading';
+      var spinner = document.createElement('div');
+      spinner.className = 'oap-spinner';
+      loadingOverlay.appendChild(spinner);
+
+      function _initAudio(srcUrl) {
+        audio = document.createElement('audio');
+        audio.src = srcUrl;
+        audio.preload = 'metadata';
+        var isMobile = typeof navigator !== 'undefined' && (/android|iphone|ipad|ipod/i.test(navigator.userAgent) || !!window.Capacitor);
+        if (isMobile) audio.muted = true;
+        audio.style.display = 'none';
+
+        audio.addEventListener('timeupdate', updTime);
+        audio.addEventListener('loadedmetadata', updTime);
+        audio.addEventListener('ended', function() {
+          if (looping) {
+            audio.currentTime = 0;
+            doPlay();
+          } else {
+            playing = false;
+            playBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>';
           }
-        } catch(e) { /* silently keep original url */ }
+        });
+        audio.addEventListener('error', function() { timeEl.textContent = 'Error'; });
+
+        wrapper.insertBefore(audio, ctrl);
+        if (!_pendingDataUrl) audio.load();
+        _audioReady = true;
+        // Update player reference if player already exists (lazy-load case)
+        try { if (player) player._a = audio; } catch(e) {}
       }
-      var audio = document.createElement('audio');
-      audio.src = url;
-      audio.preload = 'metadata';
-      audio.muted = true; // Force mobile browsers to load metadata without interaction
-      audio.style.display = 'none';
+
+      function _ensureLoaded(callback) {
+        if (_audioReady) { callback(); return; }
+        if (_loadingLazy) { setTimeout(function() { _ensureLoaded(callback); }, 100); return; }
+        _loadingLazy = true;
+        loadingOverlay.style.display = 'flex';
+
+        setTimeout(function() {
+          try {
+            var m = url.match(/^data:(audio\/[^;]+|application\/octet-stream);base64,(.+)$/);
+            if (m) {
+              var ab = _safeB64ToArrayBuffer(m[2]);
+              if (ab && ab.byteLength > 0) {
+                _blobUrl = URL.createObjectURL(new Blob([ab], { type: m[1] }));
+                _initAudio(_blobUrl);
+                audio.load();
+                audio.addEventListener('canplay', function onReady() {
+                  audio.removeEventListener('canplay', onReady);
+                  _loadingLazy = false;
+                  loadingOverlay.style.display = 'none';
+                  callback();
+                });
+                // Safety timeout: play even if canplay never fires
+                setTimeout(function() {
+                  if (_loadingLazy) { _loadingLazy = false; loadingOverlay.style.display = 'none'; callback(); }
+                }, 10000);
+                return;
+              }
+            }
+          } catch(e) { /* fallback */ }
+          _loadingLazy = false;
+          loadingOverlay.style.display = 'none';
+          callback();
+        }, 50);
+      }
 
       var seek = document.createElement('div');
       seek.className = 'oap-seek';
@@ -138,14 +219,21 @@
       ctrl.appendChild(volSlider);
       ctrl.appendChild(moreBtn);
       ctrl.appendChild(timeEl);
+      wrapper.style.position = 'relative';
       var canvasBox = document.createElement('div');
       canvasBox.className = 'oap-canvas-box';
       canvasBox.appendChild(canvas);
       wrapper.appendChild(canvasBox);
+      wrapper.appendChild(loadingOverlay);
       wrapper.appendChild(seek);
-      wrapper.appendChild(audio);
+      // audio appended by _initAudio() when ready
       wrapper.appendChild(ctrl);
       container.appendChild(wrapper);
+
+      // For non-data: URLs, create audio element eagerly (after all DOM is built)
+      if (!_pendingDataUrl) {
+        _initAudio(url);
+      }
 
       var analyser = null;
       var srcNode = null;
@@ -200,6 +288,11 @@
       }
 
       function doPlay() {
+        if (_pendingDataUrl && !_audioReady) {
+          _ensureLoaded(function() { if (audio) doPlay(); });
+          return;
+        }
+        if (!audio) { timeEl.textContent = 'Error'; return; }
         if (audio.muted && audio.volume > 0) audio.muted = false; // Restore audio on user interaction
         connectSrc();
         var ctx = getCtx();
@@ -215,14 +308,14 @@
 
       function doPause() {
         playing = false;
-        audio.pause();
+        if (audio) audio.pause();
         playBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>';
       }
 
       function doStop() {
         playing = false;
-        audio.pause();
-        audio.currentTime = 0;
+        if (audio) audio.pause();
+        if (audio) audio.currentTime = 0;
         playBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>';
         updTime();
         var c = canvas.getContext('2d');
@@ -230,7 +323,7 @@
         hue = Math.random() * 360;
       }
 
-      playBtn.addEventListener('click', function(e) { e.stopPropagation(); if (audio.paused) doPlay(); else doPause(); });
+      playBtn.addEventListener('click', function(e) { e.stopPropagation(); if (!audio || audio.paused) doPlay(); else doPause(); });
       stopBtn.addEventListener('click', function(e) { e.stopPropagation(); doStop(); });
 
       volBtn.addEventListener('click', function(e) {
@@ -239,6 +332,7 @@
         volSlider.style.display = volSlider.style.display === 'none' ? 'block' : 'none';
       });
       volSlider.addEventListener('input', function() {
+        if (!audio) return;
         audio.volume = this.value / 100;
         volBtn.innerHTML = this.value == 0
           ? '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>'
@@ -313,7 +407,7 @@
 
         mi('Playback Speed', '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>', function() {
           subMenu('Playback Speed', speeds.map(function(spd) {
-            return { label: spd + 'x', active: spd === currentSpeed, action: function() { currentSpeed = spd; audio.playbackRate = spd; } };
+            return { label: spd + 'x', active: spd === currentSpeed, action: function() { currentSpeed = spd; if (audio) audio.playbackRate = spd; } };
           }));
         });
 
@@ -356,12 +450,14 @@
       // Seek bar
       var _seekDrag = false;
       function seekFromClientX(clientX) {
+        if (!audio) return;
         var rect = seekTrack.getBoundingClientRect();
         var x = clientX - rect.left;
         var pct = Math.max(0, Math.min(1, x / rect.width));
         if (audio.duration) audio.currentTime = pct * audio.duration;
       }
       function updateSeekTip(clientX) {
+        if (!audio) return;
         var rect = seekTrack.getBoundingClientRect();
         var x = clientX - rect.left;
         var pct = Math.max(0, Math.min(1, x / rect.width));
@@ -380,28 +476,14 @@
       seekTrack.addEventListener('mousemove', function(e) { updateSeekTip(e.clientX); });
       seekTrack.addEventListener('mouseleave', function() { seekTip.style.display = 'none'; });
 
-      audio.addEventListener('timeupdate', updTime);
-      audio.addEventListener('loadedmetadata', updTime);
-      audio.addEventListener('ended', function() {
-        if (looping) {
-          audio.currentTime = 0;
-          doPlay();
-        } else {
-          playing = false;
-          playBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>';
-        }
-      });
-      audio.addEventListener('error', function() { timeEl.textContent = 'Error'; });
-      audio.load();
-
       var player = {
         _w: wrapper,
-        _a: audio,
+        _a: null, // Set below once audio exists
+        _pendingDataUrl: _pendingDataUrl,
         destroy: function() {
           dead = true;
           closeAnyMenu();
-          audio.pause();
-          audio.src = '';
+          if (audio) { audio.pause(); audio.src = ''; }
           if (_blobUrl) URL.revokeObjectURL(_blobUrl);
           if (animId) cancelAnimationFrame(animId);
           if (srcNode) { try { srcNode.disconnect(); } catch(e) {} }
@@ -410,20 +492,21 @@
           if (idx !== -1) _players.splice(idx, 1);
         }
       };
+      player._a = audio; // null for data: URLs until lazy loaded
       _players.push(player);
       return player;
     },
 
     isAnyPlaying: function() {
       for (var i = 0; i < _players.length; i++) {
-        if (!_players[i]._a.paused) return true;
+        if (_players[i]._a && !_players[i]._a.paused) return true;
       }
       return false;
     },
     savePlaying: function() {
       var saved = [];
       for (var i = _players.length - 1; i >= 0; i--) {
-        if (!_players[i]._a.paused) {
+        if (_players[i]._a && !_players[i]._a.paused) {
           var p = _players.splice(i, 1)[0];
           var row = p._w.parentElement ? p._w.closest('.message-row') : null;
           p._msgId = row ? row.getAttribute('data-msg-id') : null;

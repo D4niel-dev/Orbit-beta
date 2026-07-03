@@ -1,6 +1,14 @@
 (function() {
   if (window.OrbitVideoPlayer) return;
 
+  // Inject spinner keyframe once (may already exist from audio-player.js)
+  if (!document.getElementById('ovp-spinner-style')) {
+    var os = document.createElement('style');
+    os.id = 'ovp-spinner-style';
+    os.textContent = '@keyframes ovp-spin{to{transform:rotate(360deg)}}.ovp-loading{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);z-index:5;border-radius:8px}.ovp-spinner{width:40px;height:40px;border:4px solid rgba(255,255,255,0.2);border-top-color:#fff;border-radius:50%;animation:ovp-spin .8s linear infinite}';
+    document.head.appendChild(os);
+  }
+
   var _anyMenu = null;
   var _menuCleanup = null;
 
@@ -10,24 +18,41 @@
   }
 
   function _safeB64ToArrayBuffer(b64) {
-    var lookup = [], chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-    for (var li = 0; li < 64; li++) lookup[chars.charCodeAt(li)] = li;
-    var clean = '';
-    for (var si = 0; si < b64.length; si++) {
-      var cc = b64.charCodeAt(si);
-      if (lookup[cc] !== undefined) clean += b64[si];
+    var lookup = new Int8Array(256);
+    for (var i = 0; i < 256; i++) lookup[i] = -1;
+    var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    for (var i = 0; i < 64; i++) lookup[chars.charCodeAt(i)] = i;
+
+    var validLen = 0;
+    for (var i = 0; i < b64.length; i++) {
+      if (lookup[b64.charCodeAt(i)] !== -1) validLen++;
     }
-    var binLen = Math.floor(clean.length * 3 / 4);
+
+    var binLen = Math.floor(validLen * 3 / 4);
     if (binLen === 0) return new ArrayBuffer(0);
-    var buf = new ArrayBuffer(binLen), bytes = new Uint8Array(buf);
-    while (clean.length % 4 !== 0) clean += 'A';
+
+    var buf = new ArrayBuffer(binLen);
+    var bytes = new Uint8Array(buf);
+
     var p = 0;
-    for (var bi = 0; bi + 3 < clean.length; bi += 4) {
-      var a = lookup[clean.charCodeAt(bi)], b = lookup[clean.charCodeAt(bi + 1)];
-      var c = lookup[clean.charCodeAt(bi + 2)], d = lookup[clean.charCodeAt(bi + 3)];
-      if (p < binLen) bytes[p++] = (a << 2) | (b >> 4);
-      if (p < binLen) bytes[p++] = ((b & 0x0F) << 4) | (c >> 2);
-      if (p < binLen) bytes[p++] = ((c & 0x03) << 6) | d;
+    var b = [0,0,0,0];
+    var bi = 0;
+    for (var i = 0; i < b64.length; i++) {
+      var val = lookup[b64.charCodeAt(i)];
+      if (val === -1 || val === void 0) continue;
+      b[bi++] = val;
+      if (bi === 4) {
+        if (p < binLen) bytes[p++] = (b[0] << 2) | (b[1] >> 4);
+        if (p < binLen) bytes[p++] = ((b[1] & 15) << 4) | (b[2] >> 2);
+        if (p < binLen) bytes[p++] = ((b[2] & 3) << 6) | b[3];
+        bi = 0;
+      }
+    }
+    if (bi > 0) {
+      while (bi < 4) b[bi++] = 0;
+      if (p < binLen) bytes[p++] = (b[0] << 2) | (b[1] >> 4);
+      if (p < binLen) bytes[p++] = ((b[1] & 15) << 4) | (b[2] >> 2);
+      if (p < binLen) bytes[p++] = ((b[2] & 3) << 6) | b[3];
     }
     return buf;
   }
@@ -52,22 +77,27 @@
   /* Parse MP4 duration from the moov→mvhd atom inside a data: URL.
      Falls back to tkhd/mdhd for fragmented MP4s where mvhd.duration=0.
      Returns seconds or null if parsing fails. */
-  function parseMp4Duration(dataUrl) {
-    var m = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-    if (!m) return null;
-    var raw;
-    try {
-      var ab = _safeB64ToArrayBuffer(m[2]);
-      if (!ab || ab.byteLength === 0) return null;
-      raw = String.fromCharCode.apply(null, new Uint8Array(ab));
-    } catch(e) { return null; }
-    var len = raw.length;
+  function parseMp4Duration(dataUrl, directAb) {
+    var ab = directAb;
+    if (!ab) {
+      var m = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (!m) return null;
+      try {
+        ab = _safeB64ToArrayBuffer(m[2]);
+      } catch(e) { return null; }
+    }
+    if (!ab || ab.byteLength === 0) return null;
+    var bytes = new Uint8Array(ab);
+    var len = bytes.length;
     function u32(o) {
       if (o + 4 > len) return 0;
-      return ((raw.charCodeAt(o) << 24) | (raw.charCodeAt(o+1) << 16) |
-              (raw.charCodeAt(o+2) << 8) | raw.charCodeAt(o+3)) >>> 0;
+      return ((bytes[o] << 24) | (bytes[o+1] << 16) |
+              (bytes[o+2] << 8) | bytes[o+3]) >>> 0;
     }
-    function str4(o) { return raw.slice(o, o + 4); }
+    function str4(o) {
+      if (o + 4 > len) return '';
+      return String.fromCharCode(bytes[o], bytes[o+1], bytes[o+2], bytes[o+3]);
+    }
 
     // Find moov
     var moovStart = -1, moovEnd = -1;
@@ -93,26 +123,26 @@
         else if (bs === 1) { if (p + 16 > end) break; bs = u32(p+8)*4294967296 + u32(p+12); }
         if (bs < 8) break;
         var be = Math.min(p + bs, end);
-        if (bt === 'mvhd') {
-          var ver = raw.charCodeAt(p + 8);
+          if (bt === 'mvhd') {
+          var ver = bytes[p + 8];
           var ts, dur;
           if (ver === 0) { ts = u32(p+20); dur = u32(p+24); }
           else { ts = u32(p+28); dur = u32(p+32)*4294967296 + u32(p+36); }
           mvhdTs = ts;
           if (ts > 0 && dur > 0) mvhdDur = dur / ts;
         } else if (bt === 'tkhd') {
-          var ver = raw.charCodeAt(p + 8);
+          var ver = bytes[p + 8];
           var tkTs = mvhdTs || 1000;
           var tkDur = ver === 0 ? u32(p+28) : u32(p+36)*4294967296 + u32(p+40);
           if (tkTs > 0 && tkDur > 0) { var d = tkDur / tkTs; if (bestTrackDur === null || d > bestTrackDur) bestTrackDur = d; }
         } else if (bt === 'mdhd') {
-          var ver = raw.charCodeAt(p + 8);
+          var ver = bytes[p + 8];
           var mdTs, mdDur;
           if (ver === 0) { mdTs = u32(p+20); mdDur = u32(p+24); }
           else { mdTs = u32(p+28); mdDur = u32(p+32)*4294967296 + u32(p+36); }
           if (mdTs > 0 && mdDur > 0) { var d = mdDur / mdTs; if (bestTrackDur === null || d > bestTrackDur) bestTrackDur = d; }
         } else if (bt === 'mehd') {
-          var ver = raw.charCodeAt(p + 8);
+          var ver = bytes[p + 8];
           var meDur = ver === 0 ? u32(p+12) : u32(p+12)*4294967296 + u32(p+16);
           if (meDur > 0) { var d = meDur / (mvhdTs || 1000); if (bestTrackDur === null || d > bestTrackDur) bestTrackDur = d; }
         } else if (bt === 'trak' || bt === 'mdia' || bt === 'minf' || bt === 'stbl' || bt === 'mvex') {
@@ -190,48 +220,184 @@
 
       var _logId = Math.random().toString(36).slice(2, 6);
 
-      var isAndroid = /Android/i.test(navigator.userAgent);
-      dbg('[' + _logId + '] create() url type=' + (url ? url.slice(0, 5) : 'null') + ' len=' + (url ? url.length : 0) + ' isAndroid=' + isAndroid);
+      dbg('[' + _logId + '] create() url type=' + (url ? url.slice(0, 5) : 'null') + ' len=' + (url ? url.length : 0));
 
+      var _pendingDataUrl = (typeof url === 'string' && url.startsWith('data:')) ? url : null;
+      var video = null; // Created lazily for data: URLs
+      var _videoReady = !_pendingDataUrl;
+      var _loadingLazy = false;
       var knownDuration = null;
       var _blobUrl = null;
 
-      // Only convert data: to blob: on Android WebView (desktop handles data: fine)
-      if (isAndroid && typeof url === 'string' && url.startsWith('data:')) {
-        try {
-          var m = url.match(/^data:(video\/[^;]+|application\/octet-stream);base64,(.+)$/);
-          if (m) {
-            dbg('[' + _logId + '] converting data: → blob:  mime=' + m[1] + '  rawLen=' + m[2].length);
+      // Loading overlay shown during lazy decode
+      var loadingOverlay = document.createElement('div');
+      loadingOverlay.className = 'ovp-loading';
+      var spinnerEl = document.createElement('div');
+      spinnerEl.className = 'ovp-spinner';
+      loadingOverlay.appendChild(spinnerEl);
+      wrapper.style.position = 'relative';
+
+      function _initVideo(srcUrl) {
+        video = document.createElement('video');
+        video.className = 'ovp-video';
+        video.preload = 'metadata';
+        video.playsInline = true;
+        var isMobile = typeof navigator !== 'undefined' && (/android|iphone|ipad|ipod/i.test(navigator.userAgent) || !!window.Capacitor);
+        if (isMobile) video.muted = true;
+        video.src = srcUrl;
+        dbg('[' + _logId + '] _initVideo src=' + (srcUrl ? srcUrl.slice(0, 20) : 'null'));
+
+        // Event handlers that were attached to video
+        video.addEventListener('timeupdate', updTime);
+        video.addEventListener('loadedmetadata', function() {
+          dbg('[' + _logId + '] loadedmetadata  knownDuration=' + knownDuration + '  browserDuration=' + video.duration + ' (' + fmt(video.duration) + ')  readyState=' + video.readyState + '  vw=' + video.videoWidth + 'x' + video.videoHeight);
+          updTime();
+          parseDurationFromSource(srcUrl);
+        });
+        video.addEventListener('durationchange', function() {
+          dbg('[' + _logId + '] durationchange  knownDuration=' + knownDuration + '  browserDuration=' + video.duration + ' (' + fmt(video.duration) + ')  readyState=' + video.readyState);
+          updTime();
+        });
+
+        if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
+          dbg('[' + _logId + '] metadata already available at init, updTime()');
+          setTimeout(updTime, 10);
+        }
+
+        video.addEventListener('play', function() { dbg('[' + _logId + '] PLAY  currentTime=' + video.currentTime); });
+        video.addEventListener('playing', function() { dbg('[' + _logId + '] PLAYING  currentTime=' + video.currentTime + '  paused=' + video.paused); });
+        video.addEventListener('pause', function() {
+          dbg('[' + _logId + '] PAUSE  currentTime=' + video.currentTime + '  readyState=' + video.readyState);
+          console.log('[OVP] [' + _logId + '] PAUSE source', (new Error()).stack.split('\n').slice(2).join(' // '));
+        });
+        video.addEventListener('seeking', function() { dbg('[' + _logId + '] SEEKING  currentTime=' + video.currentTime); });
+        video.addEventListener('seeked', function() { dbg('[' + _logId + '] SEEKED  knownDuration=' + knownDuration + '  browserDuration=' + video.duration + '  currentTime=' + video.currentTime); updTime(); if (video.currentTime > 1e9) { dbg('[' + _logId + '] seeked was forced seek, seeking back to 0'); video.currentTime = 0; } });
+        video.addEventListener('waiting', function() { dbg('[' + _logId + '] WAITING  currentTime=' + video.currentTime + '  readyState=' + video.readyState); });
+        video.addEventListener('suspend', function() { dbg('[' + _logId + '] SUSPEND  currentTime=' + video.currentTime); });
+        video.addEventListener('stalled', function() { dbg('[' + _logId + '] STALLED  currentTime=' + video.currentTime); });
+        video.addEventListener('ended', function() {
+          if (looping) {
+            video.currentTime = 0;
+            doPlay();
+          } else {
+            playing = false;
+            playBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>';
+          }
+        });
+        video.addEventListener('error', handleVideoError);
+
+        videoBox.appendChild(video);
+        _videoReady = true;
+        // Eagerly start loading for non-data URLs (e.g., blob:, orbit-db://)
+        if (!_pendingDataUrl) video.load();
+        // Update player reference if player already exists (lazy-load case)
+        try { if (player) player._v = video; } catch(e) {}
+        dbg('[' + _logId + '] _initVideo complete, muted=' + (isMobile ? 'true' : 'false'));
+      }
+
+      function handleVideoError() {
+        var errMsg = video.error ? video.error.message : 'none';
+        dbg('[' + _logId + '] ERROR  code=' + (video.error ? video.error.code : 'unknown') + ' message=' + errMsg + '  currentTime=' + video.currentTime);
+
+        if (errMsg.indexOf('PIPELINE_ERROR_DECODE') !== -1) {
+          if (video.duration && video.currentTime > video.duration - 5) {
+            dbg('[' + _logId + '] decode error near end of available buffer (' + video.currentTime.toFixed(2) + 's / ' + video.duration.toFixed(2) + 's), treating as ended');
+            timeEl.textContent = 'Incomplete';
+            video.dispatchEvent(new Event('ended'));
+            return;
+          }
+          if (_decodeRetries < 3) {
+            _decodeRetries++;
+            var skipTo = video.currentTime + 2;
+            dbg('[' + _logId + '] decode error (' + _decodeRetries + '/3), reloading and skipping to ' + skipTo.toFixed(2) + 's');
+            video.src = '';
+            setTimeout(function() {
+              if (dead) return;
+              video.src = url;
+              var onMeta = function() {
+                video.removeEventListener('loadedmetadata', onMeta);
+                if (dead) return;
+                video.currentTime = skipTo;
+                video.play().catch(function(e2) { dbg('[' + _logId + '] retry play failed:', e2.message); });
+              };
+              video.addEventListener('loadedmetadata', onMeta);
+            }, 200);
+            return;
+          }
+        }
+        timeEl.textContent = 'Error';
+      }
+
+      function parseDurationFromSource(srcUrl) {
+        if (knownDuration) return;
+        if (!srcUrl) return;
+        if (_pendingDataUrl) {
+          // Decode the data URL's base64 and parse duration from the ArrayBuffer
+          var m = _pendingDataUrl.match(/^data:([^;]+);base64,(.+)$/);
+          if (!m) return;
+          try {
             var ab = _safeB64ToArrayBuffer(m[2]);
             if (ab && ab.byteLength > 0) {
-              _blobUrl = URL.createObjectURL(new Blob([ab], { type: m[1] }));
-              url = _blobUrl;
-              dbg('[' + _logId + '] blobURL=' + url);
-            } else {
-              dbg('[' + _logId + '] safe decoder produced empty buffer, using raw data: URL');
+              var d = parseMp4Duration(null, ab);
+              if (d && d > 0) {
+                knownDuration = d;
+                dbg('[' + _logId + '] lazy-parsed MP4 duration=' + knownDuration + 's (' + fmt(knownDuration) + ')');
+                updTime();
+              }
             }
-          } else {
-            dbg('[' + _logId + '] data URL regex did NOT match — using raw data: URL');
-          }
-        } catch(e) { dbg('[' + _logId + '] blob conversion error:', e); }
-      } else {
-        dbg('[' + _logId + '] using ' + (url && url.startsWith('data:') ? 'raw data: URL' : 'raw URL') + ' directly');
+          } catch(e) { dbg('[' + _logId + '] lazy parse error:', e); }
+        } else if (srcUrl.startsWith('blob:')) {
+          dbg('[' + _logId + '] fetching blob to parse MP4 duration directly');
+          fetch(srcUrl).then(function(r) { return r.arrayBuffer(); }).then(function(ab) {
+            if (dead) return;
+            var d = parseMp4Duration(null, ab);
+            if (d && d > 0) {
+              knownDuration = d;
+              dbg('[' + _logId + '] parsed MP4 duration from blob=' + knownDuration + 's');
+              updTime();
+            }
+          }).catch(function() {});
+        } else if (!srcUrl.startsWith('orbit-db://') && !srcUrl.startsWith('orbit-file://')) {
+          dbg('[' + _logId + '] no knownDuration and browser duration too small, seeking to force read');
+          video.currentTime = 1e7;
+        }
       }
 
-      /* Try to get the real duration by parsing the MP4 binary directly. */
-      if (typeof url === 'string' && url.startsWith('data:')) {
-        knownDuration = parseMp4Duration(url);
-        if (knownDuration !== null) { dbg('[' + _logId + '] parsed MP4 duration=' + knownDuration + 's (' + fmt(knownDuration) + ')'); }
-        else { dbg('[' + _logId + '] could not parse duration from source'); }
-      }
+      function _ensureLoaded(callback) {
+        if (_videoReady) { callback(); return; }
+        if (_loadingLazy) { setTimeout(function() { _ensureLoaded(callback); }, 100); return; }
+        _loadingLazy = true;
+        loadingOverlay.style.display = 'flex';
 
-      var video = document.createElement('video');
-      video.className = 'ovp-video';
-      video.preload = 'metadata';
-      video.playsInline = true;
-      video.muted = true; // Force mobile browsers to load metadata without interaction
-      video.src = url;
-      dbg('[' + _logId + '] video.src set, preload=metadata, muted=true');
+        setTimeout(function() {
+          try {
+            var m = url.match(/^data:(video\/[^;]+|application\/octet-stream);base64,(.+)$/);
+            if (m) {
+              dbg('[' + _logId + '] lazy-decoding data: → blob:  mime=' + m[1] + '  rawLen=' + m[2].length);
+              var ab = _safeB64ToArrayBuffer(m[2]);
+              if (ab && ab.byteLength > 0) {
+                _blobUrl = URL.createObjectURL(new Blob([ab], { type: m[1] }));
+                _initVideo(_blobUrl);
+                video.load();
+                video.addEventListener('canplay', function onReady() {
+                  video.removeEventListener('canplay', onReady);
+                  _loadingLazy = false;
+                  loadingOverlay.style.display = 'none';
+                  callback();
+                });
+                // Safety timeout
+                setTimeout(function() {
+                  if (_loadingLazy) { _loadingLazy = false; loadingOverlay.style.display = 'none'; callback(); }
+                }, 10000);
+                return;
+              }
+            }
+          } catch(e) { dbg('[' + _logId + '] lazy decode error:', e); }
+          _loadingLazy = false;
+          loadingOverlay.style.display = 'none';
+          callback();
+        }, 50);
+      }
 
       var seek = document.createElement('div');
       seek.className = 'ovp-seek';
@@ -297,20 +463,27 @@
       ctrl.appendChild(timeEl);
       var videoBox = document.createElement('div');
       videoBox.className = 'ovp-video-box';
-      videoBox.appendChild(video);
+      if (video) videoBox.appendChild(video);
       wrapper.appendChild(videoBox);
+      wrapper.appendChild(loadingOverlay);
       wrapper.appendChild(seek);
       wrapper.appendChild(ctrl);
       container.appendChild(wrapper);
+
+      // For non-data: URLs, create video element eagerly (after all DOM is built)
+      if (!_pendingDataUrl) {
+        _initVideo(url);
+      }
 
       var dead = false;
       var playing = false;
       var looping = false;
       var _decodeRetries = 0;
 
-      function dur() { return knownDuration || video.duration; }
+      function dur() { return knownDuration || (video ? video.duration : 0); }
 
       function updTime() {
+        if (!video) return;
         var d = dur();
         timeEl.textContent = fmt(video.currentTime) + ' / ' + fmt(d);
         var pct = d ? (video.currentTime / d * 100) : 0;
@@ -319,6 +492,11 @@
       }
 
       function doPlay() {
+        if (_pendingDataUrl && !_videoReady) {
+          _ensureLoaded(function() { if (video) doPlay(); });
+          return;
+        }
+        if (!video) { timeEl.textContent = 'Error'; return; }
         if (video.muted && video.volume > 0) video.muted = false; // Restore audio on user interaction
         video.play().then(function() {
           playing = true;
@@ -330,19 +508,18 @@
 
       function doPause() {
         playing = false;
-        video.pause();
+        if (video) video.pause();
         playBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>';
       }
 
       function doStop() {
         playing = false;
-        video.pause();
-        video.currentTime = 0;
+        if (video) { video.pause(); video.currentTime = 0; }
         playBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>';
         updTime();
       }
 
-      playBtn.addEventListener('click', function(e) { e.stopPropagation(); if (video.paused) doPlay(); else doPause(); });
+      playBtn.addEventListener('click', function(e) { e.stopPropagation(); if (!video || video.paused) doPlay(); else doPause(); });
       stopBtn.addEventListener('click', function(e) { e.stopPropagation(); doStop(); });
 
       volBtn.addEventListener('click', function(e) {
@@ -351,6 +528,7 @@
         volSlider.style.display = volSlider.style.display === 'none' ? 'block' : 'none';
       });
       volSlider.addEventListener('input', function() {
+        if (!video) return;
         video.volume = this.value / 100;
         volBtn.innerHTML = this.value == 0
           ? '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>'
@@ -368,6 +546,7 @@
       }
 
       function onFSChange() {
+        if (!video) return;
         if (document.fullscreenElement === wrapper) {
           _inFS = true;
           wrapper.style.maxWidth = 'none';
@@ -489,11 +668,12 @@
 
         mi('Playback Speed', '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>', function() {
           subMenu('Playback Speed', speeds.map(function(spd) {
-            return { label: spd + 'x', active: spd === currentSpeed, action: function() { currentSpeed = spd; video.playbackRate = spd; } };
+            return { label: spd + 'x', active: spd === currentSpeed, action: function() { currentSpeed = spd; if (video) video.playbackRate = spd; } };
           }));
         });
 
         mi('Picture-in-Picture', '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><rect x="11" y="9" width="8" height="5" rx="1" fill="currentColor"/></svg>', function() {
+          if (!video) { if (typeof showToast === 'function') showToast('Load video first', 'info'); return; }
           if (document.pictureInPictureElement) {
             document.exitPictureInPicture().catch(function() {});
           } else if (video.requestPictureInPicture) {
@@ -550,12 +730,14 @@
       function seekFromClientX(clientX) {
         var d = dur();
         if (!d) return;
+        if (!video) return;
         var rect = seekTrack.getBoundingClientRect();
         var x = clientX - rect.left;
         var pct = Math.max(0, Math.min(1, x / rect.width));
         video.currentTime = pct * d;
       }
       function updateSeekTip(clientX) {
+        if (!video) return;
         var d = dur();
         var rect = seekTrack.getBoundingClientRect();
         var x = clientX - rect.left;
@@ -575,80 +757,8 @@
       seekTrack.addEventListener('mousemove', function(e) { updateSeekTip(e.clientX); });
       seekTrack.addEventListener('mouseleave', function() { seekTip.style.display = 'none'; });
 
-      video.addEventListener('play', function() { dbg('[' + _logId + '] PLAY  currentTime=' + video.currentTime); });
-      video.addEventListener('playing', function() { dbg('[' + _logId + '] PLAYING  currentTime=' + video.currentTime + '  paused=' + video.paused); });
-      video.addEventListener('pause', function() {
-        dbg('[' + _logId + '] PAUSE  currentTime=' + video.currentTime + '  readyState=' + video.readyState);
-        console.log('[OVP] [' + _logId + '] PAUSE source', (new Error()).stack.split('\n').slice(2).join(' // '));
-      });
-      video.addEventListener('seeking', function() { dbg('[' + _logId + '] SEEKING  currentTime=' + video.currentTime); });
-      video.addEventListener('seeked', function() { dbg('[' + _logId + '] SEEKED  knownDuration=' + knownDuration + '  browserDuration=' + video.duration + '  currentTime=' + video.currentTime); updTime(); if (video.currentTime > 1e9) { dbg('[' + _logId + '] seeked was forced seek, seeking back to 0'); video.currentTime = 0; } });
-      video.addEventListener('waiting', function() { dbg('[' + _logId + '] WAITING  currentTime=' + video.currentTime + '  readyState=' + video.readyState); });
-      video.addEventListener('suspend', function() { dbg('[' + _logId + '] SUSPEND  currentTime=' + video.currentTime); });
-      video.addEventListener('stalled', function() { dbg('[' + _logId + '] STALLED  currentTime=' + video.currentTime); });
-      video.addEventListener('timeupdate', updTime);
-      video.addEventListener('loadedmetadata', function() {
-        dbg('[' + _logId + '] loadedmetadata  knownDuration=' + knownDuration + '  browserDuration=' + video.duration + ' (' + fmt(video.duration) + ')  readyState=' + video.readyState + '  vw=' + video.videoWidth + 'x' + video.videoHeight);
-        updTime();
-        if (!knownDuration && (!video.duration || video.duration < 0.5) && url && !url.startsWith('orbit-db://') && !url.startsWith('orbit-file://')) {
-          dbg('[' + _logId + '] no knownDuration and browser duration too small, seeking to force read');
-          video.currentTime = 1e7;
-        }
-      });
-      video.addEventListener('durationchange', function() {
-        dbg('[' + _logId + '] durationchange  knownDuration=' + knownDuration + '  browserDuration=' + video.duration + ' (' + fmt(video.duration) + ')  readyState=' + video.readyState);
-        updTime();
-      });
-
-      if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
-        dbg('[' + _logId + '] metadata already available at init, updTime()');
-        setTimeout(updTime, 10);
-      }
-      video.addEventListener('ended', function() {
-        if (looping) {
-          video.currentTime = 0;
-          doPlay();
-        } else {
-          playing = false;
-          playBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>';
-        }
-      });
-      video.addEventListener('error', function() {
-        var errMsg = video.error ? video.error.message : 'none';
-        dbg('[' + _logId + '] ERROR  code=' + (video.error ? video.error.code : 'unknown') + ' message=' + errMsg + '  currentTime=' + video.currentTime);
-        
-        if (errMsg.indexOf('PIPELINE_ERROR_DECODE') !== -1) {
-          // If we hit a decode error near the end of the browser's known duration, the file is likely incomplete.
-          if (video.duration && video.currentTime > video.duration - 5) {
-            dbg('[' + _logId + '] decode error near end of available buffer (' + video.currentTime.toFixed(2) + 's / ' + video.duration.toFixed(2) + 's), treating as ended');
-            timeEl.textContent = 'Incomplete';
-            video.dispatchEvent(new Event('ended'));
-            return;
-          }
-          if (_decodeRetries < 3) {
-            _decodeRetries++;
-            var skipTo = video.currentTime + 2;
-            dbg('[' + _logId + '] decode error (' + _decodeRetries + '/3), reloading and skipping to ' + skipTo.toFixed(2) + 's');
-            video.src = '';
-            setTimeout(function() {
-              if (dead) return;
-              video.src = url;
-              var onMeta = function() {
-                video.removeEventListener('loadedmetadata', onMeta);
-                if (dead) return;
-                video.currentTime = skipTo;
-                video.play().catch(function(e2) { dbg('[' + _logId + '] retry play failed:', e2.message); });
-              };
-              video.addEventListener('loadedmetadata', onMeta);
-            }, 200);
-            return;
-          }
-        }
-        timeEl.textContent = 'Error';
-      });
-      setTimeout(function() {
-        dbg('[' + _logId + '] FINAL  knownDuration=' + knownDuration + '  browserDuration=' + video.duration + ' (' + fmt(video.duration) + ')  displayDuration=' + fmt(dur()) + '  currentTime=' + video.currentTime + '  readyState=' + video.readyState + '  paused=' + video.paused + '  networkState=' + video.networkState + '  srcType=' + (video.src ? video.src.slice(0, 5) : 'null'));
-      }, 3000);
+      // Note: video event handlers (timeupdate, loadedmetadata, error, etc.)
+      // are attached in _initVideo() to avoid duplication.
 
       /* For orbit protocol URLs, ask the main process to look up the attachment
          in SQLite and parse the MP4 duration directly from the buffer. */
@@ -669,13 +779,13 @@
 
       var player = {
         _w: wrapper,
-        _v: video,
+        _v: null, // Set below
         _url: url,
+        _pendingDataUrl: _pendingDataUrl,
         destroy: function() {
           dead = true;
           console.log('[OVP] [' + _logId + '] destroy() called');
-          video.pause();
-          video.src = '';
+          if (video) { video.pause(); video.src = ''; }
           if (_blobUrl) URL.revokeObjectURL(_blobUrl);
           document.removeEventListener('fullscreenchange', onFSChange);
           if (_inFS) document.exitFullscreen().catch(function() {});
@@ -685,20 +795,21 @@
           if (idx !== -1) _players.splice(idx, 1);
         }
       };
+      player._v = video; // null for data: URLs until lazy loaded
       _players.push(player);
       return player;
     },
 
     isAnyPlaying: function() {
       for (var i = 0; i < _players.length; i++) {
-        if (!_players[i]._v.paused) return true;
+        if (_players[i]._v && !_players[i]._v.paused) return true;
       }
       return false;
     },
     savePlaying: function() {
       var saved = [];
       for (var i = _players.length - 1; i >= 0; i--) {
-        if (!_players[i]._v.paused) {
+        if (_players[i]._v && !_players[i]._v.paused) {
           var p = _players.splice(i, 1)[0];
           var row = p._w.parentElement ? p._w.closest('.message-row') : null;
           p._msgId = row ? row.getAttribute('data-msg-id') : null;

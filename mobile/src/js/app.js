@@ -22,28 +22,43 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   // Safe base64→ArrayBuffer decoder (atob() on Android WebView corrupts bytes >127)
+  // Uses single-pass streaming decoder to avoid intermediate string allocations
   window.orbitBase64ToArrayBuffer = function orbitBase64ToArrayBuffer(b64) {
-    var lookup = [], chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-    for (var li = 0; li < 64; li++) lookup[chars.charCodeAt(li)] = li;
-    var clean = '';
-    for (var si = 0; si < b64.length; si++) {
-      var cc = b64.charCodeAt(si);
-      if (lookup[cc] !== undefined) clean += b64[si];
+    var lookup = new Int8Array(256);
+    for (var i = 0; i < 256; i++) lookup[i] = -1;
+    var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    for (var i = 0; i < 64; i++) lookup[chars.charCodeAt(i)] = i;
+
+    var validLen = 0;
+    for (var i = 0; i < b64.length; i++) {
+      if (lookup[b64.charCodeAt(i)] !== -1) validLen++;
     }
-    var binLen = Math.floor(clean.length * 3 / 4);
+
+    var binLen = Math.floor(validLen * 3 / 4);
     if (binLen === 0) return new ArrayBuffer(0);
+
     var buf = new ArrayBuffer(binLen);
     var bytes = new Uint8Array(buf);
-    while (clean.length % 4 !== 0) clean += 'A';
+
     var p = 0;
-    for (var bi = 0; bi + 3 < clean.length; bi += 4) {
-      var a = lookup[clean.charCodeAt(bi)];
-      var b = lookup[clean.charCodeAt(bi + 1)];
-      var c = lookup[clean.charCodeAt(bi + 2)];
-      var d = lookup[clean.charCodeAt(bi + 3)];
-      if (p < binLen) bytes[p++] = (a << 2) | (b >> 4);
-      if (p < binLen) bytes[p++] = ((b & 0x0F) << 4) | (c >> 2);
-      if (p < binLen) bytes[p++] = ((c & 0x03) << 6) | d;
+    var b = [0,0,0,0];
+    var bi = 0;
+    for (var i = 0; i < b64.length; i++) {
+      var val = lookup[b64.charCodeAt(i)];
+      if (val === -1 || val === void 0) continue;
+      b[bi++] = val;
+      if (bi === 4) {
+        if (p < binLen) bytes[p++] = (b[0] << 2) | (b[1] >> 4);
+        if (p < binLen) bytes[p++] = ((b[1] & 15) << 4) | (b[2] >> 2);
+        if (p < binLen) bytes[p++] = ((b[2] & 3) << 6) | b[3];
+        bi = 0;
+      }
+    }
+    if (bi > 0) {
+      while (bi < 4) b[bi++] = 0;
+      if (p < binLen) bytes[p++] = (b[0] << 2) | (b[1] >> 4);
+      if (p < binLen) bytes[p++] = ((b[1] & 15) << 4) | (b[2] >> 2);
+      if (p < binLen) bytes[p++] = ((b[2] & 3) << 6) | b[3];
     }
     return buf;
   };
@@ -53,8 +68,124 @@ document.addEventListener('DOMContentLoaded', function() {
     try { return URL.createObjectURL(new Blob([buf], { type: mime })); } catch(e) { return null; }
   };
 
+  /* ---- IndexedDB Blob Store (for large files >10MB that don't fit in localStorage) ---- */
+  window.BlobStoreDB = {
+    _db: null,
+    _ready: null,
+    _open: function() {
+      if (this._ready) return this._ready;
+      var self = this;
+      this._ready = new Promise(function(resolve, reject) {
+        try {
+          var req = indexedDB.open('OrbitBlobStore', 1);
+          req.onupgradeneeded = function(e) {
+            var db = e.target.result;
+            if (!db.objectStoreNames.contains('blobs')) {
+              db.createObjectStore('blobs');
+            }
+          };
+          req.onsuccess = function(e) {
+            self._db = e.target.result;
+            self._db.onversionchange = function() { self._db.close(); };
+            resolve();
+          };
+          req.onerror = function(e) {
+            console.warn('[BlobStoreDB] open failed:', e.target.error);
+            reject(e.target.error);
+          };
+        } catch(e) {
+          console.warn('[BlobStoreDB] indexedDB unavailable:', e.message);
+          reject(e);
+        }
+      });
+      return this._ready;
+    },
+    put: function(key, arrayBuffer) {
+      var self = this;
+      return this._open().then(function() {
+        return new Promise(function(resolve, reject) {
+          try {
+            var tx = self._db.transaction('blobs', 'readwrite');
+            tx.objectStore('blobs').put(arrayBuffer, key);
+            tx.oncomplete = function() { resolve(); };
+            tx.onerror = function(e) { reject(e.target.error); };
+          } catch(e) { reject(e); }
+        });
+      });
+    },
+    get: function(key) {
+      var self = this;
+      return this._open().then(function() {
+        return new Promise(function(resolve, reject) {
+          try {
+            var tx = self._db.transaction('blobs', 'readonly');
+            var req = tx.objectStore('blobs').get(key);
+            req.onsuccess = function(e) { resolve(e.target.result); };
+            req.onerror = function(e) { reject(e.target.error); };
+          } catch(e) { reject(e); }
+        });
+      });
+    },
+    'delete': function(key) {
+      var self = this;
+      return this._open().then(function() {
+        return new Promise(function(resolve, reject) {
+          try {
+            var tx = self._db.transaction('blobs', 'readwrite');
+            tx.objectStore('blobs')['delete'](key);
+            tx.oncomplete = function() { resolve(); };
+            tx.onerror = function(e) { reject(e.target.error); };
+          } catch(e) { reject(e); }
+        });
+      });
+    }
+  };
+
+  // Restore large-file blob attachments from IndexedDB after loading from localStorage
+  window._restoreAllBlobAttachments = function _restoreAllBlobAttachments() {
+    var allMsgs = MStore.messages || {};
+    var restorePromises = [];
+    for (var cid in allMsgs) {
+      var msgs = allMsgs[cid];
+      if (!Array.isArray(msgs)) continue;
+      for (var mi = 0; mi < msgs.length; mi++) {
+        var atts = msgs[mi].attachments;
+        if (!Array.isArray(atts)) continue;
+        for (var ai = 0; ai < atts.length; ai++) {
+          var a = atts[ai];
+          if (a._blobKey && (!a.url || a.url.indexOf('blob:') === 0)) {
+            // Dead blob URL — restore from IndexedDB
+            (function(attachment, chatId) {
+              restorePromises.push(
+                window.BlobStoreDB.get(attachment._blobKey).then(function(ab) {
+                  if (!ab) { console.warn('[BlobStore] no data for key', attachment._blobKey); return; }
+                  var mime = attachment.mimeType || 'application/octet-stream';
+                  try {
+                    var newUrl = URL.createObjectURL(new Blob([ab], { type: mime }));
+                    attachment.url = newUrl;
+                    MStore._saveMsgs(chatId);
+                  } catch(e) {
+                    console.warn('[BlobStore] createObjectURL failed:', e.message);
+                  }
+                }).catch(function(err) {
+                  console.warn('[BlobStore] restore failed for', attachment._blobKey, err);
+                })
+              );
+            })(a, cid);
+          }
+        }
+      }
+    }
+    return Promise.all(restorePromises);
+  };
+
   migrateOldData(); // copy unprefixed keys before MStore reads orbit_* keys
   MStore.load();
+  // Restore blob attachments asynchronously (non-blocking — will re-render when done)
+  window._restoreAllBlobAttachments().then(function() {
+    console.log('[BlobStore] All blob attachments restored');
+    if (activeChatId) renderMessages(activeChatId);
+  });
 
   var activeChatId = null;
 
@@ -853,13 +984,40 @@ document.addEventListener('DOMContentLoaded', function() {
       if (!u) return '';
       // data: URL → blob: URL (performance, cached)
       if (u.indexOf('data:') === 0) {
+        // Audio/video: pass raw data: URL to player — decoded lazily on first play
+        if (a.type === 'audio' || a.type === 'video') return u;
         if (!window._dataUrlCache[u]) window._dataUrlCache[u] = _dataUrlToBlobUrl(u);
         return window._dataUrlCache[u];
       }
-      // Dead blob: URL → reconstruct from persisted _dataUrl
-      if (u.indexOf('blob:') === 0 && a._dataUrl) {
-        if (!window._dataUrlCache[a._dataUrl]) window._dataUrlCache[a._dataUrl] = _dataUrlToBlobUrl(a._dataUrl);
-        return window._dataUrlCache[a._dataUrl];
+      // Dead blob: URL → reconstruct from persisted _dataUrl or _blobKey (IndexedDB)
+      if (u.indexOf('blob:') === 0 && (a._dataUrl || a._blobKey)) {
+        // Audio/video: let player handle lazily from raw _dataUrl
+        if ((a.type === 'audio' || a.type === 'video') && a._dataUrl) return a._dataUrl;
+        if (a._dataUrl) {
+          if (!window._dataUrlCache[a._dataUrl]) window._dataUrlCache[a._dataUrl] = _dataUrlToBlobUrl(a._dataUrl);
+          return window._dataUrlCache[a._dataUrl];
+        }
+        // _blobKey but no _dataUrl: schedule async restore (so it re-renders with live URL)
+        // Return placeholder URL; the async restore will update a.url and re-render
+        if (!window._restoreQueue) window._restoreQueue = {};
+        if (!window._restoreQueue[a._blobKey]) {
+          window._restoreQueue[a._blobKey] = true;
+          window.BlobStoreDB.get(a._blobKey).then(function(ab) {
+            if (!ab) return;
+            window._restoreQueue[a._blobKey] = false;
+            try {
+              var mime = a.mimeType || 'application/octet-stream';
+              var newUrl = URL.createObjectURL(new Blob([ab], { type: mime }));
+              a.url = newUrl;
+              if (activeChatId) renderMessages(activeChatId);
+            } catch(e) { console.warn('[BlobStore] createObjectURL during restore:', e.message); }
+          }).catch(function(err) {
+            console.warn('[BlobStore] async restore failed:', a._blobKey, err);
+            window._restoreQueue[a._blobKey] = false;
+          });
+        }
+        // Return a placeholder indicator so the inline style below can show "Restoring..."
+        return '';
       }
       return u;
     }
@@ -953,18 +1111,47 @@ document.addEventListener('DOMContentLoaded', function() {
         var largeHtml = '';
         var hasText = m.text && m.text.trim();
         var showImages = MStore.settings.showImagePreviews !== false;
-        m.attachments.forEach(function(a) {
-          var safeAttId = escapeHtml(String(a.id || ''));
-          var attUrl = _resUrl(a);
-          if (a.type === 'video' && attUrl) {
-            largeHtml += '<div class="att-large-cell att-video-cell ovp-placeholder" data-ovp-url="' + escapeHtml(attUrl) + '" data-open-video="' + safeAttId + '" data-msg-id="' + m.id + '"></div>';
-          } else if (a.type === 'audio' && attUrl) {
-            largeHtml += '<div class="att-large-cell att-audio-cell oap-placeholder" data-oap-url="' + escapeHtml(attUrl) + '"></div>';
-          } else if (a.type === 'image' && attUrl) {
-            if (!showImages) return;
-            gridHtml += '<div class="att-grid-cell" data-open-image="' + safeAttId + '" data-msg-id="' + m.id + '">' +
-              '<img src="' + escapeHtml(attUrl) + '" style="width:100%;height:100%;object-fit:cover;" loading="lazy">' +
-            '</div>';
+          m.attachments.forEach(function(a) {
+            var safeAttId = escapeHtml(String(a.id || ''));
+            var attUrl = _resUrl(a);
+            if (a.type === 'video') {
+              if (attUrl) {
+                largeHtml += '<div class="att-large-cell att-video-cell ovp-placeholder" data-ovp-url="' + escapeHtml(attUrl) + '" data-open-video="' + safeAttId + '" data-msg-id="' + m.id + '"></div>';
+              } else if (a._pending) {
+                largeHtml += '<div class="att-large-cell att-video-cell" style="display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg-panel);color:var(--text-muted);border:1px solid var(--border-subtle);border-radius:8px;height:200px;">' +
+                  '<i data-lucide="video" style="width:32px;height:32px;margin-bottom:8px;opacity:0.5;"></i><div style="font-size:13px;font-weight:500;">Receiving Video...</div></div>';
+              } else if (a._blobKey) {
+                largeHtml += '<div class="att-large-cell att-video-cell" style="display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg-panel);color:var(--text-muted);border:1px solid var(--border-subtle);border-radius:8px;height:200px;">' +
+                  '<i data-lucide="hard-drive" style="width:28px;height:28px;margin-bottom:8px;opacity:0.5;"></i><div style="font-size:13px;font-weight:500;">Restoring...</div></div>';
+              } else {
+                gridHtml += '<div class="att-grid-cell att-file-cell"><i data-lucide="file" style="width:28px;height:28px;margin-bottom:6px;color:var(--text-muted);"></i><div class="att-file-name">' + escapeHtml(String(a.name || 'File')) + '</div></div>';
+              }
+            } else if (a.type === 'audio') {
+              if (attUrl) {
+                largeHtml += '<div class="att-large-cell att-audio-cell oap-placeholder" data-oap-url="' + escapeHtml(attUrl) + '"></div>';
+              } else if (a._pending) {
+                largeHtml += '<div class="att-large-cell att-audio-cell" style="display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg-panel);color:var(--text-muted);border:1px solid var(--border-subtle);border-radius:8px;height:120px;">' +
+                  '<i data-lucide="music" style="width:28px;height:28px;margin-bottom:8px;opacity:0.5;"></i><div style="font-size:13px;font-weight:500;">Receiving Audio...</div></div>';
+              } else if (a._blobKey) {
+                largeHtml += '<div class="att-large-cell att-audio-cell" style="display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg-panel);color:var(--text-muted);border:1px solid var(--border-subtle);border-radius:8px;height:120px;">' +
+                  '<i data-lucide="hard-drive" style="width:28px;height:28px;margin-bottom:8px;opacity:0.5;"></i><div style="font-size:13px;font-weight:500;">Restoring...</div></div>';
+              } else {
+                gridHtml += '<div class="att-grid-cell att-file-cell"><i data-lucide="file" style="width:28px;height:28px;margin-bottom:6px;color:var(--text-muted);"></i><div class="att-file-name">' + escapeHtml(String(a.name || 'File')) + '</div></div>';
+              }
+            } else if (a.type === 'image') {
+              if (attUrl) {
+                if (showImages) {
+                  gridHtml += '<div class="att-grid-cell" data-open-image="' + safeAttId + '" data-msg-id="' + m.id + '">' +
+                    '<img src="' + escapeHtml(attUrl) + '" style="width:100%;height:100%;object-fit:cover;" loading="lazy">' +
+                  '</div>';
+                }
+              } else if (a._pending) {
+                gridHtml += '<div class="att-grid-cell" style="display:flex;align-items:center;justify-content:center;background:var(--bg-panel);color:var(--text-muted);"><i data-lucide="image" style="width:24px;height:24px;opacity:0.5;"></i></div>';
+              } else if (a._blobKey) {
+                gridHtml += '<div class="att-grid-cell" style="display:flex;align-items:center;justify-content:center;background:var(--bg-panel);color:var(--text-muted);"><i data-lucide="hard-drive" style="width:24px;height:24px;opacity:0.5;"></i></div>';
+              } else {
+              gridHtml += '<div class="att-grid-cell att-file-cell"><i data-lucide="file" style="width:28px;height:28px;margin-bottom:6px;color:var(--text-muted);"></i><div class="att-file-name">' + escapeHtml(String(a.name || 'File')) + '</div></div>';
+            }
           } else {
             gridHtml += '<div class="att-grid-cell att-file-cell">' +
               '<i data-lucide="file" style="width:28px;height:28px;margin-bottom:6px;color:var(--text-muted);"></i>' +
@@ -1575,34 +1762,43 @@ document.addEventListener('DOMContentLoaded', function() {
 
       // Compute SHA-256 hash for integrity verification (CRIT-1)
       // NOTE: Uses manual base64 decoder — atob() on Android WebView corrupts bytes >127 (binary files)
+      // Uses single-pass streaming decoder (no intermediate string allocations)
       var _b64Lookup = null;
       function _base64ToBytes(b64str) {
         if (!_b64Lookup) {
-          _b64Lookup = [];
+          _b64Lookup = new Int8Array(256);
+          for (var i = 0; i < 256; i++) _b64Lookup[i] = -1;
           var b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
           for (var li = 0; li < 64; li++) _b64Lookup[b64chars.charCodeAt(li)] = li;
         }
-        // Strip non-base64 chars (whitespace, padding etc.) — only keep A-Z a-z 0-9 + /
-        var clean = '';
-        for (var si = 0; si < b64str.length; si++) {
-          var cc = b64str.charCodeAt(si);
-          if (_b64Lookup[cc] !== undefined) clean += b64str[si];
+        // Count valid base64 chars without allocating a string
+        var validLen = 0;
+        for (var i = 0; i < b64str.length; i++) {
+          if (_b64Lookup[b64str.charCodeAt(i)] !== -1) validLen++;
         }
-        // Compute decoded binary length from clean base64 data
-        var binLen = Math.floor(clean.length * 3 / 4);
+        var binLen = Math.floor(validLen * 3 / 4);
+        if (binLen === 0) return new ArrayBuffer(0);
         var buf = new ArrayBuffer(binLen);
         var bytes = new Uint8Array(buf);
-        // Pad to multiple of 4 with 'A' (= 0) so final group decodes cleanly
-        while (clean.length % 4 !== 0) clean += 'A';
         var p = 0;
-        for (var bi = 0; bi + 3 < clean.length; bi += 4) {
-          var a = _b64Lookup[clean.charCodeAt(bi)];
-          var b = _b64Lookup[clean.charCodeAt(bi + 1)];
-          var c = _b64Lookup[clean.charCodeAt(bi + 2)];
-          var d = _b64Lookup[clean.charCodeAt(bi + 3)];
-          if (p < binLen) bytes[p++] = (a << 2) | (b >> 4);
-          if (p < binLen) bytes[p++] = ((b & 0x0F) << 4) | (c >> 2);
-          if (p < binLen) bytes[p++] = ((c & 0x03) << 6) | d;
+        var b = [0,0,0,0];
+        var bi = 0;
+        for (var i = 0; i < b64str.length; i++) {
+          var val = _b64Lookup[b64str.charCodeAt(i)];
+          if (val === -1 || val === void 0) continue;
+          b[bi++] = val;
+          if (bi === 4) {
+            if (p < binLen) bytes[p++] = (b[0] << 2) | (b[1] >> 4);
+            if (p < binLen) bytes[p++] = ((b[1] & 15) << 4) | (b[2] >> 2);
+            if (p < binLen) bytes[p++] = ((b[2] & 3) << 6) | b[3];
+            bi = 0;
+          }
+        }
+        if (bi > 0) {
+          while (bi < 4) b[bi++] = 0;
+          if (p < binLen) bytes[p++] = (b[0] << 2) | (b[1] >> 4);
+          if (p < binLen) bytes[p++] = ((b[1] & 15) << 4) | (b[2] >> 2);
+          if (p < binLen) bytes[p++] = ((b[2] & 3) << 6) | b[3];
         }
         return buf;
       }
@@ -2330,7 +2526,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var friendsCount = MStore ? MStore.friends.length : 0;
         var chatsCount = MStore ? MStore.chats.length : 0;
         return '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.1.7-beta · Capacitor Android</div></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.2.0-beta · Capacitor Android</div></div>' +
         '</div>' +
         '<div class="settings-row">' +
           '<div class="settings-row-content"><span class="settings-row-title">Statistics</span><div class="settings-row-desc">' + friendsCount + ' friends · ' + chatsCount + ' chats</div></div>' +
@@ -2597,7 +2793,35 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button id="changelog-close-mobile" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;font-size:20px;">✕</button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
-        vBlock('0.1.9-beta', 'Latest', [
+        vBlock('0.2.0-beta', 'Latest', [
+          ['CRITICAL: Mobile Background Notifications & Large File Persistence', [
+            'CRITICAL: Mobile Background Notifications Fixed — document.hidden is unreliable in Capacitor WebView; notifications never appeared outside the app. Two-layer fix: JS tracks background via Capacitor appStateChange, and Java OrbitP2PPlugin creates notifications directly via NotificationManager.',
+            'CRITICAL: Large File Persistence on Mobile — Files >10MB in IndexedDB had blob: URLs die on restart. Added BlobStoreDB + _restoreAllBlobAttachments() on startup. "Restoring..." placeholders during recovery.'
+          ]],
+          ['Mobile base64 Streaming Optimizations', [
+            'All 7 binary base64 decode sites rewritten as single-pass streaming decoders — no intermediate string allocations. Includes orbitBase64ToArrayBuffer, _base64ToBytes, _safeB64ToArrayBuffer (shared audio/video players).'
+          ]],
+          ['Notification & Lifecycle Fixes', [
+            'Reliable App Background Detection: window._appIsBackgrounded from Capacitor appStateChange listener instead of unreliable document.hidden.',
+            'Native Android Notifications from Plugin: OrbitP2PPlugin creates notifications directly via NotificationManager. Works regardless of WebView JS state.',
+            'JS→Plugin Foreground Bridge: setForeground() prevents duplicate notifications.'
+          ]],
+          ['Desktop File Transfer Fixes', [
+            'Desktop AV Type Honor Fix: Desktop file-received now honors sender\'s type classification (e.g., .webm audio) instead of blind extension re-classification.'
+          ]],
+          ['Media Player Improvements', [
+            'muted=true Gated to Mobile Only: Desktop players no longer start muted.',
+            'Blob MP4 Duration Parsing: fetch(blob:) + Uint8Array byte access for large blob URLs.',
+            'Video Player Blob Duration Fallback: Fetches blob and parses MP4 header directly.'
+          ]],
+          ['Technical', [
+            'Version bumped to v0.2.0-beta.',
+            'Two-layer notification: JS handles foreground; Java handles background.',
+            'All 7 binary decode sites unified to streaming single-pass algorithm.',
+            'File persistence: ≤10MB localStorage, >10MB IndexedDB BlobStoreDB.'
+          ]]
+        ]) +
+        vBlock('0.1.9-beta', '', [
           ['CRITICAL: P2P Transfer & Service Lifecycle Fixes', [
             'CRITICAL: Mobile base64 Decode Corruption — atob() corrupts bytes >127. All 7 binary decode sites replaced with safe manual decoder.',
             'CRITICAL: Desktop→Mobile Chunk Joining — desktop btoa()\'s each chunk independently; mobile did chunks.join(\'\') → corrupt at padding boundaries. Fixed: per-chunk independent decode + ArrayBuffer concat.',
@@ -3927,9 +4151,17 @@ document.addEventListener('DOMContentLoaded', function() {
     var preview = MStore.settings.notifyPreview !== false ? text : 'New message';
     showToast(name + ': ' + preview, 'info');
     if (MStore.settings.notifySound) playNotificationSound();
-    // Show native system notification when app is in background
-    if (document.hidden) {
-      showNativeNotification(name, preview, { chatId: chatId, fromId: fromId });
+    // Show native system notification when app is in background.
+    // Use _appIsBackgrounded (set by Capacitor appStateChange listener) instead of
+    // document.hidden, which is unreliable in Capacitor WebView on Android.
+    var isBackground = (typeof window._appIsBackgrounded === 'boolean') ? window._appIsBackgrounded : document.hidden;
+    if (isBackground) {
+      // When Capacitor appState is available, the native OrbitP2P plugin creates the
+      // notification directly (bypassing JS WebView which may be paused). Use
+      // LocalNotifications.schedule() only as a non-Capacitor fallback.
+      if (typeof window._appIsBackgrounded !== 'boolean') {
+        showNativeNotification(name, preview, { chatId: chatId, fromId: fromId });
+      }
     }
   }
 
@@ -5719,16 +5951,37 @@ document.addEventListener('DOMContentLoaded', function() {
           // Build blob URL from independently-decoded chunks
           var attUrl = '';
           try { attUrl = URL.createObjectURL(new Blob([_mergedBuf.buffer], { type: mimeType })); } catch(e) { attUrl = ''; }
-          // Re-encode merged buffer as data URL for persistence across restarts
-          // btoa() only encodes — not affected by Android's broken atob() decoding
-          var _dataUrlBytes = new Uint8Array(_mergedBuf.buffer);
-          var _dataUrlBinary = '';
-          for (var _du = 0; _du < _dataUrlBytes.length; _du++) {
-            _dataUrlBinary += String.fromCharCode(_dataUrlBytes[_du]);
+          // Persist file data for cross-restart survival:
+          //   - Files <= 10MB: store as data: URL in localStorage (part of attachment JSON)
+          //   - Files > 10MB:  store raw ArrayBuffer in IndexedDB (set _blobKey reference)
+          //   + Stores ORIGINAL chunk base64 strings in IndexedDB as fallback for the fallback
+          var dataUrl = '';
+          var blobKey = null;
+          var persisted = false;
+          if (_totalByteLen > 0 && _totalByteLen <= 10 * 1024 * 1024) {
+            try {
+              var _dataUrlBytes = new Uint8Array(_mergedBuf.buffer);
+              var _dataUrlBinary = '';
+              for (var _du = 0; _du < _dataUrlBytes.length; _du++) {
+                _dataUrlBinary += String.fromCharCode(_dataUrlBytes[_du]);
+              }
+              dataUrl = 'data:' + mimeType + ';base64,' + btoa(_dataUrlBinary);
+              persisted = true;
+            } catch(e) {
+              dataUrl = '';
+            }
           }
-          var dataUrl = 'data:' + mimeType + ';base64,' + btoa(_dataUrlBinary);
-          window._orbitFileCache = window._orbitFileCache || {};
-          window._orbitFileCache[packet.payload.fileId] = _dataUrlBinary;
+          if (!persisted && _totalByteLen > 64 * 1024) {
+            // Large file: store in IndexedDB instead
+            blobKey = packet.payload.fileId;
+            (function(key, buf, mime) {
+              window.BlobStoreDB.put(key, buf).then(function() {
+                console.log('[P2P] Stored large file in IndexedDB:', key, buf.byteLength + ' bytes');
+              }).catch(function(err) {
+                console.warn('[P2P] IndexedDB store failed for', key, err);
+              });
+            })(blobKey, _mergedBuf.buffer, mimeType);
+          }
 
           // CRIT-4: Try to find existing message with matching _fileId attachment, update it instead of creating duplicate
           var existingMsgs = MStore.getMessages(chatId);
@@ -5737,17 +5990,18 @@ document.addEventListener('DOMContentLoaded', function() {
             var atts = existingMsgs[mi].attachments;
             if (atts && Array.isArray(atts)) {
               for (var ai = 0; ai < atts.length; ai++) {
-                if (atts[ai]._fileId === packet.payload.fileId) {
-                  atts[ai].url = attUrl;
-                  atts[ai]._dataUrl = dataUrl;
-                  if (!atts[ai].type || atts[ai].type === 'file') {
-                    atts[ai].type = isImage ? 'image' : (isVideo ? 'video' : (isAudio ? 'audio' : 'file'));
-                  }
-                  atts[ai]._pending = false;
-                  atts[ai].name = txEnd.fileName || atts[ai].name;
-                  MStore._saveMsgs(chatId);
-                  found = true;
-                  break;
+                 if (atts[ai]._fileId === packet.payload.fileId) {
+                   atts[ai].url = attUrl;
+                   atts[ai]._dataUrl = dataUrl;
+                   atts[ai]._blobKey = blobKey;
+                   if (!atts[ai].type || atts[ai].type === 'file') {
+                     atts[ai].type = isImage ? 'image' : (isVideo ? 'video' : (isAudio ? 'audio' : 'file'));
+                   }
+                   atts[ai]._pending = false;
+                   atts[ai].name = txEnd.fileName || atts[ai].name;
+                   MStore._saveMsgs(chatId);
+                   found = true;
+                   break;
                 }
               }
             }
@@ -5767,6 +6021,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 type: isImage ? 'image' : (isVideo ? 'video' : (isAudio ? 'audio' : 'file')),
                 url: attUrl,
                 _dataUrl: dataUrl,
+                _blobKey: blobKey,
                 _fileId: packet.payload.fileId
               }]
             });
@@ -6330,6 +6585,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
   /* -- App lifecycle handlers for background execution -- */
   (function() {
+    // Reliable app background state — used by showIncomingNotification
+    // instead of document.hidden which is unreliable in Capacitor WebView
+    window._appIsBackgrounded = false;
+
     // Request battery optimization exemption (user prompt)
     try {
       if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.OrbitP2P) {
@@ -6364,10 +6623,19 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
 
-    // Handle Capacitor appStateChange
+    // Handle Capacitor appStateChange — this is the RELIABLE way to detect
+    // foreground/background on Android (unlike document.hidden)
     if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
       try {
         window.Capacitor.Plugins.App.addListener('appStateChange', function(state) {
+          window._appIsBackgrounded = !state.isActive;
+          // Inform native plugin so it can post notifications directly
+          // (JS WebView may be paused in background, making LocalNotifications.schedule() unreliable)
+          try {
+            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.OrbitP2P) {
+              window.Capacitor.Plugins.OrbitP2P.setForeground({ isForeground: state.isActive });
+            }
+          } catch(e2) { console.log('[Lifecycle] setForeground error', e2.message); }
           if (state.isActive) {
             console.log('[Lifecycle] App foregrounded (capacitor)');
             _foregroundRecovery();
