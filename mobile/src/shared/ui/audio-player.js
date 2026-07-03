@@ -104,7 +104,8 @@
       function _initAudio(srcUrl) {
         audio = document.createElement('audio');
         audio.src = srcUrl;
-        audio.preload = 'metadata';
+        // Lazy-loaded (data: URL) → preload entire file. Eager (blob:/http) → metadata only.
+        audio.preload = _pendingDataUrl ? 'auto' : 'metadata';
         var isMobile = typeof navigator !== 'undefined' && (/android|iphone|ipad|ipod/i.test(navigator.userAgent) || !!window.Capacitor);
         if (isMobile) audio.muted = true;
         audio.style.display = 'none';
@@ -144,13 +145,13 @@
                 _blobUrl = URL.createObjectURL(new Blob([ab], { type: m[1] }));
                 _initAudio(_blobUrl);
                 audio.load();
-                audio.addEventListener('canplay', function onReady() {
-                  audio.removeEventListener('canplay', onReady);
+                audio.addEventListener('canplaythrough', function onReady() {
+                  audio.removeEventListener('canplaythrough', onReady);
                   _loadingLazy = false;
                   loadingOverlay.style.display = 'none';
                   callback();
                 });
-                // Safety timeout: play even if canplay never fires
+                // Safety timeout: play even if canplaythrough never fires
                 setTimeout(function() {
                   if (_loadingLazy) { _loadingLazy = false; loadingOverlay.style.display = 'none'; callback(); }
                 }, 10000);

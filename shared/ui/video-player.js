@@ -240,7 +240,8 @@
       function _initVideo(srcUrl) {
         video = document.createElement('video');
         video.className = 'ovp-video';
-        video.preload = 'metadata';
+        // Lazy-loaded (data: URL) → preload entire file. Eager (blob:/http) → metadata only.
+        video.preload = _pendingDataUrl ? 'auto' : 'metadata';
         video.playsInline = true;
         var isMobile = typeof navigator !== 'undefined' && (/android|iphone|ipad|ipod/i.test(navigator.userAgent) || !!window.Capacitor);
         if (isMobile) video.muted = true;
@@ -379,8 +380,8 @@
                 _blobUrl = URL.createObjectURL(new Blob([ab], { type: m[1] }));
                 _initVideo(_blobUrl);
                 video.load();
-                video.addEventListener('canplay', function onReady() {
-                  video.removeEventListener('canplay', onReady);
+                video.addEventListener('canplaythrough', function onReady() {
+                  video.removeEventListener('canplaythrough', onReady);
                   _loadingLazy = false;
                   loadingOverlay.style.display = 'none';
                   callback();

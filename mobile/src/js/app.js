@@ -989,35 +989,41 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!window._dataUrlCache[u]) window._dataUrlCache[u] = _dataUrlToBlobUrl(u);
         return window._dataUrlCache[u];
       }
-      // Dead blob: URL → reconstruct from persisted _dataUrl or _blobKey (IndexedDB)
-      if (u.indexOf('blob:') === 0 && (a._dataUrl || a._blobKey)) {
+      // Blob URL — reconstruct from persisted _dataUrl or _blobKey if dead
+      if (u.indexOf('blob:') === 0) {
         // Audio/video: let player handle lazily from raw _dataUrl
         if ((a.type === 'audio' || a.type === 'video') && a._dataUrl) return a._dataUrl;
         if (a._dataUrl) {
           if (!window._dataUrlCache[a._dataUrl]) window._dataUrlCache[a._dataUrl] = _dataUrlToBlobUrl(a._dataUrl);
           return window._dataUrlCache[a._dataUrl];
         }
-        // _blobKey but no _dataUrl: schedule async restore (so it re-renders with live URL)
-        // Return placeholder URL; the async restore will update a.url and re-render
-        if (!window._restoreQueue) window._restoreQueue = {};
-        if (!window._restoreQueue[a._blobKey]) {
-          window._restoreQueue[a._blobKey] = true;
-          window.BlobStoreDB.get(a._blobKey).then(function(ab) {
-            if (!ab) return;
-            window._restoreQueue[a._blobKey] = false;
-            try {
-              var mime = a.mimeType || 'application/octet-stream';
-              var newUrl = URL.createObjectURL(new Blob([ab], { type: mime }));
-              a.url = newUrl;
-              if (activeChatId) renderMessages(activeChatId);
-            } catch(e) { console.warn('[BlobStore] createObjectURL during restore:', e.message); }
-          }).catch(function(err) {
-            console.warn('[BlobStore] async restore failed:', a._blobKey, err);
-            window._restoreQueue[a._blobKey] = false;
-          });
+        // _blobKey but no _dataUrl (large file stored in IndexedDB)
+        if (a._blobKey) {
+          // Schedule async restore (so it re-renders with live URL across restarts)
+          if (!window._restoreQueue) window._restoreQueue = {};
+          if (!window._restoreQueue[a._blobKey]) {
+            window._restoreQueue[a._blobKey] = true;
+            window.BlobStoreDB.get(a._blobKey).then(function(ab) {
+              if (!ab) return;
+              window._restoreQueue[a._blobKey] = false;
+              try {
+                var mime = a.mimeType || 'application/octet-stream';
+                var newUrl = URL.createObjectURL(new Blob([ab], { type: mime }));
+                a.url = newUrl;
+                if (activeChatId) renderMessages(activeChatId);
+              } catch(e) { console.warn('[BlobStore] createObjectURL during restore:', e.message); }
+            }).catch(function(err) {
+              console.warn('[BlobStore] async restore failed:', a._blobKey, err);
+              window._restoreQueue[a._blobKey] = false;
+            });
+          }
+          // If this blob URL was created this session (live), return it directly.
+          // After restart, _blobCreated is false → returns '' → shows "Restoring..."
+          if (a._blobCreated) return u;
+          return '';
         }
-        // Return a placeholder indicator so the inline style below can show "Restoring..."
-        return '';
+        // Live blob URL with no persistence — return directly
+        return u;
       }
       return u;
     }
@@ -1685,7 +1691,23 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
 
-    var allAttachments = inlineAttachments.concat(largeFiles);
+    // For large audio/video files, use blob URL (short) instead of embedding the
+    // full data URL (potentially 10MB+) in the DOM's data-ovp-url / data-oap-url attribute.
+    // The original data URL is kept in the largeFiles array for _sendLargeFileToPeer.
+    var allAttachments = [];
+    inlineAttachments.forEach(function(a) { allAttachments.push(a); });
+    largeFiles.forEach(function(a) {
+      if ((a.type === 'audio' || a.type === 'video') && a.url && a.url.indexOf('data:') === 0) {
+        try {
+          var _blobForDisplay = _dataUrlToBlobUrl(a.url);
+          allAttachments.push({ id: a.id, _fileId: a.id, name: a.name, type: a.type, url: _blobForDisplay });
+        } catch(e) {
+          allAttachments.push({ id: a.id, _fileId: a.id, name: a.name, type: a.type, _pending: true });
+        }
+      } else {
+        allAttachments.push(a);
+      }
+    });
     var msgId = 'm' + Date.now() + Math.random().toString(36).slice(2, 6);
     var newMsg = {
       id: msgId,
@@ -5994,6 +6016,7 @@ document.addEventListener('DOMContentLoaded', function() {
                    atts[ai].url = attUrl;
                    atts[ai]._dataUrl = dataUrl;
                    atts[ai]._blobKey = blobKey;
+                   atts[ai]._blobCreated = true;
                    if (!atts[ai].type || atts[ai].type === 'file') {
                      atts[ai].type = isImage ? 'image' : (isVideo ? 'video' : (isAudio ? 'audio' : 'file'));
                    }
@@ -6022,6 +6045,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 url: attUrl,
                 _dataUrl: dataUrl,
                 _blobKey: blobKey,
+                _blobCreated: true,
                 _fileId: packet.payload.fileId
               }]
             });
