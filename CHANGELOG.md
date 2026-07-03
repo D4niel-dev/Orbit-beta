@@ -44,6 +44,7 @@
 ## v0.1.9-beta
 
 > **Note:** This is not a stable release — latest development version with experimental features.
+
 - **CRITICAL: Desktop→Mobile File Transfer Chunk Joining:** Desktop `btoa()`'s each 64KB binary chunk independently (each with its own base64 padding). Mobile was doing `chunks.join('')` which concatenated separately-padded base64 strings — producing invalid base64 at every chunk boundary, corrupting the entire file. Fixed: each chunk is now decoded independently via `orbitBase64ToArrayBuffer()`, ArrayBuffers concatenated, then re-encoded as a clean data URL.
 - **CRITICAL: WriteStream Race Condition (Mobile→Desktop):** `stream.end()` is asynchronous — `onComplete` (which reads the temp file via `fs.readFileSync`) was firing before data was flushed to disk. This caused truncated files on mobile→desktop transfers: videos lost audio tracks and duration metadata (missing moov atom). Fixed: `stream.on('finish', ...)` now wraps hash verification and completion callback.
 - **CRITICAL: P2P cleanup() Race in Android Plugin:** `OrbitP2PPlugin.cleanup()` called `stopService()`, which asynchronously unbound and stopped the Android foreground service. Then `initP2P()` immediately called `startServer()`/`startDiscovery()` — `ensureServiceRunning()` found `boundService` still non-null (async `onServiceDisconnected` hadn't fired yet) and returned early, never restarting the service. Fixed: Java `cleanup()` is now a no-op — the JS side (`p2p-mobile.js`) already clears connection state, pending messages, and native listeners via `removeAllListeners()`.

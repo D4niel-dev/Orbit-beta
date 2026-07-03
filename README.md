@@ -330,16 +330,6 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Desktop isVideo Added:** Desktop file-received handler now classifies incoming videos as type 'video' with correct MIME instead of 'file' / application/octet-stream.
 - **Mobile Video Aspect Ratio Fixed:** .ovp-video now has object-fit: contain, max-height: 50vh (was 300px), and #000 letterbox background — videos scale correctly to any aspect ratio.
 </details>
-<details open>
-<summary>v0.2.0-beta</summary>
-
-- **CRITICAL: Mobile Background Notifications Fixed** — `document.hidden` unreliable in Capacitor WebView. Fixed: JS tracks background via `appStateChange`; Java plugin creates notifications directly via `NotificationManager`.
-- **CRITICAL: Large File Persistence on Mobile** — Files >10MB in IndexedDB lost blob: URLs on restart. Added `BlobStoreDB` + `_restoreAllBlobAttachments()`.
-- **Mobile base64 Streaming Optimizations** — All 7 binary decode sites rewritten as single-pass streaming decoders (no intermediate strings).
-- **Desktop AV Type Honor Fix** — Desktop honors sender's type classification; .webm audio no longer misrouted to video player.
-- **`muted=true` Gated to Mobile Only** — Desktop players no longer start muted.
-- **Blob MP4 Duration Parsing** — fetch(blob:) + Uint8Array byte access for duration detection on large blob URLs.
-</details>
 <details>
 <summary>v0.1.9-beta</summary>
 
@@ -353,6 +343,16 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Mobile Metadata Preload** — muted=true + preload=metadata forces immediate duration display.
 - **Unstable AV Transfer Warning Modal** — alert-triangle modal with "Don't show again" checkbox.
 - **Auto-Discovery Diagnostic Logging** — [AutoConnect] logs for firewall debugging.
+</details>
+<details open>
+<summary>v0.2.0-beta</summary>
+
+- **CRITICAL: Mobile Background Notifications Fixed** — `document.hidden` unreliable in Capacitor WebView. Fixed: JS tracks background via `appStateChange`; Java plugin creates notifications directly via `NotificationManager`.
+- **CRITICAL: Large File Persistence on Mobile** — Files >10MB in IndexedDB lost blob: URLs on restart. Added `BlobStoreDB` + `_restoreAllBlobAttachments()`.
+- **Mobile base64 Streaming Optimizations** — All 7 binary decode sites rewritten as single-pass streaming decoders (no intermediate strings).
+- **Desktop AV Type Honor Fix** — Desktop honors sender's type classification; .webm audio no longer misrouted to video player.
+- **`muted=true` Gated to Mobile Only** — Desktop players no longer start muted.
+- **Blob MP4 Duration Parsing** — fetch(blob:) + Uint8Array byte access for duration detection on large blob URLs.
 </details>
 
 See [CHANGELOG.md](CHANGELOG.md) for the full version history.
