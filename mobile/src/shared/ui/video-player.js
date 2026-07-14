@@ -275,6 +275,8 @@
         var _isMobile = typeof navigator !== 'undefined' && (/android|iphone|ipad|ipod/i.test(navigator.userAgent) || !!window.Capacitor);
         if (_isMobile) video.muted = true;
         video.src = srcUrl;
+        _skipCorrupted = null;
+        _decodeRetries = 0;
         dbg('[' + _logId + '] _initVideo src=' + (srcUrl ? srcUrl.slice(0, 20) : 'null'));
 
         video.addEventListener('timeupdate', updTime);

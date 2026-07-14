@@ -1007,7 +1007,7 @@ document.addEventListener('DOMContentLoaded', function() {
       // Blob URL — return directly if live (this session), else restore from IndexedDB
       if (u.indexOf('blob:') === 0) {
         // Always try IndexedDB restoration if key exists (survives restart)
-        if (a._blobKey) {
+        if (a._blobKey && !a._blobCreated) {
           if (!window._restoreQueue) window._restoreQueue = {};
           if (!window._restoreQueue[a._blobKey]) {
             window._restoreQueue[a._blobKey] = true;
@@ -6108,28 +6108,33 @@ document.addEventListener('DOMContentLoaded', function() {
           })(blobKey, _mergedBuf.buffer);
 
           // CRIT-4: Try to find existing message with matching _fileId attachment, update it instead of creating duplicate
-          var existingMsgs = MStore.getMessages(chatId);
+          // Search for pending message across both chatId and msgFrom (DM chatId mismatch fix)
+          var searchIds = [chatId];
+          if (msgFrom && msgFrom !== chatId) searchIds.push(msgFrom);
           var found = false;
-          for (var mi = 0; mi < existingMsgs.length; mi++) {
-            var atts = existingMsgs[mi].attachments;
-            if (atts && Array.isArray(atts)) {
-              for (var ai = 0; ai < atts.length; ai++) {
-                 if (atts[ai]._fileId === packet.payload.fileId) {
-                   atts[ai].url = attUrl;
-                   atts[ai]._blobKey = blobKey;
-                   atts[ai]._blobCreated = true;
-                   if (!atts[ai].type || atts[ai].type === 'file') {
-                     atts[ai].type = isImage ? 'image' : (isVideo ? 'video' : (isAudio ? 'audio' : 'file'));
-                   }
-                   atts[ai]._pending = false;
-                   atts[ai].name = txEnd.fileName || atts[ai].name;
-                   MStore._saveMsgs(chatId);
-                   found = true;
-                   break;
+          for (var si = 0; si < searchIds.length && !found; si++) {
+            var existingMsgs = MStore.getMessages(searchIds[si]);
+            for (var mi = 0; mi < existingMsgs.length; mi++) {
+              var atts = existingMsgs[mi].attachments;
+              if (atts && Array.isArray(atts)) {
+                for (var ai = 0; ai < atts.length; ai++) {
+                  if (atts[ai]._fileId === packet.payload.fileId) {
+                    atts[ai].url = attUrl;
+                    atts[ai]._blobKey = blobKey;
+                    atts[ai]._blobCreated = true;
+                    if (!atts[ai].type || atts[ai].type === 'file') {
+                      atts[ai].type = isImage ? 'image' : (isVideo ? 'video' : (isAudio ? 'audio' : 'file'));
+                    }
+                    atts[ai]._pending = false;
+                    atts[ai].name = txEnd.fileName || atts[ai].name;
+                    MStore._saveMsgs(searchIds[si]);
+                    found = true;
+                    break;
+                  }
                 }
               }
+              if (found) break;
             }
-            if (found) break;
           }
 
           if (!found) {
