@@ -1890,7 +1890,7 @@ document.addEventListener('DOMContentLoaded', function() {
       return _buf;
     }
 
-    function _sendLargeFileToPeer(att, peerId) {
+    function _sendLargeFileToPeer(att, peerId, isGroup) {
       var ab = att._arrayBuffer;
       var fileSize = att._totalSize || (ab ? ab.byteLength : 0);
 
@@ -1942,17 +1942,25 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
           debugLog('P2P', 'crypto.subtle unavailable — sending without hash for ' + att.name, { fileId: fileId, totalChunks: totalChunks });
         }
+        var ftStartPayload = {
+          fileId: fileId, fileName: att.name, fileSize: fileSize,
+          totalChunks: totalChunks, hash: fileHash,
+          type: att.type || '', mimeType: att.mimeType || ''
+        };
+        if (isGroup) ftStartPayload.chatId = activeChatId;
         Orbit.P2P.send(peerId, Orbit.Protocol.createPacket(
           Orbit.Protocol.Types.FILE_TRANSFER_START, myId, peerId,
-          { fileId: fileId, fileName: att.name, fileSize: fileSize, totalChunks: totalChunks, hash: fileHash, chatId: activeChatId, type: att.type || '', mimeType: att.mimeType || '' }
+          ftStartPayload
         ));
 
         var ci = 0;
         function sendNextChunk() {
           if (ci >= totalChunks) {
+            var ftEndPayload = { fileId: fileId, hash: fileHash };
+            if (isGroup) ftEndPayload.chatId = activeChatId;
             Orbit.P2P.send(peerId, Orbit.Protocol.createPacket(
               Orbit.Protocol.Types.FILE_TRANSFER_END, myId, peerId,
-              { fileId: fileId, hash: fileHash, chatId: activeChatId }
+              ftEndPayload
             ));
             return;
           }
@@ -1981,7 +1989,7 @@ document.addEventListener('DOMContentLoaded', function() {
             (grp.members || []).forEach(function(m) {
               var memberId = typeof m === 'string' ? m : m.userId;
               if (memberId === myId) return;
-              largeFiles.forEach(function(att) { _sendLargeFileToPeer(att, memberId); });
+              largeFiles.forEach(function(att) { _sendLargeFileToPeer(att, memberId, true); });
             });
           }
         }
@@ -2003,7 +2011,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
           });
           if (largeFiles.length > 0) {
-            largeFiles.forEach(function(att) { _sendLargeFileToPeer(att, activeChatId); });
+            largeFiles.forEach(function(att) { _sendLargeFileToPeer(att, activeChatId, false); });
           }
           return;
         }
@@ -2017,7 +2025,7 @@ document.addEventListener('DOMContentLoaded', function() {
         { text: text, msgId: newMsg.id, replyTo: newMsg.replyTo, attachments: msgAttachments.length > 0 ? msgAttachments : undefined, fromName: newMsg.fromName }
       ));
       if (largeFiles.length > 0) {
-        largeFiles.forEach(function(att) { _sendLargeFileToPeer(att, activeChatId); });
+        largeFiles.forEach(function(att) { _sendLargeFileToPeer(att, activeChatId, false); });
       }
     }
   }

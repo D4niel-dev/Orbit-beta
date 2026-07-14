@@ -2304,15 +2304,16 @@ window.ChatPanel = {
         hash = '';
       }
 
-      // Send FILE_TRANSFER_START
-      sendToAll(window.Protocol.Types.FILE_TRANSFER_START, {
+      // Send FILE_TRANSFER_START (only include chatId for groups — DM uses msgFrom routing)
+      var ftStartPayload = {
         fileId: fileId,
         fileName: lf.staged.name,
         fileSize: fileData.byteLength,
         totalChunks: totalChunks,
-        hash: hash,
-        chatId: activeChatId
-      });
+        hash: hash
+      };
+      if (isGroup) ftStartPayload.chatId = activeChatId;
+      sendToAll(window.Protocol.Types.FILE_TRANSFER_START, ftStartPayload);
 
       for (var ci = 0; ci < totalChunks; ci++) {
         var start = ci * CHUNK_SIZE;
@@ -2344,12 +2345,13 @@ window.ChatPanel = {
         await new Promise(function(r) { setTimeout(r, 0); });
       }
 
-      // Send FILE_TRANSFER_END
-      sendToAll(window.Protocol.Types.FILE_TRANSFER_END, {
+      // Send FILE_TRANSFER_END (only include chatId for groups)
+      var ftEndPayload = {
         fileId: fileId,
-        hash: hash,
-        chatId: activeChatId
-      });
+        hash: hash
+      };
+      if (isGroup) ftEndPayload.chatId = activeChatId;
+      sendToAll(window.Protocol.Types.FILE_TRANSFER_END, ftEndPayload);
     }
 
     // Clean up transfer progress for sent files
