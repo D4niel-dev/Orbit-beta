@@ -1,14 +1,6 @@
 (function() {
   if (window.OrbitAudioPlayer) return;
 
-  // Inject spinner keyframe once
-  if (!document.getElementById('oap-spinner-style')) {
-    var os = document.createElement('style');
-    os.id = 'oap-spinner-style';
-    os.textContent = '@keyframes oap-spin{to{transform:rotate(360deg)}}.oap-loading{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.45);z-index:5;border-radius:8px}.oap-spinner{width:32px;height:32px;border:3px solid rgba(255,255,255,0.2);border-top-color:#fff;border-radius:50%;animation:oap-spin .8s linear infinite}';
-    document.head.appendChild(os);
-  }
-
   var _audioCtx = null;
 
   function getCtx() {
@@ -38,46 +30,6 @@
     if (_menuCleanup) { _menuCleanup(); _menuCleanup = null; }
   }
 
-  function _safeB64ToArrayBuffer(b64) {
-    var lookup = new Int8Array(256);
-    for (var i = 0; i < 256; i++) lookup[i] = -1;
-    var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-    for (var i = 0; i < 64; i++) lookup[chars.charCodeAt(i)] = i;
-
-    var validLen = 0;
-    for (var i = 0; i < b64.length; i++) {
-      if (lookup[b64.charCodeAt(i)] !== -1) validLen++;
-    }
-
-    var binLen = Math.floor(validLen * 3 / 4);
-    if (binLen === 0) return new ArrayBuffer(0);
-
-    var buf = new ArrayBuffer(binLen);
-    var bytes = new Uint8Array(buf);
-
-    var p = 0;
-    var b = [0,0,0,0];
-    var bi = 0;
-    for (var i = 0; i < b64.length; i++) {
-      var val = lookup[b64.charCodeAt(i)];
-      if (val === -1 || val === void 0) continue;
-      b[bi++] = val;
-      if (bi === 4) {
-        if (p < binLen) bytes[p++] = (b[0] << 2) | (b[1] >> 4);
-        if (p < binLen) bytes[p++] = ((b[1] & 15) << 4) | (b[2] >> 2);
-        if (p < binLen) bytes[p++] = ((b[2] & 3) << 6) | b[3];
-        bi = 0;
-      }
-    }
-    if (bi > 0) {
-      while (bi < 4) b[bi++] = 0;
-      if (p < binLen) bytes[p++] = (b[0] << 2) | (b[1] >> 4);
-      if (p < binLen) bytes[p++] = ((b[1] & 15) << 4) | (b[2] >> 2);
-      if (p < binLen) bytes[p++] = ((b[2] & 3) << 6) | b[3];
-    }
-    return buf;
-  }
-
   window.OrbitAudioPlayer = {
     create: function(container, url) {
       var wrapper = document.createElement('div');
@@ -88,81 +40,13 @@
       canvas.width = 400;
       canvas.height = 200;
 
-      var _pendingDataUrl = (typeof url === 'string' && url.startsWith('data:')) ? url : null;
-      var _blobUrl = null;
-      var audio = null; // Created lazily for data: URLs
-      var _audioReady = !_pendingDataUrl; // Non-data URLs are ready immediately
+      var _pendingDataUrl = (typeof url === 'string' && url.indexOf('data:') === 0) ? url : null;
+      var audio = null;
+      var _audioReady = !_pendingDataUrl;
       var _loadingLazy = false;
 
-      // Loading overlay shown during lazy decode
-      var loadingOverlay = document.createElement('div');
-      loadingOverlay.className = 'oap-loading';
-      var spinner = document.createElement('div');
-      spinner.className = 'oap-spinner';
-      loadingOverlay.appendChild(spinner);
-
-      function _initAudio(srcUrl) {
-        audio = document.createElement('audio');
-        audio.src = srcUrl;
-        // Lazy-loaded (data: URL) → preload entire file. Eager (blob:/http) → metadata only.
-        audio.preload = _pendingDataUrl ? 'auto' : 'metadata';
-        var isMobile = typeof navigator !== 'undefined' && (/android|iphone|ipad|ipod/i.test(navigator.userAgent) || !!window.Capacitor);
-        if (isMobile) audio.muted = true;
-        audio.style.display = 'none';
-
-        audio.addEventListener('timeupdate', updTime);
-        audio.addEventListener('loadedmetadata', updTime);
-        audio.addEventListener('ended', function() {
-          if (looping) {
-            audio.currentTime = 0;
-            doPlay();
-          } else {
-            playing = false;
-            playBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>';
-          }
-        });
-        audio.addEventListener('error', function() { timeEl.textContent = 'Error'; });
-
-        wrapper.insertBefore(audio, ctrl);
-        if (!_pendingDataUrl) audio.load();
-        _audioReady = true;
-        // Update player reference if player already exists (lazy-load case)
-        try { if (player) player._a = audio; } catch(e) {}
-      }
-
-      function _ensureLoaded(callback) {
-        if (_audioReady) { callback(); return; }
-        if (_loadingLazy) { setTimeout(function() { _ensureLoaded(callback); }, 100); return; }
-        _loadingLazy = true;
-        loadingOverlay.style.display = 'flex';
-
-        setTimeout(function() {
-          try {
-            var m = url.match(/^data:(audio\/[^;]+|application\/octet-stream);base64,(.+)$/);
-            if (m) {
-              var ab = _safeB64ToArrayBuffer(m[2]);
-              if (ab && ab.byteLength > 0) {
-                _blobUrl = URL.createObjectURL(new Blob([ab], { type: m[1] }));
-                _initAudio(_blobUrl);
-                audio.load();
-                audio.addEventListener('canplaythrough', function onReady() {
-                  audio.removeEventListener('canplaythrough', onReady);
-                  _loadingLazy = false;
-                  loadingOverlay.style.display = 'none';
-                  callback();
-                });
-                // Safety timeout: play even if canplaythrough never fires
-                setTimeout(function() {
-                  if (_loadingLazy) { _loadingLazy = false; loadingOverlay.style.display = 'none'; callback(); }
-                }, 10000);
-                return;
-              }
-            }
-          } catch(e) { /* fallback */ }
-          _loadingLazy = false;
-          loadingOverlay.style.display = 'none';
-          callback();
-        }, 50);
+      if (!_pendingDataUrl) {
+        _initAudio(url);
       }
 
       var seek = document.createElement('div');
@@ -191,7 +75,6 @@
       stopBtn.className = 'oap-btn oap-stop';
       stopBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg>';
 
-      // Volume
       var volBtn = document.createElement('button');
       volBtn.className = 'oap-btn oap-vol';
       volBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14" stroke="currentColor" stroke-width="2" fill="none"/></svg>';
@@ -204,7 +87,6 @@
       volSlider.value = 100;
       volSlider.style.display = 'none';
 
-      // More options button (⋮)
       var moreBtn = document.createElement('button');
       moreBtn.className = 'oap-btn oap-more';
       moreBtn.title = 'More';
@@ -225,16 +107,10 @@
       canvasBox.className = 'oap-canvas-box';
       canvasBox.appendChild(canvas);
       wrapper.appendChild(canvasBox);
-      wrapper.appendChild(loadingOverlay);
+      /* audio appended in _initAudio */
       wrapper.appendChild(seek);
-      // audio appended by _initAudio() when ready
       wrapper.appendChild(ctrl);
       container.appendChild(wrapper);
-
-      // For non-data: URLs, create audio element eagerly (after all DOM is built)
-      if (!_pendingDataUrl) {
-        _initAudio(url);
-      }
 
       var analyser = null;
       var srcNode = null;
@@ -246,6 +122,7 @@
       var looping = false;
 
       function connectSrc() {
+        if (!audio) return;
         if (srcConnected) return;
         var ctx = getCtx();
         if (!ctx) return;
@@ -253,7 +130,6 @@
           srcNode = ctx.createMediaElementSource(audio);
           analyser = ctx.createAnalyser();
           analyser.fftSize = 64;
-          var bufLen = analyser.frequencyBinCount;
           srcNode.connect(analyser);
           analyser.connect(ctx.destination);
           srcConnected = true;
@@ -288,13 +164,51 @@
         seekThumb.style.left = pct + '%';
       }
 
-      function doPlay() {
-        if (_pendingDataUrl && !_audioReady) {
-          _ensureLoaded(function() { if (audio) doPlay(); });
-          return;
-        }
-        if (!audio) { timeEl.textContent = 'Error'; return; }
-        if (audio.muted && audio.volume > 0) audio.muted = false; // Restore audio on user interaction
+      function _initAudio(srcUrl) {
+        audio = document.createElement('audio');
+        audio.src = srcUrl;
+        audio.preload = 'auto';
+        var _isMobile = typeof navigator !== 'undefined' && (/android|iphone|ipad|ipod/i.test(navigator.userAgent) || !!window.Capacitor);
+        if (_isMobile) audio.muted = true;
+        audio.style.display = 'none';
+        wrapper.appendChild(audio);
+        audio.addEventListener('timeupdate', updTime);
+        audio.addEventListener('loadedmetadata', updTime);
+        audio.addEventListener('ended', function() {
+          if (looping) { audio.currentTime = 0; doPlay(); }
+          else { playing = false; playBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>'; }
+        });
+        audio.addEventListener('error', function() { timeEl.textContent = 'Error'; });
+        audio.load();
+        _audioReady = true;
+        try { if (player) player._a = audio; } catch(e) {}
+      }
+
+      function _ensureLoaded(callback) {
+        if (_audioReady) { callback(); return; }
+        if (_loadingLazy) { setTimeout(function() { _ensureLoaded(callback); }, 100); return; }
+        _loadingLazy = true;
+        setTimeout(function() {
+          try {
+            if (typeof url === 'string' && url.indexOf('data:') === 0) {
+              _initAudio(url);
+              audio.addEventListener('canplaythrough', function onReady() {
+                audio.removeEventListener('canplaythrough', onReady);
+                _loadingLazy = false;
+                callback();
+              });
+              setTimeout(function() {
+                if (_loadingLazy) { _loadingLazy = false; callback(); }
+              }, 10000);
+              return;
+            }
+          } catch(e) {}
+          _loadingLazy = false;
+          callback();
+        }, 50);
+      }
+
+      function _doPlayInner() {
         connectSrc();
         var ctx = getCtx();
         if (ctx && ctx.state === 'suspended') ctx.resume();
@@ -305,6 +219,26 @@
         }).catch(function(e) {
           if (window.MStore && MStore.settings.logNetworkPackets) console.log('[OAP] play fail:', e.message);
         });
+      }
+
+      function doPlay() {
+        if (_pendingDataUrl && !_audioReady) {
+          _ensureLoaded(function() { if (audio) doPlay(); });
+          return;
+        }
+        if (!audio) { timeEl.textContent = 'Error'; return; }
+        if (audio.muted && audio.volume > 0) audio.muted = false;
+        if (audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) {
+          var onReady = function() {
+            audio.removeEventListener('canplaythrough', onReady);
+            if (!audio || dead) return;
+            _doPlayInner();
+          };
+          audio.addEventListener('canplaythrough', onReady, { once: true });
+          audio.load();
+          return;
+        }
+        _doPlayInner();
       }
 
       function doPause() {
@@ -340,7 +274,6 @@
           : '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14" stroke="currentColor" stroke-width="2" fill="none"/></svg>';
       });
 
-      // ── More Options Menu ──
       var speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
       var currentSpeed = 1;
 
@@ -448,7 +381,6 @@
         showMenu(moreBtn.getBoundingClientRect());
       });
 
-      // Seek bar
       var _seekDrag = false;
       function seekFromClientX(clientX) {
         if (!audio) return;
@@ -479,21 +411,19 @@
 
       var player = {
         _w: wrapper,
-        _a: null, // Set below once audio exists
-        _pendingDataUrl: _pendingDataUrl,
+        _a: audio,
         destroy: function() {
           dead = true;
           closeAnyMenu();
           if (audio) { audio.pause(); audio.src = ''; }
-          if (_blobUrl) URL.revokeObjectURL(_blobUrl);
           if (animId) cancelAnimationFrame(animId);
           if (srcNode) { try { srcNode.disconnect(); } catch(e) {} }
+          if (analyser) { try { analyser.disconnect(); } catch(e) {} }
           wrapper.remove();
           var idx = _players.indexOf(player);
           if (idx !== -1) _players.splice(idx, 1);
         }
       };
-      player._a = audio; // null for data: URLs until lazy loaded
       _players.push(player);
       return player;
     },
@@ -534,6 +464,7 @@
                 dup.remove();
               }
               ph.appendChild(p._w);
+              ph._oapInited = true;
               _players.push(p);
               return;
             }
@@ -543,16 +474,35 @@
         _players.push(p);
       });
     },
+
+    _observer: null,
+    _getObserver: function() {
+      if (!this._observer) {
+        var self = this;
+        this._observer = new IntersectionObserver(function(entries) {
+          entries.forEach(function(entry) {
+            if (entry.isIntersecting) {
+              var el = entry.target;
+              self._observer.unobserve(el);
+              if (el._oapInited) return;
+              if (!el.isConnected) return;
+              el._oapInited = true;
+              var url = el.getAttribute('data-oap-url');
+              if (url) window.OrbitAudioPlayer.create(el, url);
+            }
+          });
+        }, { rootMargin: '200px' });
+      }
+      return this._observer;
+    },
+
     init: function(root) {
       root = root || document;
-      // Destroy all tracked players (handles re-render cleanup — old wrappers
-      // were already removed from DOM by innerHTML replacement before init call)
       while (_players.length) _players[0].destroy();
+      var observer = this._getObserver();
       root.querySelectorAll('.oap-placeholder').forEach(function(el) {
         if (el._oapInited) return;
-        el._oapInited = true;
-        var url = el.getAttribute('data-oap-url');
-        if (url) window.OrbitAudioPlayer.create(el, url);
+        observer.observe(el);
       });
     }
   };

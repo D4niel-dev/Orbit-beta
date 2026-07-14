@@ -287,9 +287,49 @@ app.whenReady().then(() => {
       return new Response(r.body, { headers: cacheHeaders({ 'Content-Type': r.headers.get('Content-Type') || 'application/octet-stream' }) });
     });
   });
-  function contentTypeFromAtt(att) {
+  function detectMimeFromHeader(data, fallbackExt) {
+    if (!data || data.length < 16) return null;
+    var header = '';
+    for (var i = 0; i < Math.min(16, data.length); i++) {
+      header += String.fromCharCode(data[i]);
+    }
+    if (header.substring(4, 8) === 'ftyp') {
+      var brand = header.substring(8, 12);
+      if (brand === 'M4A ' || brand === 'M4B ' || brand === 'M4P ') return 'audio/mp4';
+      return 'video/mp4';
+    }
+    if (header.substring(4, 8) === 'moov') return 'video/quicktime';
+    if (header.substring(0, 4) === '\x1a\x45\xdf\xa3') {
+      if (data.length > 40) {
+        var docType = '';
+        for (var i = 31; i < 40 && data[i] !== 0; i++) docType += String.fromCharCode(data[i]);
+        if (docType.indexOf('webm') !== -1 || docType.indexOf('WebM') !== -1) return 'video/webm';
+      }
+      return 'video/x-matroska';
+    }
+    if (header.substring(0, 4) === 'RIFF' && header.substring(8, 12) === 'AVI ') return 'video/x-msvideo';
+    if (header.substring(0, 3) === 'FLV') return 'video/x-flv';
+    if (header.substring(0, 3) === 'ID3') return 'audio/mpeg';
+    if (data[0] === 0xFF && (data[1] & 0xE0) === 0xE0) return 'audio/mpeg';
+    if (header.substring(0, 4) === 'OggS') {
+      if (fallbackExt === 'ogv' || fallbackExt === 'video') return 'video/ogg';
+      return 'audio/ogg';
+    }
+    if (header.substring(0, 4) === 'RIFF' && header.substring(8, 12) === 'WAVE') return 'audio/wav';
+    if (header.substring(0, 4) === 'fLaC') return 'audio/flac';
+    if (header.substring(0, 4) === 'Opus') return 'audio/opus';
+    if (header.substring(0, 6) === '\x30\x26\xb2\x75\x8e\x66') return 'video/x-ms-wmv';
+    return null;
+  }
+  function contentTypeFromAtt(att, data) {
     if (!att) return 'application/octet-stream';
-    if (att.type && att.type.includes('/')) return att.type;
+    if (att.type && att.type.indexOf('/') !== -1) return att.type;
+    if (att.mimeType) return att.mimeType;
+    if ((!att.type || att.type === 'file') && data) {
+      var ext = (att.name || '').split('.').pop().toLowerCase();
+      var magicMime = detectMimeFromHeader(data, ext);
+      if (magicMime) return magicMime;
+    }
     if (att.type === 'image') {
       var ext = (att.name || '').split('.').pop().toLowerCase();
       var mimeMap = { jpeg: 'image/jpeg', jpg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml', bmp: 'image/bmp', ico: 'image/x-icon' };
@@ -297,12 +337,12 @@ app.whenReady().then(() => {
     }
     if (att.type === 'audio') {
       var ext = (att.name || '').split('.').pop().toLowerCase();
-      var audioMimeMap = { mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', flac: 'audio/flac', aac: 'audio/aac', m4a: 'audio/mp4', wma: 'audio/x-ms-wma', webm: 'audio/webm' };
+      var audioMimeMap = { mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', flac: 'audio/flac', aac: 'audio/aac', m4a: 'audio/mp4', wma: 'audio/x-ms-wma', webm: 'audio/webm', opus: 'audio/opus', mka: 'audio/x-matroska' };
       return audioMimeMap[ext] || 'audio/webm';
     }
     if (att.type === 'video') {
       var ext = (att.name || '').split('.').pop().toLowerCase();
-      var videoMimeMap = { mp4: 'video/mp4', webm: 'video/webm', ogg: 'video/ogg', ogv: 'video/ogg', mkv: 'video/x-matroska', avi: 'video/x-msvideo', mov: 'video/quicktime', m4v: 'video/mp4', '3gp': 'video/3gpp' };
+      var videoMimeMap = { mp4: 'video/mp4', webm: 'video/webm', ogg: 'video/ogg', ogv: 'video/ogg', mkv: 'video/x-matroska', avi: 'video/x-msvideo', mov: 'video/quicktime', m4v: 'video/mp4', '3gp': 'video/3gpp', wmv: 'video/x-ms-wmv', flv: 'video/x-flv', f4v: 'video/mp4', ts: 'video/mp2t', mts: 'video/mp2t', m2ts: 'video/mp2t' };
       return videoMimeMap[ext] || 'video/mp4';
     }
     return 'application/octet-stream';
@@ -330,7 +370,7 @@ app.whenReady().then(() => {
             } else if (att && att.data && att.data.length > 0) {
               // Fallback to original image if no thumbnail yet
               resolve(new Response(att.data, {
-                headers: cacheHeaders({ 'Content-Type': contentTypeFromAtt(att) })
+                headers: cacheHeaders({ 'Content-Type': contentTypeFromAtt(att, att.data) })
               }));
               return;
             } else if (att && att.localPath && fs.existsSync(att.localPath)) {
@@ -353,7 +393,7 @@ app.whenReady().then(() => {
           if (globalDb) {
             const att = globalDb.getAttachment(id);
             if (att && att.data && att.data.length > 0) {
-              var ct = contentTypeFromAtt(att);
+              var ct = contentTypeFromAtt(att, att.data);
               var extraHeaders = { 'Content-Type': ct, 'Content-Length': String(att.data.length) };
               if (ct.startsWith('audio/') || ct.startsWith('video/')) {
                 extraHeaders['Accept-Ranges'] = 'bytes';

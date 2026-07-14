@@ -13,7 +13,7 @@ class Store {
     this.user = null;
     this.settings = {
       theme: 'dark',
-      enterToSend: true,
+      enterToSend: false,
       swipeToReply: true,
       privacyMode: false,
       e2eeEnabled: false,

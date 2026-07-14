@@ -156,6 +156,7 @@ document.addEventListener('DOMContentLoaded', function() {
           if (a._blobKey && (!a.url || a.url.indexOf('blob:') === 0)) {
             // Dead blob URL — restore from IndexedDB
             (function(attachment, chatId) {
+              if (window._restoreQueue && window._restoreQueue[attachment._blobKey]) return;
               restorePromises.push(
                 window.BlobStoreDB.get(attachment._blobKey).then(function(ab) {
                   if (!ab) { console.warn('[BlobStore] no data for key', attachment._blobKey); return; }
@@ -163,6 +164,7 @@ document.addEventListener('DOMContentLoaded', function() {
                   try {
                     var newUrl = URL.createObjectURL(new Blob([ab], { type: mime }));
                     attachment.url = newUrl;
+                    attachment._blobCreated = true;
                     MStore._saveMsgs(chatId);
                   } catch(e) {
                     console.warn('[BlobStore] createObjectURL failed:', e.message);
@@ -903,7 +905,20 @@ document.addEventListener('DOMContentLoaded', function() {
           forwardedFrom: senderName
         };
         if (msg.attachments && msg.attachments.length > 0) {
-          newMsg.attachments = msg.attachments.map(function(a) { return Object.assign({}, a); });
+          newMsg.attachments = msg.attachments.map(function(a) {
+            var copy = Object.assign({}, a);
+            if (copy.url && copy.url.indexOf('blob:') === 0) {
+              if (copy._dataUrl) {
+                copy.url = copy._dataUrl;
+              } else if (copy._blobKey) {
+                copy.url = '';
+                copy._pending = true;
+              } else {
+                copy.url = '';
+              }
+            }
+            return copy;
+          });
         }
         if (MStore.user) newMsg.fromName = MStore.user.name;
 
@@ -975,6 +990,13 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function renderMessages(chatId) {
+    // Revoke blob URLs from previous render to prevent memory leaks
+    if (window._blobUrlsToRevoke) {
+      window._blobUrlsToRevoke.forEach(function(url) {
+        try { URL.revokeObjectURL(url); } catch(e) {}
+      });
+    }
+    window._blobUrlsToRevoke = [];
     var feed = document.getElementById('message-feed');
     var msgs = MStore.getMessages(chatId);
     // Resolve attachment URLs without mutating store objects (avoids silent data loss)
@@ -982,34 +1004,46 @@ document.addEventListener('DOMContentLoaded', function() {
     function _resUrl(a) {
       var u = a && a.url;
       if (!u) return '';
-      // data: URL → blob: URL (performance, cached)
-      if (u.indexOf('data:') === 0) {
-        // Audio/video: pass raw data: URL to player — decoded lazily on first play
-        if (a.type === 'audio' || a.type === 'video') return u;
-        if (!window._dataUrlCache[u]) window._dataUrlCache[u] = _dataUrlToBlobUrl(u);
-        return window._dataUrlCache[u];
-      }
-      // Blob URL — reconstruct from persisted _dataUrl or _blobKey if dead
+      // Blob URL — return directly if live (this session), else restore from IndexedDB
       if (u.indexOf('blob:') === 0) {
-        // Audio/video: let player handle lazily from raw _dataUrl
-        if ((a.type === 'audio' || a.type === 'video') && a._dataUrl) return a._dataUrl;
-        if (a._dataUrl) {
-          if (!window._dataUrlCache[a._dataUrl]) window._dataUrlCache[a._dataUrl] = _dataUrlToBlobUrl(a._dataUrl);
-          return window._dataUrlCache[a._dataUrl];
-        }
-        // _blobKey but no _dataUrl (large file stored in IndexedDB)
+        // Always try IndexedDB restoration if key exists (survives restart)
         if (a._blobKey) {
-          // Schedule async restore (so it re-renders with live URL across restarts)
           if (!window._restoreQueue) window._restoreQueue = {};
           if (!window._restoreQueue[a._blobKey]) {
             window._restoreQueue[a._blobKey] = true;
             window.BlobStoreDB.get(a._blobKey).then(function(ab) {
-              if (!ab) return;
+              if (!ab) {
+                setTimeout(function() {
+                  window.BlobStoreDB.get(a._blobKey).then(function(ab2) {
+                    if (!ab2) { window._restoreQueue[a._blobKey] = false; return; }
+                    window._restoreQueue[a._blobKey] = false;
+                    try {
+                      var mime = a.mimeType || 'application/octet-stream';
+                      var newUrl = URL.createObjectURL(new Blob([ab2], { type: mime }));
+                      if (a.url && a.url !== newUrl && a.url.indexOf('blob:') === 0 && a._blobCreated) {
+                        try { URL.revokeObjectURL(a.url); } catch(e) {}
+                      }
+                      a.url = newUrl;
+                      a._blobCreated = true;
+                      if (!window._blobUrlsToRevoke) window._blobUrlsToRevoke = [];
+                      window._blobUrlsToRevoke.push(newUrl);
+                      if (activeChatId) renderMessages(activeChatId);
+                    } catch(e) { console.warn('[BlobStore] retry restore error:', e.message); }
+                  });
+                }, 300);
+                return;
+              }
               window._restoreQueue[a._blobKey] = false;
               try {
                 var mime = a.mimeType || 'application/octet-stream';
                 var newUrl = URL.createObjectURL(new Blob([ab], { type: mime }));
+                if (a.url && a.url !== newUrl && a.url.indexOf('blob:') === 0 && a._blobCreated) {
+                  try { URL.revokeObjectURL(a.url); } catch(e) {}
+                }
                 a.url = newUrl;
+                a._blobCreated = true;
+                if (!window._blobUrlsToRevoke) window._blobUrlsToRevoke = [];
+                window._blobUrlsToRevoke.push(newUrl);
                 if (activeChatId) renderMessages(activeChatId);
               } catch(e) { console.warn('[BlobStore] createObjectURL during restore:', e.message); }
             }).catch(function(err) {
@@ -1017,14 +1051,30 @@ document.addEventListener('DOMContentLoaded', function() {
               window._restoreQueue[a._blobKey] = false;
             });
           }
-          // If this blob URL was created this session (live), return it directly.
-          // After restart, _blobCreated is false → returns '' → shows "Restoring..."
-          if (a._blobCreated) return u;
-          return '';
+          return ''; // Show "Restoring..." until restore completes
         }
-        // Live blob URL with no persistence — return directly
-        return u;
+        if (a._blobCreated) return u;
+        // Fallback: use _dataUrl if blob can't be restored
+        if (a._dataUrl && a._dataUrl.indexOf('data:') === 0) {
+          if (a.type === 'video' || a.type === 'audio') return a._dataUrl;
+          if (!window._dataUrlCache) window._dataUrlCache = {};
+          if (!window._dataUrlCache[a._dataUrl]) {
+            window._dataUrlCache[a._dataUrl] = _dataUrlToBlobUrl(a._dataUrl);
+          }
+          return window._dataUrlCache[a._dataUrl];
+        }
+        return ''; // No persistence key — can't restore
       }
+      // Data URL — old messages.
+      // Video/Audio: return as-is (players handle data: URLs natively)
+      // Images: convert to blob URL for better WebView compatibility
+      if (u.indexOf('data:') === 0) {
+        if (a && (a.type === 'video' || a.type === 'audio')) return u;
+        if (!window._dataUrlCache) window._dataUrlCache = {};
+        if (!window._dataUrlCache[u]) window._dataUrlCache[u] = _dataUrlToBlobUrl(u);
+        return window._dataUrlCache[u];
+      }
+      // Everything else (file://, orbit-db://, http://, etc.)
       return u;
     }
     if (chatSearchFilter) {
@@ -1669,11 +1719,19 @@ document.addEventListener('DOMContentLoaded', function() {
     var INLINE_LIMIT = 1.5 * 1024 * 1024;
     var CHUNK_SIZE = 64 * 1024;
 
+    // Helper: convert ArrayBuffer to base64 string (binary-per-chunk for large files)
+    function _arrayBufferToBase64(ab) {
+      var u8 = new Uint8Array(ab);
+      var binary = '';
+      for (var i = 0; i < u8.length; i++) binary += String.fromCharCode(u8[i]);
+      return btoa(binary);
+    }
+
     var inlineAttachments = [];
     var largeFiles = [];
     stagedFiles.forEach(function(s) {
-      var size = 0;
-      if (s.url && s.url.indexOf('data:') === 0) {
+      var size = s._arrayBuffer ? s._arrayBuffer.byteLength : 0;
+      if (size === 0 && s.url && s.url.indexOf('data:') === 0) {
         var b64 = s.url.substring(s.url.indexOf(',') + 1);
         size = Math.round(b64.length * 3 / 4);
       }
@@ -1682,28 +1740,46 @@ document.addEventListener('DOMContentLoaded', function() {
         type: s.type,
         name: s.name,
         size: s.size,
-        url: s.url
+        url: s.url  // blob URL for audio/video, data URL for images
       };
       if (size >= INLINE_LIMIT && (s.type === 'video' || s.type === 'audio' || s.type === 'file')) {
+        // Keep the ArrayBuffer for on-the-fly chunking during send (matching desktop pattern)
+        if (s._arrayBuffer) {
+          att._arrayBuffer = s._arrayBuffer;
+          att._totalSize = size;
+          att.mimeType = s.mimeType || '';
+        }
         largeFiles.push(att);
       } else {
+        // For inline attachments with ArrayBuffer (e.g. small audio), convert to base64
+        if (s._arrayBuffer) {
+          var mime = s.type === 'video' ? 'video/mp4' : (s.type === 'audio' ? 'audio/mpeg' : 'application/octet-stream');
+          att.url = 'data:' + mime + ';base64,' + _arrayBufferToBase64(s._arrayBuffer);
+        }
         inlineAttachments.push(att);
       }
     });
 
-    // For large audio/video files, use blob URL (short) instead of embedding the
-    // full data URL (potentially 10MB+) in the DOM's data-ovp-url / data-oap-url attribute.
-    // The original data URL is kept in the largeFiles array for _sendLargeFileToPeer.
+    // Build allAttachments: inline are used as-is, large files use the blob URL for display
     var allAttachments = [];
     inlineAttachments.forEach(function(a) { allAttachments.push(a); });
     largeFiles.forEach(function(a) {
-      if ((a.type === 'audio' || a.type === 'video') && a.url && a.url.indexOf('data:') === 0) {
-        try {
-          var _blobForDisplay = _dataUrlToBlobUrl(a.url);
-          allAttachments.push({ id: a.id, _fileId: a.id, name: a.name, type: a.type, url: _blobForDisplay });
-        } catch(e) {
-          allAttachments.push({ id: a.id, _fileId: a.id, name: a.name, type: a.type, _pending: true });
+      if (a.type === 'audio' || a.type === 'video') {
+        var localKey = 'local_' + a.id;
+        if (a._arrayBuffer) {
+          (function(key, buf, attsRef) {
+            window.BlobStoreDB.put(key, buf).then(function() {
+            }).catch(function(err) {
+              console.warn('[Send] Local persist failed:', err);
+              delete attsRef._blobKey;
+            });
+          })(localKey, a._arrayBuffer, allAttachments[allAttachments.length - 1]);
         }
+        allAttachments.push({
+          id: a.id, _fileId: a.id, name: a.name, type: a.type,
+          url: a.url, _blobCreated: true,
+          _blobKey: a._arrayBuffer ? localKey : undefined
+        });
       } else {
         allAttachments.push(a);
       }
@@ -1774,77 +1850,101 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     }
 
-    function _sendLargeFileToPeer(att, peerId) {
-      if (!att.url || att.url.indexOf('data:') !== 0) return;
-      var b64 = att.url.substring(att.url.indexOf(',') + 1);
-      var totalChunks = Math.ceil(b64.length / CHUNK_SIZE);
-      // Use att.id as fileId so MESSAGE _fileId markers match (CRIT-4)
-      var fileId = att.id;
-      var myId = MStore.user ? MStore.user.id : 'mobile';
+    // Shared base64 decoder for hash computation (avoids allocating lookup table repeatedly)
+    var _b64Lookup = null;
+    function _base64ToBytes(b64str) {
+      if (!_b64Lookup) {
+        _b64Lookup = new Int8Array(256);
+        for (var i = 0; i < 256; i++) _b64Lookup[i] = -1;
+        var b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+        for (var li = 0; li < 64; li++) _b64Lookup[b64chars.charCodeAt(li)] = li;
+      }
+      var _validLen = 0;
+      for (var i = 0; i < b64str.length; i++) {
+        if (_b64Lookup[b64str.charCodeAt(i)] !== -1) _validLen++;
+      }
+      var _binLen = Math.floor(_validLen * 3 / 4);
+      if (_binLen === 0) return new ArrayBuffer(0);
+      var _buf = new ArrayBuffer(_binLen);
+      var _bytes = new Uint8Array(_buf);
+      var _p = 0;
+      var _b = [0,0,0,0];
+      var _bi = 0;
+      for (var i = 0; i < b64str.length; i++) {
+        var val = _b64Lookup[b64str.charCodeAt(i)];
+        if (val === -1 || val === void 0) continue;
+        _b[_bi++] = val;
+        if (_bi === 4) {
+          if (_p < _binLen) _bytes[_p++] = (_b[0] << 2) | (_b[1] >> 4);
+          if (_p < _binLen) _bytes[_p++] = ((_b[1] & 15) << 4) | (_b[2] >> 2);
+          if (_p < _binLen) _bytes[_p++] = ((_b[2] & 3) << 6) | _b[3];
+          _bi = 0;
+        }
+      }
+      if (_bi > 0) {
+        while (_bi < 4) _b[_bi++] = 0;
+        if (_p < _binLen) _bytes[_p++] = (_b[0] << 2) | (_b[1] >> 4);
+        if (_p < _binLen) _bytes[_p++] = ((_b[1] & 15) << 4) | (_b[2] >> 2);
+        if (_p < _binLen) _bytes[_p++] = ((_b[2] & 3) << 6) | _b[3];
+      }
+      return _buf;
+    }
 
-      // Compute SHA-256 hash for integrity verification (CRIT-1)
-      // NOTE: Uses manual base64 decoder — atob() on Android WebView corrupts bytes >127 (binary files)
-      // Uses single-pass streaming decoder (no intermediate string allocations)
-      var _b64Lookup = null;
-      function _base64ToBytes(b64str) {
-        if (!_b64Lookup) {
-          _b64Lookup = new Int8Array(256);
-          for (var i = 0; i < 256; i++) _b64Lookup[i] = -1;
-          var b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-          for (var li = 0; li < 64; li++) _b64Lookup[b64chars.charCodeAt(li)] = li;
-        }
-        // Count valid base64 chars without allocating a string
-        var validLen = 0;
-        for (var i = 0; i < b64str.length; i++) {
-          if (_b64Lookup[b64str.charCodeAt(i)] !== -1) validLen++;
-        }
-        var binLen = Math.floor(validLen * 3 / 4);
-        if (binLen === 0) return new ArrayBuffer(0);
-        var buf = new ArrayBuffer(binLen);
-        var bytes = new Uint8Array(buf);
-        var p = 0;
-        var b = [0,0,0,0];
-        var bi = 0;
-        for (var i = 0; i < b64str.length; i++) {
-          var val = _b64Lookup[b64str.charCodeAt(i)];
-          if (val === -1 || val === void 0) continue;
-          b[bi++] = val;
-          if (bi === 4) {
-            if (p < binLen) bytes[p++] = (b[0] << 2) | (b[1] >> 4);
-            if (p < binLen) bytes[p++] = ((b[1] & 15) << 4) | (b[2] >> 2);
-            if (p < binLen) bytes[p++] = ((b[2] & 3) << 6) | b[3];
-            bi = 0;
-          }
-        }
-        if (bi > 0) {
-          while (bi < 4) b[bi++] = 0;
-          if (p < binLen) bytes[p++] = (b[0] << 2) | (b[1] >> 4);
-          if (p < binLen) bytes[p++] = ((b[1] & 15) << 4) | (b[2] >> 2);
-          if (p < binLen) bytes[p++] = ((b[2] & 3) << 6) | b[3];
-        }
-        return buf;
+    function _sendLargeFileToPeer(att, peerId) {
+      var ab = att._arrayBuffer;
+      var fileSize = att._totalSize || (ab ? ab.byteLength : 0);
+
+      // Fallback: legacy data URL path (no ArrayBuffer)
+      if (!ab) {
+        if (!att.url || att.url.indexOf('data:') !== 0) return;
+        var _b64 = att.url.substring(att.url.indexOf(',') + 1);
+        fileSize = Math.round(_b64.length * 3 / 4);
+        // Convert data URL to ArrayBuffer for chunking
+        try {
+          var _m = att.url.match(/^data:[^;]+;base64,(.+)$/);
+          if (_m) ab = _base64ToBytes(_m[1]);
+        } catch(e) {}
+        if (!ab || ab.byteLength === 0) return;
+        att._totalSize = fileSize;
+        att._arrayBuffer = ab;
       }
 
-      function _computeFileHash(b64str, callback) {
+      var fileId = att.id;
+      var myId = MStore.user ? MStore.user.id : 'mobile';
+      var totalChunks = Math.ceil(fileSize / CHUNK_SIZE);
+      var _u8 = new Uint8Array(ab);
+
+      // On-the-fly chunk: read a binary chunk from ArrayBuffer, convert to base64
+      function _getChunk(index) {
+        var start = index * CHUNK_SIZE;
+        var end = Math.min(start + CHUNK_SIZE, fileSize);
+        var slice = _u8.subarray(start, end);
+        var bin = '';
+        for (var bi = 0; bi < slice.length; bi++) bin += String.fromCharCode(slice[bi]);
+        return btoa(bin);
+      }
+
+      // Compute file hash (SHA-256 of the full ArrayBuffer, truncated if >50MB)
+      function _computeFileHash(callback) {
         try {
-          var buf = _base64ToBytes(b64str);
-          crypto.subtle.digest('SHA-256', buf).then(function(hashBuf) {
-            var hashArr = Array.from(new Uint8Array(hashBuf));
-            var hex = hashArr.map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
-            callback(hex);
+          var _hashBuf = fileSize > 50 * 1024 * 1024 ? _u8.subarray(0, 50 * 1024 * 1024) : _u8;
+          crypto.subtle.digest('SHA-256', _hashBuf.buffer).then(function(hashBuf) {
+            var _hashArr = Array.from(new Uint8Array(hashBuf));
+            var _hex = _hashArr.map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+            callback(_hex);
           }).catch(function() { callback(''); });
         } catch(e) { callback(''); }
       }
 
-      _computeFileHash(b64, function(fileHash) {
+      _computeFileHash(function(fileHash) {
         if (fileHash) {
-          debugLog('P2P', 'Computed file hash for ' + att.name, { fileId: fileId, hash: fileHash, b64len: b64.length });
+          debugLog('P2P', 'Computed file hash for ' + att.name, { fileId: fileId, hash: fileHash, totalChunks: totalChunks, fileSize: fileSize });
         } else {
-          debugLog('P2P', 'crypto.subtle unavailable — sending without hash for ' + att.name, { fileId: fileId, b64len: b64.length });
+          debugLog('P2P', 'crypto.subtle unavailable — sending without hash for ' + att.name, { fileId: fileId, totalChunks: totalChunks });
         }
         Orbit.P2P.send(peerId, Orbit.Protocol.createPacket(
           Orbit.Protocol.Types.FILE_TRANSFER_START, myId, peerId,
-          { fileId: fileId, fileName: att.name, fileSize: Math.round(b64.length * 3 / 4), totalChunks: totalChunks, hash: fileHash, chatId: activeChatId }
+          { fileId: fileId, fileName: att.name, fileSize: fileSize, totalChunks: totalChunks, hash: fileHash, chatId: activeChatId, type: att.type || '', mimeType: att.mimeType || '' }
         ));
 
         var ci = 0;
@@ -1856,10 +1956,10 @@ document.addEventListener('DOMContentLoaded', function() {
             ));
             return;
           }
-          var chunk = b64.substring(ci * CHUNK_SIZE, (ci + 1) * CHUNK_SIZE);
+          var chunkData = _getChunk(ci);
           Orbit.P2P.send(peerId, Orbit.Protocol.createPacket(
             Orbit.Protocol.Types.FILE_CHUNK, myId, peerId,
-            { fileId: fileId, chunkIndex: ci, data: chunk }
+            { fileId: fileId, chunkIndex: ci, data: chunkData }
           ));
           ci++;
           setTimeout(sendNextChunk, 0);
@@ -1991,6 +2091,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 name: file.name,
                 size: file.size,
                 type: 'image',
+                mimeType: file.type || 'image/jpeg',
                 url: compressedUrl
               });
               done++;
@@ -2001,48 +2102,43 @@ document.addEventListener('DOMContentLoaded', function() {
         } else if (isVideo) {
           var reader = new FileReader();
           reader.onload = function(ev) {
-            var videoUrl = ev.target.result;
-            if (false) {
-              compressVideoMobile(videoUrl, 1280, function(compressedUrl) {
-                stagedFiles.push({
-                  name: file.name,
-                  size: compressedUrl.length,
-                  type: 'video',
-                  url: compressedUrl
-                });
-                done++;
-                if (done === total) renderFilePreview();
-              });
-            } else {
-              stagedFiles.push({
-                name: file.name,
-                size: file.size,
-                type: 'video',
-                url: videoUrl
-              });
-              done++;
-              if (done === total) renderFilePreview();
-            }
-          };
-          reader.readAsDataURL(file);
-        } else if (isAudio) {
-          var audioReader = new FileReader();
-          audioReader.onload = function(ev) {
+            var ab = ev.target.result;
+            var blobUrl = URL.createObjectURL(new Blob([ab], { type: file.type || 'video/mp4' }));
             stagedFiles.push({
               name: file.name,
               size: file.size,
-              type: 'audio',
-              url: ev.target.result
+              type: 'video',
+              mimeType: file.type || 'video/mp4',
+              url: blobUrl,
+              _arrayBuffer: ab
             });
             done++;
             if (done === total) renderFilePreview();
           };
-          audioReader.readAsDataURL(file);
+          reader.readAsArrayBuffer(file);
+        } else if (isAudio) {
+          var audioReader = new FileReader();
+          audioReader.onload = function(ev) {
+            var ab = ev.target.result;
+            var blobUrl = URL.createObjectURL(new Blob([ab], { type: file.type || 'audio/mpeg' }));
+            stagedFiles.push({
+              name: file.name,
+              size: file.size,
+              type: 'audio',
+              mimeType: file.type || 'audio/mpeg',
+              url: blobUrl,
+              _arrayBuffer: ab
+            });
+            done++;
+            if (done === total) renderFilePreview();
+          };
+          audioReader.readAsArrayBuffer(file);
         } else {
           stagedFiles.push({
             name: file.name,
             size: file.size,
             type: 'file',
+            mimeType: file.type || 'application/octet-stream',
             url: null
           });
           done++;
@@ -4340,10 +4436,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function _dataUrlToBlobUrl(dataUrl) {
     try {
-      var m = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+      // Parse MIME type even if extra parameters (e.g. ;codecs=...) appear before ;base64,
+      var m = dataUrl.match(/^data:([^;]+)(?:;[^;]+)*;base64,(.+)$/);
+      if (!m) m = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
       if (m) {
         var blobUrl = window.orbitBase64ToBlob(m[2], m[1]);
-        if (blobUrl) return blobUrl;
+        if (blobUrl) {
+          if (!window._blobUrlsToRevoke) window._blobUrlsToRevoke = [];
+          window._blobUrlsToRevoke.push(blobUrl);
+          return blobUrl;
+        }
       }
     } catch(e) { console.warn('[Orbit] data:→blob failed', e.message); }
     return dataUrl;
@@ -5778,15 +5880,35 @@ document.addEventListener('DOMContentLoaded', function() {
       if (packet.type === Orbit.Protocol.Types.MESSAGE) {
         var msgText = packet.payload.text || '';
         var msgAttachmentsRaw = packet.payload.attachments || undefined;
-        // Convert inline data: URLs to blob: URLs before storing (preserve original in _dataUrl for persistence)
+        // Convert inline data: URLs to blob: URLs and persist in IndexedDB
         if (msgAttachmentsRaw) {
           for (var ai = 0; ai < msgAttachmentsRaw.length; ai++) {
             var aa = msgAttachmentsRaw[ai];
             if (aa.url && aa.url.indexOf('data:') === 0) {
               var blobUrl = _dataUrlToBlobUrl(aa.url);
               if (blobUrl !== aa.url) {
-                aa._dataUrl = aa.url;   // preserve for restart recovery
+                aa._dataUrl = aa.url;   // preserve for restart recovery (backward compat)
                 aa.url = blobUrl;
+              }
+              // Persist inline attachment data in IndexedDB
+              if (!aa._blobKey && !aa._pending) {
+                var inlineKey = 'inline_' + chatId + '_' + (aa.id || Date.now() + '_' + Math.random().toString(36).slice(2, 6));
+                try {
+                  var dataUrlToParse = aa._dataUrl || aa.url;
+                  var m = dataUrlToParse.match(/^data:([^;]+);base64,(.+)$/);
+                  if (m) {
+                    var ab = window.orbitBase64ToArrayBuffer(m[2]);
+                    if (ab && ab.byteLength > 0) {
+                      window.BlobStoreDB.put(inlineKey, ab).catch(function(err) {
+                        console.warn('[P2P] Inline persist failed:', err);
+                      });
+                      aa._blobKey = inlineKey;
+                      aa._blobCreated = true;
+                    }
+                  }
+                } catch(e) {
+                  console.warn('[P2P] Inline persist error:', e);
+                }
               }
             }
           }
@@ -5974,36 +6096,16 @@ document.addEventListener('DOMContentLoaded', function() {
           var attUrl = '';
           try { attUrl = URL.createObjectURL(new Blob([_mergedBuf.buffer], { type: mimeType })); } catch(e) { attUrl = ''; }
           // Persist file data for cross-restart survival:
-          //   - Files <= 10MB: store as data: URL in localStorage (part of attachment JSON)
-          //   - Files > 10MB:  store raw ArrayBuffer in IndexedDB (set _blobKey reference)
-          //   + Stores ORIGINAL chunk base64 strings in IndexedDB as fallback for the fallback
-          var dataUrl = '';
-          var blobKey = null;
-          var persisted = false;
-          if (_totalByteLen > 0 && _totalByteLen <= 10 * 1024 * 1024) {
-            try {
-              var _dataUrlBytes = new Uint8Array(_mergedBuf.buffer);
-              var _dataUrlBinary = '';
-              for (var _du = 0; _du < _dataUrlBytes.length; _du++) {
-                _dataUrlBinary += String.fromCharCode(_dataUrlBytes[_du]);
-              }
-              dataUrl = 'data:' + mimeType + ';base64,' + btoa(_dataUrlBinary);
-              persisted = true;
-            } catch(e) {
-              dataUrl = '';
-            }
-          }
-          if (!persisted && _totalByteLen > 64 * 1024) {
-            // Large file: store in IndexedDB instead
-            blobKey = packet.payload.fileId;
-            (function(key, buf, mime) {
-              window.BlobStoreDB.put(key, buf).then(function() {
-                console.log('[P2P] Stored large file in IndexedDB:', key, buf.byteLength + ' bytes');
-              }).catch(function(err) {
-                console.warn('[P2P] IndexedDB store failed for', key, err);
-              });
-            })(blobKey, _mergedBuf.buffer, mimeType);
-          }
+          // ALL files (any size) are stored as raw ArrayBuffer in IndexedDB.
+          // No data: URL is created — blob URLs are restored from IndexedDB on startup.
+          var blobKey = packet.payload.fileId;
+          (function(key, buf) {
+            window.BlobStoreDB.put(key, buf).then(function() {
+              console.log('[P2P] Stored file in IndexedDB:', key, buf.byteLength + ' bytes');
+            }).catch(function(err) {
+              console.warn('[P2P] IndexedDB store failed for', key, err);
+            });
+          })(blobKey, _mergedBuf.buffer);
 
           // CRIT-4: Try to find existing message with matching _fileId attachment, update it instead of creating duplicate
           var existingMsgs = MStore.getMessages(chatId);
@@ -6014,7 +6116,6 @@ document.addEventListener('DOMContentLoaded', function() {
               for (var ai = 0; ai < atts.length; ai++) {
                  if (atts[ai]._fileId === packet.payload.fileId) {
                    atts[ai].url = attUrl;
-                   atts[ai]._dataUrl = dataUrl;
                    atts[ai]._blobKey = blobKey;
                    atts[ai]._blobCreated = true;
                    if (!atts[ai].type || atts[ai].type === 'file') {
@@ -6043,7 +6144,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 name: txEnd.fileName,
                 type: isImage ? 'image' : (isVideo ? 'video' : (isAudio ? 'audio' : 'file')),
                 url: attUrl,
-                _dataUrl: dataUrl,
                 _blobKey: blobKey,
                 _blobCreated: true,
                 _fileId: packet.payload.fileId

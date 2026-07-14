@@ -799,8 +799,8 @@ document.addEventListener('DOMContentLoaded', () => {
           window.orbitAPI.showNotification('File from ' + senderName, data.name, senderAvatar);
         }
         const isImage = data.name.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) != null;
-        const isVideo = data.name.match(/\.(mp4|mov|avi|mkv|webm|3gp)$/i) != null;
-        const isAudio = data.name.match(/\.(mp3|wav|ogg|flac|aac|m4a|wma)$/i) != null;
+        const isVideo = data.name.match(/\.(mp4|mov|avi|mkv|webm|3gp|m4v|wmv|flv|f4v|ts|mts|m2ts)$/i) != null;
+        const isAudio = data.name.match(/\.(mp3|wav|ogg|flac|aac|m4a|wma|opus|mka)$/i) != null;
         const attId = data.fileId || (window.orbitAPI ? window.orbitAPI.getUuid() : Date.now().toString());
         const fileSize = data.size || 0;
         // Default type/MIME for the !found fallback (overridden inside the found loop if found)
@@ -823,18 +823,22 @@ document.addEventListener('DOMContentLoaded', () => {
                   // routing it to the video player where decode errors trigger a +2s seek.
                   var senderType = atts[ai].type;
                   if (senderType && senderType !== 'file') {
-                    // Keep sender's type, derive MIME from extension
                     attType = senderType;
-                    if (attType === 'audio') {
+                    // Use mimeType from START packet if provided (more reliable than extension mapping)
+                    if (data.mimeType && data.mimeType.indexOf('/') !== -1) {
+                      attMime = data.mimeType;
+                    } else if (attType === 'audio') {
                       var ext = data.name.split('.').pop().toLowerCase();
-                      var extMap = { webm: 'audio/webm', mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', flac: 'audio/flac', aac: 'audio/aac', m4a: 'audio/mp4', wma: 'audio/x-ms-wma' };
+                      var extMap = { webm: 'audio/webm', mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', flac: 'audio/flac', aac: 'audio/aac', m4a: 'audio/mp4', wma: 'audio/x-ms-wma', opus: 'audio/opus', mka: 'audio/x-matroska' };
                       attMime = extMap[ext] || 'audio/webm';
                     } else if (attType === 'video') {
                       var vext = data.name.split('.').pop().toLowerCase();
-                      var videoExtMap2 = { mp4: 'video/mp4', mov: 'video/quicktime', avi: 'video/x-msvideo', mkv: 'video/x-matroska', webm: 'video/webm', '3gp': 'video/3gpp' };
+                      var videoExtMap2 = { mp4: 'video/mp4', webm: 'video/webm', ogg: 'video/ogg', ogv: 'video/ogg', mkv: 'video/x-matroska', avi: 'video/x-msvideo', mov: 'video/quicktime', m4v: 'video/mp4', '3gp': 'video/3gpp', wmv: 'video/x-ms-wmv', flv: 'video/x-flv', f4v: 'video/mp4', ts: 'video/mp2t', mts: 'video/mp2t', m2ts: 'video/mp2t' };
                       attMime = videoExtMap2[vext] || 'video/mp4';
                     } else if (attType === 'image') {
-                      attMime = data.name.toLowerCase().endsWith('.gif') ? 'image/gif' : (data.name.toLowerCase().endsWith('.png') ? 'image/png' : (data.name.toLowerCase().endsWith('.webp') ? 'image/webp' : (data.name.toLowerCase().endsWith('.svg') ? 'image/svg+xml' : 'image/jpeg')));
+                      var iext = data.name.split('.').pop().toLowerCase();
+                      var imgExtMap = { jpeg: 'image/jpeg', jpg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml', bmp: 'image/bmp' };
+                      attMime = imgExtMap[iext] || 'image/png';
                     } else {
                       attMime = 'application/octet-stream';
                     }
@@ -887,6 +891,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (!found) {
+          // If no pending message found, use type/mime from START packet if available
+          if (data.type && data.type !== 'file' && data.type !== '') {
+            attType = data.type;
+            if (data.mimeType && data.mimeType.indexOf('/') !== -1) {
+              attMime = data.mimeType;
+            }
+          }
           // Fallback: create new message entry
           window.store.handleIncomingPacket({
             type: window.Protocol.Types.MESSAGE,
