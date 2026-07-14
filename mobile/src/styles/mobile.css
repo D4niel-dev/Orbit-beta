@@ -864,6 +864,15 @@ html, body {
   z-index: 1;
 }
 
+/* Fullscreen backdrop — prevents Android WebView default blue */
+.ovp-wrap::backdrop {
+  background: #000 !important;
+}
+.ovp-wrap:fullscreen,
+.ovp-wrap:-webkit-full-screen {
+  background: #000 !important;
+}
+
 .ovp-ctrl {
   display: flex;
   align-items: center;

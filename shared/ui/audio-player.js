@@ -1,6 +1,13 @@
 (function() {
   if (window.OrbitAudioPlayer) return;
 
+  if (!document.getElementById('oap-spinner-style')) {
+    var os = document.createElement('style');
+    os.id = 'oap-spinner-style';
+    os.textContent = '@keyframes oap-spin{to{transform:rotate(360deg)}}.oap-loading{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.4);z-index:5;border-radius:8px}.oap-spinner{width:32px;height:32px;border:3px solid rgba(255,255,255,0.2);border-top-color:#fff;border-radius:50%;animation:oap-spin .8s linear infinite}';
+    document.head.appendChild(os);
+  }
+
   var _audioCtx = null;
 
   function getCtx() {
@@ -105,6 +112,14 @@
       wrapper.style.position = 'relative';
       var canvasBox = document.createElement('div');
       canvasBox.className = 'oap-canvas-box';
+      canvasBox.style.position = 'relative';
+      var loadingOverlay = document.createElement('div');
+      loadingOverlay.className = 'oap-loading';
+      var spinnerEl = document.createElement('div');
+      spinnerEl.className = 'oap-spinner';
+      loadingOverlay.appendChild(spinnerEl);
+      loadingOverlay.style.display = 'none';
+      canvasBox.appendChild(loadingOverlay);
       canvasBox.appendChild(canvas);
       wrapper.appendChild(canvasBox);
       /* audio appended in _initAudio */
@@ -120,6 +135,14 @@
       var srcConnected = false;
       var playing = false;
       var looping = false;
+      var _decodeRetries = 0;
+
+      function _showBuffer() {
+        loadingOverlay.style.display = 'flex';
+      }
+      function _hideBuffer() {
+        loadingOverlay.style.display = 'none';
+      }
 
       function connectSrc() {
         if (!audio) return;
@@ -173,12 +196,50 @@
         audio.style.display = 'none';
         wrapper.appendChild(audio);
         audio.addEventListener('timeupdate', updTime);
-        audio.addEventListener('loadedmetadata', updTime);
+        audio.addEventListener('loadedmetadata', function() {
+          if (!isFinite(audio.duration) || audio.duration === 0) {
+            audio._forcedSeek = true;
+            audio.currentTime = 1e10;
+          }
+          updTime();
+        });
+        audio.addEventListener('durationchange', updTime);
+        audio.addEventListener('seeked', function() {
+          if (audio.currentTime > 1e9) {
+            audio.currentTime = 0;
+          } else if (audio._forcedSeek) {
+            audio._forcedSeek = false;
+            audio.currentTime = 0;
+          }
+          updTime();
+        });
+        audio.addEventListener('waiting', function() { if (playing) _showBuffer(); });
+        audio.addEventListener('canplay', function() { if (playing) _hideBuffer(); });
+        audio.addEventListener('canplaythrough', function() { if (playing) _hideBuffer(); });
         audio.addEventListener('ended', function() {
           if (looping) { audio.currentTime = 0; doPlay(); }
           else { playing = false; playBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>'; }
         });
-        audio.addEventListener('error', function() { timeEl.textContent = 'Error'; });
+        audio.addEventListener('error', function() {
+          var errMsg = audio.error ? audio.error.message : 'none';
+          if (errMsg.indexOf('PIPELINE_ERROR_DECODE') !== -1 || (audio.error && audio.error.code === 3)) {
+            if (_decodeRetries < 3) {
+              _decodeRetries++;
+              var skipTo = audio.currentTime + 0.1;
+              _showBuffer();
+              audio.load();
+              var onLoadedData = function() {
+                audio.removeEventListener('loadeddata', onLoadedData);
+                if (dead) return;
+                audio.currentTime = skipTo;
+                audio.play().then(function() { _hideBuffer(); }).catch(function(e2) { _hideBuffer(); });
+              };
+              audio.addEventListener('loadeddata', onLoadedData);
+              return;
+            }
+          }
+          timeEl.textContent = 'Error';
+        });
         audio.load();
         _audioReady = true;
         try { if (player) player._a = audio; } catch(e) {}

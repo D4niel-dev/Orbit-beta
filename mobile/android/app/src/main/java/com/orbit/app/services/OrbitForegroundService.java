@@ -214,19 +214,19 @@ public class OrbitForegroundService extends Service {
         if (conn != null) conn.close();
     }
 
-    public void sendData(String connectionId, String data) {
+    public interface SendCallback {
+        void onSuccess();
+        void onError(String error);
+    }
+
+    public void sendData(String connectionId, String data, SendCallback callback) {
         PeerConnection conn = connections.get(connectionId);
         if (conn == null) {
             eventQueue.add(new FgEvent("sendFailed", connectionId, "No connection: " + connectionId, null));
+            if (callback != null) callback.onError("No connection");
             return;
         }
-        executor.execute(() -> {
-            try {
-                conn.send(data);
-            } catch (IOException e) {
-                eventQueue.add(new FgEvent("sendFailed", connectionId, e.getMessage(), null));
-            }
-        });
+        conn.sendAsync(data, callback);
     }
 
     public void startDiscovery() {
@@ -420,6 +420,7 @@ public class OrbitForegroundService extends Service {
         final DataInputStream input;
         final DataOutputStream output;
         final Object sendLock = new Object();
+        final ExecutorService sendExecutor = Executors.newSingleThreadExecutor();
         private boolean firstPacket = true;
 
         PeerConnection(String peerId, Socket socket) throws IOException {
@@ -467,17 +468,26 @@ public class OrbitForegroundService extends Service {
             });
         }
 
-        void send(String data) throws IOException {
-            synchronized (sendLock) {
-                byte[] buf = data.getBytes("UTF-8");
-                output.writeInt(buf.length);
-                output.write(buf);
-                output.flush();
-            }
+        void sendAsync(String data, SendCallback callback) {
+            sendExecutor.execute(() -> {
+                try {
+                    synchronized (sendLock) {
+                        byte[] buf = data.getBytes("UTF-8");
+                        output.writeInt(buf.length);
+                        output.write(buf);
+                        output.flush();
+                    }
+                    if (callback != null) callback.onSuccess();
+                } catch (IOException e) {
+                    eventQueue.add(new FgEvent("sendFailed", peerId, e.getMessage(), null));
+                    if (callback != null) callback.onError(e.getMessage());
+                }
+            });
         }
 
         void close() {
             try { socket.close(); } catch (Exception ignored) {}
+            sendExecutor.shutdownNow();
         }
     }
 

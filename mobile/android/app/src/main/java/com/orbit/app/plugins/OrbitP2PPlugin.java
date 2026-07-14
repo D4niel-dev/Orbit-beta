@@ -301,8 +301,16 @@ public class OrbitP2PPlugin extends Plugin {
         String connectionId = call.getString("connectionId");
         String data = call.getString("data");
         if (boundService != null) {
-            boundService.sendData(connectionId, data);
-            call.resolve();
+            boundService.sendData(connectionId, data, new OrbitForegroundService.SendCallback() {
+                @Override
+                public void onSuccess() {
+                    call.resolve();
+                }
+                @Override
+                public void onError(String error) {
+                    call.reject(error);
+                }
+            });
         } else {
             call.reject("Service not available");
         }

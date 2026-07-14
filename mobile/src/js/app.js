@@ -9,6 +9,7 @@ var replyingTo = null;
 
 /* ---- Mobile App ---- */
 document.addEventListener('DOMContentLoaded', function() {
+  window._orbitSessionId = Date.now();
   // Init env
   if (!window.Orbit) window.Orbit = {};
   if (!window.Orbit.env) {
@@ -20,6 +21,28 @@ document.addEventListener('DOMContentLoaded', function() {
       platform: 'android'
     };
   }
+
+  window.orbitGuessMimeType = function(fileName) {
+    if (!fileName) return 'application/octet-stream';
+    var extMatch = fileName.match(/\.(png|jpe?g|gif|webp|svg|tiff?|bmp|heic|heif|avif)$/i);
+    var audioMatch = fileName.match(/\.(mp3|wav|ogg|flac|aac|m4a|wma|opus|mka)$/i);
+    var videoMatch = fileName.match(/\.(mp4|mov|avi|mkv|webm|3gp|m4v|wmv|flv|f4v|ts|mts|m2ts)$/i);
+    if (extMatch) {
+      var extLower = extMatch[1].toLowerCase();
+      if (extLower === 'svg') return 'image/svg+xml';
+      if (extLower === 'tif' || extLower === 'tiff') return 'image/tiff';
+      return 'image/' + extLower.replace('jpg','jpeg');
+    }
+    if (videoMatch) {
+      var videoExtMap = { mp4: 'video/mp4', mov: 'video/quicktime', avi: 'video/x-msvideo', mkv: 'video/x-matroska', webm: 'video/webm', '3gp': 'video/3gpp', m4v: 'video/x-m4v', wmv: 'video/x-ms-wmv', flv: 'video/x-flv', f4v: 'video/x-f4v', ts: 'video/mp2t', mts: 'video/mp2t', m2ts: 'video/mp2t' };
+      return videoExtMap[videoMatch[1].toLowerCase()] || 'video/mp4';
+    }
+    if (audioMatch) {
+      var audioExtMap = { mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', flac: 'audio/flac', aac: 'audio/aac', m4a: 'audio/mp4', wma: 'audio/x-ms-wma', opus: 'audio/opus', mka: 'audio/x-matroska' };
+      return audioExtMap[audioMatch[1].toLowerCase()] || 'audio/mpeg';
+    }
+    return 'application/octet-stream';
+  };
 
   // Safe base64→ArrayBuffer decoder (atob() on Android WebView corrupts bytes >127)
   // Uses single-pass streaming decoder to avoid intermediate string allocations
@@ -164,7 +187,7 @@ document.addEventListener('DOMContentLoaded', function() {
                   try {
                     var newUrl = URL.createObjectURL(new Blob([ab], { type: mime }));
                     attachment.url = newUrl;
-                    attachment._blobCreated = true;
+                    attachment._blobCreated = true; attachment._blobSession = window._orbitSessionId;
                     MStore._saveMsgs(chatId);
                   } catch(e) {
                     console.warn('[BlobStore] createObjectURL failed:', e.message);
@@ -1007,7 +1030,7 @@ document.addEventListener('DOMContentLoaded', function() {
       // Blob URL — return directly if live (this session), else restore from IndexedDB
       if (u.indexOf('blob:') === 0) {
         // Always try IndexedDB restoration if key exists (survives restart)
-        if (a._blobKey && !a._blobCreated) {
+        if (a._blobKey && (!a._blobCreated || a._blobSession !== window._orbitSessionId)) {
           if (!window._restoreQueue) window._restoreQueue = {};
           if (!window._restoreQueue[a._blobKey]) {
             window._restoreQueue[a._blobKey] = true;
@@ -1018,13 +1041,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (!ab2) { window._restoreQueue[a._blobKey] = false; return; }
                     window._restoreQueue[a._blobKey] = false;
                     try {
-                      var mime = a.mimeType || 'application/octet-stream';
+                      var mime = a.mimeType || window.orbitGuessMimeType(a.name);
                       var newUrl = URL.createObjectURL(new Blob([ab2], { type: mime }));
                       if (a.url && a.url !== newUrl && a.url.indexOf('blob:') === 0 && a._blobCreated) {
                         try { URL.revokeObjectURL(a.url); } catch(e) {}
                       }
                       a.url = newUrl;
-                      a._blobCreated = true;
+                      a._blobCreated = true; a._blobSession = window._orbitSessionId;
                       if (!window._blobUrlsToRevoke) window._blobUrlsToRevoke = [];
                       window._blobUrlsToRevoke.push(newUrl);
                       if (activeChatId) renderMessages(activeChatId);
@@ -1035,13 +1058,13 @@ document.addEventListener('DOMContentLoaded', function() {
               }
               window._restoreQueue[a._blobKey] = false;
               try {
-                var mime = a.mimeType || 'application/octet-stream';
+                var mime = a.mimeType || window.orbitGuessMimeType(a.name);
                 var newUrl = URL.createObjectURL(new Blob([ab], { type: mime }));
                 if (a.url && a.url !== newUrl && a.url.indexOf('blob:') === 0 && a._blobCreated) {
                   try { URL.revokeObjectURL(a.url); } catch(e) {}
                 }
                 a.url = newUrl;
-                a._blobCreated = true;
+                a._blobCreated = true; a._blobSession = window._orbitSessionId;
                 if (!window._blobUrlsToRevoke) window._blobUrlsToRevoke = [];
                 window._blobUrlsToRevoke.push(newUrl);
                 if (activeChatId) renderMessages(activeChatId);
@@ -1777,7 +1800,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         allAttachments.push({
           id: a.id, _fileId: a.id, name: a.name, type: a.type,
-          url: a.url, _blobCreated: true,
+          url: a.url, _blobCreated: true, _blobSession: window._orbitSessionId,
           _blobKey: a._arrayBuffer ? localKey : undefined
         });
       } else {
@@ -1968,9 +1991,14 @@ document.addEventListener('DOMContentLoaded', function() {
           Orbit.P2P.send(peerId, Orbit.Protocol.createPacket(
             Orbit.Protocol.Types.FILE_CHUNK, myId, peerId,
             { fileId: fileId, chunkIndex: ci, data: chunkData }
-          ));
-          ci++;
-          setTimeout(sendNextChunk, 0);
+          )).then(function() {
+            ci++;
+            setTimeout(sendNextChunk, 0);
+          }).catch(function(e) {
+            console.error('Failed to send chunk ' + ci, e);
+            // Retry once on failure before giving up
+            setTimeout(sendNextChunk, 1000);
+          });
         }
         sendNextChunk();
       });
@@ -2652,7 +2680,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var friendsCount = MStore ? MStore.friends.length : 0;
         var chatsCount = MStore ? MStore.chats.length : 0;
         return '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.2.0-beta · Capacitor Android</div></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.2.4-beta · Capacitor Android</div></div>' +
         '</div>' +
         '<div class="settings-row">' +
           '<div class="settings-row-content"><span class="settings-row-title">Statistics</span><div class="settings-row-desc">' + friendsCount + ' friends · ' + chatsCount + ' chats</div></div>' +
@@ -5911,7 +5939,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         console.warn('[P2P] Inline persist failed:', err);
                       });
                       aa._blobKey = inlineKey;
-                      aa._blobCreated = true;
+                      aa._blobCreated = true; aa._blobSession = window._orbitSessionId;
                     }
                   }
                 } catch(e) {
@@ -6025,8 +6053,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (tx) {
           var chunkIdx = parseInt(packet.payload.chunkIndex, 10);
           if (!isNaN(chunkIdx) && chunkIdx >= 0 && chunkIdx < tx.chunks.length) {
-            tx.chunks[chunkIdx] = packet.payload.data;
-            tx.received++;
+            if (tx.chunks[chunkIdx] === undefined) { tx.chunks[chunkIdx] = packet.payload.data; tx.received++; }
+            // tx.received++ removed since it is handled above
           }
           var bwLimit = MStore.settings.netBandwidthLimit || 0;
           if (bwLimit > 0 && tx.received < tx.total) {
@@ -6129,10 +6157,11 @@ document.addEventListener('DOMContentLoaded', function() {
                   if (atts[ai]._fileId === packet.payload.fileId) {
                     atts[ai].url = attUrl;
                     atts[ai]._blobKey = blobKey;
-                    atts[ai]._blobCreated = true;
+                    atts[ai]._blobCreated = true; atts[ai]._blobSession = window._orbitSessionId;
                     if (!atts[ai].type || atts[ai].type === 'file') {
                       atts[ai].type = isImage ? 'image' : (isVideo ? 'video' : (isAudio ? 'audio' : 'file'));
                     }
+                    atts[ai].mimeType = mimeType;
                     atts[ai]._pending = false;
                     atts[ai].name = txEnd.fileName || atts[ai].name;
                     MStore._saveMsgs(searchIds[si]);
@@ -6158,7 +6187,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 type: isImage ? 'image' : (isVideo ? 'video' : (isAudio ? 'audio' : 'file')),
                 url: attUrl,
                 _blobKey: blobKey,
-                _blobCreated: true,
+                _blobCreated: true, _blobSession: window._orbitSessionId,
                 _fileId: packet.payload.fileId
               }]
             });
