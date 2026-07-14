@@ -466,10 +466,6 @@
         }
         if (!video) { timeEl.textContent = 'Error'; return; }
         if (video.muted && video.volume > 0) video.muted = false;
-        if (_skipCorrupted && video.currentTime < _skipCorrupted - 1) {
-          dbg('[' + _logId + '] replay corruption skip: jumping from ' + video.currentTime.toFixed(2) + 's to ' + _skipCorrupted.toFixed(2) + 's');
-          video.currentTime = _skipCorrupted;
-        }
         video.play().then(function() {
           playing = true;
           playBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
@@ -518,7 +514,7 @@
       function doStop() {
         playing = false;
         if (video) { video.pause(); video.currentTime = 0; }
-
+        _skipCorrupted = null;
         playBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>';
         updTime();
       }
