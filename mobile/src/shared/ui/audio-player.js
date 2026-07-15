@@ -1,6 +1,13 @@
 (function() {
   if (window.OrbitAudioPlayer) return;
 
+  if (!document.getElementById('oap-spinner-style')) {
+    var os = document.createElement('style');
+    os.id = 'oap-spinner-style';
+    os.textContent = '@keyframes oap-spin{to{transform:rotate(360deg)}}.oap-loading{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.4);z-index:5;border-radius:8px}.oap-spinner{width:32px;height:32px;border:3px solid rgba(255,255,255,0.2);border-top-color:#fff;border-radius:50%;animation:oap-spin .8s linear infinite}.oap-center-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:20px;z-index:6;opacity:0;transition:opacity .25s ease;pointer-events:none}.oap-center-overlay.visible{opacity:1;pointer-events:auto}.oap-center-btn{width:40px;height:40px;border-radius:50%;border:none;background:rgba(0,0,0,0.5);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s,transform .1s}.oap-center-btn:hover{background:rgba(0,0,0,0.7);transform:scale(1.05)}.oap-center-btn:active{transform:scale(0.95)}.oap-center-btn svg{width:20px;height:20px}.oap-center-play{width:48px;height:48px;background:rgba(0,0,0,0.6)}.oap-center-play svg{width:24px;height:24px}';
+    document.head.appendChild(os);
+  }
+
   var _audioCtx = null;
 
   function getCtx() {
@@ -29,6 +36,16 @@
     if (_anyMenu) { _anyMenu.remove(); _anyMenu = null; }
     if (_menuCleanup) { _menuCleanup(); _menuCleanup = null; }
   }
+
+  function _iconToggle(el, isActive, filledSvg, outlinedSvg) {
+    if (!el) return;
+    el.innerHTML = isActive ? filledSvg : outlinedSvg;
+  }
+
+  var _playSvg = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>';
+  var _pauseSvg = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+  var _centerPlaySvg = '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>';
+  var _centerPauseSvg = '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
 
   window.OrbitAudioPlayer = {
     create: function(container, url) {
@@ -69,11 +86,12 @@
 
       var playBtn = document.createElement('button');
       playBtn.className = 'oap-btn oap-play';
-      playBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>';
+      _iconToggle(playBtn, false, _pauseSvg, _playSvg);
 
       var stopBtn = document.createElement('button');
-      stopBtn.className = 'oap-btn oap-stop';
-      stopBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg>';
+      stopBtn.className = 'oap-center-btn';
+      stopBtn.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg>';
+      stopBtn.title = 'Stop';
 
       var volBtn = document.createElement('button');
       volBtn.className = 'oap-btn oap-vol';
@@ -96,15 +114,43 @@
       timeEl.className = 'oap-time';
       timeEl.textContent = '0:00 / 0:00';
 
-      ctrl.appendChild(playBtn);
-      ctrl.appendChild(stopBtn);
+      // Controls layout: [timeEl] [vol] .......... [⋮]
+      ctrl.appendChild(timeEl);
       ctrl.appendChild(volBtn);
       ctrl.appendChild(volSlider);
+      var _ctrlR = document.createElement('div'); _ctrlR.style.cssText = 'flex:1;min-width:4px';
+      ctrl.appendChild(_ctrlR);
       ctrl.appendChild(moreBtn);
-      ctrl.appendChild(timeEl);
       wrapper.style.position = 'relative';
       var canvasBox = document.createElement('div');
       canvasBox.className = 'oap-canvas-box';
+      canvasBox.style.position = 'relative';
+      var loadingOverlay = document.createElement('div');
+      loadingOverlay.className = 'oap-loading';
+      var spinnerEl = document.createElement('div');
+      spinnerEl.className = 'oap-spinner';
+      loadingOverlay.appendChild(spinnerEl);
+      loadingOverlay.style.display = 'none';
+      canvasBox.appendChild(loadingOverlay);
+      var centerOverlay = document.createElement('div');
+      centerOverlay.className = 'oap-center-overlay';
+      var backBtn = document.createElement('button');
+      backBtn.className = 'oap-center-btn';
+      backBtn.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>';
+      backBtn.title = 'Backward 10s';
+      var centerPlayBtn = document.createElement('button');
+      centerPlayBtn.className = 'oap-center-btn oap-center-play';
+      centerPlayBtn.innerHTML = '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>';
+      centerPlayBtn.title = 'Play / Pause';
+      var fwdBtn = document.createElement('button');
+      fwdBtn.className = 'oap-center-btn';
+      fwdBtn.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z"/></svg>';
+      fwdBtn.title = 'Forward 10s';
+      centerOverlay.appendChild(backBtn);
+      centerOverlay.appendChild(centerPlayBtn);
+      centerOverlay.appendChild(stopBtn);
+      centerOverlay.appendChild(fwdBtn);
+      canvasBox.appendChild(centerOverlay);
       canvasBox.appendChild(canvas);
       wrapper.appendChild(canvasBox);
       /* audio appended in _initAudio */
@@ -120,6 +166,38 @@
       var srcConnected = false;
       var playing = false;
       var looping = false;
+      var _decodeRetries = 0;
+      var _centerOverlayTimer = null;
+
+      function seekRelative(secs) {
+        if (!audio) return;
+        var d = audio.duration || 0;
+        if (!d) return;
+        audio.currentTime = Math.max(0, Math.min(d, audio.currentTime + secs));
+      }
+      function _showCenterOverlay() {
+        if (!audio) return;
+        centerOverlay.classList.add('visible');
+        if (_centerOverlayTimer) clearTimeout(_centerOverlayTimer);
+        _centerOverlayTimer = setTimeout(function() {
+          centerOverlay.classList.remove('visible');
+          _centerOverlayTimer = null;
+        }, 3000);
+      }
+      function _hideCenterOverlay() {
+        centerOverlay.classList.remove('visible');
+        if (_centerOverlayTimer) { clearTimeout(_centerOverlayTimer); _centerOverlayTimer = null; }
+      }
+      function _updateCenterPlayBtn() {
+        _iconToggle(centerPlayBtn, playing && audio && !audio.paused, _centerPauseSvg, _centerPlaySvg);
+      }
+
+      function _showBuffer() {
+        loadingOverlay.style.display = 'flex';
+      }
+      function _hideBuffer() {
+        loadingOverlay.style.display = 'none';
+      }
 
       function connectSrc() {
         if (!audio) return;
@@ -173,12 +251,50 @@
         audio.style.display = 'none';
         wrapper.appendChild(audio);
         audio.addEventListener('timeupdate', updTime);
-        audio.addEventListener('loadedmetadata', updTime);
+        audio.addEventListener('loadedmetadata', function() {
+          if (!isFinite(audio.duration) || audio.duration === 0) {
+            audio._forcedSeek = true;
+            audio.currentTime = 1e10;
+          }
+          updTime();
+        });
+        audio.addEventListener('durationchange', updTime);
+        audio.addEventListener('seeked', function() {
+          if (audio.currentTime > 1e9) {
+            audio.currentTime = 0;
+          } else if (audio._forcedSeek) {
+            audio._forcedSeek = false;
+            audio.currentTime = 0;
+          }
+          updTime();
+        });
+        audio.addEventListener('waiting', function() { if (playing) _showBuffer(); });
+        audio.addEventListener('canplay', function() { if (playing) _hideBuffer(); });
+        audio.addEventListener('canplaythrough', function() { if (playing) _hideBuffer(); });
         audio.addEventListener('ended', function() {
           if (looping) { audio.currentTime = 0; doPlay(); }
-          else { playing = false; playBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>'; }
+          else { playing = false; _updateCenterPlayBtn(); _iconToggle(playBtn, false, _pauseSvg, _playSvg); }
         });
-        audio.addEventListener('error', function() { timeEl.textContent = 'Error'; });
+        audio.addEventListener('error', function() {
+          var errMsg = audio.error ? audio.error.message : 'none';
+          if (errMsg.indexOf('PIPELINE_ERROR_DECODE') !== -1 || (audio.error && audio.error.code === 3)) {
+            if (_decodeRetries < 3) {
+              _decodeRetries++;
+              var skipTo = audio.currentTime + 0.1;
+              _showBuffer();
+              audio.load();
+              var onLoadedData = function() {
+                audio.removeEventListener('loadeddata', onLoadedData);
+                if (dead) return;
+                audio.currentTime = skipTo;
+                audio.play().then(function() { _hideBuffer(); }).catch(function(e2) { _hideBuffer(); });
+              };
+              audio.addEventListener('loadeddata', onLoadedData);
+              return;
+            }
+          }
+          timeEl.textContent = 'Error';
+        });
         audio.load();
         _audioReady = true;
         try { if (player) player._a = audio; } catch(e) {}
@@ -214,7 +330,8 @@
         if (ctx && ctx.state === 'suspended') ctx.resume();
         audio.play().then(function() {
           playing = true;
-          playBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+          _updateCenterPlayBtn();
+          _iconToggle(playBtn, true, _pauseSvg, _playSvg);
           if (!animId) draw();
         }).catch(function(e) {
           if (window.MStore && MStore.settings.logNetworkPackets) console.log('[OAP] play fail:', e.message);
@@ -243,15 +360,17 @@
 
       function doPause() {
         playing = false;
+        _updateCenterPlayBtn();
         if (audio) audio.pause();
-        playBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>';
+        _iconToggle(playBtn, false, _pauseSvg, _playSvg);
       }
 
       function doStop() {
         playing = false;
+        _updateCenterPlayBtn();
         if (audio) audio.pause();
         if (audio) audio.currentTime = 0;
-        playBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>';
+        _iconToggle(playBtn, false, _pauseSvg, _playSvg);
         updTime();
         var c = canvas.getContext('2d');
         c.clearRect(0, 0, canvas.width, canvas.height);
@@ -261,6 +380,38 @@
       playBtn.addEventListener('click', function(e) { e.stopPropagation(); if (!audio || audio.paused) doPlay(); else doPause(); });
       stopBtn.addEventListener('click', function(e) { e.stopPropagation(); doStop(); });
 
+      // Center overlay controls
+      backBtn.addEventListener('click', function(e) { e.stopPropagation(); seekRelative(-10); _showCenterOverlay(); });
+      centerPlayBtn.addEventListener('click', function(e) { e.stopPropagation(); if (!audio || audio.paused) doPlay(); else doPause(); _showCenterOverlay(); });
+      fwdBtn.addEventListener('click', function(e) { e.stopPropagation(); seekRelative(10); _showCenterOverlay(); });
+
+      // Click canvas to toggle center overlay
+      canvasBox.addEventListener('click', function(e) {
+        if (e.target.closest('.oap-loading')) return;
+        if (e.target.closest('.oap-center-btn')) return;
+        if (e.target.closest('.oap-ctrl')) return;
+        if (e.target.closest('.oap-seek')) return;
+        if (centerOverlay.classList.contains('visible')) {
+          _hideCenterOverlay();
+        } else {
+          _showCenterOverlay();
+        }
+      });
+      canvasBox.addEventListener('mousemove', function() {
+        if (!centerOverlay.classList.contains('visible')) _showCenterOverlay();
+      });
+
+      // Keyboard shortcuts
+      document.addEventListener('keydown', function(e) {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        var wrapperEl = wrapper;
+        if (!wrapperEl.contains(e.target) && !wrapperEl.contains(document.activeElement)) return;
+        if (e.key === ' ' || e.key === 'k') { e.preventDefault(); if (!audio || audio.paused) doPlay(); else doPause(); }
+        if (e.key === 'ArrowLeft') { e.preventDefault(); seekRelative(-10); _showCenterOverlay(); }
+        if (e.key === 'ArrowRight') { e.preventDefault(); seekRelative(10); _showCenterOverlay(); }
+        if (e.key === 'm') { e.preventDefault(); if (audio) { audio.muted = !audio.muted; } }
+      });
+
       volBtn.addEventListener('click', function(e) {
         e.stopPropagation();
         closeAnyMenu();
@@ -269,9 +420,10 @@
       volSlider.addEventListener('input', function() {
         if (!audio) return;
         audio.volume = this.value / 100;
-        volBtn.innerHTML = this.value == 0
-          ? '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>'
-          : '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14" stroke="currentColor" stroke-width="2" fill="none"/></svg>';
+        _iconToggle(volBtn, this.value == 0,
+          '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>',
+          '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14" stroke="currentColor" stroke-width="2" fill="none"/></svg>'
+        );
       });
 
       var speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
@@ -503,6 +655,16 @@
       root.querySelectorAll('.oap-placeholder').forEach(function(el) {
         if (el._oapInited) return;
         observer.observe(el);
+      });
+    },
+
+    // Stop all playing audio (used when app goes to background)
+    stopAll: function() {
+      _players.forEach(function(p) {
+        if (p._a && !p._a.paused) {
+          p._a.pause();
+          p._a.currentTime = 0;
+        }
       });
     }
   };

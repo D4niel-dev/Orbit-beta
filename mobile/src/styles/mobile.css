@@ -540,7 +540,7 @@ html, body {
 }
 
 .message-row.mine .message-bubble {
-  background: var(--accent-primary);
+  background: var(--bg-hover);
   color: #fff;
   border-bottom-right-radius: 4px;
 }
@@ -559,7 +559,7 @@ html, body {
   right: -6px;
   width: 12px;
   height: 12px;
-  background: var(--accent-primary);
+  background: var(--bg-hover);
   clip-path: polygon(0 0, 0% 100%, 100% 100%);
   border-bottom-right-radius: 3px;
 }
@@ -864,13 +864,49 @@ html, body {
   z-index: 1;
 }
 
-/* Fullscreen backdrop — prevents Android WebView default blue */
+/* Placeholder before video player loads — shows play icon */
+.att-video-cell.ovp-placeholder {
+  position: relative;
+  min-height: 180px;
+  background: var(--bg-surface);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.att-video-cell.ovp-placeholder::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.3);
+  border-radius: 8px;
+}
+.att-video-cell.ovp-placeholder::after {
+  content: '';
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.25);
+  display: block;
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+  backdrop-filter: blur(4px);
+  /* Play triangle inside circle via border trick */
+  border-left: 20px solid #fff;
+  border-top: 12px solid transparent;
+  border-bottom: 12px solid transparent;
+  border-right: none;
+  margin-left: 4px;
+}
+
+/* Fullscreen backdrop — uses theme variable to match bg */
 .ovp-wrap::backdrop {
-  background: #000 !important;
+  background: var(--bg-base, #000) !important;
 }
 .ovp-wrap:fullscreen,
 .ovp-wrap:-webkit-full-screen {
-  background: #000 !important;
+  background: var(--bg-base, #000) !important;
 }
 
 .ovp-ctrl {

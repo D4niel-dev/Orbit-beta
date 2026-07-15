@@ -40,9 +40,11 @@ window.ImageViewer = {
         </div>
       </div>
       <div style="flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative;" id="iv-canvas-area">
-        <button id="iv-btn-prev" style="position:absolute; left: 20px; top: 50%; transform: translateY(-50%); background:rgba(0,0,0,0.5); border:none; border-radius:50%; color:white; width:48px; height:48px; display:none; align-items:center; justify-content:center; cursor:pointer; z-index: 10;"><i data-lucide="chevron-left"></i></button>
+        <button id="iv-btn-prev" style="position:absolute; left: 20px; top: 50%; transform: translateY(-50%); background:rgba(0,0,0,0.5); border:none; border-radius:50%; color:white; width:48px; height:48px; display:none; align-items:center; justify-content:center; cursor:pointer; z-index: 10; transition: background 0.2s;"><i data-lucide="chevron-left"></i></button>
         <img id="iv-image" src="" style="max-width: 90%; max-height: 90%; object-fit: contain; transition: transform 0.2s ease;">
-        <button id="iv-btn-next" style="position:absolute; right: 20px; top: 50%; transform: translateY(-50%); background:rgba(0,0,0,0.5); border:none; border-radius:50%; color:white; width:48px; height:48px; display:none; align-items:center; justify-content:center; cursor:pointer; z-index: 10;"><i data-lucide="chevron-right"></i></button>
+        <button id="iv-btn-next" style="position:absolute; right: 20px; top: 50%; transform: translateY(-50%); background:rgba(0,0,0,0.5); border:none; border-radius:50%; color:white; width:48px; height:48px; display:none; align-items:center; justify-content:center; cursor:pointer; z-index: 10; transition: background 0.2s;"><i data-lucide="chevron-right"></i></button>
+      </div>
+      <div id="iv-filmstrip-container" style="height: 80px; display: none; align-items: center; gap: 8px; padding: 0 16px; background: rgba(0,0,0,0.5); overflow-x: auto; scroll-behavior: smooth;">
       </div>
     `;
     lucide.createIcons({ root: this.container });
@@ -328,6 +330,37 @@ window.ImageViewer = {
     document.getElementById('iv-btn-prev').style.display = this.galleryImages.length > 1 ? 'flex' : 'none';
     document.getElementById('iv-btn-next').style.display = this.galleryImages.length > 1 ? 'flex' : 'none';
     
+    // Update filmstrip
+    var filmstrip = document.getElementById('iv-filmstrip-container');
+    if (filmstrip) {
+      if (this.galleryImages.length > 1) {
+        filmstrip.style.display = 'flex';
+        var html = '';
+        var self = this;
+        this.galleryImages.forEach(function(img, idx) {
+          var isSelected = idx === self.currentIndex;
+          var opacity = isSelected ? '1' : '0.4';
+          var border = isSelected ? '2px solid white' : '2px solid transparent';
+          html += '<img src="' + window.Sanitize.escapeHtml(img.url) + '" ' +
+            'style="width:56px; height:56px; object-fit:cover; border-radius:6px; cursor:pointer; opacity:' + opacity + '; border:' + border + '; transition:all 0.2s;" ' +
+            'onclick="window.ImageViewer.currentIndex = ' + idx + '; window.ImageViewer.showImage(window.ImageViewer.galleryImages[' + idx + ']);" ' +
+            'id="iv-thumb-' + idx + '" ' +
+            'onerror="this.style.display=\'none\';">';
+        });
+        filmstrip.innerHTML = html;
+        // Scroll selected thumbnail into view
+        setTimeout(function() {
+          var thumb = document.getElementById('iv-thumb-' + self.currentIndex);
+          if (thumb) {
+            var scrollLeft = thumb.offsetLeft - (filmstrip.clientWidth / 2) + (thumb.clientWidth / 2);
+            filmstrip.scrollTo({ left: scrollLeft, behavior: 'smooth' });
+          }
+        }, 50);
+      } else {
+        filmstrip.style.display = 'none';
+      }
+    }
+
     this.updateZoom();
   },
 

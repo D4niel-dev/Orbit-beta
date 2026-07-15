@@ -5,7 +5,7 @@
   if (!document.getElementById('ovp-spinner-style')) {
     var os = document.createElement('style');
     os.id = 'ovp-spinner-style';
-    os.textContent = '@keyframes ovp-spin{to{transform:rotate(360deg)}}.ovp-loading{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);z-index:5;border-radius:8px}.ovp-spinner{width:40px;height:40px;border:4px solid rgba(255,255,255,0.2);border-top-color:#fff;border-radius:50%;animation:ovp-spin .8s linear infinite}';
+    os.textContent = '@keyframes ovp-spin{to{transform:rotate(360deg)}}.ovp-loading{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);z-index:5;border-radius:8px;pointer-events:none}.ovp-spinner{width:40px;height:40px;border:4px solid rgba(255,255,255,0.2);border-top-color:#fff;border-radius:50%;animation:ovp-spin .8s linear infinite}.ovp-video-box{background:#000;position:relative}.ovp-wrap::backdrop{background:var(--bg-base,#000)!important}.ovp-wrap:fullscreen,.ovp-wrap:-webkit-full-screen{background:var(--bg-base,#000)!important}.ovp-center-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:24px;z-index:6;opacity:0;transition:opacity .25s ease;pointer-events:none}.ovp-center-overlay.visible{opacity:1;pointer-events:auto}.ovp-center-btn{width:48px;height:48px;border-radius:50%;border:none;background:rgba(0,0,0,0.6);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s,transform .1s}.ovp-center-btn:hover{background:rgba(0,0,0,0.8);transform:scale(1.05)}.ovp-center-btn:active{transform:scale(0.95)}.ovp-center-btn svg{width:24px;height:24px}.ovp-center-play{width:56px;height:56px;background:rgba(0,0,0,0.65)}.ovp-center-play svg{width:28px;height:28px}';
     document.head.appendChild(os);
   }
 
@@ -16,6 +16,14 @@
     if (_anyMenu) { _anyMenu.remove(); _anyMenu = null; }
     if (_menuCleanup) { _menuCleanup(); _menuCleanup = null; }
   }
+
+  function _iconToggle(el, isActive, filledSvg, outlinedSvg) {
+    if (!el) return;
+    el.innerHTML = isActive ? filledSvg : outlinedSvg;
+  }
+
+  var _playSvg = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>';
+  var _pauseSvg = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
 
   function dbg() {
     var args = Array.prototype.slice.call(arguments);
@@ -186,6 +194,21 @@
       var looping = false;
       var _decodeRetries = 0;
       var _skipCorrupted = null;
+      var _isRetrying = false;
+
+      function _showBuffer() {
+        if (video && video.videoWidth && video.videoHeight) {
+          videoBox.style.aspectRatio = video.videoWidth + ' / ' + video.videoHeight;
+        } else if (videoBox.offsetHeight > 0) {
+          videoBox.style.aspectRatio = videoBox.offsetWidth + ' / ' + videoBox.offsetHeight;
+        }
+        loadingOverlay.style.display = 'flex';
+        _hideCenterOverlay();
+      }
+      function _hideBuffer() {
+        loadingOverlay.style.display = 'none';
+        videoBox.style.aspectRatio = '';
+      }
 
       wrapper.style.position = 'relative';
 
@@ -220,8 +243,9 @@
       playBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>';
 
       var stopBtn = document.createElement('button');
-      stopBtn.className = 'ovp-btn ovp-stop';
-      stopBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg>';
+      stopBtn.className = 'ovp-center-btn ovp-stop';
+      stopBtn.title = 'Stop';
+      stopBtn.innerHTML = '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>';
 
       // Volume
       var volBtn = document.createElement('button');
@@ -252,20 +276,69 @@
       timeEl.className = 'ovp-time';
       timeEl.textContent = '0:00 / 0:00';
 
-      ctrl.appendChild(playBtn);
-      ctrl.appendChild(stopBtn);
+      // Controls layout: [timeEl] [vol] .... [■] .... [⛶] [⋮]
+      ctrl.appendChild(timeEl);
       ctrl.appendChild(volBtn);
       ctrl.appendChild(volSlider);
+      var _ctrlR = document.createElement('div'); _ctrlR.style.cssText = 'flex:1;min-width:4px';
+      ctrl.appendChild(_ctrlR);
       ctrl.appendChild(fsBtn);
       ctrl.appendChild(moreBtn);
-      ctrl.appendChild(timeEl);
       var videoBox = document.createElement('div');
       videoBox.className = 'ovp-video-box';
+      videoBox.appendChild(loadingOverlay);
+      // Center overlay controls (backward, play/pause, forward) — fade in/out on click
+      var centerOverlay = document.createElement('div');
+      centerOverlay.className = 'ovp-center-overlay';
+      var backBtn = document.createElement('button');
+      backBtn.className = 'ovp-center-btn';
+      backBtn.innerHTML = '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>';
+      backBtn.title = 'Backward 10s';
+      var centerPlayBtn = document.createElement('button');
+      centerPlayBtn.className = 'ovp-center-btn ovp-center-play';
+      centerPlayBtn.innerHTML = '<svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>';
+      centerPlayBtn.title = 'Play / Pause';
+      var fwdBtn = document.createElement('button');
+      fwdBtn.className = 'ovp-center-btn';
+      fwdBtn.innerHTML = '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z"/></svg>';
+      fwdBtn.title = 'Forward 10s';
+      centerOverlay.appendChild(backBtn);
+      centerOverlay.appendChild(centerPlayBtn);
+      centerOverlay.appendChild(stopBtn);
+      centerOverlay.appendChild(fwdBtn);
+      videoBox.appendChild(centerOverlay);
       wrapper.appendChild(videoBox);
-      wrapper.appendChild(loadingOverlay);
       wrapper.appendChild(seek);
       wrapper.appendChild(ctrl);
       container.appendChild(wrapper);
+
+      function seekRelative(secs) {
+        if (!video) return;
+        var d = dur();
+        if (!d) return;
+        video.currentTime = Math.max(0, Math.min(d, video.currentTime + secs));
+      }
+      var _centerOverlayTimer = null;
+      function _showCenterOverlay() {
+        if (!video) return;
+        centerOverlay.classList.add('visible');
+        if (_centerOverlayTimer) clearTimeout(_centerOverlayTimer);
+        _centerOverlayTimer = setTimeout(function() {
+          centerOverlay.classList.remove('visible');
+          _centerOverlayTimer = null;
+        }, 3000);
+      }
+      function _hideCenterOverlay() {
+        centerOverlay.classList.remove('visible');
+        if (_centerOverlayTimer) { clearTimeout(_centerOverlayTimer); _centerOverlayTimer = null; }
+      }
+      function _updateCenterPlayBtn() {
+        var isPlaying = !!(playing && video && !video.paused);
+        _iconToggle(centerPlayBtn, isPlaying,
+          '<svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>',
+          '<svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>'
+        );
+      }
 
       function _initVideo(srcUrl) {
         video = document.createElement('video');
@@ -281,6 +354,9 @@
 
         video.addEventListener('timeupdate', updTime);
         video.addEventListener('loadedmetadata', function() {
+          if (video.videoWidth && video.videoHeight) {
+            videoBox.style.aspectRatio = video.videoWidth + ' / ' + video.videoHeight;
+          }
           dbg('[' + _logId + '] loadedmetadata  knownDuration=' + knownDuration + '  browserDuration=' + video.duration + ' (' + fmt(video.duration) + ')  readyState=' + video.readyState + '  vw=' + video.videoWidth + 'x' + video.videoHeight);
           updTime();
           parseDurationFromSource(srcUrl);
@@ -301,8 +377,11 @@
           dbg('[' + _logId + '] PAUSE  currentTime=' + video.currentTime + '  readyState=' + video.readyState);
         });
         video.addEventListener('seeking', function() { dbg('[' + _logId + '] SEEKING  currentTime=' + video.currentTime); });
-        video.addEventListener('seeked', function() { dbg('[' + _logId + '] SEEKED  knownDuration=' + knownDuration + '  browserDuration=' + video.duration + '  currentTime=' + video.currentTime); updTime(); if (video.currentTime > 1e9) { dbg('[' + _logId + '] seeked was forced seek, seeking back to 0'); video.currentTime = 0; } });
-        video.addEventListener('waiting', function() { dbg('[' + _logId + '] WAITING  currentTime=' + video.currentTime + '  readyState=' + video.readyState); });
+        video.addEventListener('seeked', function() { dbg('[' + _logId + '] SEEKED  knownDuration=' + knownDuration + '  browserDuration=' + video.duration + '  currentTime=' + video.currentTime); updTime(); if (video.currentTime > 1e9) { dbg('[' + _logId + '] seeked was forced seek, seeking back to 0'); video.currentTime = 0; } else if (video._forcedSeek) { video._forcedSeek = false; video.currentTime = 0; } });
+        video.addEventListener('waiting', function() { dbg('[' + _logId + '] WAITING  currentTime=' + video.currentTime + '  readyState=' + video.readyState); if (playing) _showBuffer(); });
+        video.addEventListener('canplay', function() {
+          if (playing) _hideBuffer();
+        });
         video.addEventListener('suspend', function() { dbg('[' + _logId + '] SUSPEND  currentTime=' + video.currentTime); });
         video.addEventListener('stalled', function() { dbg('[' + _logId + '] STALLED  currentTime=' + video.currentTime); });
         video.addEventListener('ended', function() {
@@ -311,7 +390,8 @@
             doPlay();
           } else {
             playing = false;
-            playBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>';
+            _iconToggle(playBtn, false, _pauseSvg, _playSvg);
+            _updateCenterPlayBtn();
           }
         });
         video.addEventListener('error', handleVideoError);
@@ -331,7 +411,7 @@
         var errMsg = video.error ? video.error.message : 'none';
         dbg('[' + _logId + '] ERROR  code=' + (video.error ? video.error.code : 'unknown') + ' message=' + errMsg + '  currentTime=' + video.currentTime);
 
-        if (errMsg.indexOf('PIPELINE_ERROR_DECODE') !== -1) {
+        if (errMsg.indexOf('PIPELINE_ERROR_DECODE') !== -1 || (video.error && video.error.code === 3)) {
           if (video.duration && video.currentTime > video.duration - 5) {
             dbg('[' + _logId + '] decode error near end of available buffer (' + video.currentTime.toFixed(2) + 's / ' + video.duration.toFixed(2) + 's), treating as ended');
             timeEl.textContent = 'Incomplete';
@@ -339,21 +419,29 @@
             return;
           }
           if (_decodeRetries < 3) {
+            if (_isRetrying) {
+              dbg('[' + _logId + '] decode error but already retrying, ignoring');
+              return;
+            }
+            _isRetrying = true;
             _decodeRetries++;
-            var skipTo = video.currentTime + 2;
+            // Nudge forward slightly (0.1s) instead of aggressively skipping 2s to preserve content
+            var skipTo = video.currentTime + 0.1;
             dbg('[' + _logId + '] decode error (' + _decodeRetries + '/3), reloading and skipping to ' + skipTo.toFixed(2) + 's');
-            video.src = '';
-            setTimeout(function() {
+            _showBuffer();
+            
+            // DO NOT set video.src = '' as it collapses layout and resets dimensions.
+            // Just force a reload of the current source.
+            video.load();
+            
+            var onLoadedData = function() {
+              video.removeEventListener('loadeddata', onLoadedData);
               if (dead) return;
-              video.src = url;
-              var onMeta = function() {
-                video.removeEventListener('loadedmetadata', onMeta);
-                if (dead) return;
-                video.currentTime = skipTo;
-                video.play().catch(function(e2) { dbg('[' + _logId + '] retry play failed:', e2.message); });
-              };
-              video.addEventListener('loadedmetadata', onMeta);
-            }, 200);
+              video.currentTime = skipTo;
+              video.play().then(function() { _isRetrying = false; _hideBuffer(); }).catch(function(e2) { _isRetrying = false; _hideBuffer(); dbg('[' + _logId + '] retry play failed:', e2.message); });
+            };
+            // Wait for loadeddata instead of loadedmetadata before seeking to prevent pipeline crashing again
+            video.addEventListener('loadeddata', onLoadedData);
             return;
           }
           // Retries exhausted — check if the DOM placeholder has a refreshed URL
@@ -367,24 +455,19 @@
             return;
           }
           // Retries exhausted, URL unchanged — try permanent corruption skip
-          // Store the skip point so replays don't re-encounter the corruption
           if (knownDuration && video && video.currentTime > 0 && video.currentTime < knownDuration - 2) {
             var skipPoint = video.currentTime + 2;
             dbg('[' + _logId + '] permanent corruption skip: storing skip=' + skipPoint + 's for future replays');
             _skipCorrupted = skipPoint;
-            // Reload from after corruption point
-            video.src = '';
-            setTimeout(function() {
+            _showBuffer();
+            video.load();
+            var onLoadedDataPerm = function() {
+              video.removeEventListener('loadeddata', onLoadedDataPerm);
               if (dead) return;
-              video.src = url;
-              var onMeta = function() {
-                video.removeEventListener('loadedmetadata', onMeta);
-                if (dead) return;
-                video.currentTime = skipPoint;
-                video.play().catch(function(e2) { dbg('[' + _logId + '] skip play failed:', e2.message); });
-              };
-              video.addEventListener('loadedmetadata', onMeta);
-            }, 200);
+              video.currentTime = skipPoint;
+              video.play().then(function() { _isRetrying = false; _hideBuffer(); }).catch(function(e2) { _isRetrying = false; _hideBuffer(); dbg('[' + _logId + '] skip play failed:', e2.message); });
+            };
+            video.addEventListener('loadeddata', onLoadedDataPerm);
             return;
           }
         }
@@ -420,6 +503,10 @@
                 knownDuration = d;
                 dbg('[' + _logId + '] parsed MP4 duration from blob=' + knownDuration + 's');
                 updTime();
+              } else if (video && (!isFinite(video.duration) || video.duration === 0)) {
+                dbg('[' + _logId + '] no knownDuration and browser duration zero/Infinity, seeking to force read');
+                video._forcedSeek = true;
+                video.currentTime = 1e10;
               }
             }).catch(function(e) {
               dbg('[' + _logId + '] blob fetch failed:', e);
@@ -435,16 +522,22 @@
                         knownDuration = d2;
                         dbg('[' + _logId + '] parsed MP4 duration from data URL fallback=' + knownDuration + 's');
                         updTime();
+                      } else if (video && (!isFinite(video.duration) || video.duration === 0)) {
+                        video._forcedSeek = true;
+                        video.currentTime = 1e10;
                       }
                     }
                   }
                 } catch(e2) { dbg('[' + _logId + '] data URL duration fallback error:', e2); }
+              } else if (video && (!isFinite(video.duration) || video.duration === 0)) {
+                video._forcedSeek = true;
+                video.currentTime = 1e10;
               }
             });
           }, 0);
         } else if (!srcUrl.startsWith('orbit-db://') && !srcUrl.startsWith('orbit-file://')) {
           dbg('[' + _logId + '] no knownDuration and browser duration zero, seeking to force read');
-          if (video) video.currentTime = 1e7;
+          if (video) { video._forcedSeek = true; video.currentTime = 1e10; }
         }
       }
 
@@ -468,7 +561,8 @@
         if (video.muted && video.volume > 0) video.muted = false;
         video.play().then(function() {
           playing = true;
-          playBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+          _iconToggle(playBtn, true, _pauseSvg, _playSvg);
+          _updateCenterPlayBtn();
         }).catch(function(e) {
           if (window.MStore && MStore.settings.logNetworkPackets) console.log('[OVP] play fail:', e.message);
         });
@@ -508,19 +602,55 @@
       function doPause() {
         playing = false;
         if (video) video.pause();
-        playBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>';
+        _iconToggle(playBtn, false, _pauseSvg, _playSvg);
+        _updateCenterPlayBtn();
       }
 
       function doStop() {
         playing = false;
         if (video) { video.pause(); video.currentTime = 0; }
         _skipCorrupted = null;
-        playBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>';
+        _iconToggle(playBtn, false, _pauseSvg, _playSvg);
+        _updateCenterPlayBtn();
         updTime();
       }
 
       playBtn.addEventListener('click', function(e) { e.stopPropagation(); if (!video || video.paused) doPlay(); else doPause(); });
       stopBtn.addEventListener('click', function(e) { e.stopPropagation(); doStop(); });
+      // Center overlay controls
+      backBtn.addEventListener('click', function(e) { e.stopPropagation(); seekRelative(-10); _showCenterOverlay(); });
+      centerPlayBtn.addEventListener('click', function(e) { e.stopPropagation(); if (!video || video.paused) doPlay(); else doPause(); _showCenterOverlay(); });
+      fwdBtn.addEventListener('click', function(e) { e.stopPropagation(); seekRelative(10); _showCenterOverlay(); });
+      
+      // Click video to toggle center overlay
+      videoBox.addEventListener('click', function(e) {
+        if (e.target.closest('.ovp-loading')) return;
+        if (e.target.closest('.ovp-center-btn')) return;
+        if (e.target.closest('.ovp-ctrl')) return;
+        if (e.target.closest('.ovp-seek')) return;
+        if (centerOverlay.classList.contains('visible')) {
+          _hideCenterOverlay();
+        } else {
+          _showCenterOverlay();
+        }
+      });
+      // Mouse movement also shows overlay
+      videoBox.addEventListener('mousemove', function() {
+        if (!centerOverlay.classList.contains('visible')) _showCenterOverlay();
+      });
+
+      // Keyboard shortcuts
+      document.addEventListener('keydown', function(e) {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        var wrapperInFS = _manualFS || document.fullscreenElement === wrapper || document.webkitFullscreenElement === wrapper;
+        if (!wrapperInFS && !wrapper.contains(document.activeElement)) return;
+        if (e.key === ' ' || e.key === 'k') { e.preventDefault(); if (!video || video.paused) doPlay(); else doPause(); }
+        if (e.key === 'ArrowLeft') { e.preventDefault(); seekRelative(-10); _showCenterOverlay(); }
+        if (e.key === 'ArrowRight') { e.preventDefault(); seekRelative(10); _showCenterOverlay(); }
+        if (e.key === 'f') { e.preventDefault(); toggleFS(); }
+        if (e.key === 'm') { e.preventDefault(); if (video) { video.muted = !video.muted; } }
+        if (e.key === 'Escape' && _manualFS) { e.preventDefault(); _exitManualFS(); }
+      });
 
       volBtn.addEventListener('click', function(e) {
         e.stopPropagation();
@@ -530,9 +660,10 @@
       volSlider.addEventListener('input', function() {
         if (!video) return;
         video.volume = this.value / 100;
-        volBtn.innerHTML = this.value == 0
-          ? '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>'
-          : '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14" stroke="currentColor" stroke-width="2" fill="none"/></svg>';
+        _iconToggle(volBtn, this.value == 0,
+          '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>',
+          '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14" stroke="currentColor" stroke-width="2" fill="none"/></svg>'
+        );
       });
 
       // ── Fullscreen toggle ──
@@ -540,53 +671,121 @@
 
       function updateFSButton() {
         fsBtn.title = _inFS ? 'Exit Fullscreen' : 'Fullscreen';
-        fsBtn.innerHTML = _inFS
-          ? '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>'
-          : '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
+        _iconToggle(fsBtn, _inFS,
+          '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" stroke="currentColor" stroke-width="2"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>',
+          '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>'
+        );
       }
 
-      function onFSChange() {
-        if (!video) return;
-        if (document.fullscreenElement === wrapper) {
-          _inFS = true;
-          wrapper.style.maxWidth = 'none';
-          wrapper.style.maxHeight = '100vh';
-          wrapper.style.width = '100vw';
-          wrapper.style.background = 'var(--bg-surface)';
-          seek.style.marginTop = '14px';
-          video.style.maxHeight = 'calc(100vh - 62px)';
-          video.style.objectFit = 'contain';
-          video.style.width = '100%';
-          video.style.background = 'var(--bg-surface)';
-          video.style.boxShadow = '0 0 60px rgba(0,0,0,0.5)';
-        } else if (!document.fullscreenElement && _inFS) {
-          _inFS = false;
-          wrapper.style.maxWidth = '';
-          wrapper.style.maxHeight = '';
-          wrapper.style.width = '';
-          wrapper.style.background = '';
-          seek.style.marginTop = '';
-          video.style.maxHeight = '';
-          video.style.objectFit = '';
-          video.style.width = '';
-          video.style.background = '';
-          video.style.boxShadow = '';
+
+      var _manualFS = false;
+      var _fsBacking = null; // our own backdrop div (not the broken ::backdrop)
+      var _origParent = null;
+      var _origNext = null;
+      var _fsGlow = null;
+
+      function _enterManualFS() {
+        if (_manualFS) return;
+        _manualFS = true;
+        _inFS = true;
+        // Remember position in DOM
+        _origParent = wrapper.parentNode;
+        _origNext = wrapper.nextSibling;
+
+        // Create our own solid backdrop
+        if (!_fsBacking) {
+          _fsBacking = document.createElement('div');
+          _fsBacking.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:99999;display:flex;flex-direction:column;justify-content:center;align-items:center;';
         }
+        _fsBacking.style.setProperty('background', 'var(--bg-base)', 'important');
+
+        // Add soft themed glow behind video
+        if (!_fsGlow) {
+          _fsGlow = document.createElement('div');
+          _fsGlow.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;opacity:0.15;';
+        }
+        _fsGlow.style.setProperty('background', 'radial-gradient(ellipse at center, var(--accent-primary) 0%, transparent 65%)', 'important');
+
+        // Move wrapper into our backdrop
+        document.body.appendChild(_fsBacking);
+        _fsBacking.appendChild(wrapper);
+
+        // Insert glow behind wrapper
+        if (_fsGlow) _fsBacking.insertBefore(_fsGlow, wrapper);
+
+        wrapper.style.maxWidth = 'none';
+        wrapper.style.maxHeight = '100vh';
+        wrapper.style.width = '100vw';
+        wrapper.style.height = '100vh';
+        wrapper.style.display = 'flex';
+        wrapper.style.flexDirection = 'column';
+        wrapper.style.justifyContent = 'center';
+        wrapper.style.borderRadius = '0';
+        wrapper.style.boxShadow = 'none';
+        videoBox.style.flex = '1';
+        videoBox.style.display = 'flex';
+        videoBox.style.alignItems = 'center';
+        videoBox.style.justifyContent = 'center';
+        videoBox.style.overflow = 'hidden';
+        video.style.maxWidth = '100%';
+        video.style.maxHeight = '100%';
+        video.style.objectFit = 'contain';
+        video.style.width = '100%';
+        video.style.height = 'auto';
+        video.style.setProperty('background', 'var(--bg-base)', 'important');
+        wrapper.style.setProperty('background', 'var(--bg-base)', 'important');
+        videoBox.style.setProperty('background', 'transparent', 'important');
         updateFSButton();
       }
 
-      document.addEventListener('fullscreenchange', onFSChange);
+      function _exitManualFS() {
+        if (!_manualFS) return;
+        _manualFS = false;
+        _inFS = false;
+
+        // Move wrapper back
+        if (_origParent) {
+          if (_origNext) _origParent.insertBefore(wrapper, _origNext);
+          else _origParent.appendChild(wrapper);
+        }
+        if (_fsBacking && _fsBacking.parentNode) _fsBacking.parentNode.removeChild(_fsBacking);
+
+        // Remove glow
+        if (_fsGlow && _fsGlow.parentNode) _fsGlow.parentNode.removeChild(_fsGlow);
+
+        wrapper.style.maxWidth = '';
+        wrapper.style.maxHeight = '';
+        wrapper.style.width = '';
+        wrapper.style.height = '';
+        wrapper.style.display = '';
+        wrapper.style.flexDirection = '';
+        wrapper.style.justifyContent = '';
+        wrapper.style.setProperty('background', 'var(--bg-base)', 'important');
+        wrapper.style.borderRadius = '';
+        wrapper.style.boxShadow = '';
+        videoBox.style.flex = '';
+        videoBox.style.display = '';
+        videoBox.style.alignItems = '';
+        videoBox.style.justifyContent = '';
+        videoBox.style.overflow = '';
+        videoBox.style.background = '';
+        video.style.background = '';
+        video.style.removeProperty('background');
+        wrapper.style.removeProperty('background');
+        videoBox.style.removeProperty('background');
+        video.style.maxWidth = '';
+        video.style.maxHeight = '';
+        video.style.objectFit = '';
+        video.style.width = '';
+        video.style.height = '';
+        updateFSButton();
+      }
 
       function toggleFS() {
         closeAnyMenu();
         volSlider.style.display = 'none';
-        if (document.fullscreenElement) {
-          document.exitFullscreen().catch(function() {});
-        } else if (wrapper.requestFullscreen) {
-          wrapper.requestFullscreen().catch(function() {});
-        } else if (wrapper.webkitRequestFullscreen) {
-          wrapper.webkitRequestFullscreen();
-        }
+        if (_manualFS) { _exitManualFS(); return; }
+        _enterManualFS();
       }
 
       fsBtn.addEventListener('click', function(e) { e.stopPropagation(); toggleFS(); });
@@ -779,12 +978,16 @@
         _v: video,
         _url: url,
         _pendingDataUrl: _pendingDataUrl,
+        _exitManualFS: _exitManualFS,
         destroy: function() {
           dead = true;
           console.log('[OVP] [' + _logId + '] destroy() called');
           if (video) { video.pause(); video.src = ''; }
-          document.removeEventListener('fullscreenchange', onFSChange);
-          if (_inFS) document.exitFullscreen().catch(function() {});
+          if (_inFS) {
+            if (_manualFS) _exitManualFS();
+            else if (document.exitFullscreen) document.exitFullscreen().catch(function() {});
+            else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+          }
           closeAnyMenu();
           wrapper.remove();
           var idx = _players.indexOf(player);
@@ -873,6 +1076,28 @@
         if (el._ovpInited) return;
         observer.observe(el);
       });
+    },
+
+    // Stop all playing videos (used when app goes to background)
+    stopAll: function() {
+      _players.forEach(function(p) {
+        if (p._v && !p._v.paused) {
+          p._v.pause();
+          p._v.currentTime = 0;
+        }
+      });
+    },
+
+    // Exit fullscreen on all video players
+    exitAllFullscreen: function() {
+      _players.forEach(function(p) {
+        if (p._exitManualFS) p._exitManualFS();
+      });
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(function() {});
+      } else if (document.webkitFullscreenElement) {
+        document.webkitExitFullscreen();
+      }
     }
   };
 })();

@@ -469,6 +469,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (activeRow) activeRow.classList.add('active-chat');
 
     renderMessages(chatId);
+    if (window.renderTypingIndicator) window.renderTypingIndicator();
   }
 
   var _groupCreateMode = false;
@@ -589,9 +590,34 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function closeChat() {
+    // Send stop-typing indicator before clearing activeChatId
+    if (activeChatId && activeChatId !== 'local-echo' && window.Orbit && window.Orbit.P2P && Orbit.P2P.isAvailable()) {
+      var isGrp = MStore.groups.some(function(g) { return g.id === activeChatId; });
+      var myId = MStore.user ? MStore.user.id : 'mobile';
+      var username = MStore.user ? MStore.user.name : 'Someone';
+      var stopPayload = { isTyping: false, username: username };
+      if (isGrp) stopPayload.groupId = activeChatId;
+      if (isGrp) {
+        var grp = MStore.groups.find(function(g) { return g.id === activeChatId; });
+        if (grp && grp.members) {
+          grp.members.forEach(function(m) {
+            var mid = typeof m === 'string' ? m : m.userId;
+            if (mid !== myId) {
+              Orbit.P2P.send(mid, Orbit.Protocol.createPacket(Orbit.Protocol.Types.TYPING, myId, mid, stopPayload));
+            }
+          });
+        }
+      } else {
+        Orbit.P2P.send(activeChatId, Orbit.Protocol.createPacket(Orbit.Protocol.Types.TYPING, myId, activeChatId, stopPayload));
+      }
+    }
+    
     document.getElementById('panel-chat').classList.remove('open', 'active');
     document.getElementById('mobile-nav').style.display = 'flex';
     activeChatId = null;
+    var typingDiv = document.getElementById('typing-indicator');
+    if (typingDiv) typingDiv.style.display = 'none';
+    
     // Clear search bar
     chatSearchFilter = '';
     var csb = document.getElementById('message-search-bar');
@@ -602,6 +628,27 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.chat-row.active-chat').forEach(function(r) { r.classList.remove('active-chat'); });
     document.querySelectorAll('.friend-row.highlighted').forEach(function(r) { r.classList.remove('highlighted'); });
   }
+
+  window.renderTypingIndicator = function() {
+    if (!activeChatId) return;
+    var typingDiv = document.getElementById('typing-indicator');
+    var typingText = document.getElementById('typing-text');
+    if (!typingDiv || !typingText) return;
+    
+    var users = window._typingUsers && window._typingUsers[activeChatId] ? Object.values(window._typingUsers[activeChatId]) : [];
+    if (users.length === 0) {
+      typingDiv.style.display = 'none';
+    } else if (users.length === 1) {
+      typingText.innerText = users[0].username + ' is typing...';
+      typingDiv.style.display = 'flex';
+    } else if (users.length === 2) {
+      typingText.innerText = users[0].username + ' and ' + users[1].username + ' are typing...';
+      typingDiv.style.display = 'flex';
+    } else {
+      typingText.innerText = 'Several people are typing...';
+      typingDiv.style.display = 'flex';
+    }
+  };
 
   function getStatusColor(status) {
     var colors = { online: 'var(--accent-success)', away: 'var(--accent-warning)', busy: 'var(--accent-danger)', offline: 'var(--text-muted)' };
@@ -1195,7 +1242,8 @@ document.addEventListener('DOMContentLoaded', function() {
             var attUrl = _resUrl(a);
             if (a.type === 'video') {
               if (attUrl) {
-                largeHtml += '<div class="att-large-cell att-video-cell ovp-placeholder" data-ovp-url="' + escapeHtml(attUrl) + '" data-open-video="' + safeAttId + '" data-msg-id="' + m.id + '"></div>';
+                var posterAttr = a._poster ? ' data-ovp-poster="' + escapeHtml(a._poster) + '"' : '';
+                largeHtml += '<div class="att-large-cell att-video-cell ovp-placeholder" data-ovp-url="' + escapeHtml(attUrl) + '"' + posterAttr + ' data-open-video="' + safeAttId + '" data-msg-id="' + m.id + '"></div>';
               } else if (a._pending) {
                 largeHtml += '<div class="att-large-cell att-video-cell" style="display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg-panel);color:var(--text-muted);border:1px solid var(--border-subtle);border-radius:8px;height:200px;">' +
                   '<i data-lucide="video" style="width:32px;height:32px;margin-bottom:8px;opacity:0.5;"></i><div style="font-size:13px;font-weight:500;">Receiving Video...</div></div>';
@@ -1690,6 +1738,28 @@ document.addEventListener('DOMContentLoaded', function() {
     var text = input.value.trim();
     if ((!text && stagedFiles.length === 0) || !activeChatId) return;
 
+    // Send stop-typing indicator immediately
+    if (activeChatId && activeChatId !== 'local-echo' && window.Orbit && window.Orbit.P2P && Orbit.P2P.isAvailable()) {
+      var isGrp = MStore.groups.some(function(g) { return g.id === activeChatId; });
+      var myId = MStore.user ? MStore.user.id : 'mobile';
+      var username = MStore.user ? MStore.user.name : 'Someone';
+      var stopPayload = { isTyping: false, username: username };
+      if (isGrp) stopPayload.groupId = activeChatId;
+      if (isGrp) {
+        var grp = MStore.groups.find(function(g) { return g.id === activeChatId; });
+        if (grp && grp.members) {
+          grp.members.forEach(function(m) {
+            var mid = typeof m === 'string' ? m : m.userId;
+            if (mid !== myId) {
+              Orbit.P2P.send(mid, Orbit.Protocol.createPacket(Orbit.Protocol.Types.TYPING, myId, mid, stopPayload));
+            }
+          });
+        }
+      } else {
+        Orbit.P2P.send(activeChatId, Orbit.Protocol.createPacket(Orbit.Protocol.Types.TYPING, myId, activeChatId, stopPayload));
+      }
+    }
+
     // Warn about unstable audio/video transfers before proceeding
     var hasAvFile = stagedFiles.some(function(s) { return s.type === 'audio' || s.type === 'video'; });
     if (hasAvFile) {
@@ -1803,6 +1873,45 @@ document.addEventListener('DOMContentLoaded', function() {
           url: a.url, _blobCreated: true, _blobSession: window._orbitSessionId,
           _blobKey: a._arrayBuffer ? localKey : undefined
         });
+        if (a.type === 'video' && a._arrayBuffer) {
+          try {
+            var blob = new Blob([a._arrayBuffer], { type: 'video/mp4' });
+            var blobUrl = URL.createObjectURL(blob);
+            var vid = document.createElement('video');
+            vid.preload = 'auto';
+            vid.muted = true;
+            vid.playsInline = true;
+            var thumbnailCaptureTimeout = setTimeout(function() {
+              vid.remove();
+              URL.revokeObjectURL(blobUrl);
+            }, 10000);
+            vid.onloadeddata = function() {
+              vid.currentTime = 0.5;
+            };
+            vid.onseeked = function() {
+              try {
+                var canvas = document.createElement('canvas');
+                canvas.width = vid.videoWidth || 320;
+                canvas.height = vid.videoHeight || 240;
+                var ctx = canvas.getContext('2d');
+                ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
+                var posterDataUrl = canvas.toDataURL('image/jpeg', 0.6);
+                var lastAtt = allAttachments[allAttachments.length - 1];
+                if (lastAtt) lastAtt._poster = posterDataUrl;
+              } catch(e) {}
+              clearTimeout(thumbnailCaptureTimeout);
+              vid.remove();
+              URL.revokeObjectURL(blobUrl);
+            };
+            vid.onerror = function() {
+              clearTimeout(thumbnailCaptureTimeout);
+              vid.remove();
+              URL.revokeObjectURL(blobUrl);
+            };
+            vid.src = blobUrl;
+            vid.load();
+          } catch(e) {}
+        }
       } else {
         allAttachments.push(a);
       }
@@ -2680,7 +2789,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var friendsCount = MStore ? MStore.friends.length : 0;
         var chatsCount = MStore ? MStore.chats.length : 0;
         return '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.2.4-beta · Capacitor Android</div></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.2.5-beta · Capacitor Android</div></div>' +
         '</div>' +
         '<div class="settings-row">' +
           '<div class="settings-row-content"><span class="settings-row-title">Statistics</span><div class="settings-row-desc">' + friendsCount + ' friends · ' + chatsCount + ' chats</div></div>' +
@@ -3737,13 +3846,17 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     var msgs = MStore.getMessages(activeChatId);
-    var images = msgs.filter(function(m) {
-      return m.attachments && m.attachments.some(function(a) { return a.type === 'image'; });
+    var mediaMsgs = msgs.filter(function(m) {
+      return m.attachments && m.attachments.some(function(a) { 
+        var t = (a.type || '').toLowerCase();
+        var mime = (a.mimeType || '').toLowerCase();
+        return t === 'image' || t === 'video' || t === 'audio' || mime.startsWith('image/') || mime.startsWith('video/') || mime.startsWith('audio/');
+      });
     });
 
-    if (images.length === 0) {
+    if (mediaMsgs.length === 0) {
       container.innerHTML =
-        '<div class="gallery-empty"><i data-lucide="image"></i><div>No images shared yet</div></div>';
+        '<div class="gallery-empty"><i data-lucide="image"></i><div>No media shared yet</div></div>';
       renderLucide({ root: container });
       return;
     }
@@ -3753,15 +3866,37 @@ document.addEventListener('DOMContentLoaded', function() {
       '.gallery-item{aspect-ratio:1;position:relative;cursor:pointer;background:var(--bg-hover);}' +
       '.gallery-item::after{content:"";position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.1);opacity:0;transition:opacity 0.2s;}' +
       '.gallery-item:active::after{opacity:1;}' +
-      '.gallery-item img{width:100%;height:100%;object-fit:cover;}' +
+      '.gallery-item img, .gallery-item video{width:100%;height:100%;object-fit:cover;}' +
       '</style>';
     
     html += '<div class="gallery-grid">';
-    images.forEach(function(m) {
+    mediaMsgs.forEach(function(m) {
       if (m.attachments) {
         m.attachments.forEach(function(a) {
-          if (a.type === 'image' && a.url) {
-            html += '<div class="gallery-item" onclick="openLightbox(\'' + escapeHtml(a.url).replace(/'/g, "\\'") + '\')"><img src="' + escapeHtml(a.url) + '" loading="lazy"></div>';
+          var t = (a.type || '').toLowerCase();
+          var mime = (a.mimeType || '').toLowerCase();
+          var isImg = t === 'image' || mime.startsWith('image/');
+          var isVid = t === 'video' || mime.startsWith('video/');
+          var isAud = t === 'audio' || mime.startsWith('audio/');
+          if ((isImg || isVid || isAud) && a.url) {
+            var safeUrl = escapeHtml(a.url).replace(/'/g, "\\'");
+            var safeType = isVid ? 'video' : (isAud ? 'audio' : 'image');
+            html += '<div class="gallery-item" onclick="openLightbox(\'' + safeUrl + '\', \'' + safeType + '\')">';
+            if (isVid) {
+              var posterUrl = window.Sanitize ? window.Sanitize.escapeHtml(a._poster || '') : escapeHtml(a._poster || '');
+              if (posterUrl) {
+                html += '<img src="' + posterUrl + '" style="width:100%;height:100%;object-fit:cover;">';
+              } else {
+                html += '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-base);"><i data-lucide="video" style="width:32px;height:32px;opacity:0.5;"></i></div>';
+              }
+              html += '<div style="position:absolute;bottom:4px;left:4px;background:rgba(0,0,0,0.6);border-radius:4px;padding:2px 4px;font-size:10px;color:white;font-weight:600;"><i data-lucide="video" style="width:12px;height:12px;margin-right:2px;vertical-align:middle;"></i>Video</div>';
+            } else if (isAud) {
+              html += '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-base);"><i data-lucide="music" style="width:32px;height:32px;color:var(--accent-success);"></i></div>';
+              html += '<div style="position:absolute;bottom:4px;left:4px;background:rgba(0,0,0,0.6);border-radius:4px;padding:2px 4px;font-size:10px;color:white;font-weight:600;">Audio</div>';
+            } else {
+              html += '<img src="' + escapeHtml(a.url) + '" loading="lazy">';
+            }
+            html += '</div>';
           }
         });
       }
@@ -3771,13 +3906,23 @@ document.addEventListener('DOMContentLoaded', function() {
     renderLucide({ root: container });
   }
 
-  window.openLightbox = function(url) {
+  window.openLightbox = function(url, type) {
     var existing = document.getElementById('image-lightbox');
     if (existing) existing.remove();
 
+    var contentHtml = '';
+    type = type || 'image';
+    if (type === 'video') {
+      contentHtml = '<video src="' + escapeHtml(url) + '" controls autoplay style="max-width:100%;max-height:100%;object-fit:contain;animation:scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);"></video>';
+    } else if (type === 'audio') {
+      contentHtml = '<audio src="' + escapeHtml(url) + '" controls autoplay style="width:80%;max-width:400px;animation:scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);"></audio>';
+    } else {
+      contentHtml = '<img src="' + escapeHtml(url) + '" style="max-width:100%;max-height:100%;object-fit:contain;animation:scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);">';
+    }
+
     var html = '<div id="image-lightbox" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.95);z-index:10000;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.2s;">' +
-      '<button onclick="this.parentNode.remove()" style="position:absolute;top:16px;right:16px;background:rgba(255,255,255,0.1);border:none;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#fff;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);"><i data-lucide="x"></i></button>' +
-      '<img src="' + escapeHtml(url) + '" style="max-width:100%;max-height:100%;object-fit:contain;animation:scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);">' +
+      '<button onclick="this.parentNode.remove()" style="position:absolute;top:16px;right:16px;background:rgba(255,255,255,0.1);border:none;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#fff;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);z-index:10001;"><i data-lucide="x"></i></button>' +
+      contentHtml +
     '</div>';
     
     var div = document.createElement('div');
@@ -4548,6 +4693,35 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('chat-input').addEventListener('input', function() {
     this.style.height = 'auto';
     this.style.height = Math.min(this.scrollHeight, 150) + 'px';
+    
+    // Send typing indicator
+    if (activeChatId && activeChatId !== 'local-echo' && window.Orbit && window.Orbit.P2P && Orbit.P2P.isAvailable()) {
+      var now = Date.now();
+      if (now - (window._lastTypingSent || 0) > 2000) {
+        window._lastTypingSent = now;
+        var isGroup = MStore.groups.some(function(g) { return g.id === activeChatId; });
+        var myId = MStore.user ? MStore.user.id : 'mobile';
+        var username = MStore.user ? MStore.user.name : 'Someone';
+        var payload = { isTyping: true, username: username };
+        if (isGroup) payload.groupId = activeChatId;
+        
+        if (isGroup) {
+          var grp = MStore.groups.find(function(g) { return g.id === activeChatId; });
+          if (grp && grp.members) {
+            grp.members.forEach(function(m) {
+              var mid = typeof m === 'string' ? m : m.userId;
+              if (mid !== myId) {
+                var pkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.TYPING, myId, mid, payload);
+                Orbit.P2P.send(mid, pkt);
+              }
+            });
+          }
+        } else {
+          var pkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.TYPING, myId, activeChatId, payload);
+          Orbit.P2P.send(activeChatId, pkt);
+        }
+      }
+    }
   });
 
   // Search inputs
@@ -5997,9 +6171,29 @@ document.addEventListener('DOMContentLoaded', function() {
 
       // Handle typing indicators
       if (packet.type === Orbit.Protocol.Types.TYPING) {
-        console.log('[P2P] Typing:', msgFrom, packet.payload && packet.payload.isTyping ? 'started' : 'stopped');
+        var typChatId = (packet.payload && packet.payload.groupId) || packet.from;
+        var isTyping = packet.payload && packet.payload.isTyping;
+        var username = packet.payload ? packet.payload.username : 'Someone';
+        
+        if (!window._typingUsers) window._typingUsers = {};
+        if (!window._typingUsers[typChatId]) window._typingUsers[typChatId] = {};
+        
+        if (isTyping) {
+          window._typingUsers[typChatId][packet.from] = { username: username, timeout: setTimeout(function() {
+            if (window._typingUsers[typChatId] && window._typingUsers[typChatId][packet.from]) {
+              delete window._typingUsers[typChatId][packet.from];
+              renderTypingIndicator();
+            }
+          }, 4000) };
+        } else {
+          if (window._typingUsers[typChatId][packet.from]) clearTimeout(window._typingUsers[typChatId][packet.from].timeout);
+          delete window._typingUsers[typChatId][packet.from];
+        }
+        
+        window.renderTypingIndicator();
         return;
       }
+      
 
       // Handle reactions
       if (packet.type === Orbit.Protocol.Types.REACTION) {
@@ -6779,6 +6973,16 @@ document.addEventListener('DOMContentLoaded', function() {
         var udpPort = MStore.settings.udpPort || 45678;
         Orbit.P2P.startDiscovery(beacon, udpPort);
       }
+      // Stop all media players and exit fullscreen on foreground (fixes blank black screen)
+      try {
+        if (window.OrbitVideoPlayer) {
+          window.OrbitVideoPlayer.exitAllFullscreen();
+          window.OrbitVideoPlayer.stopAll();
+        }
+        if (window.OrbitAudioPlayer) {
+          window.OrbitAudioPlayer.stopAll();
+        }
+      } catch(e) { console.log('[Lifecycle] stopMedia error:', e.message); }
     }
 
     // Handle visibility changes
@@ -6786,6 +6990,12 @@ document.addEventListener('DOMContentLoaded', function() {
       if (!document.hidden) {
         console.log('[Lifecycle] App foregrounded (visibility)');
         _foregroundRecovery();
+      } else {
+        // Stop all media when going to background
+        try {
+          if (window.OrbitVideoPlayer) window.OrbitVideoPlayer.stopAll();
+          if (window.OrbitAudioPlayer) window.OrbitAudioPlayer.stopAll();
+        } catch(e) {}
       }
     });
 
@@ -6808,6 +7018,11 @@ document.addEventListener('DOMContentLoaded', function() {
           } else {
             console.log('[Lifecycle] App backgrounded — service keeps running');
             MStore.save();
+            // Stop all media when going to background
+            try {
+              if (window.OrbitVideoPlayer) window.OrbitVideoPlayer.stopAll();
+              if (window.OrbitAudioPlayer) window.OrbitAudioPlayer.stopAll();
+            } catch(e) {}
           }
         });
       } catch(e) { console.log('[Lifecycle] App plugin listener error', e.message); }

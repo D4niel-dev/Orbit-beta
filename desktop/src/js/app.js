@@ -569,7 +569,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       window.orbitAPI.on('network-message', (packet) => {
         if (packet.type === window.Protocol.Types.TYPING) {
-          var chatId = packet.to || packet.from;
+          var chatId = (packet.payload && packet.payload.groupId) || packet.from;
           var isTyping = packet.payload && packet.payload.isTyping;
           var username = packet.payload ? packet.payload.username : 'Someone';
           if (isTyping) {
@@ -932,6 +932,55 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (window.SidebarLeft) window.SidebarLeft.init();
+
+    // Initialize nav history logic for titlebar buttons
+    var btnBack = document.getElementById('btn-nav-back');
+    var btnForward = document.getElementById('btn-nav-forward');
+    if (btnBack && btnForward) {
+      var navHistory = [];
+      var navIndex = -1;
+
+      // Track navigation history
+      var unsubscribeNav = window.store.subscribe(function(state, changed) {
+        if (changed && 'activeChatId' in changed && state.activeChatId) {
+          // Don't record if going back/forward programmatically (skip flag)
+          if (state._navSkip) return;
+          // Remove forward history if we navigated to a new place
+          if (navIndex < navHistory.length - 1) {
+            navHistory = navHistory.slice(0, navIndex + 1);
+          }
+          navHistory.push(state.activeChatId);
+          navIndex = navHistory.length - 1;
+          // Cap history at 50 entries
+          if (navHistory.length > 50) {
+            navHistory.shift();
+            navIndex--;
+          }
+        }
+      });
+
+      document.getElementById('btn-nav-back').addEventListener('click', function() {
+        if (navIndex <= 0) return;
+        navIndex--;
+        var targetChat = navHistory[navIndex];
+        window.store.setState({ _navSkip: true, activeChatId: targetChat, activeTab: 'dms' });
+        // Reset the skip flag after the state change
+        setTimeout(function() {
+          window.store.setState({ _navSkip: undefined });
+        }, 0);
+      });
+
+      document.getElementById('btn-nav-forward').addEventListener('click', function() {
+        if (navIndex >= navHistory.length - 1) return;
+        navIndex++;
+        var targetChat = navHistory[navIndex];
+        window.store.setState({ _navSkip: true, activeChatId: targetChat, activeTab: 'dms' });
+        setTimeout(function() {
+          window.store.setState({ _navSkip: undefined });
+        }, 0);
+      });
+    }
+
     if (window.SidebarMiddle) window.SidebarMiddle.init();
     if (window.ChatPanel) window.ChatPanel.init();
 

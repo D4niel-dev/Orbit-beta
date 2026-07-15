@@ -1,6 +1,20 @@
 window.ActivityCenter = {
   activeTab: 'all',
 
+  _fmtDuration(sec) {
+    if (!sec || !isFinite(sec)) return '';
+    var m = Math.floor(sec / 60);
+    var s = Math.floor(sec % 60);
+    return m + ':' + (s < 10 ? '0' : '') + s;
+  },
+
+  _fmtSize(bytes) {
+    if (!bytes) return '';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(1) + ' MB';
+  },
+
   show() {
     if (this._overlay) return;
     this.activeTab = 'all';
@@ -91,6 +105,7 @@ window.ActivityCenter = {
 
   renderContent() {
     if (!this._content) return;
+    var self = this;
     var state = window.store.getState();
     var messages = state.messages || {};
     var friends = state.friends || [];
@@ -125,7 +140,14 @@ window.ActivityCenter = {
       var logs = state.activityLog || [];
       logs = logs.filter(function(l) { return new Date(l.timestamp).getTime() > sysClearedAt; });
       if (logs.length === 0) {
-        activityHtml = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-muted);text-align:center;gap:8px;"><i data-lucide="activity" style="width:40px;height:40px;opacity:0.3;"></i><div style="font-size:14px;">No system activity recently.</div></div>';
+        activityHtml = 
+          '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:40px;text-align:center;">' +
+            '<div style="margin-bottom:16px; width:80px; height:80px; border-radius:50%; background:var(--bg-hover); display:flex; align-items:center; justify-content:center; color:var(--text-muted);">' +
+              '<i data-lucide="activity" style="width:40px;height:40px;opacity:0.5;"></i>' +
+            '</div>' +
+            '<div style="font-size:16px; font-weight:600; color:var(--text-primary); margin-bottom:4px;">No System Activity</div>' +
+            '<div style="font-size:13px; color:var(--text-muted); max-width:280px; line-height:1.5;">Network events like connections and disconnections will appear here.</div>' +
+          '</div>';
       } else {
         activityHtml = logs.slice().reverse().map(function(l) {
           var time = new Date(l.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -179,7 +201,15 @@ window.ActivityCenter = {
       if (allEvents.length === 0) {
         var emptyText = this.activeTab === 'mentions' ? 'No recent mentions.' : (this.activeTab === 'files' ? 'No recent files.' : 'No chat activity recently.');
         var emptyIcon = this.activeTab === 'mentions' ? 'at-sign' : (this.activeTab === 'files' ? 'file' : 'message-square');
-        activityHtml = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-muted);text-align:center;gap:8px;"><i data-lucide="' + emptyIcon + '" style="width:40px;height:40px;opacity:0.3;"></i><div style="font-size:14px;">' + emptyText + '</div></div>';
+        var emptyDesc = this.activeTab === 'mentions' ? 'When someone mentions you in a group chat, it will appear here.' : (this.activeTab === 'files' ? 'Files and media shared in your chats will appear here.' : 'Your recent messages and activity will appear here.');
+        activityHtml = 
+          '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:40px;text-align:center;">' +
+            '<div style="margin-bottom:16px; width:80px; height:80px; border-radius:50%; background:var(--bg-hover); display:flex; align-items:center; justify-content:center; color:var(--text-muted);">' +
+              '<i data-lucide="' + emptyIcon + '" style="width:40px;height:40px;opacity:0.5;"></i>' +
+            '</div>' +
+            '<div style="font-size:16px; font-weight:600; color:var(--text-primary); margin-bottom:4px;">' + emptyText + '</div>' +
+            '<div style="font-size:13px; color:var(--text-muted); max-width:280px; line-height:1.5;">' + emptyDesc + '</div>' +
+          '</div>';
       } else {
         activityHtml = allEvents.map(function(ev) {
           var senderName = ev.isMe ? 'You' : ev.chatName;
@@ -196,15 +226,47 @@ window.ActivityCenter = {
           }
           
           var senderAvatar = getAvatarHtml(ev.msg.sender, senderName);
-          var text;
+          var text = '';
           if (ev.msg.text) {
-            text = window.Sanitize.escapeHtml(ev.msg.text);
-            if (text.length > 100) text = text.substring(0, 100) + '...';
-          } else if (ev.msg.attachments && ev.msg.attachments.length > 0) {
-            var fileNames = ev.msg.attachments.map(function(a) { return a.name; }).join(', ');
-            text = '<i data-lucide="paperclip" style="width:12px;height:12px;display:inline-block;vertical-align:middle;color:var(--accent-primary);"></i> <span style="color:var(--accent-primary);font-style:italic;">File: ' + window.Sanitize.escapeHtml(fileNames) + '</span>';
-          } else {
-            text = '';
+            var escaped = window.Sanitize.escapeHtml(ev.msg.text);
+            if (escaped.length > 100) escaped = escaped.substring(0, 100) + '...';
+            text = escaped;
+          }
+          // Always render attachment pills when present (video, audio, image, file)
+          if (ev.msg.attachments && ev.msg.attachments.length > 0) {
+            var attachHtml = ev.msg.attachments.map(function(a) {
+              if (a._pending) return '';
+              var type = a.type || '';
+              var mime = a.mimeType || '';
+              var safeUrl = window.Sanitize.escapeHtml(a.url || '');
+              var safeName = window.Sanitize.escapeHtml(a.name || 'unknown');
+              
+              if (type === 'video' || mime.startsWith('video/')) {
+                var posterUrl = window.Sanitize.escapeHtml(a._poster || '');
+                return '<div style="width:100px;height:100px;border-radius:8px;overflow:hidden;border:1px solid var(--border-subtle);background:var(--bg-hover);position:relative;flex-shrink:0;cursor:pointer;" onmouseover="var vc=this.querySelector(\'.vid-c\'); if(!vc.querySelector(\'video\')){ vc.innerHTML = \'<video src=&quot;' + safeUrl + '&quot; style=&quot;width:100%;height:100%;object-fit:cover;&quot; muted loop autoplay playsinline></video>\'; } else { vc.querySelector(\'video\').play().catch(function(){}); }" onmouseout="var v=this.querySelector(\'video\'); if(v) v.pause();" onclick="if(window.ImageViewer) window.ImageViewer.open({url:\'' + safeUrl + '\', name:\'' + safeName + '\', size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'})">' +
+                  (posterUrl ? '<img src="' + posterUrl + '" style="width:100%;height:100%;object-fit:cover;position:absolute;inset:0;z-index:0;">' : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;position:absolute;inset:0;z-index:0;"><i data-lucide="video" style="width:32px;height:32px;opacity:0.5;"></i></div>') +
+                  '<div class="vid-c" style="position:absolute;inset:0;z-index:1;pointer-events:none;"></div>' +
+                  '<div style="position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,0.6);border-radius:4px;padding:2px 4px;font-size:9px;color:white;font-weight:600;z-index:2;"><i data-lucide="video" style="width:10px;height:10px;margin-right:2px;vertical-align:middle;"></i>Video</div>' +
+                '</div>';
+              } else if (type === 'audio' || mime.startsWith('audio/')) {
+                return '<div style="width:100px;height:100px;border-radius:8px;overflow:hidden;border:1px solid var(--border-subtle);background:var(--bg-base);position:relative;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;" onclick="if(window.ImageViewer) window.ImageViewer.open({url:\'' + safeUrl + '\', name:\'' + safeName + '\', size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'})">' +
+                  '<i data-lucide="music" style="width:32px;height:32px;color:var(--accent-success);"></i>' +
+                  '<div style="position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,0.6);border-radius:4px;padding:2px 4px;font-size:9px;color:white;font-weight:600;">Audio</div>' +
+                '</div>';
+              } else if (type === 'image' || mime.startsWith('image/')) {
+                return '<div style="width:100px;height:100px;border-radius:8px;overflow:hidden;border:1px solid var(--border-subtle);background:var(--bg-hover);flex-shrink:0;cursor:pointer;" onclick="if(window.ImageViewer) window.ImageViewer.open({url:\'' + safeUrl + '\', name:\'' + safeName + '\', size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'})">' +
+                  '<img src="' + safeUrl + '" style="width:100%;height:100%;object-fit:cover;" onerror="if(window.handleMediaError) window.handleMediaError(this, \'' + safeUrl + '\')">' +
+                '</div>';
+              } else {
+                return '<div style="width:100px;height:100px;border-radius:8px;overflow:hidden;border:1px solid var(--border-subtle);background:var(--bg-hover);flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px;text-align:center;">' +
+                  '<i data-lucide="file" style="width:24px;height:24px;color:var(--text-muted);margin-bottom:4px;"></i>' +
+                  '<div style="font-size:10px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;">' + safeName + '</div>' +
+                '</div>';
+              }
+            }).filter(function(h) { return h; }).join('');
+            if (attachHtml) {
+              text += (text ? '<div style="margin-top:8px;"></div>' : '') + '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">' + attachHtml + '</div>';
+            }
           }
           var time = ev.msg.timestamp ? new Date(ev.msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
           

@@ -121,8 +121,11 @@ window.GallerySidebar = {
       if (this.currentTab === 'images' || this.currentTab === 'files') {
         if (msg.attachments) {
           msg.attachments.forEach(att => {
-            if ((this.currentTab === 'images' && att.type === 'image') || 
-                (this.currentTab === 'files' && att.type !== 'image')) {
+            var aType = (att.type || '').toLowerCase();
+            var aMime = (att.mimeType || '').toLowerCase();
+            var isMedia = aType === 'image' || aType === 'video' || aType === 'audio' || aMime.startsWith('image/') || aMime.startsWith('video/') || aMime.startsWith('audio/');
+            if ((this.currentTab === 'images' && isMedia) || 
+                (this.currentTab === 'files' && !isMedia)) {
               items.push({
                 ...att,
                 msgId: msg.id,
@@ -183,18 +186,36 @@ window.GallerySidebar = {
         html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">';
         groupItems.forEach(img => {
           const safeUrl = window.Sanitize.escapeHtml(img.url);
-          var thumbUrl = safeUrl;
-          if (thumbUrl.indexOf('orbit-file://') !== 0) {
-            thumbUrl = thumbUrl.replace('orbit-db://attachment/', 'orbit-db://thumbnail/');
-          }
-          const safeName = window.Sanitize.escapeHtml(String(img.name || 'Image'));
+          const safeName = window.Sanitize.escapeHtml(String(img.name || 'Media'));
           const safeSize = window.Sanitize.escapeHtml(String(img.size || 0));
           const safeSender = window.Sanitize.escapeHtml(img.senderName);
+          var imgType = (img.type || '').toLowerCase();
+          var imgMime = (img.mimeType || '').toLowerCase();
+          var isVideo = imgType === 'video' || imgMime.startsWith('video/');
+          var isAudio = imgType === 'audio' || imgMime.startsWith('audio/');
+          var posterUrl = window.Sanitize.escapeHtml(img._poster || '');
+          if (isVideo) {
+            mediaContent = '<div style="width:100%;height:100%;background:var(--bg-panel);position:relative;transition:transform 0.3s;" class="media-container">' +
+              (posterUrl ? '<img src="' + posterUrl + '" style="width:100%;height:100%;object-fit:cover;transition:transform 0.3s;">' : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;transition:transform 0.3s;"><i data-lucide="video" style="width:32px;height:32px;opacity:0.5;"></i></div>') +
+            '</div>';
+            overlayIcon = 'play';
+          } else if (isAudio) {
+            mediaContent = '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-base);transition:transform 0.3s;"><i data-lucide="music" style="width:40px;height:40px;color:var(--accent-success);"></i></div>';
+            overlayIcon = 'play';
+          } else {
+            var thumbUrl = safeUrl;
+            if (thumbUrl.indexOf('orbit-file://') !== 0) {
+              thumbUrl = thumbUrl.replace('orbit-db://attachment/', 'orbit-db://thumbnail/');
+            }
+            mediaContent = '<img src="' + thumbUrl + '" data-fallback-src="' + safeUrl + '" style="width:100%;height:100%;object-fit:cover;transition:transform 0.3s;" onerror="if(window.mediaImgOnError) window.mediaImgOnError(this)">';
+          }
 
-          html += '<div class="gallery-item group" style="position:relative;border-radius:12px;overflow:hidden;aspect-ratio:1/1;cursor:pointer;border:1px solid var(--border-subtle);" onclick="if(window.ImageViewer) window.ImageViewer.open({url:\'' + safeUrl + '\', name:\'' + safeName + '\', size:\'' + safeSize + '\'})">' +
-            '<img src="' + thumbUrl + '" data-fallback-src="' + safeUrl + '" style="width:100%;height:100%;object-fit:cover;transition:transform 0.3s;" onerror="if(window.mediaImgOnError) window.mediaImgOnError(this)">' +
+          html += '<div class="gallery-item group" data-media-type="' + (isVideo ? 'video' : (isAudio ? 'audio' : 'image')) + '" style="position:relative;border-radius:12px;overflow:hidden;aspect-ratio:1/1;cursor:pointer;border:1px solid var(--border-subtle);" onclick="if(window.ImageViewer) window.ImageViewer.open({url:\'' + safeUrl + '\', name:\'' + safeName + '\', size:\'' + safeSize + '\'})">' +
+            mediaContent +
+            (isVideo ? '<div style="position:absolute;bottom:6px;left:6px;background:rgba(0,0,0,0.7);border-radius:4px;padding:2px 6px;font-size:10px;color:white;font-weight:600;pointer-events:none;"><i data-lucide="video" style="width:10px;height:10px;margin-right:3px;vertical-align:middle;"></i>Video</div>' : '') +
+            (isAudio ? '<div style="position:absolute;bottom:6px;left:6px;background:rgba(0,0,0,0.7);border-radius:4px;padding:2px 6px;font-size:10px;color:white;font-weight:600;pointer-events:none;">Audio</div>' : '') +
             '<div class="gallery-hover-overlay" style="position:absolute;inset:0;background:rgba(0,0,0,0.6);display:flex;flex-direction:column;justify-content:space-between;padding:8px;opacity:0;transition:opacity 0.2s;">' +
-              '<div style="align-self:flex-end;"><button style="background:rgba(255,255,255,0.2);border:none;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:white;cursor:pointer;"><i data-lucide="zoom-in" style="width:14px;height:14px;"></i></button></div>' +
+              '<div style="align-self:flex-end;"><button style="background:rgba(255,255,255,0.2);border:none;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:white;cursor:pointer;"><i data-lucide="' + overlayIcon + '" style="width:14px;height:14px;"></i></button></div>' +
               '<div style="font-size:11px;color:white;font-weight:500;">Sent by ' + safeSender + '</div>' +
             '</div>' +
           '</div>';
@@ -249,12 +270,28 @@ window.GallerySidebar = {
     
     // Inject hover css via JS for .gallery-item.group since inline hover on complex elements is tricky
     this.contentArea.querySelectorAll('.gallery-item.group').forEach(el => {
+      var mediaType = el.getAttribute('data-media-type');
+      var safeUrl = el.getAttribute('data-url');
       el.addEventListener('mouseenter', () => {
-        el.querySelector('img').style.transform = 'scale(1.05)';
+        var mediaEl = el.querySelector('img') || el.querySelector('video') || el.querySelector('.media-container');
+        if (mediaEl) mediaEl.style.transform = 'scale(1.05)';
+        if (mediaType === 'video') {
+          var container = el.querySelector('.media-container');
+          if (container && !container.querySelector('video')) {
+            container.innerHTML = '<video src="' + safeUrl + '" style="width:100%;height:100%;object-fit:cover;transition:transform 0.3s;" muted loop autoplay playsinline></video>';
+          } else if (container && container.querySelector('video')) {
+            container.querySelector('video').play().catch(function(){});
+          }
+        }
         el.querySelector('.gallery-hover-overlay').style.opacity = '1';
       });
       el.addEventListener('mouseleave', () => {
-        el.querySelector('img').style.transform = 'scale(1)';
+        var mediaEl = el.querySelector('img') || el.querySelector('video') || el.querySelector('.media-container');
+        if (mediaEl) mediaEl.style.transform = 'scale(1)';
+        if (mediaType === 'video') {
+          var vid = el.querySelector('video');
+          if (vid) { vid.pause(); }
+        }
         el.querySelector('.gallery-hover-overlay').style.opacity = '0';
       });
     });

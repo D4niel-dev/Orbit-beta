@@ -75,6 +75,11 @@
   border-radius: var(--radius-md);
 }
 
+/* Fill SVG icons when button is active — filled variant for active state */
+.icon-btn.active svg {
+  fill: currentColor !important;
+}
+
 /* Active indicator line on the left */
 .icon-btn.active::before {
   content: '';
@@ -1473,3 +1478,71 @@ button:active,
   color: var(--text-muted);
 }
 
+
+
+.titlebar-nav-btn { -webkit-app-region: no-drag; transition: all 0.2s; }
+.titlebar-nav-btn:hover { background: var(--bg-hover) !important; color: var(--text-primary) !important; }
+.titlebar-nav-btn:active { background: var(--bg-active) !important; }
+
+/* ─── Gallery Grid Items ─── */
+.gallery-grid-item {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-hover);
+  position: relative;
+  cursor: pointer;
+  break-inside: avoid;
+}
+.gallery-grid-item:hover {
+  border-color: var(--accent-primary);
+}
+.gallery-grid-item .gallery-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.6);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.gallery-grid-item:hover .gallery-overlay {
+  opacity: 1;
+}
+.gallery-action-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  color: white;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.gallery-action-btn:hover {
+  background: var(--accent-primary);
+  transform: scale(1.1);
+}
+.gallery-grid-item .gallery-label {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 12px 12px 8px 12px;
+  background: linear-gradient(transparent, rgba(0,0,0,0.9));
+  color: white;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  z-index: 2;
+}

@@ -50,8 +50,10 @@ window.GlobalGallery = {
         if (msg.attachments) {
           msg.attachments.forEach(function(att) {
             var type = (att.type || '').toLowerCase();
-            if (this.mediaType === 'images' && type !== 'image') return;
-            if (this.mediaType === 'files' && type === 'image') return;
+            var mime = (att.mimeType || '').toLowerCase();
+            var isMedia = type === 'image' || type === 'video' || type === 'audio' || mime.startsWith('image/') || mime.startsWith('video/') || mime.startsWith('audio/');
+            if (this.mediaType === 'images' && !isMedia) return;
+            if (this.mediaType === 'files' && isMedia) return;
             allAttachments.push({
               ...att,
               chatId: chatId,
@@ -85,9 +87,6 @@ window.GlobalGallery = {
     // Sort newest first
     allAttachments.sort(function(a, b) { return new Date(b.timestamp) - new Date(a.timestamp); });
 
-    var images = allAttachments.filter(function(a) { return (a.type || '').toLowerCase() === 'image'; });
-    var nonImages = allAttachments.filter(function(a) { return (a.type || '').toLowerCase() !== 'image'; });
-
     function fileIconHtml(name) {
       var ext = (name || '').split('.').pop().toLowerCase();
       var icon = 'file';
@@ -100,15 +99,37 @@ window.GlobalGallery = {
       return icon;
     }
 
-    function isImageType(a) {
-      return (a.type || '').toLowerCase() === 'image';
+    function isMediaType(a) {
+      var type = (a.type || '').toLowerCase();
+      var mime = (a.mimeType || '').toLowerCase();
+      return type === 'image' || type === 'video' || type === 'audio' || mime.startsWith('image/') || mime.startsWith('video/') || mime.startsWith('audio/');
     }
 
     function renderGridItem(a) {
-      if (isImageType(a)) {
-        return '<div style="border-radius:12px; overflow:hidden; border:1px solid var(--border-subtle); background:var(--bg-hover); aspect-ratio:1; position:relative; cursor:pointer;" onclick="if(window.ImageViewer) window.ImageViewer.open({url:\'' + window.Sanitize.escapeHtml(a.url || '') + '\', name:\'' + window.Sanitize.escapeHtml(a.name || 'Image') + '\', size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'})">' +
-          '<img src="' + window.Sanitize.escapeHtml(a.url || '') + '" style="width:100%; height:100%; object-fit:cover;" onerror="if(window.handleMediaError) window.handleMediaError(this, \'' + window.Sanitize.escapeHtml(a.url || '') + '\')">' +
-          '<div style="position:absolute; bottom:0; left:0; right:0; padding:8px; background:linear-gradient(transparent, rgba(0,0,0,0.8)); color:white; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + window.Sanitize.escapeHtml(a.chatName) + '</div>' +
+      if (isMediaType(a)) {
+        var isVideo = (a.type === 'video' || (a.mimeType || '').startsWith('video/'));
+        var isAudio = (a.type === 'audio' || (a.mimeType || '').startsWith('audio/'));
+        var mediaHtml = '';
+        var safeUrl = window.Sanitize.escapeHtml(a.url || '');
+        if (isVideo) {
+          var posterUrl = window.Sanitize.escapeHtml(a._poster || '');
+          mediaHtml = '<div style="width:100%; height:100%; background:var(--bg-panel); position:relative;" onmouseover="var vc=this.querySelector(\'.vid-c\'); if(!vc.querySelector(\'video\')){ vc.innerHTML = \'<video src=&quot;' + safeUrl + '&quot; style=&quot;width:100%;height:100%;object-fit:cover;position:absolute;inset:0;&quot; muted loop autoplay playsinline></video>\'; } else { vc.querySelector(\'video\').play().catch(function(){}); }" onmouseout="var v=this.querySelector(\'video\'); if(v) v.pause();">' +
+            (posterUrl ? '<img src="' + posterUrl + '" style="width:100%;height:100%;object-fit:cover;position:absolute;inset:0;">' : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;position:absolute;inset:0;"><i data-lucide="video" style="width:32px;height:32px;opacity:0.5;"></i></div>') +
+            '<div class="vid-c" style="position:absolute;inset:0;pointer-events:none;"></div>' +
+          '</div>';
+        } else if (isAudio) {
+          mediaHtml = '<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:var(--bg-base);"><i data-lucide="music" style="width:48px;height:48px;color:var(--accent-success);"></i></div>';
+        } else {
+          mediaHtml = '<img src="' + safeUrl + '" style="width:100%; height:100%; object-fit:cover;" onerror="if(window.handleMediaError) window.handleMediaError(this, \'' + safeUrl + '\')">';
+        }
+
+        return '<div class="gallery-grid-item" style="aspect-ratio:1;" onclick="if(window.ImageViewer) window.ImageViewer.open({url:\'' + safeUrl + '\', name:\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\', size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'})">' +
+          mediaHtml +
+          '<div class="gallery-label">' + window.Sanitize.escapeHtml(a.chatName) + '</div>' +
+          '<div class="gallery-overlay">' +
+            '<button class="gallery-action-btn" title="View"><i data-lucide="' + (isVideo || isAudio ? 'play' : 'eye') + '" style="width:18px;height:18px;"></i></button>' +
+            '<a href="' + safeUrl + '" download="' + window.Sanitize.escapeHtml(a.name || 'Media') + '" class="gallery-action-btn" title="Download" onclick="event.stopPropagation()"><i data-lucide="download" style="width:18px;height:18px;"></i></a>' +
+          '</div>' +
         '</div>';
       }
       var fic = fileIconHtml(a.name);
@@ -121,13 +142,29 @@ window.GlobalGallery = {
     function renderListItem(a) {
       var d = new Date(a.timestamp);
       var dateStr = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-      if (isImageType(a)) {
-        return '<div style="display:flex; gap:16px; align-items:center; border-radius:12px; padding:12px; border:1px solid var(--border-subtle); background:var(--bg-surface); cursor:pointer;" onclick="if(window.ImageViewer) window.ImageViewer.open({url:\'' + window.Sanitize.escapeHtml(a.url || '') + '\', name:\'' + window.Sanitize.escapeHtml(a.name || 'Image') + '\', size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'})">' +
+      if (isMediaType(a)) {
+        var isVideo = (a.type === 'video' || (a.mimeType || '').startsWith('video/'));
+        var isAudio = (a.type === 'audio' || (a.mimeType || '').startsWith('audio/'));
+        var mediaHtml = '';
+        var safeUrl = window.Sanitize.escapeHtml(a.url || '');
+        if (isVideo) {
+          var posterUrl = window.Sanitize.escapeHtml(a._poster || '');
+          mediaHtml = '<div style="width:100%; height:100%; background:var(--bg-panel); position:relative;" onmouseover="var vc=this.querySelector(\'.vid-c\'); if(!vc.querySelector(\'video\')){ vc.innerHTML = \'<video src=&quot;' + safeUrl + '&quot; style=&quot;width:100%;height:100%;object-fit:cover;position:absolute;inset:0;&quot; muted loop autoplay playsinline></video>\'; } else { vc.querySelector(\'video\').play().catch(function(){}); }" onmouseout="var v=this.querySelector(\'video\'); if(v) v.pause();">' +
+            (posterUrl ? '<img src="' + posterUrl + '" style="width:100%;height:100%;object-fit:cover;position:absolute;inset:0;">' : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;position:absolute;inset:0;"><i data-lucide="video" style="width:24px;height:24px;opacity:0.5;"></i></div>') +
+            '<div class="vid-c" style="position:absolute;inset:0;pointer-events:none;"></div>' +
+          '</div>';
+        } else if (isAudio) {
+          mediaHtml = '<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:var(--bg-base);"><i data-lucide="music" style="width:32px;height:32px;color:var(--accent-success);"></i></div>';
+        } else {
+          mediaHtml = '<img src="' + safeUrl + '" style="width:100%; height:100%; object-fit:cover;" onerror="if(window.handleMediaError) window.handleMediaError(this, \'' + safeUrl + '\')">';
+        }
+
+        return '<div style="display:flex; gap:16px; align-items:center; border-radius:12px; padding:12px; border:1px solid var(--border-subtle); background:var(--bg-surface); cursor:pointer;" onclick="if(window.ImageViewer) window.ImageViewer.open({url:\'' + safeUrl + '\', name:\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\', size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'})">' +
           '<div style="width:80px; height:80px; border-radius:8px; overflow:hidden; flex-shrink:0;">' +
-            '<img src="' + window.Sanitize.escapeHtml(a.url || '') + '" style="width:100%; height:100%; object-fit:cover;" onerror="if(window.handleMediaError) window.handleMediaError(this, \'' + window.Sanitize.escapeHtml(a.url || '') + '\')">' +
+            mediaHtml +
           '</div>' +
           '<div style="flex:1; overflow:hidden;">' +
-            '<div style="font-weight:600; font-family:var(--font-display); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + window.Sanitize.escapeHtml(a.name || 'Image') + '</div>' +
+            '<div style="font-weight:600; font-family:var(--font-display); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + window.Sanitize.escapeHtml(a.name || 'Media') + '</div>' +
             '<div style="color:var(--text-secondary); font-size:13px; margin-top:4px;">Shared in ' + window.Sanitize.escapeHtml(a.chatName) + '</div>' +
             '<div style="color:var(--text-muted); font-size:12px; margin-top:4px;">' + dateStr + '</div>' +
           '</div>' +
@@ -148,7 +185,18 @@ window.GlobalGallery = {
     // Build content HTML
     var contentHtml = '';
     if (allAttachments.length === 0) {
-      contentHtml = '<div style="flex:1; display:flex; align-items:center; justify-content:center; color:var(--text-muted);">No media found matching your criteria.</div>';
+      contentHtml = 
+        '<div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding: 40px;">' +
+          '<svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="var(--border-subtle)" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:16px;">' +
+            '<rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>' +
+            '<circle cx="8.5" cy="8.5" r="1.5"></circle>' +
+            '<polyline points="21 15 16 10 5 21"></polyline>' +
+          '</svg>' +
+          '<div style="font-size:16px; font-weight:600; color:var(--text-primary); margin-bottom:4px;">No Media Found</div>' +
+          '<div style="font-size:13px; color:var(--text-muted); text-align:center; max-width:280px;">' +
+            (this.searchQuery ? 'Try adjusting your search or filters to find what you\'re looking for.' : 'When you share images, videos, or files in chats, they will appear here.') +
+          '</div>' +
+        '</div>';
     } else {
       if (this.displayMode === 'grid') {
         contentHtml = '<div style="flex:1; overflow-y:auto; padding:var(--spacing-lg); display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:16px; align-content:start;">';
@@ -160,14 +208,36 @@ window.GlobalGallery = {
         contentHtml += '</div>';
       } else if (this.displayMode === 'masonry') {
         contentHtml = '<div style="flex:1; overflow-y:auto; padding:var(--spacing-lg); column-count: 3; column-gap: 16px;">';
-        images.forEach(function(a) {
-          contentHtml += '<div style="border-radius:12px; overflow:hidden; border:1px solid var(--border-subtle); background:var(--bg-hover); margin-bottom:16px; cursor:pointer; break-inside: avoid;" onclick="if(window.ImageViewer) window.ImageViewer.open({url:\'' + window.Sanitize.escapeHtml(a.url || '') + '\', name:\'' + window.Sanitize.escapeHtml(a.name || 'Image') + '\', size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'})">' +
-            '<img src="' + window.Sanitize.escapeHtml(a.url || '') + '" style="width:100%; display:block;" onerror="if(window.handleMediaError) window.handleMediaError(this, \'' + window.Sanitize.escapeHtml(a.url || '') + '\')">' +
+        var mediaFiles = allAttachments.filter(function(a) { return isMediaType(a); });
+        var otherFiles = allAttachments.filter(function(a) { return !isMediaType(a); });
+        mediaFiles.forEach(function(a) {
+          var isVideo = (a.type === 'video' || (a.mimeType || '').startsWith('video/'));
+          var isAudio = (a.type === 'audio' || (a.mimeType || '').startsWith('audio/'));
+          var mediaHtml = '';
+          var safeUrl = window.Sanitize.escapeHtml(a.url || '');
+          if (isVideo) {
+            var posterUrl = window.Sanitize.escapeHtml(a._poster || '');
+          mediaHtml = '<div style="width:100%; height:100%; min-height:120px; display:flex; align-items:center; justify-content:center; background:var(--bg-panel); position:relative;" onmouseover="var vc=this.querySelector(\'.vid-c\'); if(!vc.querySelector(\'video\')){ vc.innerHTML = \'<video src=&quot;' + safeUrl + '&quot; style=&quot;width:100%;height:100%;object-fit:cover;display:block;position:absolute;inset:0;&quot; muted loop autoplay playsinline></video>\'; } else { vc.querySelector(\'video\').play().catch(function(){}); }" onmouseout="var v=this.querySelector(\'video\'); if(v) v.pause();">' +
+            (posterUrl ? '<img src="' + posterUrl + '" style="width:100%;height:100%;object-fit:cover;display:block;position:absolute;inset:0;">' : '<i data-lucide="video" style="width:32px;height:32px;opacity:0.5;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);"></i>') +
+            '<div class="vid-c" style="position:absolute;inset:0;pointer-events:none;"></div>' +
+          '</div>';
+          } else if (isAudio) {
+            mediaHtml = '<div style="width:100%; aspect-ratio:1; display:flex; align-items:center; justify-content:center; background:var(--bg-base);"><i data-lucide="music" style="width:48px;height:48px;color:var(--accent-success);"></i></div>';
+          } else {
+            mediaHtml = '<img src="' + safeUrl + '" style="width:100%; display:block;" onerror="if(window.handleMediaError) window.handleMediaError(this, \'' + safeUrl + '\')">';
+          }
+
+          contentHtml += '<div class="gallery-grid-item" onclick="if(window.ImageViewer) window.ImageViewer.open({url:\'' + safeUrl + '\', name:\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\', size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'})" style="margin-bottom:16px;">' +
+            mediaHtml +
+            '<div class="gallery-overlay">' +
+              '<button class="gallery-action-btn" title="View"><i data-lucide="' + (isVideo || isAudio ? 'play' : 'eye') + '" style="width:18px;height:18px;"></i></button>' +
+              '<a href="' + safeUrl + '" download="' + window.Sanitize.escapeHtml(a.name || 'Media') + '" class="gallery-action-btn" title="Download" onclick="event.stopPropagation()"><i data-lucide="download" style="width:18px;height:18px;"></i></a>' +
+            '</div>' +
           '</div>';
         });
-        if (nonImages.length > 0) {
+        if (otherFiles.length > 0) {
           contentHtml += '<div style="break-inside:avoid; margin-bottom:16px; padding:12px; background:var(--bg-hover); border-radius:12px; border:1px solid var(--border-subtle);"><div style="font-size:11px; color:var(--text-muted); margin-bottom:8px;">Files</div>';
-          nonImages.forEach(function(a) {
+          otherFiles.forEach(function(a) {
             var fic = fileIconHtml(a.name);
             contentHtml += '<div style="display:flex; align-items:center; gap:8px; padding:4px 0;"><i data-lucide="' + fic + '" style="width:14px; height:14px; color:var(--text-muted); flex-shrink:0;"></i><span style="font-size:12px; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + window.Sanitize.escapeHtml(a.name || 'file') + '</span></div>';
           });

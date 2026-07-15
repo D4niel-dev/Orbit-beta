@@ -47,6 +47,14 @@
 <body>
   <!-- Custom Titlebar -->
   <div id="titlebar">
+    <div id="titlebar-nav" style="display: flex; align-items: center; padding-left: 6px; gap: 4px; z-index: 1000; -webkit-app-region: no-drag;">
+      <button class="titlebar-nav-btn" id="btn-nav-back" title="Back" style="width: 24px; height: 24px; border-radius: 4px; border: none; background: transparent; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center;">
+        <i data-lucide="arrow-left" style="width:12px;height:12px;"></i>
+      </button>
+      <button class="titlebar-nav-btn" id="btn-nav-forward" title="Forward" style="width: 24px; height: 24px; border-radius: 4px; border: none; background: transparent; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center;">
+        <i data-lucide="arrow-right" style="width:12px;height:12px;"></i>
+      </button>
+    </div>
     <div class="titlebar-drag-area"></div>
     <div class="controls">
       <button id="btn-minimize" class="control-btn" title="Minimize">

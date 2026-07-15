@@ -670,6 +670,66 @@ window.SettingsModal = {
       content.querySelectorAll('input[name="theme"]').forEach(function(radio) {
         radio.addEventListener('change', function(e) {
           if (e.target.checked) {
+            var currentTheme = window.store.getState().settings.theme;
+            // Easter egg: Light mode warning 😎
+            if (e.target.value === 'light' && currentTheme !== 'light') {
+              // Revert the radio visually while we show the dialog
+              e.target.checked = false;
+              var prevRadio = content.querySelector('input[name="theme"][value="' + currentTheme + '"]');
+              if (prevRadio) prevRadio.checked = true;
+
+              // Build a funny warning dialog
+              var overlay = document.createElement('div');
+              overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(6px);z-index:99999;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.2s ease;';
+              overlay.innerHTML =
+                '<div style="background:var(--bg-surface);border:1px solid var(--border-strong);border-radius:16px;padding:32px;max-width:440px;width:90%;box-shadow:0 24px 48px rgba(0,0,0,0.4);text-align:center;">' +
+                  '<div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#FFD93D,#FF6B6B);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;"><svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg></div>' +
+                  '<h3 style="font-family:var(--font-display);font-size:20px;color:var(--text-primary);margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:8px;"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="var(--accent-warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>CAUTION : Light Mode</h3>' +
+                  '<p style="font-size:14px;color:var(--text-secondary);line-height:1.6;margin-bottom:6px;">' +
+                    'Are you <b>ABSOLUTELY</b> sure you want to switch to <br><span style="color:#FFD93D;font-weight:700;">Light Mode</span> ?' +
+                  '</p>' +
+                  '<p style="font-size:13px;color:var(--text-muted);line-height:1.5;margin-bottom:20px;">' +
+                    'This action will deploy a tactical <b style="color:var(--accent-warning);">FLASHBANG</b> directly to your retinas. ' +
+                    '<br>Side effects may include temporary blindness, existential confusion, and an overwhelming urge to switch back to Dark Mode immediately.<br><br>' +
+                    '<span style="font-size:12px;opacity:0.7;">We recommend putting on sunglasses before proceeding. <br>You have been warned.</span>' +
+                  '</p>' +
+                  '<div style="display:flex;gap:10px;justify-content:center;">' +
+                    '<button id="light-mode-cancel" style="padding:10px 20px;border-radius:10px;border:1px solid var(--border-subtle);background:transparent;color:var(--text-secondary);cursor:pointer;font-size:13px;font-weight:500;">No thanks, I choose life</button>' +
+                    '<button id="light-mode-confirm" style="padding:10px 20px;border-radius:10px;border:none;background:linear-gradient(135deg,#FFD93D,#FF8C00);color:#000;cursor:pointer;font-size:13px;font-weight:700;display:inline-flex;align-items:center;gap:6px;"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Flashbang me</button>' +
+                  '</div>' +
+                '</div>';
+              document.body.appendChild(overlay);
+
+              overlay.querySelector('#light-mode-cancel').addEventListener('click', function() {
+                overlay.style.opacity = '0';
+                overlay.style.transition = 'opacity 0.2s';
+                setTimeout(function() { overlay.remove(); }, 200);
+              });
+              overlay.addEventListener('click', function(ev) {
+                if (ev.target === overlay) {
+                  overlay.style.opacity = '0';
+                  overlay.style.transition = 'opacity 0.2s';
+                  setTimeout(function() { overlay.remove(); }, 200);
+                }
+              });
+
+              overlay.querySelector('#light-mode-confirm').addEventListener('click', function() {
+                overlay.remove();
+                // Deploy the flashbang 💥
+                var flash = document.createElement('div');
+                flash.style.cssText = 'position:fixed;inset:0;background:#fff;z-index:999999;opacity:1;transition:opacity 0.8s ease;pointer-events:none;';
+                document.body.appendChild(flash);
+                setTimeout(function() {
+                  flash.style.opacity = '0';
+                  setTimeout(function() { flash.remove(); }, 800);
+                }, 400);
+                // Apply the theme
+                updateSettings('theme', 'light');
+                if (window.SettingsModal) window.SettingsModal.renderTab('appearance');
+              });
+              return;
+            }
+
             updateSettings('theme', e.target.value);
             content.querySelectorAll('input[name="theme"]').forEach(function(r) {
               r.parentElement.style.borderColor = 'var(--border-subtle)';

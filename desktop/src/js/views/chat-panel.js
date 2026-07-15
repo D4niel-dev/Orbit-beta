@@ -731,7 +731,7 @@ window.ChatPanel = {
       const actionsBar = '<div class="msg-actions-bar' + (isMine ? ' msg-actions-left' : ' msg-actions-right') + '">' + actionBtns + '</div>';
 
       const bubblePadding = (sanitizedText || attachmentsHtml) ? 'padding: 10px 14px;' : 'padding: 0;';
-      const bubbleBgMine = (sanitizedText || attachmentsHtml) ? 'background-color: var(--accent-primary); color: white; box-shadow: var(--shadow-sm);' : 'background: transparent;';
+      const bubbleBgMine = (sanitizedText || attachmentsHtml) ? 'background-color: var(--bg-hover); color: white; box-shadow: var(--shadow-sm);' : 'background: transparent;';
       const bubbleBgOther = (sanitizedText || attachmentsHtml) ? 'background-color: var(--bg-surface); box-shadow: var(--shadow-sm);' : 'background: transparent;';
 
       // Link Preview detection
@@ -1201,9 +1201,12 @@ window.ChatPanel = {
         if (!chatId || chatId === 'local-echo') return;
         var members = state.groups.find(function(g) { return g.groupId === chatId; });
         var recipients = members ? members.members : [state.friends.find(function(f) { return f.userId === chatId; })].filter(Boolean);
+        var isGroup = !!members;
         recipients.forEach(function(r) {
           if (r.userId !== state.currentUser.userId) {
-            window.orbitAPI.networkSend(r.userId, r.ip || '', window.Protocol.Types.TYPING, { isTyping: isTyping, username: state.currentUser.username });
+            var payload = { isTyping: isTyping, username: state.currentUser.username };
+            if (isGroup) payload.groupId = chatId;
+            window.orbitAPI.networkSend(r.userId, r.ip || '', window.Protocol.Types.TYPING, payload);
           }
         });
       };
