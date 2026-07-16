@@ -965,6 +965,12 @@ window.ChatPanel = {
         '</div>' +
       '</div>';
 
+    // Suppress message enter animation during initial scroll to prevent 12px over-correction
+    var suppressingRows = this.container.querySelectorAll('.message-row');
+    for (var si = 0; si < suppressingRows.length; si++) {
+      suppressingRows[si].style.animation = 'none';
+    }
+
     // Syntax-highlight code blocks
     if (window.Prism) setTimeout(function() { Prism.highlightAll(); }, 0);
 
@@ -1067,9 +1073,23 @@ window.ChatPanel = {
     // Inject message FX particles for own messages
     this._injectMessageParticles();
 
-    // Auto scroll to bottom
+    // Auto scroll to bottom (or to a pending message from Activity Center / search)
     var feed = document.getElementById('chat-message-feed');
-    if (feed) feed.scrollTop = feed.scrollHeight;
+    if (feed) {
+      var scrollMsgId = window._pendingActivityScrollMsgId;
+      if (scrollMsgId) {
+        var scrollEl = feed.querySelector('[data-msg-id="' + scrollMsgId + '"].message-row');
+        if (scrollEl) {
+          var feedRect = feed.getBoundingClientRect();
+          var elRect = scrollEl.getBoundingClientRect();
+          var offset = (elRect.top + elRect.height / 2) - (feedRect.top + feedRect.height / 2);
+          feed.scrollTop += offset;
+          window._pendingActivityScrollMsgId = null;
+        }
+      } else {
+        feed.scrollTop = feed.scrollHeight;
+      }
+    }
 
     // Jump-to-unread scroll listener
     if (feed) {
@@ -2239,6 +2259,47 @@ window.ChatPanel = {
       lf._fileId = fid;
     });
 
+    // ---- Generate posters for video files before sending ----
+    await Promise.all(largeFiles.map(async function(lf) {
+      if (lf.staged.type !== 'video' || !lf.staged.file) return;
+      try {
+        var videoUrl = URL.createObjectURL(lf.staged.file);
+        var vid = document.createElement('video');
+        vid.preload = 'metadata';
+        vid.muted = true;
+        vid.playsInline = true;
+        vid.src = videoUrl;
+        await new Promise(function(resolve, reject) {
+          var timeout = setTimeout(function() { vid.remove(); URL.revokeObjectURL(videoUrl); resolve(); }, 8000);
+          vid.addEventListener('loadeddata', function() {
+            vid.currentTime = 0.5;
+          });
+          vid.addEventListener('seeked', function() {
+            try {
+              var canvas = document.createElement('canvas');
+              canvas.width = vid.videoWidth || 320;
+              canvas.height = vid.videoHeight || 240;
+              canvas.getContext('2d').drawImage(vid, 0, 0);
+              lf.staged._poster = canvas.toDataURL('image/jpeg', 0.6);
+            } catch(e) { /* poster capture failed */ }
+            clearTimeout(timeout);
+            vid.remove();
+            URL.revokeObjectURL(videoUrl);
+            resolve();
+          });
+          vid.addEventListener('error', function() {
+            clearTimeout(timeout);
+            vid.remove();
+            URL.revokeObjectURL(videoUrl);
+            resolve();
+          });
+          vid.load();
+        });
+      } catch(e) {
+        console.warn('[ChatPanel] Failed to generate video poster:', e);
+      }
+    }));
+
     // ---- Send MESSAGE with text + small file data URLs (+ large file markers for CRIT-4) ----
     var msgId = Date.now() + 2;
     if (text || inlineAttachments.length > 0 || largeFiles.length > 0) {
@@ -2260,7 +2321,7 @@ window.ChatPanel = {
       }
       // Add _fileId markers for large files so receiver can merge (CRIT-4)
       largeFiles.forEach(function(lf) {
-        payload.attachments.push({ _fileId: lf._fileId, name: lf.staged.name, type: lf.staged.type, _pending: true });
+        payload.attachments.push({ _fileId: lf._fileId, name: lf.staged.name, type: lf.staged.type, _poster: lf.staged._poster || undefined, _pending: true });
       });
 
       // E2EE: encrypt text for each recipient

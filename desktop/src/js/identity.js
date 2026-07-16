@@ -34,6 +34,23 @@ window.Identity = {
     window.store.setState({ currentUser: target });
     if (window.orbitAPI) window.orbitAPI.dbSetSetting('lastActiveUserId', target.userId);
     console.log('[Identity] Switched to:', target.username + '#' + target.usertag);
+
+    // Track account switch for undo/redo
+    if (window.UndoManager && !window.UndoManager._paused && window.store) {
+      var _prevUser = window.store.getState().currentUser;
+      var _newUserId = userId;
+      var _newUser = target;
+      window.UndoManager.pushAction('Switch account', function() {
+        // Undo: switch back to previous account
+        if (_prevUser && _prevUser.userId) {
+          window.Identity.switchTo(_prevUser.userId);
+        }
+      }, function() {
+        // Redo: switch to new account
+        window.Identity.switchTo(_newUserId);
+      });
+    }
+
     return true;
   },
 
@@ -89,6 +106,38 @@ window.Identity = {
       if (!validation.isValid) {
         throw new Error("Bio contains inappropriate language.");
       }
+    }
+
+    // Track profile changes for undo/redo
+    if (window.UndoManager && !window.UndoManager._paused) {
+      var _oldUser = currentState;
+      var _newUser = newState;
+      var _changedKeys = Object.keys(updates);
+      var label = 'Update profile';
+      if (_changedKeys.length === 1) {
+        if (_changedKeys[0] === 'username') label = 'Change username';
+        else if (_changedKeys[0] === 'bio') label = 'Change bio';
+        else if (_changedKeys[0] === 'avatar') label = 'Change avatar';
+        else if (_changedKeys[0] === 'banner') label = 'Change banner';
+      }
+      window.UndoManager.pushAction(label, function() {
+        // Undo: restore old user data
+        window.Identity.save(_oldUser);
+        window.store.setState({ currentUser: _oldUser });
+        // Re-render account tab if open
+        if (window.SettingsModal) {
+          var ct = document.querySelector('#settings-content');
+          if (ct && ct.innerHTML.indexOf('My Account') > -1) window.SettingsModal.renderTab('account');
+        }
+      }, function() {
+        // Redo: re-apply new user data
+        window.Identity.save(_newUser);
+        window.store.setState({ currentUser: _newUser });
+        if (window.SettingsModal) {
+          var ct = document.querySelector('#settings-content');
+          if (ct && ct.innerHTML.indexOf('My Account') > -1) window.SettingsModal.renderTab('account');
+        }
+      });
     }
 
     this.save(newState);

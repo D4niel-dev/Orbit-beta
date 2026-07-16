@@ -311,6 +311,7 @@
       wrapper.appendChild(seek);
       wrapper.appendChild(ctrl);
       container.appendChild(wrapper);
+      container.classList.remove('ovp-placeholder');
 
       function seekRelative(secs) {
         if (!video) return;
@@ -503,10 +504,32 @@
                 knownDuration = d;
                 dbg('[' + _logId + '] parsed MP4 duration from blob=' + knownDuration + 's');
                 updTime();
-              } else if (video && (!isFinite(video.duration) || video.duration === 0)) {
-                dbg('[' + _logId + '] no knownDuration and browser duration zero/Infinity, seeking to force read');
-                video._forcedSeek = true;
-                video.currentTime = 1e10;
+              } else {
+                dbg('[' + _logId + '] no knownDuration from parse, trying browser metadata');
+                var onMeta = function onMeta() {
+                  video.removeEventListener('loadedmetadata', onMeta);
+                  if (isFinite(video.duration) && video.duration > 0) {
+                    knownDuration = video.duration;
+                    dbg('[' + _logId + '] got duration from loadedmetadata=' + knownDuration + 's');
+                    updTime();
+                  }
+                };
+                if (isFinite(video.duration) && video.duration > 0) {
+                  knownDuration = video.duration;
+                  dbg('[' + _logId + '] got duration from video.duration=' + knownDuration + 's');
+                  updTime();
+                } else if (video.readyState >= 1) {
+                  if (isFinite(video.duration) && video.duration > 0) {
+                    knownDuration = video.duration;
+                    dbg('[' + _logId + '] got duration from video.duration (readyState>=1)=' + knownDuration + 's');
+                    updTime();
+                  }
+                } else {
+                  video.addEventListener('loadedmetadata', onMeta);
+                  setTimeout(function() {
+                    video.removeEventListener('loadedmetadata', onMeta);
+                  }, 5000);
+                }
               }
             }).catch(function(e) {
               dbg('[' + _logId + '] blob fetch failed:', e);
@@ -522,22 +545,91 @@
                         knownDuration = d2;
                         dbg('[' + _logId + '] parsed MP4 duration from data URL fallback=' + knownDuration + 's');
                         updTime();
-                      } else if (video && (!isFinite(video.duration) || video.duration === 0)) {
-                        video._forcedSeek = true;
-                        video.currentTime = 1e10;
+                      } else {
+                        var onMeta2 = function onMeta2() {
+                          video.removeEventListener('loadedmetadata', onMeta2);
+                          if (isFinite(video.duration) && video.duration > 0) {
+                            knownDuration = video.duration;
+                            dbg('[' + _logId + '] got duration from loadedmetadata (fallback)=' + knownDuration + 's');
+                            updTime();
+                          }
+                        };
+                        if (isFinite(video.duration) && video.duration > 0) {
+                          knownDuration = video.duration;
+                          dbg('[' + _logId + '] got duration from video.duration (fallback)=' + knownDuration + 's');
+                          updTime();
+                        } else if (video.readyState >= 1) {
+                          if (isFinite(video.duration) && video.duration > 0) {
+                            knownDuration = video.duration;
+                            dbg('[' + _logId + '] got duration from video.duration rS>=1 (fallback)=' + knownDuration + 's');
+                            updTime();
+                          }
+                        } else {
+                          video.addEventListener('loadedmetadata', onMeta2);
+                          setTimeout(function() {
+                            video.removeEventListener('loadedmetadata', onMeta2);
+                          }, 5000);
+                        }
                       }
                     }
                   }
                 } catch(e2) { dbg('[' + _logId + '] data URL duration fallback error:', e2); }
-              } else if (video && (!isFinite(video.duration) || video.duration === 0)) {
-                video._forcedSeek = true;
-                video.currentTime = 1e10;
+              } else {
+                var onMeta3 = function onMeta3() {
+                  video.removeEventListener('loadedmetadata', onMeta3);
+                  if (isFinite(video.duration) && video.duration > 0) {
+                    knownDuration = video.duration;
+                    dbg('[' + _logId + '] got duration from loadedmetadata (fallback2)=' + knownDuration + 's');
+                    updTime();
+                  }
+                };
+                if (isFinite(video.duration) && video.duration > 0) {
+                  knownDuration = video.duration;
+                  dbg('[' + _logId + '] got duration from video.duration (fallback2)=' + knownDuration + 's');
+                  updTime();
+                } else if (video.readyState >= 1) {
+                  if (isFinite(video.duration) && video.duration > 0) {
+                    knownDuration = video.duration;
+                    dbg('[' + _logId + '] got duration from video.duration rS>=1 (fallback2)=' + knownDuration + 's');
+                    updTime();
+                  }
+                } else {
+                  video.addEventListener('loadedmetadata', onMeta3);
+                  setTimeout(function() {
+                    video.removeEventListener('loadedmetadata', onMeta3);
+                  }, 5000);
+                }
               }
             });
           }, 0);
         } else if (!srcUrl.startsWith('orbit-db://') && !srcUrl.startsWith('orbit-file://')) {
-          dbg('[' + _logId + '] no knownDuration and browser duration zero, seeking to force read');
-          if (video) { video._forcedSeek = true; video.currentTime = 1e10; }
+          dbg('[' + _logId + '] no knownDuration from parse, trying browser metadata');
+          if (video) {
+            var onMeta4 = function onMeta4() {
+              video.removeEventListener('loadedmetadata', onMeta4);
+              if (isFinite(video.duration) && video.duration > 0) {
+                knownDuration = video.duration;
+                dbg('[' + _logId + '] got duration from loadedmetadata (final)=' + knownDuration + 's');
+                updTime();
+              }
+            };
+            if (isFinite(video.duration) && video.duration > 0) {
+              knownDuration = video.duration;
+              dbg('[' + _logId + '] got duration from video.duration (final)=' + knownDuration + 's');
+              updTime();
+            } else if (video.readyState >= 1) {
+              if (isFinite(video.duration) && video.duration > 0) {
+                knownDuration = video.duration;
+                dbg('[' + _logId + '] got duration from video.duration rS>=1 (final)=' + knownDuration + 's');
+                updTime();
+              }
+            } else {
+              video.addEventListener('loadedmetadata', onMeta4);
+              setTimeout(function() {
+                video.removeEventListener('loadedmetadata', onMeta4);
+              }, 5000);
+            }
+          }
         }
       }
 
@@ -702,9 +794,9 @@
         // Add soft themed glow behind video
         if (!_fsGlow) {
           _fsGlow = document.createElement('div');
-          _fsGlow.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;opacity:0.15;';
+          _fsGlow.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;opacity:0.25;filter:blur(100px);transform:scale(1.1);';
         }
-        _fsGlow.style.setProperty('background', 'radial-gradient(ellipse at center, var(--accent-primary) 0%, transparent 65%)', 'important');
+        _fsGlow.style.setProperty('background', 'radial-gradient(ellipse at center, var(--accent-primary) 0%, transparent 70%)', 'important');
 
         // Move wrapper into our backdrop
         document.body.appendChild(_fsBacking);
@@ -734,6 +826,7 @@
         video.style.height = 'auto';
         video.style.setProperty('background', 'var(--bg-base)', 'important');
         wrapper.style.setProperty('background', 'var(--bg-base)', 'important');
+        wrapper.style.paddingBottom = 'env(safe-area-inset-bottom, 0px)';
         videoBox.style.setProperty('background', 'transparent', 'important');
         updateFSButton();
       }
@@ -760,6 +853,7 @@
         wrapper.style.display = '';
         wrapper.style.flexDirection = '';
         wrapper.style.justifyContent = '';
+        wrapper.style.paddingBottom = '';
         wrapper.style.setProperty('background', 'var(--bg-base)', 'important');
         wrapper.style.borderRadius = '';
         wrapper.style.boxShadow = '';

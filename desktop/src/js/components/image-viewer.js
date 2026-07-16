@@ -397,6 +397,60 @@ window.ImageViewer = {
     }
   },
 
+  openAudio(imgObj) {
+    if (!this.container) return;
+    this.container.style.display = 'flex';
+    try {
+      var titleEl = document.getElementById('iv-title');
+      if (titleEl) titleEl.innerText = imgObj.name || 'Audio';
+
+      // Hide zoom controls (not relevant for audio)
+      var zi = document.getElementById('iv-btn-zoom-in');
+      if (zi) zi.style.display = 'none';
+      var zo = document.getElementById('iv-btn-zoom-out');
+      if (zo) zo.style.display = 'none';
+      var pp = document.getElementById('iv-btn-prev');
+      if (pp) pp.style.display = 'none';
+      var nn = document.getElementById('iv-btn-next');
+      if (nn) nn.style.display = 'none';
+
+      var canvasArea = document.getElementById('iv-canvas-area');
+      if (!canvasArea) return;
+
+      // Hide the img element
+      var imgEl = document.getElementById('iv-image');
+      if (imgEl) imgEl.style.display = 'none';
+
+      // Remove any existing video element
+      var existingVid = canvasArea.querySelector('video');
+      if (existingVid) existingVid.remove();
+
+      // Remove any existing audio player wrapper
+      var existingOap = canvasArea.querySelector('.oap-wrap');
+      if (existingOap) existingOap.remove();
+
+      // Create a container for the audio player
+      var audioContainer = document.createElement('div');
+      audioContainer.style.cssText = 'width:100%; max-width:500px; margin:0 auto; padding:20px;';
+      canvasArea.appendChild(audioContainer);
+
+      // Use the existing OrbitAudioPlayer to create the inline player
+      if (window.OrbitAudioPlayer) {
+        window.OrbitAudioPlayer.create(audioContainer, imgObj.url);
+      } else {
+        // Fallback: native audio element
+        var fallbackAudio = document.createElement('audio');
+        fallbackAudio.src = imgObj.url;
+        fallbackAudio.controls = true;
+        fallbackAudio.autoplay = true;
+        fallbackAudio.style.cssText = 'width:100%; max-width:500px;';
+        audioContainer.appendChild(fallbackAudio);
+      }
+    } catch(e) {
+      console.warn('[ImageViewer] openAudio error:', e);
+    }
+  },
+
   openVideo(src, msgId) {
     if (!this.container) return;
     this.container.style.display = 'flex';

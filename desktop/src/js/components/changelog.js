@@ -14,7 +14,94 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.2.0-beta', 'Latest', [
+        versionBlock('0.2.6-beta', 'Latest', [
+          ['New Features', [
+            'Undo/Redo System — Full Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y support via the new UndoManager component. Covers: message send/delete/edit, settings changes (all tabs), profile updates (username, bio, avatar, banner), account switching, and chat navigation. Titlebar buttons with visual disabled state and tooltip hints.',
+            'Konami Code Easter Egg — Type ↑↑↓↓←→←→BA or ↑↑↓↓←→←→AB to toggle Developer Mode. Visual sequence feedback shown in the title bar.',
+            'Light Mode Flashbang Prevention — "Disable Light Mode Flashbang" toggle in Animation settings. A "Don\'t flashbang me next time" checkbox in the Light Mode warning dialog permanently skips the white flash.',
+            'Theme Transition Animation — 600ms smooth CSS transition for background, border-color, color, fill, and stroke when switching themes. Respects Reduce Motion setting.',
+            'Theme Change Easter Egg — Random theme-matched quotes shown as toasts when switching themes (7-9 texts per theme).',
+            'Midnight Sleep Reminder — Between 12AM-5AM on dark/midnight themes, a toast gently reminds users to get some sleep.',
+            'Gallery Audio/Video Playback — Gallery sidebar and Global Gallery now route audio files to the Audio Player and video files to the Video Player.',
+            'ImageViewer Audio Player — New openAudio() method embeds the Audio Player for inline audio playback in the image viewer overlay.',
+            'Activity Center Scroll-to-Message — Clicking an activity entry now scrolls to the specific message in chat.',
+            'noFlashbang Setting in Theme Export/Import — The noFlashbang setting is included in exported theme JSON files.'
+          ]],
+          ['Bug Fixes', [
+            'Profile Frame Per-Account Sync Fixed — Frame now reads from currentUser.profileFrame, not global settings. Switching accounts shows the correct frame.',
+            'overlayIcon ReferenceError Fixed — Undeclared variable in gallery-sidebar.js caused gallery crash.',
+            'Activity Center UI Shift Fixed — scrollIntoView propagation fixed with manual feed.scrollTop calculation.',
+            'Mobile Buffer Loader Always Visible Fixed — Placeholder removal and overflow:hidden in mobile CSS.',
+            'Image Send Bug Fixed — Blob URL revocation removed from renderMessages().',
+            'Mobile Video Duration Mismatch Fixed — loadedmetadata event listener replaces forced seek hack.',
+            'Mobile→Desktop Video Thumbnails Fixed — _poster field preserved across platforms.',
+            'Gallery Audio/Video Route Fixed — Proper type detection routes to correct player.',
+            'Mobile Fullscreen Taskbar Overlap Fixed — safe-area-inset-bottom padding.',
+            'Blue Fullscreen Background Eliminated — 4-layer background fix across all fullscreen elements.',
+            'Fullscreen Manual Only — Both platforms use _enterManualFS()/_exitManualFS() exclusively.'
+          ]],
+          ['Media Player Improvements', [
+            'Fullscreen Theme Glow — Radial gradient accent glow behind video.',
+            'App-wide Filled Icon State — _iconToggle helper switches filled/outlined Lucide icons.',
+            'Byte-identical Players — shared and mobile player files confirmed identical.'
+          ]],
+          ['UI/UX Polish', [
+            'Titlebar nav buttons switched to undo/redo icons.',
+            'GPU-accelerated rendering with will-change + translateZ(0).',
+            'Sidebar nav back/forward buttons with 50-entry history.'
+          ]],
+          ['Technical', [
+            'New UndoManager component: 100-action stack, Ctrl+Z/Y/Shift+Z, privacy mode awareness.',
+            'NoFlashbang setting, theme transition CSS classes, version bumped to v0.2.6-beta.'
+          ]]
+        ]) +
+        versionBlock('0.2.5-beta', '', [
+          ['New Features', [
+            'Global Gallery Redesign — Grid and list views with audio/video type detection.',
+            'Gallery Sidebar Improvements — Audio inline player, video posters, media type badges.',
+            'Activity Center Enhancements — Refined rendering and click handling.'
+          ]],
+          ['Media Player Improvements', [
+            '_poster field propagated through attachment pipeline for video thumbnails.'
+          ]],
+          ['UI/UX Polish', [
+            'Sidebar nav header with Back/Forward navigation buttons.',
+            'Activity Center shows Lucide icons with color badges, duration/size displays.'
+          ]]
+        ]) +
+        versionBlock('0.2.4-beta', '', [
+          ['Bug Fixes', [
+            'Removed _skipCorrupted proactive seek in doPlay() — forced 1e10 seek replaced with loadedmetadata listeners.',
+            'FILE_TRANSFER DM Packet Fix — chatId removed from DM FILE_TRANSFER packets.'
+          ]]
+        ]) +
+        versionBlock('0.2.3-beta', '', [
+          ['Bug Fixes', [
+            'Render loop fix, _skipCorrupted state persistence across stop/play cycles, chatId packet routing fix.'
+          ]]
+        ]) +
+        versionBlock('0.2.2-beta', '', [
+          ['Media Player Improvements', [
+            'Video Player complete overhaul — MP4 duration parsing, multi-layered fallback, eliminated forced seeks.',
+            'Audio Player major rewrite — same architecture as video player, reliable metadata detection.',
+            'Automatic Video Poster Capture at 0.5s on send (both platforms).',
+            'Mobile sync — both players synced via shared/ui/ directory.'
+          ]],
+          ['Technical', [
+            'Shared audio/video player refactored into clean module pattern.',
+            'Version bumped to v0.2.2-beta.'
+          ]]
+        ]) +
+        versionBlock('0.2.1-beta', '', [
+          ['Bug Fixes', [
+            'Null-check safety for audio/video player controls.',
+            'Mobile audio/video player synced with desktop fixes.'
+          ]],
+          ['Technical', [
+            'Version bumped to v0.2.1-beta.'
+          ]]
+        ]) +
+        versionBlock('0.2.0-beta', '', [
           ['CRITICAL: Mobile Background Notifications & Large File Persistence', [
             'CRITICAL: Mobile Background Notifications Fixed — document.hidden is unreliable in Capacitor WebView; notifications never appeared outside the app. Two-layer fix: JS tracks background via Capacitor appStateChange, and Java OrbitP2PPlugin creates notifications directly via NotificationManager, bypassing the paused WebView entirely.',
             'CRITICAL: Large File Persistence on Mobile — Files >10MB in IndexedDB had blob: URLs die on restart. Added BlobStoreDB (IndexedDB wrapper) + _restoreAllBlobAttachments() on startup. "Restoring..." placeholders shown during recovery.'

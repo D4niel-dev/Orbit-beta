@@ -78,7 +78,7 @@ window.SettingsModal = {
 
     if (tabName === 'account') {
       var s = state.settings || {};
-      var frameNum = s.profileFrame || 0;
+      var frameNum = (user && user.profileFrame != null ? user.profileFrame : (s.profileFrame || 0));
       var frameOverlayPreview = frameNum ? '<img src="icons/frames/pfp_frame_' + frameNum + '.png" style="position:absolute;top:-21%;left:-17%;width:133%;height:133%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '';
 
       var avatarPreview = user.avatar
@@ -135,11 +135,11 @@ window.SettingsModal = {
           '</div>' +
           '<div class="collapsible-body" style="padding:16px;display:block;">' +
             '<div style="display:flex;flex-wrap:wrap;gap:6px;" id="frame-picker">' +
-              '<button class="frame-option" data-frame="0" style="width:44px;height:44px;border-radius:50%;border:2px solid ' + (!s.profileFrame ? 'var(--accent-primary)' : 'var(--border-subtle)') + ';background:var(--bg-base);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-muted);">None</button>' +
+              '<button class="frame-option" data-frame="0" style="width:44px;height:44px;border-radius:50%;border:2px solid ' + (!frameNum ? 'var(--accent-primary)' : 'var(--border-subtle)') + ';background:var(--bg-base);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-muted);">None</button>' +
               (function() {
                 var html = '';
                 for (var i = 1; i <= 42; i++) {
-                  html += '<button class="frame-option" data-frame="' + i + '" style="width:44px;height:44px;border-radius:50%;border:2px solid ' + (s.profileFrame === i ? 'var(--accent-primary)' : 'var(--border-subtle)') + ';cursor:pointer;overflow:hidden;padding:0;background:var(--bg-base);">' +
+                  html += '<button class="frame-option" data-frame="' + i + '" style="width:44px;height:44px;border-radius:50%;border:2px solid ' + (frameNum === i ? 'var(--accent-primary)' : 'var(--border-subtle)') + ';cursor:pointer;overflow:hidden;padding:0;background:var(--bg-base);">' +
                     '<img src="icons/frames/pfp_frame_' + i + '.png" style="width:100%;height:100%;object-fit:contain;" draggable="false">' +
                   '</button>';
                 }
@@ -328,6 +328,27 @@ window.SettingsModal = {
 
       // Settings helper for Account tab (also syncs profileFrame to identity)
       var updateSettings = function(key, val) {
+        // Record undo/redo action
+        if (window.UndoManager && !window.UndoManager._paused) {
+          var _oldVal = window.store.getState().settings[key];
+          var _key = key;
+          var _newVal = val;
+          if (_oldVal !== _newVal) {
+            window.UndoManager.pushAction('Change ' + _key, function() {
+              var s = { ...window.store.getState().settings };
+              s[_key] = _oldVal;
+              window.store.setState({ settings: s });
+              window.Storage.set('settings', s);
+              if (window.App && window.App.applySettings) window.App.applySettings(s);
+            }, function() {
+              var s = { ...window.store.getState().settings };
+              s[_key] = _newVal;
+              window.store.setState({ settings: s });
+              window.Storage.set('settings', s);
+              if (window.App && window.App.applySettings) window.App.applySettings(s);
+            });
+          }
+        }
         var newSettings = { ...window.store.getState().settings };
         newSettings[key] = val;
         window.store.setState({ settings: newSettings });
@@ -577,6 +598,12 @@ window.SettingsModal = {
                    '<div><div>Reduce Motion</div><div style="font-size:12px;color:var(--text-muted);font-weight:400;">Disable animations, freeze GIF previews, and stop avatar effects</div></div>' +
                 '</label>' +
               '</div>' +
+              '<div style="border-top:1px solid var(--border-subtle);padding-top:12px;margin-top:4px;">' +
+                '<label style="display:flex;align-items:center;gap:12px;font-size:14px;color:var(--text-primary);cursor:pointer;">' +
+                  '<input id="set-nobang" type="checkbox" '+(s.noFlashbang?'checked':'')+'>' +
+                  '<div><div>Disable Light Mode Flashbang</div><div style="font-size:12px;color:var(--text-muted);font-weight:400;">Skip the white flash when switching to Light Mode</div></div>' +
+                '</label>' +
+              '</div>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -647,6 +674,27 @@ window.SettingsModal = {
       if (window.lucide) window.lucide.createIcons({ root: content });
 
       var updateSettings = function(key, val) {
+        // Record undo/redo action
+        if (window.UndoManager && !window.UndoManager._paused) {
+          var _oldVal = window.store.getState().settings[key];
+          var _key = key;
+          var _newVal = val;
+          if (_oldVal !== _newVal) {
+            window.UndoManager.pushAction('Change ' + _key, function() {
+              var s = { ...window.store.getState().settings };
+              s[_key] = _oldVal;
+              window.store.setState({ settings: s });
+              window.Storage.set('settings', s);
+              if (window.App && window.App.applySettings) window.App.applySettings(s);
+            }, function() {
+              var s = { ...window.store.getState().settings };
+              s[_key] = _newVal;
+              window.store.setState({ settings: s });
+              window.Storage.set('settings', s);
+              if (window.App && window.App.applySettings) window.App.applySettings(s);
+            });
+          }
+        }
         var newSettings = { ...window.store.getState().settings };
         newSettings[key] = val;
         window.store.setState({ settings: newSettings });
@@ -693,6 +741,10 @@ window.SettingsModal = {
                     '<br>Side effects may include temporary blindness, existential confusion, and an overwhelming urge to switch back to Dark Mode immediately.<br><br>' +
                     '<span style="font-size:12px;opacity:0.7;">We recommend putting on sunglasses before proceeding. <br>You have been warned.</span>' +
                   '</p>' +
+                  '<label style="display:flex;align-items:center;gap:8px;justify-content:center;font-size:13px;color:var(--text-muted);cursor:pointer;margin-bottom:16px;">' +
+                    '<input id="light-mode-nobang" type="checkbox" '+(window.store.getState().settings.noFlashbang?'checked':'')+'>' +
+                    '<span>Don\u0027t flashbang me next time</span>' +
+                  '</label>' +
                   '<div style="display:flex;gap:10px;justify-content:center;">' +
                     '<button id="light-mode-cancel" style="padding:10px 20px;border-radius:10px;border:1px solid var(--border-subtle);background:transparent;color:var(--text-secondary);cursor:pointer;font-size:13px;font-weight:500;">No thanks, I choose life</button>' +
                     '<button id="light-mode-confirm" style="padding:10px 20px;border-radius:10px;border:none;background:linear-gradient(135deg,#FFD93D,#FF8C00);color:#000;cursor:pointer;font-size:13px;font-weight:700;display:inline-flex;align-items:center;gap:6px;"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Flashbang me</button>' +
@@ -715,14 +767,23 @@ window.SettingsModal = {
 
               overlay.querySelector('#light-mode-confirm').addEventListener('click', function() {
                 overlay.remove();
-                // Deploy the flashbang 💥
-                var flash = document.createElement('div');
-                flash.style.cssText = 'position:fixed;inset:0;background:#fff;z-index:999999;opacity:1;transition:opacity 0.8s ease;pointer-events:none;';
-                document.body.appendChild(flash);
-                setTimeout(function() {
-                  flash.style.opacity = '0';
-                  setTimeout(function() { flash.remove(); }, 800);
-                }, 400);
+                var noBang = overlay.querySelector('#light-mode-nobang').checked;
+                if (noBang) {
+                  updateSettings('noFlashbang', true);
+                }
+                if (!noBang) {
+                  var settings = window.store.getState().settings;
+                  if (!settings || !settings.noFlashbang) {
+                    // Deploy the flashbang 💥
+                    var flash = document.createElement('div');
+                    flash.style.cssText = 'position:fixed;inset:0;background:#fff;z-index:999999;opacity:1;transition:opacity 0.8s ease;pointer-events:none;';
+                    document.body.appendChild(flash);
+                    setTimeout(function() {
+                      flash.style.opacity = '0';
+                      setTimeout(function() { flash.remove(); }, 800);
+                    }, 400);
+                  }
+                }
                 // Apply the theme
                 updateSettings('theme', 'light');
                 if (window.SettingsModal) window.SettingsModal.renderTab('appearance');
@@ -784,6 +845,12 @@ window.SettingsModal = {
       content.querySelector('#set-anim-speed').addEventListener('change', function(e) { updateSettings('animSpeed', e.target.value); });
       content.querySelector('#set-anim').addEventListener('change', function(e) { updateSettings('animations', e.target.checked); });
       content.querySelector('#set-reduce-motion').addEventListener('change', function(e) { updateSettings('reduceMotion', e.target.checked); });
+      var nobangEl = content.querySelector('#set-nobang');
+      if (nobangEl) {
+        nobangEl.addEventListener('change', function(e) {
+          updateSettings('noFlashbang', e.target.checked);
+        });
+      }
       content.querySelector('#set-msg-anim').addEventListener('change', function(e) { updateSettings('messageAnim', e.target.value); });
       content.querySelector('#set-24h').addEventListener('change', function(e) { updateSettings('timeFormat24', e.target.checked); });
       content.querySelector('#set-translate').addEventListener('change', function(e) {
@@ -882,7 +949,7 @@ window.SettingsModal = {
           reader.onload = function(evt) {
             try {
               var themeData = JSON.parse(evt.target.result);
-              var validKeys = ['theme', 'messageBubbles', 'fontSize', 'animations', 'animSpeed', 'reduceMotion', 'timeFormat24', 'messageAnim', 'bgPattern', 'appZoom', 'chatWallpaper', 'sidebarButtons', 'customColors'];
+              var validKeys = ['theme', 'messageBubbles', 'fontSize', 'animations', 'animSpeed', 'reduceMotion', 'noFlashbang', 'timeFormat24', 'messageAnim', 'bgPattern', 'appZoom', 'chatWallpaper', 'sidebarButtons', 'customColors'];
               validKeys.forEach(function(key) {
                 if (key in themeData) {
                   updateSettings(key, themeData[key]);
@@ -1216,6 +1283,27 @@ window.SettingsModal = {
       if (window.lucide) window.lucide.createIcons({ root: content });
 
       var updateSettings = function(key, val) {
+        // Record undo/redo action
+        if (window.UndoManager && !window.UndoManager._paused) {
+          var _oldVal = window.store.getState().settings[key];
+          var _key = key;
+          var _newVal = val;
+          if (_oldVal !== _newVal) {
+            window.UndoManager.pushAction('Change ' + _key, function() {
+              var s = { ...window.store.getState().settings };
+              s[_key] = _oldVal;
+              window.store.setState({ settings: s });
+              window.Storage.set('settings', s);
+              if (window.App && window.App.applySettings) window.App.applySettings(s);
+            }, function() {
+              var s = { ...window.store.getState().settings };
+              s[_key] = _newVal;
+              window.store.setState({ settings: s });
+              window.Storage.set('settings', s);
+              if (window.App && window.App.applySettings) window.App.applySettings(s);
+            });
+          }
+        }
         var newSettings = { ...window.store.getState().settings };
         newSettings[key] = val;
         window.store.setState({ settings: newSettings });
@@ -1487,6 +1575,27 @@ window.SettingsModal = {
       if (window.lucide) window.lucide.createIcons({ root: content });
 
       var updateSettings = function(key, val) {
+        // Record undo/redo action
+        if (window.UndoManager && !window.UndoManager._paused) {
+          var _oldVal = window.store.getState().settings[key];
+          var _key = key;
+          var _newVal = val;
+          if (_oldVal !== _newVal) {
+            window.UndoManager.pushAction('Change ' + _key, function() {
+              var s = { ...window.store.getState().settings };
+              s[_key] = _oldVal;
+              window.store.setState({ settings: s });
+              window.Storage.set('settings', s);
+              if (window.App && window.App.applySettings) window.App.applySettings(s);
+            }, function() {
+              var s = { ...window.store.getState().settings };
+              s[_key] = _newVal;
+              window.store.setState({ settings: s });
+              window.Storage.set('settings', s);
+              if (window.App && window.App.applySettings) window.App.applySettings(s);
+            });
+          }
+        }
         var newSettings = { ...window.store.getState().settings };
         newSettings[key] = val;
         window.store.setState({ settings: newSettings });
@@ -1762,6 +1871,27 @@ window.SettingsModal = {
         '</div>';
 
       var updateSettings = function(key, val) {
+        // Record undo/redo action
+        if (window.UndoManager && !window.UndoManager._paused) {
+          var _oldVal = window.store.getState().settings[key];
+          var _key = key;
+          var _newVal = val;
+          if (_oldVal !== _newVal) {
+            window.UndoManager.pushAction('Change ' + _key, function() {
+              var s = { ...window.store.getState().settings };
+              s[_key] = _oldVal;
+              window.store.setState({ settings: s });
+              window.Storage.set('settings', s);
+              if (window.App && window.App.applySettings) window.App.applySettings(s);
+            }, function() {
+              var s = { ...window.store.getState().settings };
+              s[_key] = _newVal;
+              window.store.setState({ settings: s });
+              window.Storage.set('settings', s);
+              if (window.App && window.App.applySettings) window.App.applySettings(s);
+            });
+          }
+        }
         var newSettings = { ...window.store.getState().settings };
         newSettings[key] = val;
         window.store.setState({ settings: newSettings });

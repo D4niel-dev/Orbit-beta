@@ -59,6 +59,8 @@
   overflow: hidden;
   padding-top: 32px; /* Avoid titlebar overlap */
   transition: grid-template-columns 0.3s ease;
+  will-change: transform;
+  transform: translateZ(0);
 }
 
 #app-layout.sidebar-collapsed {

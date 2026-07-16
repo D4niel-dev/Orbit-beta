@@ -48,11 +48,11 @@
   <!-- Custom Titlebar -->
   <div id="titlebar">
     <div id="titlebar-nav" style="display: flex; align-items: center; padding-left: 6px; gap: 4px; z-index: 1000; -webkit-app-region: no-drag;">
-      <button class="titlebar-nav-btn" id="btn-nav-back" title="Back" style="width: 24px; height: 24px; border-radius: 4px; border: none; background: transparent; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center;">
-        <i data-lucide="arrow-left" style="width:12px;height:12px;"></i>
+      <button class="titlebar-nav-btn" id="btn-nav-back" title="No actions to undo" style="width: 24px; height: 24px; border-radius: 4px; border: none; background: transparent; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center; opacity:0.2;">
+        <i data-lucide="undo-2" style="width:12px;height:12px;"></i>
       </button>
-      <button class="titlebar-nav-btn" id="btn-nav-forward" title="Forward" style="width: 24px; height: 24px; border-radius: 4px; border: none; background: transparent; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center;">
-        <i data-lucide="arrow-right" style="width:12px;height:12px;"></i>
+      <button class="titlebar-nav-btn" id="btn-nav-forward" title="No actions to redo" style="width: 24px; height: 24px; border-radius: 4px; border: none; background: transparent; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center; opacity:0.2;">
+        <i data-lucide="redo-2" style="width:12px;height:12px;"></i>
       </button>
     </div>
     <div class="titlebar-drag-area"></div>
@@ -172,6 +172,7 @@
   <script src="js/identity.js"></script>
   <script src="js/components/emoji-picker.js"></script>
   <script src="js/components/toast.js"></script>
+  <script src="js/components/undo-manager.js"></script>
   <script src="js/components/confirm-modal.js"></script>
   <script src="js/components/context-menu.js"></script>
   <script src="js/components/image-viewer.js"></script>

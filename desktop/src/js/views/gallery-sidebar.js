@@ -194,6 +194,7 @@ window.GallerySidebar = {
           var isVideo = imgType === 'video' || imgMime.startsWith('video/');
           var isAudio = imgType === 'audio' || imgMime.startsWith('audio/');
           var posterUrl = window.Sanitize.escapeHtml(img._poster || '');
+          var overlayIcon = 'search';
           if (isVideo) {
             mediaContent = '<div style="width:100%;height:100%;background:var(--bg-panel);position:relative;transition:transform 0.3s;" class="media-container">' +
               (posterUrl ? '<img src="' + posterUrl + '" style="width:100%;height:100%;object-fit:cover;transition:transform 0.3s;">' : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;transition:transform 0.3s;"><i data-lucide="video" style="width:32px;height:32px;opacity:0.5;"></i></div>') +
@@ -210,7 +211,7 @@ window.GallerySidebar = {
             mediaContent = '<img src="' + thumbUrl + '" data-fallback-src="' + safeUrl + '" style="width:100%;height:100%;object-fit:cover;transition:transform 0.3s;" onerror="if(window.mediaImgOnError) window.mediaImgOnError(this)">';
           }
 
-          html += '<div class="gallery-item group" data-media-type="' + (isVideo ? 'video' : (isAudio ? 'audio' : 'image')) + '" style="position:relative;border-radius:12px;overflow:hidden;aspect-ratio:1/1;cursor:pointer;border:1px solid var(--border-subtle);" onclick="if(window.ImageViewer) window.ImageViewer.open({url:\'' + safeUrl + '\', name:\'' + safeName + '\', size:\'' + safeSize + '\'})">' +
+          html += '<div class="gallery-item group" data-media-type="' + (isVideo ? 'video' : (isAudio ? 'audio' : 'image')) + '" style="position:relative;border-radius:12px;overflow:hidden;aspect-ratio:1/1;cursor:pointer;border:1px solid var(--border-subtle);" onclick="if(window.ImageViewer){ if(' + (isVideo ? 'true' : 'false') + ') window.ImageViewer.openVideo(\'' + safeUrl + '\',\'' + safeName + '\'); else if(' + (isAudio ? 'true' : 'false') + ') window.ImageViewer.openAudio({url:\'' + safeUrl + '\',name:\'' + safeName + '\',size:\'' + safeSize + '\'}); else window.ImageViewer.open({url:\'' + safeUrl + '\',name:\'' + safeName + '\',size:\'' + safeSize + '\'}); }">' +
             mediaContent +
             (isVideo ? '<div style="position:absolute;bottom:6px;left:6px;background:rgba(0,0,0,0.7);border-radius:4px;padding:2px 6px;font-size:10px;color:white;font-weight:600;pointer-events:none;"><i data-lucide="video" style="width:10px;height:10px;margin-right:3px;vertical-align:middle;"></i>Video</div>' : '') +
             (isAudio ? '<div style="position:absolute;bottom:6px;left:6px;background:rgba(0,0,0,0.7);border-radius:4px;padding:2px 6px;font-size:10px;color:white;font-weight:600;pointer-events:none;">Audio</div>' : '') +

@@ -86,13 +86,8 @@ window.ActivityCenter = {
         var chatId = row.getAttribute('data-activity-chat');
         var msgId = row.getAttribute('data-msg-id');
         self.close();
+        window._pendingActivityScrollMsgId = msgId || null;
         window.store.setState({ activeChatId: chatId, activeTab: 'dms' });
-        if (msgId) {
-          setTimeout(function() {
-            var el = document.querySelector('[data-msg-id="' + msgId + '"].message-row');
-            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }, 200);
-        }
       }
     });
 

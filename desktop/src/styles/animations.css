@@ -127,3 +127,17 @@
   opacity: 0.4;
   pointer-events: none;
 }
+
+/* Theme Transition */
+.theme-transitioning,
+.theme-transitioning *,
+.theme-transitioning *::before,
+.theme-transitioning *::after {
+  transition: background 0.4s ease,
+              background-color 0.4s ease,
+              border-color 0.3s ease,
+              color 0.35s ease,
+              fill 0.3s ease,
+              stroke 0.3s ease !important;
+}
+

@@ -104,6 +104,7 @@ class Store {
         tutorialCompleted: false,
         tutorialSkipped: false,
         showTutorialOnStartup: true,
+        noFlashbang: false,
         sidebarButtons: { activity: true, gallery: true, storage: true },
         ...savedSettings
       },
@@ -953,6 +954,35 @@ class Store {
       }
     }
 
+    // Track own message sends for undo/redo
+    if (window.UndoManager && !window.UndoManager._paused && messageObj.sender === this.state.currentUser.userId) {
+      var _addedChatId = chatId;
+      var _addedMsg = messageObj;
+      window.UndoManager.pushAction('Send message', function() {
+        // Undo: delete the message
+        var st = window.store.getState();
+        var m = st.messages && st.messages[_addedChatId];
+        if (m) {
+          var f = m.filter(function(x) { return x.id !== _addedMsg.id; });
+          var u = { ...st.messages };
+          u[_addedChatId] = f;
+          window.store.setState({ messages: u });
+          if (window.orbitAPI && window.orbitAPI.dbSaveMessages) window.orbitAPI.dbSaveMessages(_addedChatId, f);
+        }
+      }, function() {
+        // Redo: note — re-send not fully supported for attachments
+        var st = window.store.getState();
+        var m = st.messages && st.messages[_addedChatId] || [];
+        var restored = [...m, _addedMsg];
+        restored.sort(function(a, b) { return (a.timestamp || 0) - (b.timestamp || 0); });
+        var u = { ...st.messages };
+        u[_addedChatId] = restored;
+        window.store.setState({ messages: u });
+        if (window.orbitAPI && window.orbitAPI.dbSaveMessages) window.orbitAPI.dbSaveMessages(_addedChatId, restored);
+        if (window.Toast) window.Toast.show('Redo', 'Message restored locally. Re-send manually if needed.', 'info', 3000);
+      }, { isAttachment: !!(messageObj.attachments && messageObj.attachments.length > 0) });
+    }
+
     this.setState({ messages: msgs, unreadCounts, mentionCounts });
   }
 
@@ -995,6 +1025,47 @@ class Store {
         return m;
       });
       if (window.orbitAPI) window.orbitAPI.dbEditMessage(chatId, msgId, newText);
+
+      // Track own message edits for undo/redo
+      if (window.UndoManager && !window.UndoManager._paused && msgs[chatId]) {
+        var _editChatId = chatId;
+        var _editMsgId = msgId;
+        var _oldMsg = this.state.messages[chatId] ? this.state.messages[chatId].find(function(m) { return String(m.id) === String(msgId); }) : null;
+        var _oldText = _oldMsg ? _oldMsg.text : '';
+        var _newText = newText;
+        if (_oldMsg && (_oldMsg.sender === this.state.currentUser.userId || !_oldMsg.sender) && _oldText !== _newText) {
+          window.UndoManager.pushAction('Edit message', function() {
+            // Undo: restore old text
+            var st = window.store.getState();
+            var m = st.messages && st.messages[_editChatId];
+            if (m) {
+              var u = m.map(function(x) {
+                if (String(x.id) === String(_editMsgId)) return { ...x, text: _oldText, edited: true };
+                return x;
+              });
+              var ms = { ...st.messages };
+              ms[_editChatId] = u;
+              window.store.setState({ messages: ms });
+              if (window.orbitAPI && window.orbitAPI.dbSaveMessages) window.orbitAPI.dbSaveMessages(_editChatId, u);
+            }
+          }, function() {
+            // Redo: re-apply new text
+            var st = window.store.getState();
+            var m = st.messages && st.messages[_editChatId];
+            if (m) {
+              var u = m.map(function(x) {
+                if (String(x.id) === String(_editMsgId)) return { ...x, text: _newText, edited: true };
+                return x;
+              });
+              var ms = { ...st.messages };
+              ms[_editChatId] = u;
+              window.store.setState({ messages: ms });
+              if (window.orbitAPI && window.orbitAPI.dbSaveMessages) window.orbitAPI.dbSaveMessages(_editChatId, u);
+            }
+          });
+        }
+      }
+
       this.setState({ messages: msgs });
     }
   }
@@ -1002,6 +1073,39 @@ class Store {
   deleteMessage(chatId, msgId) {
     const msgs = { ...this.state.messages };
     if (msgs[chatId]) {
+      // Track own message deletes for undo/redo
+      var _deletedMsg = null;
+      if (window.UndoManager && !window.UndoManager._paused && msgs[chatId]) {
+        var _delChatId = chatId;
+        var _delMsgId = msgId;
+        _deletedMsg = msgs[chatId].find(function(m) { return String(m.id) === String(msgId); });
+        if (_deletedMsg && (_deletedMsg.sender === this.state.currentUser.userId || !_deletedMsg.sender)) {
+          var _capturedMsg = _deletedMsg;
+          window.UndoManager.pushAction('Delete message', function() {
+            // Undo: restore the deleted message
+            var st = window.store.getState();
+            var m = st.messages && st.messages[_delChatId] || [];
+            var restored = [...m, _capturedMsg];
+            restored.sort(function(a, b) { return (a.timestamp || 0) - (b.timestamp || 0); });
+            var u = { ...st.messages };
+            u[_delChatId] = restored;
+            window.store.setState({ messages: u });
+            if (window.orbitAPI && window.orbitAPI.dbSaveMessages) window.orbitAPI.dbSaveMessages(_delChatId, restored);
+          }, function() {
+            // Redo: delete again
+            var st = window.store.getState();
+            var m = st.messages && st.messages[_delChatId];
+            if (m) {
+              var f = m.filter(function(x) { return String(x.id) !== String(_delMsgId); });
+              var u = { ...st.messages };
+              u[_delChatId] = f;
+              window.store.setState({ messages: u });
+              if (window.orbitAPI && window.orbitAPI.dbSaveMessages) window.orbitAPI.dbSaveMessages(_delChatId, f);
+            }
+          });
+        }
+      }
+
       msgs[chatId] = msgs[chatId].filter(m => m.id != msgId);
       if (window.orbitAPI) window.orbitAPI.dbDeleteMessage(chatId, msgId);
       this.setState({ messages: msgs });

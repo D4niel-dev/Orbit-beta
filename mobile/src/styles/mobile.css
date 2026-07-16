@@ -828,6 +828,7 @@ html, body {
   background: var(--bg-hover);
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
+  overflow: hidden;
 }
 
 .ovp-wrap {

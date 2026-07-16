@@ -123,7 +123,7 @@ window.GlobalGallery = {
           mediaHtml = '<img src="' + safeUrl + '" style="width:100%; height:100%; object-fit:cover;" onerror="if(window.handleMediaError) window.handleMediaError(this, \'' + safeUrl + '\')">';
         }
 
-        return '<div class="gallery-grid-item" style="aspect-ratio:1;" onclick="if(window.ImageViewer) window.ImageViewer.open({url:\'' + safeUrl + '\', name:\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\', size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'})">' +
+        return '<div class="gallery-grid-item" style="aspect-ratio:1;" onclick="if(window.ImageViewer){ if(' + (isVideo ? 'true' : 'false') + ') window.ImageViewer.openVideo(\'' + safeUrl + '\',\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\'); else if(' + (isAudio ? 'true' : 'false') + ') window.ImageViewer.openAudio({url:\'' + safeUrl + '\',name:\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\',size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'}); else window.ImageViewer.open({url:\'' + safeUrl + '\',name:\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\',size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'}); }">' +
           mediaHtml +
           '<div class="gallery-label">' + window.Sanitize.escapeHtml(a.chatName) + '</div>' +
           '<div class="gallery-overlay">' +
@@ -159,7 +159,7 @@ window.GlobalGallery = {
           mediaHtml = '<img src="' + safeUrl + '" style="width:100%; height:100%; object-fit:cover;" onerror="if(window.handleMediaError) window.handleMediaError(this, \'' + safeUrl + '\')">';
         }
 
-        return '<div style="display:flex; gap:16px; align-items:center; border-radius:12px; padding:12px; border:1px solid var(--border-subtle); background:var(--bg-surface); cursor:pointer;" onclick="if(window.ImageViewer) window.ImageViewer.open({url:\'' + safeUrl + '\', name:\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\', size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'})">' +
+        return '<div style="display:flex; gap:16px; align-items:center; border-radius:12px; padding:12px; border:1px solid var(--border-subtle); background:var(--bg-surface); cursor:pointer;" onclick="if(window.ImageViewer){ if(' + (isVideo ? 'true' : 'false') + ') window.ImageViewer.openVideo(\'' + safeUrl + '\',\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\'); else if(' + (isAudio ? 'true' : 'false') + ') window.ImageViewer.openAudio({url:\'' + safeUrl + '\',name:\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\',size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'}); else window.ImageViewer.open({url:\'' + safeUrl + '\',name:\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\',size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'}); }">' +
           '<div style="width:80px; height:80px; border-radius:8px; overflow:hidden; flex-shrink:0;">' +
             mediaHtml +
           '</div>' +
@@ -227,7 +227,7 @@ window.GlobalGallery = {
             mediaHtml = '<img src="' + safeUrl + '" style="width:100%; display:block;" onerror="if(window.handleMediaError) window.handleMediaError(this, \'' + safeUrl + '\')">';
           }
 
-          contentHtml += '<div class="gallery-grid-item" onclick="if(window.ImageViewer) window.ImageViewer.open({url:\'' + safeUrl + '\', name:\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\', size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'})" style="margin-bottom:16px;">' +
+          contentHtml += '<div class="gallery-grid-item" onclick="if(window.ImageViewer){ if(' + (isVideo ? 'true' : 'false') + ') window.ImageViewer.openVideo(\'' + safeUrl + '\',\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\'); else if(' + (isAudio ? 'true' : 'false') + ') window.ImageViewer.openAudio({url:\'' + safeUrl + '\',name:\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\',size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'}); else window.ImageViewer.open({url:\'' + safeUrl + '\',name:\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\',size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'}); }" style="margin-bottom:16px;">' +
             mediaHtml +
             '<div class="gallery-overlay">' +
               '<button class="gallery-action-btn" title="View"><i data-lucide="' + (isVideo || isAudio ? 'play' : 'eye') + '" style="width:18px;height:18px;"></i></button>' +

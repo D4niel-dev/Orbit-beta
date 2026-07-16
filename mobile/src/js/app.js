@@ -1060,13 +1060,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function renderMessages(chatId) {
-    // Revoke blob URLs from previous render to prevent memory leaks
-    if (window._blobUrlsToRevoke) {
-      window._blobUrlsToRevoke.forEach(function(url) {
-        try { URL.revokeObjectURL(url); } catch(e) {}
-      });
-    }
-    window._blobUrlsToRevoke = [];
+    // Blob URL lifecycle managed by browser — no eager revocation here
     var feed = document.getElementById('message-feed');
     var msgs = MStore.getMessages(chatId);
     // Resolve attachment URLs without mutating store objects (avoids silent data loss)
@@ -1128,10 +1122,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (a._dataUrl && a._dataUrl.indexOf('data:') === 0) {
           if (a.type === 'video' || a.type === 'audio') return a._dataUrl;
           if (!window._dataUrlCache) window._dataUrlCache = {};
-          if (!window._dataUrlCache[a._dataUrl]) {
-            window._dataUrlCache[a._dataUrl] = _dataUrlToBlobUrl(a._dataUrl);
-          }
-          return window._dataUrlCache[a._dataUrl];
+          // Always create fresh blob URL — cache produces stale revoked URLs
+          return _dataUrlToBlobUrl(a._dataUrl);
         }
         return ''; // No persistence key — can't restore
       }
@@ -1898,6 +1890,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 var posterDataUrl = canvas.toDataURL('image/jpeg', 0.6);
                 var lastAtt = allAttachments[allAttachments.length - 1];
                 if (lastAtt) lastAtt._poster = posterDataUrl;
+                a._poster = posterDataUrl;
               } catch(e) {}
               clearTimeout(thumbnailCaptureTimeout);
               vid.remove();
@@ -1961,7 +1954,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var memberFriend = MStore.friends.find(function(f) { return f.id === memberId; });
         var memberKey = memberFriend ? memberFriend.publicKey : (typeof m !== 'string' ? m.publicKey : null);
         var grpAttachments = inlineAttachments.length > 0 ? inlineAttachments.slice() : [];
-        largeFiles.forEach(function(lf) { grpAttachments.push({ id: lf.id, _fileId: lf.id, name: lf.name, type: lf.type, _pending: true }); });
+        largeFiles.forEach(function(lf) { grpAttachments.push({ id: lf.id, _fileId: lf.id, name: lf.name, type: lf.type, _poster: lf._poster || undefined, _pending: true }); });
         var payload = {
           text: textToSend, groupId: groupId, msgId: newMsg.id, replyTo: newMsg.replyTo,
           attachments: grpAttachments.length > 0 ? grpAttachments : undefined,
@@ -2140,7 +2133,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (encrypted) {
               // Include large file metadata so receiver can merge text+file into one message (CRIT-4)
               var e2eeAttachments = inlineAttachments.length > 0 ? inlineAttachments.slice() : [];
-              largeFiles.forEach(function(lf) { e2eeAttachments.push({ id: lf.id, _fileId: lf.id, name: lf.name, type: lf.type, _pending: true }); });
+              largeFiles.forEach(function(lf) { e2eeAttachments.push({ id: lf.id, _fileId: lf.id, name: lf.name, type: lf.type, _poster: lf._poster || undefined, _pending: true }); });
               Orbit.P2P.send(activeChatId, Orbit.Protocol.createPacket(
                 Orbit.Protocol.Types.MESSAGE, myId, activeChatId,
                 { e2ee: true, ciphertext: encrypted.ciphertext, nonce: encrypted.nonce, msgId: newMsg.id, replyTo: newMsg.replyTo, attachments: e2eeAttachments.length > 0 ? e2eeAttachments : undefined, fromName: newMsg.fromName }
@@ -2156,7 +2149,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
       // Include large file metadata so receiver can merge text+file into one message (CRIT-4)
       var msgAttachments = inlineAttachments.length > 0 ? inlineAttachments.slice() : [];
-      largeFiles.forEach(function(lf) { msgAttachments.push({ id: lf.id, _fileId: lf.id, name: lf.name, type: lf.type, _pending: true }); });
+      largeFiles.forEach(function(lf) { msgAttachments.push({ id: lf.id, _fileId: lf.id, name: lf.name, type: lf.type, _poster: lf._poster || undefined, _pending: true }); });
       Orbit.P2P.send(activeChatId, Orbit.Protocol.createPacket(
         Orbit.Protocol.Types.MESSAGE, myId, activeChatId,
         { text: text, msgId: newMsg.id, replyTo: newMsg.replyTo, attachments: msgAttachments.length > 0 ? msgAttachments : undefined, fromName: newMsg.fromName }
@@ -2789,7 +2782,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var friendsCount = MStore ? MStore.friends.length : 0;
         var chatsCount = MStore ? MStore.chats.length : 0;
         return '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.2.5-beta · Capacitor Android</div></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.2.6-beta · Capacitor Android</div></div>' +
         '</div>' +
         '<div class="settings-row">' +
           '<div class="settings-row-content"><span class="settings-row-title">Statistics</span><div class="settings-row-desc">' + friendsCount + ' friends · ' + chatsCount + ' chats</div></div>' +
@@ -3056,7 +3049,93 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button id="changelog-close-mobile" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;font-size:20px;">✕</button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
-        vBlock('0.2.0-beta', 'Latest', [
+        vBlock('0.2.6-beta', 'Latest', [
+          ['New Features', [
+            'Undo/Redo System — Full Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y support via the new UndoManager component. Covers: message send/delete/edit, settings changes, profile updates, account switching, and chat navigation. Titlebar buttons with visual disabled state.',
+            'Konami Code Easter Egg — Type ↑↑↓↓←→←→BA or ↑↑↓↓←→←→AB to toggle Developer Mode. Visual sequence feedback in the title bar.',
+            'Light Mode Flashbang Prevention — "Disable Light Mode Flashbang" toggle and warning dialog checkbox to permanently skip the white flash when switching to Light Mode.',
+            'Theme Transition Animation — 600ms smooth CSS transition for background, border-color, color, fill, and stroke when switching themes. Respects Reduce Motion setting.',
+            'Theme Change Easter Egg — Random theme-matched quotes shown as toasts when switching themes.',
+            'Midnight Sleep Reminder — Between 12AM-5AM on dark/midnight themes, a toast gently reminds users to rest.',
+            'Gallery Audio/Video Playback — Gallery sidebar routes audio files to Audio Player and video files to Video Player.',
+            'ImageViewer Audio Player — New openAudio() method for inline audio playback in the image viewer overlay.',
+            'Activity Center Scroll-to-Message — Activity entries scroll to the specific message in chat.'
+          ]],
+          ['Bug Fixes', [
+            'Profile Frame Per-Account Sync Fixed — Frame picker reads from currentUser.profileFrame, not global settings. Switching accounts shows correct frame.',
+            'overlayIcon ReferenceError Fixed — Undeclared variable in gallery-sidebar.js caused gallery crash.',
+            'Activity Center UI Shift Fixed — scrollIntoView propagation fixed with manual feed.scrollTop calculation.',
+            'Mobile Buffer Loader Always Visible Fixed — Placeholder removal and overflow:hidden in mobile CSS.',
+            'Image Send Bug Fixed — Blob URL revocation removed from renderMessages().',
+            'Mobile Video Duration Mismatch Fixed — loadedmetadata event listener replaces forced seek hack.',
+            'Mobile→Desktop Video Thumbnails Fixed — _poster field preserved across platforms.',
+            'Gallery Audio/Video Route Fixed — Proper type detection routes to correct player.',
+            'Mobile Fullscreen Taskbar Overlap Fixed — safe-area-inset-bottom padding.',
+            'Blue Fullscreen Background Eliminated — 4-layer background fix across all fullscreen elements.',
+            'Fullscreen Manual Only — Both platforms use _enterManualFS()/_exitManualFS() exclusively.'
+          ]],
+          ['Media Player Improvements', [
+            'Fullscreen Theme Glow — Radial gradient accent glow behind video.',
+            'App-wide Filled Icon State — _iconToggle helper switches filled/outlined Lucide icons.',
+            'Byte-identical Players — shared and mobile player files confirmed identical.'
+          ]],
+          ['UI/UX Polish', [
+            'Titlebar nav buttons switched to undo/redo icons.',
+            'GPU-accelerated rendering with will-change + translateZ(0).',
+            'Sidebar nav back/forward buttons with 50-entry history.'
+          ]],
+          ['Technical', [
+            'New UndoManager component: 100-action stack, Ctrl+Z/Y/Shift+Z, privacy mode awareness.',
+            'NoFlashbang setting, theme transition CSS classes, version bumped to v0.2.6-beta.'
+          ]]
+        ]) +
+        vBlock('0.2.5-beta', '', [
+          ['New Features', [
+            'Global Gallery Redesign — Grid and list views with audio/video type detection.',
+            'Gallery Sidebar Improvements — Audio inline player, video posters, media type badges.',
+            'Activity Center Enhancements — Refined rendering and click handling.'
+          ]],
+          ['Media Player Improvements', [
+            '_poster field propagated through attachment pipeline for video thumbnails.'
+          ]],
+          ['UI/UX Polish', [
+            'Sidebar nav header with Back/Forward navigation buttons.',
+            'Activity Center shows Lucide icons with color badges, duration/size displays.'
+          ]]
+        ]) +
+        vBlock('0.2.4-beta', '', [
+          ['Bug Fixes', [
+            'Removed _skipCorrupted proactive seek in doPlay() — forced 1e10 seek replaced with loadedmetadata listeners.',
+            'FILE_TRANSFER DM Packet Fix — chatId removed from DM FILE_TRANSFER packets.'
+          ]]
+        ]) +
+        vBlock('0.2.3-beta', '', [
+          ['Bug Fixes', [
+            'Render loop fix, _skipCorrupted state persistence across stop/play cycles, chatId packet routing fix.'
+          ]]
+        ]) +
+        vBlock('0.2.2-beta', '', [
+          ['Media Player Improvements', [
+            'Video Player complete overhaul — MP4 duration parsing, multi-layered fallback, eliminated forced seeks.',
+            'Audio Player major rewrite — same architecture as video player, reliable metadata detection.',
+            'Automatic Video Poster Capture at 0.5s on send (both platforms).',
+            'Mobile sync — both players synced via shared/ui/ directory.'
+          ]],
+          ['Technical', [
+            'Shared audio/video player refactored into clean module pattern.',
+            'Version bumped to v0.2.2-beta.'
+          ]]
+        ]) +
+        vBlock('0.2.1-beta', '', [
+          ['Bug Fixes', [
+            'Null-check safety for audio/video player controls.',
+            'Mobile audio/video player synced with desktop fixes.'
+          ]],
+          ['Technical', [
+            'Version bumped to v0.2.1-beta.'
+          ]]
+        ]) +
+        vBlock('0.2.0-beta', '', [
           ['CRITICAL: Mobile Background Notifications & Large File Persistence', [
             'CRITICAL: Mobile Background Notifications Fixed — document.hidden is unreliable in Capacitor WebView; notifications never appeared outside the app. Two-layer fix: JS tracks background via Capacitor appStateChange, and Java OrbitP2PPlugin creates notifications directly via NotificationManager.',
             'CRITICAL: Large File Persistence on Mobile — Files >10MB in IndexedDB had blob: URLs die on restart. Added BlobStoreDB + _restoreAllBlobAttachments() on startup. "Restoring..." placeholders during recovery.'

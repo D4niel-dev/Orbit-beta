@@ -241,6 +241,40 @@ document.addEventListener('DOMContentLoaded', () => {
       else { theme = 'seasonal-winter'; }
     }
     document.documentElement.setAttribute('data-theme', theme);
+    // Animate the theme transition (skip if reduceMotion is on)
+    if (!settings.reduceMotion) {
+      document.documentElement.classList.add('theme-transitioning');
+      setTimeout(function() {
+        document.documentElement.classList.remove('theme-transitioning');
+      }, 600);
+    }
+
+    // Theme change easter egg — random theme-matched text
+    if (window._prevTheme && window._prevTheme !== theme) {
+      var themeTexts = {
+        'dark': ['"In the darkness, we find connection."', '"The night is young and so are we."', '"Dark mode isn\'t just a theme, it\'s a lifestyle."', '"Embracing the void, one pixel at a time."', '"The void stares back, but we stare together."', '"Darkness is just the absence of light. Connection is the presence of soul."', '"The dark side has cookies. And really good contrast ratios."', '"Shadows hold the deepest conversations."', '"Night mode: because burning your retinas is so 2010."'],
+        'light': ['"Into the light, I command thee!"', '"Bright ideas start here."', '"Day mode activated. Sunglasses recommended."', '"The path is illuminated before you."', '"Brightness amplifies everything. Even the truth."', '"Step into the light — the water\'s fine."', '"Light mode: for when you want to feel the sun on your digital face."', '"Illuminate your conversations."', '"Seeing clearly never felt so right."'],
+        'midnight': ['"The witching hour calls."', '"Stars whisper secrets in the midnight glow."', '"Deep blue echoes of the cosmos."', '"After midnight, we roam free."', '"Between the ticks of midnight, messages fly."', '"Stars are just holes in the dark letting light through."', '"Midnight oil burns brighter than the morning sun."', '"The moon is a loyal companion in every late-night chat."', '"In the deep blue hour, words flow freely."'],
+        'seasonal-spring': ['"Blooming with possibilities."', '"Fresh starts and new beginnings."', '"Cherry blossoms and gentle breezes."', '"April showers bring May flowers and fresh conversations."', '"Everything grows when given light and water. Even friendships."', '"Spring fever meets chat energy."', '"A season of renewal and reconnection."'],
+        'seasonal-summer': ['"Basking in the warmth."', '"Endless days and golden rays."', '"Summer vibes, all year long."', '"Long days, short nights, endless conversations."', '"Heat waves and good vibes."', '"Summer state of mind."', '"The sun doesn\'t rush. Neither should you."'],
+        'seasonal-fall': ['"Embracing the change of seasons."', '"Golden leaves and crisp air."', '"Cozy nights and warm tones."', '"Let the falling leaves remind you that letting go is beautiful."', '"Sweater weather and deep conversations."', '"Crisp air and warm hearts."', '"Everything changes. That\'s the beauty of it."'],
+        'seasonal-winter': ['"A quiet snowfall of pixels."', '"Cold outside, warm inside."', '"Winter\'s embrace in every frame."', '"Cold outside, warm inside. The best kind of winter."', '"Each snowflake is unique. So is every message."', '"Winter is the season of introspection and hot cocoa."', '"Blankets of snow, blankets of conversation."'],
+        'ocean': ['"Diving into the deep blue."', '"Waves of tranquility wash over."', '"Beneath the surface, calm awaits."', '"The ocean\'s surface hides depths we\'ve yet to explore."', '"Salt water heals everything. Even a tired soul."', '"Let the waves carry your thoughts."', '"Deep as the ocean, vast as the sky."'],
+        'forest': ['"Among the towering pines."', '"Nature\'s palette in every shade of green."', '"Where the wild things are."', '"The forest speaks in whispers. Listen closely."', '"Among the trees, we find ourselves."', '"Mossy paths lead to the best discoveries."', '"Breathe in the green, breathe out the noise."'],
+        'sunset': ['"Painting the sky with fire."', '"Golden hour, extended."', '"The sun never sets on Orbit."', '"Every sunset is an opportunity to reset."', '"The sky\'s farewell kiss at the end of each day."', '"Golden hues paint the end of a perfect day."', '"Sunsets are proof that endings can be beautiful."'],
+        'coffee': ['"Brewing something special."', '"Warm mugs and good vibes."', '"Another cup of conversation."', '"Good coffee, better conversations."', '"Coffee: the original productivity hack."', '"Brewed with care, served with love."', '"A warm cup of connection."'],
+        'retro': ['"Floppy disks and neon dreams."', '"Back to the future of chat."', '"Pixel-perfect nostalgia."', '"Floppy disks held 1.44MB. Our conversations hold so much more."', '"Pixel art is just modern impressionism."', '"Retro vibes, future connections."', '"8-bit dreams in a 64-bit world."'],
+        'custom': ['"Your vision, realized."', '"Colors of your imagination."', '"Uniquely yours."', '"Your palette, your world."', '"Every color tells a story. What\'s yours?"', '"Custom-crafted for your unique taste."', '"The perfect blend of your imagination."']
+      };
+      var texts = themeTexts[theme] || ['"A new look for a new mood."'];
+      var msg = texts[Math.floor(Math.random() * texts.length)];
+      if (window.Toast) {
+        setTimeout(function() {
+          if (window.Toast) window.Toast.show('Theme Changed', msg, 'info', 3000);
+        }, 400);
+      }
+    }
+    window._prevTheme = theme;
 
     if (settings.customThemeColors && theme === 'custom') {
       Object.keys(settings.customThemeColors).forEach(function(key) {
@@ -472,7 +506,56 @@ document.addEventListener('DOMContentLoaded', () => {
       if (input) input.focus();
       return;
     }
+    // Konami code easter egg: ↑↑↓↓←→←→BA (using e.code for reliability)
+    if (!window._konamiSeq) window._konamiSeq = [];
+    var kc = e.code;
+    var konamiMap = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', KeyB: 'b', KeyA: 'a' };
+    var mapped = konamiMap[kc];
+    if (mapped) {
+      if (mapped === 'up' || mapped === 'down' || mapped === 'left' || mapped === 'right') {
+        e.preventDefault(); // prevent scrolling during sequence
+      }
+      window._konamiSeq.push(mapped);
+      if (window._konamiSeq.length > 10) window._konamiSeq.shift();
+      var seq = window._konamiSeq.join(',');
+      if (seq === 'up,up,down,down,left,right,left,right,b,a' || seq === 'up,up,down,down,left,right,left,right,a,b') {
+        window._konamiSeq = [];
+        var cur = window.store.getState().settings.devMode;
+        var updateSettings = function(key, val) {
+          var newSettings = { ...window.store.getState().settings };
+          newSettings[key] = val;
+          window.store.setState({ settings: newSettings });
+          window.Storage.set('settings', newSettings);
+          if (window.App && window.App.applySettings) window.App.applySettings(newSettings);
+        };
+        updateSettings('devMode', !cur);
+        if (window.Toast) {
+          window.Toast.show('Konami!', cur ? 'Developer Mode disabled' : 'Developer Mode enabled' + (!cur ? ' — You found the secret!' : ''), !cur ? 'success' : 'info', 4000);
+        }
+      }
+    }
+    // Debug: show Konami sequence in title bar
+    if (window._konamiSeq && window._konamiSeq.length > 0) {
+      document.title = '[' + window._konamiSeq.join(' ') + '] Orbit Beta';
+    } else {
+      document.title = 'Orbit Beta';
+    }
   });
+
+  // Midnight sleep reminder (12AM-5AM, dark/midnight themes only)
+  setTimeout(function() {
+    try {
+      var hr = new Date().getHours();
+      if (hr >= 0 && hr < 5) {
+        var theme = window.store.getState().settings.theme || 'dark';
+        if (theme === 'dark' || theme === 'midnight') {
+          if (window.Toast) {
+            window.Toast.show('🌙 Late Night Chatting', 'It\'s ' + hr + ':00 and you\'re still here? Maybe get some sleep, night owl. 🌌', 'info', 8000);
+          }
+        }
+      }
+    } catch(e) {}
+  }, 3000);
 
   // ---- Phase 2 (next frame): Identity, network, views ----
   function startPhase2() {
@@ -869,6 +952,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   atts[ai].size = fileSize;
                   atts[ai].name = data.name;
                   atts[ai]._pending = false;
+                  atts[ai]._poster = atts[ai]._poster || null;
                   // CRIT-5: Persist received file data into DB so orbit-db:// resolves after restart
                   try {
                     window.orbitAPI.dbSaveAttachment(msgs[mi].id, {
@@ -933,53 +1017,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (window.SidebarLeft) window.SidebarLeft.init();
 
-    // Initialize nav history logic for titlebar buttons
-    var btnBack = document.getElementById('btn-nav-back');
-    var btnForward = document.getElementById('btn-nav-forward');
-    if (btnBack && btnForward) {
-      var navHistory = [];
-      var navIndex = -1;
-
-      // Track navigation history
-      var unsubscribeNav = window.store.subscribe(function(state, changed) {
-        if (changed && 'activeChatId' in changed && state.activeChatId) {
-          // Don't record if going back/forward programmatically (skip flag)
-          if (state._navSkip) return;
-          // Remove forward history if we navigated to a new place
-          if (navIndex < navHistory.length - 1) {
-            navHistory = navHistory.slice(0, navIndex + 1);
-          }
-          navHistory.push(state.activeChatId);
-          navIndex = navHistory.length - 1;
-          // Cap history at 50 entries
-          if (navHistory.length > 50) {
-            navHistory.shift();
-            navIndex--;
-          }
-        }
-      });
-
-      document.getElementById('btn-nav-back').addEventListener('click', function() {
-        if (navIndex <= 0) return;
-        navIndex--;
-        var targetChat = navHistory[navIndex];
-        window.store.setState({ _navSkip: true, activeChatId: targetChat, activeTab: 'dms' });
-        // Reset the skip flag after the state change
-        setTimeout(function() {
-          window.store.setState({ _navSkip: undefined });
-        }, 0);
-      });
-
-      document.getElementById('btn-nav-forward').addEventListener('click', function() {
-        if (navIndex >= navHistory.length - 1) return;
-        navIndex++;
-        var targetChat = navHistory[navIndex];
-        window.store.setState({ _navSkip: true, activeChatId: targetChat, activeTab: 'dms' });
-        setTimeout(function() {
-          window.store.setState({ _navSkip: undefined });
-        }, 0);
-      });
+    // Initialize UndoManager
+    if (window.UndoManager) {
+      window.UndoManager.init();
     }
+
+    // Track chat navigation as undoable actions
+    var _lastChatId = null;
+    var _chatNavSub = window.store.subscribe(function(state, changed) {
+      if (changed && 'activeChatId' in changed && state.activeChatId && state.activeChatId !== _lastChatId) {
+        var prevChatId = _lastChatId;
+        var newChatId = state.activeChatId;
+        _lastChatId = newChatId;
+        // Don't record if this navigation was triggered by an undo/redo
+        if (window.UndoManager && window.UndoManager._paused) return;
+        window.UndoManager.pushAction(
+          'Switch to ' + (newChatId === 'local-echo' ? 'Orbit Echo' : 'Chat'),
+          function() {
+            // Undo: go back to previous chat
+            window.store.setState({ activeChatId: prevChatId || 'local-echo', activeTab: 'dms' });
+          },
+          function() {
+            // Redo: go to new chat
+            window.store.setState({ activeChatId: newChatId, activeTab: 'dms' });
+          }
+        );
+      }
+    });
 
     if (window.SidebarMiddle) window.SidebarMiddle.init();
     if (window.ChatPanel) window.ChatPanel.init();
