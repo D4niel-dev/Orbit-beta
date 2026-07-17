@@ -18,15 +18,28 @@ window.SidebarMiddle = {
 
     this.render();
     this._initStatsOverlay();
-    this.attachEvents();
-    
-    // Initial render
-    var state = window.store.getState();
-    if (state.activeView === 'groups') {
-      this.renderGroups();
-    } else {
-      this.renderList(state);
-    }
+  },
+
+  _formatLastMessage(text) {
+    if (!text) return 'No messages yet';
+    var preview = text;
+    // Strip multi-line code blocks entirely
+    preview = preview.replace(/```[\s\S]*?```/g, 'code');
+    // Strip single-line backtick fences
+    preview = preview.replace(/```([^`\n]+?)```/g, '$1');
+    // Strip inline code
+    preview = preview.replace(/`([^`]+)`/g, '$1');
+    // Strip URLs → "link"
+    preview = preview.replace(/https?:\/\/[^\s]+/g, 'link');
+    // Strip bold, italic, strikethrough, headings, blockquotes
+    preview = preview.replace(/[*_~#>`\-]/g, '');
+    // Strip [text](url) links
+    preview = preview.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+    // Collapse whitespace
+    preview = preview.replace(/\s+/g, ' ').trim();
+    // Truncate
+    if (preview.length > 80) preview = preview.substring(0, 80) + '…';
+    return preview || 'Message';
   },
 
   render() {
@@ -46,6 +59,15 @@ window.SidebarMiddle = {
         '<!-- Dynamically rendered -->' +
       '</div>';
     lucide.createIcons({ root: this.container });
+    this.attachEvents();
+    
+    // Initial render
+    var state = window.store.getState();
+    if (state.activeView === 'groups') {
+      this.renderGroups();
+    } else {
+      this.renderList(state);
+    }
   },
 
   _initStatsOverlay() {
@@ -131,9 +153,7 @@ window.SidebarMiddle = {
           }
           var escapedSender = window.Sanitize.escapeHtml(senderName);
           if (lastMsg.text) {
-            var text = lastMsg.text;
-            if (text.length > 30) text = text.substring(0, 30) + '...';
-            subtitle = escapedSender + window.Sanitize.escapeHtml(text);
+            subtitle = escapedSender + window.Sanitize.escapeHtml(self._formatLastMessage(lastMsg.text));
           } else {
             subtitle = escapedSender + '<span style="display:inline-flex;align-items:center;gap:4px;"><i data-lucide="paperclip" style="width:12px;height:12px;"></i> Attachment</span>';
           }
@@ -452,9 +472,7 @@ window.SidebarMiddle = {
       if (userMsgs.length > 0) {
         var lastMsg = userMsgs[userMsgs.length - 1];
         if (lastMsg.text) {
-          var text = lastMsg.text;
-          if (text.length > 25) text = text.substring(0, 25) + '...';
-          subtitleHtml = window.Sanitize.escapeHtml(text);
+          subtitleHtml = window.Sanitize.escapeHtml(self._formatLastMessage(lastMsg.text));
         } else {
           subtitleHtml = '<span style="display:inline-flex;align-items:center;gap:4px;color:var(--accent-primary);"><i data-lucide="paperclip" style="width:12px;height:12px;"></i> Attachment</span>';
         }

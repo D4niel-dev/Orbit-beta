@@ -973,6 +973,43 @@ window.ChatPanel = {
 
     // Syntax-highlight code blocks
     if (window.Prism) setTimeout(function() { Prism.highlightAll(); }, 0);
+    // Wire up copy-code buttons
+    setTimeout(function() {
+      var feed = document.getElementById('chat-message-feed');
+      if (!feed) return;
+      feed.querySelectorAll('.copy-code-btn').forEach(function(btn) {
+        btn.onclick = function(e) {
+          e.stopPropagation();
+          var code = this.getAttribute('data-code');
+          if (!code) return;
+          var decoded = code.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(decoded).then(function() {
+              var orig = btn.textContent;
+              btn.textContent = 'Copied!';
+              btn.style.color = 'var(--accent-success, #3fb950)';
+              setTimeout(function() { btn.textContent = orig; btn.style.color = ''; }, 2000);
+            }).catch(function() {});
+          } else {
+            // Fallback: select text from the code element
+            var codeEl = btn.closest('.code-block-wrap').querySelector('code');
+            if (codeEl) {
+              var range = document.createRange();
+              range.selectNodeContents(codeEl);
+              var sel = window.getSelection();
+              sel.removeAllRanges();
+              sel.addRange(range);
+              document.execCommand('copy');
+              sel.removeAllRanges();
+              var orig = btn.textContent;
+              btn.textContent = 'Copied!';
+              btn.style.color = 'var(--accent-success, #3fb950)';
+              setTimeout(function() { btn.textContent = orig; btn.style.color = ''; }, 2000);
+            }
+          }
+        };
+      });
+    }, 50);
 
     // Reply/Edit preview bar
     let replyEditBar = '';

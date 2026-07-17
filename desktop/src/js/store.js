@@ -745,7 +745,7 @@ class Store {
     if (packet.type === window.Protocol.Types.REACTION) {
       const { msgId, emoji, action, userId, chatId: payloadChatId, groupId } = packet.payload;
       // Defensive: trust groupId for group reactions, otherwise fall back to packet.from (DM sender)
-      const chatId = groupId || payloadChatId || packet.to || packet.from;
+      const chatId = groupId || payloadChatId || packet.from || packet.to;
       const msgs = { ...this.state.messages };
       if (msgs[chatId]) {
         msgs[chatId] = msgs[chatId].map(m => {

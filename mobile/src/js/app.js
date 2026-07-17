@@ -259,6 +259,29 @@ document.addEventListener('DOMContentLoaded', function() {
     '</div>';
   }
 
+  /* ─── Clean preview text for chat list ─── */
+  function formatLastMessage(text) {
+    if (!text) return 'No messages yet';
+    var preview = text;
+    // Strip multi-line code blocks entirely
+    preview = preview.replace(/```[\s\S]*?```/g, 'code');
+    // Strip single-line backtick fences
+    preview = preview.replace(/```([^`\n]+?)```/g, '$1');
+    // Strip inline code
+    preview = preview.replace(/`([^`]+)`/g, '$1');
+    // Strip URLs → "link"
+    preview = preview.replace(/https?:\/\/[^\s]+/g, 'link');
+    // Strip bold, italic, strikethrough, headings, blockquotes
+    preview = preview.replace(/[*_~#>`\-]/g, '');
+    // Strip [text](url) links
+    preview = preview.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+    // Collapse whitespace
+    preview = preview.replace(/\s+/g, ' ').trim();
+    // Truncate
+    if (preview.length > 80) preview = preview.substring(0, 80) + '…';
+    return preview || 'Message';
+  }
+
   function renderChatList() {
     var container = document.getElementById('chat-list');
     var chats = MStore.getChats();
@@ -334,7 +357,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (hasAtt) {
         previewHtml += '<i data-lucide="paperclip" class="chat-row-attachment-icon"></i>';
       }
-      previewHtml += escapeHtml(c.lastMessage || 'No messages yet');
+      previewHtml += escapeHtml(formatLastMessage(c.lastMessage));
       var rowClass = 'chat-row';
       if (c.unread > 0) rowClass += ' unread';
       return '<div class="' + rowClass + '" data-chat="' + c.id + '">' +
@@ -1328,7 +1351,7 @@ document.addEventListener('DOMContentLoaded', function() {
             (count > 1 ? '<span class="reaction-pill-count">' + count + '</span>' : '') +
             '</div>';
         }
-        reactionsHtml = '<div class="reactions-row">' + rxHtml + '</div>';
+        reactionsHtml = '<div class="reactions-row" data-msg-id="' + m.id + '">' + rxHtml + '</div>';
       }
 
       html += '<div class="message-row ' + (isMine ? 'mine' : 'other') + (isGrouped ? ' grouped' : '') + '" data-msg-id="' + m.id + '" data-msg-anim="' + (MStore.settings.messageAnim || 'slide') + '">' +
@@ -1352,6 +1375,41 @@ document.addEventListener('DOMContentLoaded', function() {
     feed.setAttribute('data-refreshing', 'true');
     feed.innerHTML = html;
     if (window.Prism) setTimeout(function() { Prism.highlightAll(); }, 0);
+    // Wire up copy-code buttons
+    setTimeout(function() {
+      feed.querySelectorAll('.copy-code-btn').forEach(function(btn) {
+        btn.onclick = function(e) {
+          e.stopPropagation();
+          var code = this.getAttribute('data-code');
+          if (!code) return;
+          var decoded = code.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(decoded).then(function() {
+              var orig = btn.textContent;
+              btn.textContent = 'Copied!';
+              btn.style.color = 'var(--accent-success, #3fb950)';
+              setTimeout(function() { btn.textContent = orig; btn.style.color = ''; }, 2000);
+            }).catch(function() {});
+          } else {
+            // Fallback: select text from the code element
+            var codeEl = btn.closest('.code-block-wrap').querySelector('code');
+            if (codeEl) {
+              var range = document.createRange();
+              range.selectNodeContents(codeEl);
+              var sel = window.getSelection();
+              sel.removeAllRanges();
+              sel.addRange(range);
+              document.execCommand('copy');
+              sel.removeAllRanges();
+              var orig = btn.textContent;
+              btn.textContent = 'Copied!';
+              btn.style.color = 'var(--accent-success, #3fb950)';
+              setTimeout(function() { btn.textContent = orig; btn.style.color = ''; }, 2000);
+            }
+          }
+        };
+      });
+    }, 50);
     freezeGifImages(feed);
     if (window.OrbitAudioPlayer) OrbitAudioPlayer.init(feed);
     if (window.OrbitVideoPlayer) OrbitVideoPlayer.init(feed);
@@ -3066,13 +3124,30 @@ document.addEventListener('DOMContentLoaded', function() {
             'All Chat Pre-Loading — _restoreAllBlobAttachments now loads ALL chat messages before restoration runs, not just Orbit Echo. P2P chat attachments are restored proactively at startup.',
             'Exponential Backoff Retry — _resUrl blob restoration retries 5 times (300ms→4.8s) instead of giving up after one attempt. Eliminates permanent "Restoring..." dead state.',
             'Local Send Path Cleanup — Fixed the attsRef pointer in large-file BlobStoreDB.put which targeted the last inline attachment instead of the correct large-file attachment due to IIFE timing.',
-            'FILE_TRANSFER_END _blobKey restored to synchronous save — _blobKey is set before _saveMsgs (v0.2.6 pattern), ensuring the render path finds the field on restart and shows the correct media player / "Restoring..." state instead of a generic file icon.'
+            'FILE_TRANSFER_END _blobKey restored to synchronous save — _blobKey is set before _saveMsgs (v0.2.6 pattern), ensuring the render path finds the field on restart.'
           ]],
           ['Video Duration Fix', [
             'Backward moov scan — Added fallback backward scan for moov atom when forward scan fails (non-faststart MP4s). Prevents null duration from triggering wrong fallbacks.',
             'Duration return priority — max(mvhdDur, bestTrackDur) for fragmented MP4s where mvhd has partial initial duration.',
             'durationchange handler updates knownDuration — Browser duration corrections propagate into knownDuration, preventing wrong values from sticking.',
             'dur() uses max(knownDuration, video.duration) — Read-side safety net displays the best available duration from both sources.'
+          ]],
+          ['Mobile Status Circle Fix', [
+            'PONG handler updates friend.lastSeen — prevents 45s offline timeout from marking connected peers as offline.',
+            'MESSAGE handler updates sender status — incoming messages now refresh friend online status.',
+            'onPeerFound sets lastSeen + re-renders — UDP discovery and reconnect paths keep status accurate.'
+          ]],
+          ['Emoji Reaction Fix', [
+            'Reactions-row now carries data-msg-id — pill click handlers use reliable closest() lookup instead of fragile DOM traversal.'
+          ]],
+          ['Video Overlay Controls Fix', [
+            'touchstart handler + _touchTap guard — overlay appears instantly on tap, no 300ms click delay or destructive mousemove interference.'
+          ]],
+          ['UI/UX Improvements', [
+            'Code blocks redesigned — wrapped in styled container with header bar, language label, and Copy button on both platforms.',
+            'Copy button on all code blocks — copies decoded code text to clipboard with "Copied!" confirmation feedback.',
+            'Inline/single-line code styling — accent color border and improved background for better visibility.',
+            'Chat list previews cleaned — markdown syntax stripped: code fences→"code", URLs→"link", inline code→text, bold/italic/hash markers removed, truncated at 80 chars.'
           ]],
           ['Technical', [
             'Version bumped to v0.2.7-beta.'
@@ -6063,10 +6138,21 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
 
-      // Handle PONG — reset heartbeat ping count
+      // Handle PONG — reset heartbeat ping count AND update friend status
       if (packet.type === Orbit.Protocol.Types.PONG) {
         if (window._heartbeatPingCount && data.connectionId) {
           window._heartbeatPingCount[data.connectionId] = 0;
+        }
+        // Update friend's lastSeen so the offline check doesn't mark them offline
+        var pongFriend = MStore.friends.find(function(f) { return f.connectionId === data.connectionId || f.id === data.connectionId; });
+        if (pongFriend) {
+          pongFriend.lastSeen = Date.now();
+          if (pongFriend.status !== 'online') {
+            pongFriend.status = 'online';
+            MStore.save();
+            renderFriends();
+            renderChatList();
+          }
         }
         return;
       }
@@ -6271,6 +6357,14 @@ document.addEventListener('DOMContentLoaded', function() {
           replyTo: msgReplyTo,
           attachments: msgAttachments
         });
+        // Update sender's status — receiving a message confirms they're online
+        var msgFriend = MStore.friends.find(function(f) { return f.id === msgFrom; });
+        if (msgFriend) {
+          msgFriend.lastSeen = Date.now();
+          if (msgFriend.status !== 'online') {
+            msgFriend.status = 'online';
+          }
+        }
         if (activeChatId === chatId) renderMessages(activeChatId);
         renderChatList();
         showIncomingNotification(chatId, msgFrom, msgText);
@@ -6877,6 +6971,7 @@ document.addEventListener('DOMContentLoaded', function() {
           ipFriend.name = peerName;
           ipFriend.tag = peerTag;
           ipFriend.status = 'online';
+          ipFriend.lastSeen = Date.now();
           ipFriend.ip = data.host;
           if (pPayload.avatar) ipFriend.avatar = pPayload.avatar;
           if (pPayload.publicKey) ipFriend.publicKey = pPayload.publicKey;
@@ -6904,6 +6999,7 @@ document.addEventListener('DOMContentLoaded', function() {
       } else {
         debugLog('P2P', 'Updating existing friend status', { name: existing.name, id: peerId });
         existing.status = 'online';
+        existing.lastSeen = Date.now();
         existing.ip = data.host;
         if (pPayload.avatar) existing.avatar = pPayload.avatar;
         if (pPayload.publicKey) existing.publicKey = pPayload.publicKey;
@@ -6912,6 +7008,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (pPayload.tcpPort) existing.tcpPort = pPayload.tcpPort;
         MStore.save();
         renderFriends();
+        renderChatList();
       }
 
       // Ensure chat exists (avoid duplicates from host:port→UUID merge)
@@ -6950,9 +7047,11 @@ document.addEventListener('DOMContentLoaded', function() {
             var friend = MStore.friends.find(function(f) { return f.id === peerId; });
             if (friend) {
               friend.status = 'online';
+              friend.lastSeen = Date.now();
               if (result.connectionId && result.connectionId !== friend.connectionId) friend.connectionId = result.connectionId;
               MStore.save();
               renderFriends();
+              renderChatList();
             }
           } else {
             debugLog('P2P', 'Connection to ' + peerName + ' failed', { error: result.error });

@@ -24,9 +24,10 @@ window.Sanitize = {
     // Protect single-line fenced code blocks (```code```)
     html = html.replace(/```([^`\n]+?)```/g, function(match, code) {
       var idx = pc++;
+      var trimmedCode = code.trim();
       protectedContent[idx] =
-        '<code style="background:var(--bg-hover);padding:2px 4px;border-radius:4px;font-family:var(--font-mono);font-size:0.9em;">' +
-        code +
+        '<code style="background:var(--bg-hover, rgba(0,0,0,0.15));padding:2px 6px;border-radius:4px;font-family:var(--font-mono, monospace);font-size:0.9em;color:var(--accent-primary, #58a6ff);border:1px solid var(--border-subtle, rgba(255,255,255,0.1));">' +
+        trimmedCode +
         '</code>';
       return '\x00MD' + idx + '\x00';
     });
@@ -37,20 +38,30 @@ window.Sanitize = {
       var langClean = lang.replace(/[^\w]/g, '');
       var codeCls = langClean ? ' class="language-' + langClean + '"' : '';
       var preCls  = langClean ? ' class="language-' + langClean + '"' : '';
+      var langLabel = langClean ? '<span class="code-lang-label" style="font-size:10px;font-weight:600;color:var(--text-secondary,#aaa);font-family:var(--font-mono,monospace);text-transform:lowercase;letter-spacing:0.3px;padding:1px 6px;border-radius:4px;background:var(--bg-surface, rgba(255,255,255,0.06));line-height:1.6;">' + langClean + '</span>' : '';
+      var trimmedCode = code.trim();
+      // Escape the code for use in an attribute — can't use the code directly in onclick because it may contain quotes
+      var codeForAttr = trimmedCode.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       protectedContent[idx] =
-        '<pre' + preCls + ' style="margin:8px 0;border-radius:8px;overflow-x:auto;padding:12px 16px;">' +
-        '<code' + codeCls + ' style="font-family:var(--font-mono);font-size:0.85em;">' +
-        code.trim() +
-        '</code></pre>';
+        '<div class="code-block-wrap" style="position:relative;margin:8px 0;border-radius:8px;overflow:hidden;background:var(--bg-hover, #1a1a2e);border:1px solid var(--border-subtle, rgba(255,255,255,0.1));">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 12px;background:var(--bg-surface, rgba(0,0,0,0.15));border-bottom:1px solid var(--border-subtle, rgba(255,255,255,0.05));">' +
+        '<div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">' + langLabel + '</div>' +
+        '<button class="copy-code-btn" data-code="' + codeForAttr + '" style="font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid var(--border-subtle, rgba(255,255,255,0.15));background:transparent;color:var(--text-muted, #888);cursor:pointer;font-family:inherit;line-height:1.5;transition:all 0.15s;" onmouseover="this.style.background=\'var(--bg-hover, rgba(255,255,255,0.05))\';this.style.color=\'var(--text-primary, #fff)\';" onmouseout="this.style.background=\'transparent\';this.style.color=\'var(--text-muted, #888)\';">Copy</button>' +
+        '</div>' +
+        '<pre' + preCls + ' style="margin:0;padding:12px 16px;overflow-x:auto;background:transparent;border:none;">' +
+        '<code' + codeCls + ' style="font-family:var(--font-mono);font-size:0.85em;line-height:1.5;">' +
+        trimmedCode +
+        '</code></pre></div>';
       return '\x00MD' + idx + '\x00';
     });
 
     // Protect inline code (`code`)
     html = html.replace(/`([^`]+)`/g, function(match, code) {
       var idx = pc++;
+      var trimmedCode = code.trim();
       protectedContent[idx] =
-        '<code style="background:var(--bg-hover);padding:2px 4px;border-radius:4px;font-family:var(--font-mono);font-size:0.9em;">' +
-        code +
+        '<code style="background:var(--bg-hover, rgba(0,0,0,0.15));padding:2px 6px;border-radius:4px;font-family:var(--font-mono, monospace);font-size:0.9em;color:var(--accent-primary, #58a6ff);border:1px solid var(--border-subtle, rgba(255,255,255,0.1));">' +
+        trimmedCode +
         '</code>';
       return '\x00MD' + idx + '\x00';
     });
@@ -61,14 +72,14 @@ window.Sanitize = {
     html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function(match, text, url) {
       var idx = pc++;
       protectedContent[idx] =
-        '<a href="' + url + '" target="_blank" rel="noopener noreferrer" class="msg-link">' + text + '</a>';
+        '<a href="' + url + '" target="_blank" rel="noopener noreferrer" style="color: var(--accent-primary); text-decoration: underline;">' + text + '</a>';
       return '\x00MD' + idx + '\x00';
     });
 
     // Links (auto-detect URLs)
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     html = html.replace(urlRegex, function(url) {
-      return '<a href="' + url + '" target="_blank" rel="noopener noreferrer" class="msg-link">' + url + '</a>';
+      return '<a href="' + url + '" target="_blank" rel="noopener noreferrer" style="color: var(--accent-primary); text-decoration: underline;">' + url + '</a>';
     });
 
     // @mentions

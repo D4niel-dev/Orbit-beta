@@ -27,6 +27,23 @@ window.Changelog = {
             'durationchange handler updates knownDuration on correction.',
             'dur() uses max(knownDuration, video.duration) safety net.'
           ]],
+          ['Mobile Status Circle Fix', [
+            'PONG/MESSAGE handlers update friend.lastSeen — prevents false offline display.',
+            'onPeerFound sets lastSeen + triggers re-render on reconnect.'
+          ]],
+          ['Emoji Reaction Fix', [
+            'Fixed packet.from vs packet.to swap in store.js REACTION handler — DM reactions from mobile now reach desktop.'
+          ]],
+          ['Video Overlay Controls Fix', [
+            'touchstart handler + _touchTap guard for instant overlay on mobile tap.'
+          ]],
+          ['UI/UX Improvements', [
+            'Code blocks redesigned with header bar, language label, and Copy button.',
+            'Copy code button with clipboard API + "Copied!" feedback.',
+            'Improved inline code styling with accent color border.',
+            'Desktop sanitize.js synced with shared version — copy button now works on desktop too.',
+            'Chat list previews cleaned — markdown syntax stripped, truncated at 80 chars.'
+          ]],
           ['Technical', [
             'Version bumped to v0.2.7-beta.'
           ]]
