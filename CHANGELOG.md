@@ -1,6 +1,89 @@
 # Orbit Changelog
 
-## v0.2.0-beta **(Latest Version)**
+## v0.2.7-beta — **Stable Release**
+
+### Features
+
+- **4-Layer Video Duration Fix** — Backward moov scan when forward scan misses moov (size=0 box); return max(mvhdDur, bestTrackDur) for fragmented MP4s; durationchange handler updates knownDuration; dur() uses max(knownDuration, video.duration) safety net.
+- **Mobile A/V Persistence Fix** — All chat pre-loading before _restoreAllBlobAttachments; exponential backoff in _resUrl (5 retries 300ms→4.8s); local send path attsRef cleanup; FILE_TRANSFER_END _blobKey restored to synchronous save.
+- **Mobile Status Circle Fix** — PONG handler updates friend.lastSeen+status; MESSAGE handler refreshes sender status; onPeerFound sets lastSeen + re-renders.
+- **Emoji Reaction Fix** — Desktop store.js packet.to→packet.from swap for DM reaction routing; mobile reactions-row gets data-msg-id attribute.
+- **Mobile Overlay Controls Fix** — touchstart handler for instant overlay; _touchTap guard prevents destructive click toggle; touch-action: manipulation CSS.
+- **Code Block UI Redesign** — Styled container with header bar, language badge, Copy button; inline code accent color border.
+- **Copy Code Button** — Clipboard API + "Copied!" feedback with execCommand fallback; wired on both platforms.
+- **Chat List Preview Cleaned** — Markdown stripped from sidebar previews (code→"code", URLs→"link", bold/italic/hash removed, truncated at 80 chars).
+- **Desktop sanitize.js Synced** — Desktop now loads updated copy with all code block improvements (was using old standalone copy).
+- **Technical:** Version bumped to v0.2.7-beta across all manifests.
+
+## v0.2.6-beta
+
+> **Note:** This is not a stable release — latest development version with experimental features.
+
+### Investigation & Verification
+
+- **Investigation: File Persistence Root Cause** — Discovered that _restoreAllBlobAttachments only scanned MStore.messages which at startup only had echo data — P2P chats were invisible. Debugger, code-archaeologist, backend-specialist agents deployed for parallel root cause analysis.
+- **Player File Identity Enforced** — shared/ui/ and mobile/src/shared/ui/ player files confirmed byte-identical.
+
+## v0.2.5-beta
+
+> **Note:** This is not a stable release — latest development version with experimental features.
+
+### Features
+
+- **Blue Fullscreen Background 4-Layer Fix** — backdrop, wrapper, videoBox, video all get var(--bg-base) with accent glow.
+- **Fullscreen Uses Manual Mode** — Both platforms use _enterManualFS/_exitManualFS exclusively.
+- **Activity Center UI Shift Fixed** — scrollIntoView replaced with manual scrollTop+offset calculation.
+- **Light Mode Flashbang Prevention** — Warning checkbox + Appearance toggle; noFlashbang store field.
+- **Theme Transitions + Easter Egg** — 600ms CSS transition on data-theme change; random theme quotes as Toast.
+- **Midnight Sleep Reminder** — 3s after boot, 12AM-5AM on dark/midnight themes.
+- **Full Undo/Redo System** — 100-action stack (Ctrl+Z, Ctrl+Shift+Z/Y); respects Privacy Mode.
+- **Avatar Frame Per-Account Fix** — Reads from currentUser.profileFrame with settings fallback.
+- **Konami Code → Developer Mode** — ↑↑↓↓←→←→BA/AB toggles devMode with Toast.
+- **Bugfixes** — Activity Center shift, mobile buffer loader, image send corruption, mobile video duration mismatch, desktop→mobile video thumbnails, gallery routing, overlayIcon ReferenceError, fullscreen taskbar overlap.
+
+## v0.2.4-beta
+
+> **Note:** This is not a stable release — latest development version with experimental features.
+
+### Activity Center & Transfer UX
+
+- **Activity Center Overhaul** — Lucide icons with color badges, duration/size displays, audio player integration.
+- **Activity Center UI Shift Fix** — Manual scroll calculation replaces scrollIntoView.
+- **Transfer UX** — Progress display in Activity Center, file type icons, media duration/size.
+
+## v0.2.3-beta
+
+> **Note:** This is not a stable release — latest development version with experimental features.
+
+### Media Player Alignment
+
+- **Video Player Complete Overhaul** — MP4 duration parsing, multi-layered fallback, eliminated forced seeks.
+- **Audio Player Match** — Consistent player architecture with video.
+- **Player File Identity** — Shared player files byte-identical across platforms.
+
+## v0.2.2-beta
+
+> **Note:** This is not a stable release — latest development version with experimental features.
+
+### Mobile & Player Fixes
+
+- **Mobile Metadata Preload** — muted=true + preload=metadata forces immediate duration on mobile browsers.
+- **Blob MP4 Duration Parsing** — fetch(blob:) + Uint8Array byte access for large blob URLs.
+- **Video Player Blob Duration Fallback** — Fetches blob and parses MP4 header directly.
+- **Mobile Changelog** — Full What's New modal on Android.
+
+## v0.2.1-beta
+
+> **Note:** This is not a stable release — latest development version with experimental features.
+
+### Stability & Infrastructure
+
+- **CRITICAL: WriteStream Race Fixed (Mobile→Desktop)** — stream.end() async; onComplete fired before flush → truncated files. Fixed with stream.on('finish') wrapping completion.
+- **CRITICAL: Duplicate Messages Fixed** — _fileId markers in MESSAGE attachment; receiver merges into existing message.
+- **File Transfer Stability** — Hash mismatch handling, group chat file routing, mobile type override prevention.
+- **Changelog System** — Version history added to mobile About tab.
+
+## v0.2.0-beta
 
 > **Note:** This is not a stable release — latest development version with experimental features.
 
@@ -370,7 +453,7 @@
 - **Build Pipeline Overhaul (v0.1.2-beta plan):** Android now builds `assembleRelease` instead of `assembleDebug`. SHA256SUMS.txt generated per platform and consolidated at release. Artifact verification step fails the build if any required artifact (`.exe`, `.dmg`, `.AppImage`, `.deb`, `.apk`) is missing. Build metadata (version, commit hash, date) auto-injected into release notes. Asset size table generated dynamically.
 - **Protocol Definitions Unified:** `shared/network/protocol.js` and `desktop/src/js/network/protocol.js` now both contain all 47 protocol types (CALL_*, FILE_TRANSFER_*/CHUNK/END/OFFER/ACCEPT, DISCOVERY, E2EE_KEY_EXCHANGE, etc.) — cross-platform type compatibility guaranteed.
 
-## v0.1.1-beta
+## v0.1.1-beta — **Stable Release**
 
 ### New Features
 - **Voice & Video Calls (P2P):** Full WebRTC call system — CallManager with peer-to-peer audio/video, incoming call notification, mute/speaker controls, call timer, ICE candidate exchange via P2P network layer

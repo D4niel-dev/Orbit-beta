@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v027-beta-latest-version">v0.2.7-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v027-beta-stable-release">v0.2.7-beta</a>
 </p>
 
 <p align="center">
@@ -28,13 +28,13 @@
 
 | Channel | Version | Status |
 |---------|---------|--------|
-| *Development* | v0.2.7-beta | Latest build (unstable) |
-| **Stable** | v0.1.1-beta | Stable release |
-| Previous **Stable** | v0.0.5-beta | Legacy stable release |
+| *Development* | v0.2.7-beta | Latest build (stable) |
+| **Stable** | v0.2.7-beta | Stable release |
+| Previous **Stable** | v0.1.1-beta | Legacy stable release |
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
 
-## Windows Preview (Old)
+## Windows Preview
 
 <p align="center">
   <img src="desktop/src/icons/screenshots/preview-darkmode.png" alt="Orbit dark mode" width="720"><br>
@@ -64,7 +64,7 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
   <em>Group chat</em>
 </p>
 
-## Mobile Preview (Old)
+## Mobile Preview
 
 <p align="center">
   <img src="desktop/src/icons/screenshots/preview-chat-dark-M.png" alt="Mobile chat screen" width="200">
@@ -90,14 +90,15 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage desktop app** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
-## Highlights (v0.2.0-beta)
+## Highlights (v0.2.7-beta)
 
-- **CRITICAL: Mobile Background Notifications Fixed:** `document.hidden` is unreliable in Capacitor WebView — native notifications never appeared outside the app. Fixed at two layers: JS now tracks background via Capacitor's `appStateChange` listener, and the Java `OrbitP2PPlugin` creates notifications directly via `NotificationManager`, bypassing the paused WebView entirely.
-- **CRITICAL: Large File Persistence on Mobile:** Files >10MB stored in IndexedDB had `blob:` URLs die on restart. Added `BlobStoreDB` with `_restoreAllBlobAttachments()` to reconstruct URLs on startup. "Restoring..." placeholders shown during recovery.
-- **Mobile base64 Streaming Optimizations:** All 7 binary decode sites rewritten as single-pass streaming decoders — no intermediate string allocations, inline validity counting, 4-char group buffer. Faster and more memory-efficient.
-- **Desktop AV Type Honor Fix:** Desktop `file-received` handler now respects the sender's original type classification instead of blindly re-classifying by extension — .webm audio files no longer misrouted to the video player.
-- **`muted=true` Gated to Mobile Only:** Desktop players no longer start muted. The preload hack is now only applied on actual mobile devices.
-- **Blob MP4 Duration Parsing:** `parseMp4Duration()` now accepts direct ArrayBuffer via `fetch(blob:URL)` and uses `Uint8Array` byte access instead of failing `String.fromCharCode.apply` on large buffers.
+- **4-Layer Video Duration Fix:** Backward moov scan for non-faststart MP4s, max(mvhdDur, bestTrackDur) for fragmented MP4s, durationchange→knownDuration propagation, dur() max safety net.
+- **Mobile A/V Persistence Fixed:** All chat pre-loading, exponential backoff retry, local send path cleanup, synchronous _blobKey save.
+- **Mobile Status Circle Fixed:** PONG/MESSAGE/onPeerFound handlers now properly update friend.lastSeen to prevent false offline display.
+- **Emoji Reactions Fixed:** Desktop→mobile REACTION packet.from routing fixed; mobile reactions-row data-msg-id attribute added.
+- **Mobile Overlay Controls Fixed:** Instant touch response with touchstart handler and _touchTap guard, no more 300ms delay.
+- **Code Block UI Redesign:** Styled container with language badge and Copy button (clipboard API + "Copied!" feedback).
+- **Chat List Preview Cleaning:** Markdown syntax stripped from sidebar previews — cleaner chat list display.
 
 ## Version History
 <details>
@@ -221,7 +222,7 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Bug Fixes** — orbit-db://attachment/ 404, selective subscriber undefined changedState, message avatar click re-attached, loadFullChatMessages dropping existing messages
 </details>
 <details open>
-<summary>v0.1.1-beta (Latest Stable)</summary>
+<summary>v0.1.1-beta (Stable)</summary>
 
 - **Voice & Video Calls (P2P WebRTC)** — Full call system with incoming notification, mute/speaker controls, timer, ICE candidate exchange over P2P network layer
 - **Group Calls (Mesh)** — Each participant gets their own RTCPeerConnection; video grid or avatar circles for audio-only; start/join/leave group calls
@@ -344,7 +345,8 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Unstable AV Transfer Warning Modal** — alert-triangle modal with "Don't show again" checkbox.
 - **Auto-Discovery Diagnostic Logging** — [AutoConnect] logs for firewall debugging.
 </details>
-<details open>
+<details>
+<details>
 <summary>v0.2.0-beta</summary>
 
 - **CRITICAL: Mobile Background Notifications Fixed** — `document.hidden` unreliable in Capacitor WebView. Fixed: JS tracks background via `appStateChange`; Java plugin creates notifications directly via `NotificationManager`.
@@ -353,6 +355,56 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Desktop AV Type Honor Fix** — Desktop honors sender's type classification; .webm audio no longer misrouted to video player.
 - **`muted=true` Gated to Mobile Only** — Desktop players no longer start muted.
 - **Blob MP4 Duration Parsing** — fetch(blob:) + Uint8Array byte access for duration detection on large blob URLs.
+</details>
+<details>
+<summary>v0.2.1-beta</summary>
+
+- CRITICAL: WriteStream race fixed (mobile→desktop truncated files)
+- CRITICAL: Duplicate messages for large files fixed
+- File transfer stability improvements
+</details>
+<summary>v0.2.2-beta</summary>
+
+- Mobile metadata preload (muted=true forces immediate duration)
+- Blob MP4 duration parsing via fetch(blob:)
+- Mobile changelog modal
+</details>
+<details>
+<summary>v0.2.3-beta</summary>
+
+- Video player complete overhaul (MP4 duration parsing, multi-layered fallback)
+- Audio player matching architecture
+</details>
+<details>
+<summary>v0.2.4-beta</summary>
+
+- Activity Center overhaul with Lucide icons, badges, duration/size
+- Transfer UX progress display
+</details>
+<details>
+<summary>v0.2.5-beta</summary>
+
+- 4-layer fullscreen bg fix, manual fullscreen only
+- Light mode flashbang prevention, theme transitions + easter egg, midnight sleep reminder
+- Full undo/redo system (100-action stack, Ctrl+Z/Y, privacy mode)
+- Avatar frame per-account fix, Konami code→dev mode
+</details>
+<details>
+<summary>v0.2.6-beta</summary>
+
+- File persistence investigation: root cause found (P2P chats invisible to _restoreAllBlobAttachments at startup)
+- Player file identity enforced (byte-identical across platforms)
+</details>
+<details open>
+<summary>v0.2.7-beta (Latest Stable)</summary>
+
+- Video duration: 4-layer fix (backward moov scan, max return priority, durationchange→knownDuration, dur() max safety net)
+- Mobile A/V persistence: all-chat pre-loading, exponential backoff retry, local send path cleanup
+- Status circle: PONG/MESSAGE/onPeerFound all update lastSeen properly
+- Emoji reactions: packet.from routing fix, data-msg-id on reactions-row
+- Overlay controls: touchstart handler, _touchTap guard
+- Code blocks: redesigned with Copy button + language badge
+- Chat list: markdown-stripped previews
 </details>
 
 See [CHANGELOG.md](CHANGELOG.md) for the full version history.
@@ -418,7 +470,7 @@ Or let GitHub Actions build it automatically — push a `v*` tag or trigger the 
 ## How it works
 
 ```
-  	    Desktop Orbit             Android Orbit
+  	 Desktop Orbit             Android Orbit
        	      │                         │
        	      │         TCP P2P         │
        	      ├─────────────────────────┤
@@ -512,14 +564,15 @@ Transparency matters in beta. Current constraints include:
 
 ## Roadmap
 
-### Shipped (v0.2.0-beta)
+### Shipped (v0.2.7-beta)
 
-- **CRITICAL: Mobile Background Notifications Fixed** — two-layer fix: JS `appStateChange` + native Java `NotificationManager`
-- **CRITICAL: Large File Persistence on Mobile** — IndexedDB BlobStore with restart recovery
-- **Mobile base64 Streaming Optimizations** — single-pass decoders, no intermediate strings
-- **Desktop AV Type Honor Fix** — sender type classification respected over extension matching
-- **`muted=true` Gated to Mobile Only** — desktop players no longer start muted
-- **Blob MP4 Duration Parsing** — direct ArrayBuffer parsing via fetch(blob:) for large files
+- **4-Layer Video Duration Fix** — backward moov scan, max duration return, durationchange→knownDuration, dur() safety net
+- **Mobile A/V Persistence Fix** — all chat pre-loading, exponential backoff, synchronous _blobKey
+- **Mobile Status Circle Fix** — lastSeen updated on PONG/MESSAGE/onPeerFound
+- **Emoji Reaction Fix** — packet.from routing for DM reactions
+- **Mobile Overlay Controls Fix** — touchstart handler, zero-delay overlay
+- **Code Block UI Redesign** — styled container with Copy button and language badge
+- **Chat List Preview Cleaned** — markdown stripped in sidebar
 
 ### In Progress / Planned
 
