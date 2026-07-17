@@ -1,6 +1,6 @@
 {
   "name": "orbit-workspace",
-  "version": "0.2.6-beta",
+  "version": "0.2.7-beta",
   "private": true,
   "description": "Orbit P2P Chat — Workspace Root",
   "scripts": {

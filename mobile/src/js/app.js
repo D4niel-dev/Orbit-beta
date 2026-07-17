@@ -206,6 +206,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
   migrateOldData(); // copy unprefixed keys before MStore reads orbit_* keys
   MStore.load();
+  // Force-load all chat messages so _restoreAllBlobAttachments processes them
+  MStore.chats.forEach(function(c) { MStore.getMessages(c.id); });
   // Restore blob attachments asynchronously (non-blocking — will re-render when done)
   window._restoreAllBlobAttachments().then(function() {
     console.log('[BlobStore] All blob attachments restored');
@@ -1077,24 +1079,36 @@ document.addEventListener('DOMContentLoaded', function() {
             window._restoreQueue[a._blobKey] = true;
             window.BlobStoreDB.get(a._blobKey).then(function(ab) {
               if (!ab) {
-                setTimeout(function() {
-                  window.BlobStoreDB.get(a._blobKey).then(function(ab2) {
-                    if (!ab2) { window._restoreQueue[a._blobKey] = false; return; }
+                // Retry with exponential backoff (300ms, 600ms, 1.2s, 2.4s, 4.8s)
+                var _retryDelay = 300;
+                var _maxRetries = 5;
+                var _retryCount = 0;
+                (function _retryBlob() {
+                  if (_retryCount >= _maxRetries) {
+                    console.warn('[BlobStore] give up restoring', a._blobKey, 'after', _maxRetries, 'retries');
                     window._restoreQueue[a._blobKey] = false;
-                    try {
-                      var mime = a.mimeType || window.orbitGuessMimeType(a.name);
-                      var newUrl = URL.createObjectURL(new Blob([ab2], { type: mime }));
-                      if (a.url && a.url !== newUrl && a.url.indexOf('blob:') === 0 && a._blobCreated) {
-                        try { URL.revokeObjectURL(a.url); } catch(e) {}
-                      }
-                      a.url = newUrl;
-                      a._blobCreated = true; a._blobSession = window._orbitSessionId;
-                      if (!window._blobUrlsToRevoke) window._blobUrlsToRevoke = [];
-                      window._blobUrlsToRevoke.push(newUrl);
-                      if (activeChatId) renderMessages(activeChatId);
-                    } catch(e) { console.warn('[BlobStore] retry restore error:', e.message); }
-                  });
-                }, 300);
+                    return;
+                  }
+                  _retryCount++;
+                  setTimeout(function() {
+                    window.BlobStoreDB.get(a._blobKey).then(function(abN) {
+                      if (!abN) { _retryDelay *= 2; _retryBlob(); return; }
+                      window._restoreQueue[a._blobKey] = false;
+                      try {
+                        var mime = a.mimeType || window.orbitGuessMimeType(a.name);
+                        var newUrl = URL.createObjectURL(new Blob([abN], { type: mime }));
+                        if (a.url && a.url !== newUrl && a.url.indexOf('blob:') === 0 && a._blobCreated) {
+                          try { URL.revokeObjectURL(a.url); } catch(e) {}
+                        }
+                        a.url = newUrl;
+                        a._blobCreated = true; a._blobSession = window._orbitSessionId;
+                        if (!window._blobUrlsToRevoke) window._blobUrlsToRevoke = [];
+                        window._blobUrlsToRevoke.push(newUrl);
+                        if (activeChatId) renderMessages(activeChatId);
+                      } catch(e) { console.warn('[BlobStore] retry restore error:', e.message); }
+                    });
+                  }, _retryDelay);
+                })();
                 return;
               }
               window._restoreQueue[a._blobKey] = false;
@@ -1851,20 +1865,18 @@ document.addEventListener('DOMContentLoaded', function() {
     largeFiles.forEach(function(a) {
       if (a.type === 'audio' || a.type === 'video') {
         var localKey = 'local_' + a.id;
-        if (a._arrayBuffer) {
-          (function(key, buf, attsRef) {
-            window.BlobStoreDB.put(key, buf).then(function() {
-            }).catch(function(err) {
-              console.warn('[Send] Local persist failed:', err);
-              delete attsRef._blobKey;
-            });
-          })(localKey, a._arrayBuffer, allAttachments[allAttachments.length - 1]);
-        }
-        allAttachments.push({
+        var localAtt = {
           id: a.id, _fileId: a.id, name: a.name, type: a.type,
-          url: a.url, _blobCreated: true, _blobSession: window._orbitSessionId,
-          _blobKey: a._arrayBuffer ? localKey : undefined
-        });
+          url: a.url, _blobCreated: true, _blobSession: window._orbitSessionId
+        };
+        if (a._arrayBuffer) {
+          window.BlobStoreDB.put(localKey, a._arrayBuffer).then(function() {
+            localAtt._blobKey = localKey;
+          }).catch(function(err) {
+            console.warn('[Send] Local persist failed:', err);
+          });
+        }
+        allAttachments.push(localAtt);
         if (a.type === 'video' && a._arrayBuffer) {
           try {
             var blob = new Blob([a._arrayBuffer], { type: 'video/mp4' });
@@ -3049,7 +3061,19 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button id="changelog-close-mobile" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;font-size:20px;">✕</button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
-        vBlock('0.2.6-beta', 'Latest', [
+        vBlock('0.2.7-beta', 'Latest', [
+          ['CRITICAL: Audio/Video Persistence Fix', [
+            'Mobile file persistence overhaul — P2P audio and video files no longer lost after app restart.',
+            'IndexedDB Write Order Fixed (CRITICAL) — BlobStoreDB.put() must complete before _blobKey is saved to localStorage. Prevents dangling references where metadata says data exists but the write never finished.',
+            'All Chat Pre-Loading — _restoreAllBlobAttachments now loads ALL chat messages (not just Orbit Echo) before restoration runs. P2P chat attachments are restored proactively at startup.',
+            'Exponential Backoff Retry — _resUrl blob restoration retries 5 times (300ms→4.8s) instead of giving up after one attempt. Eliminates permanent "Restoring..." dead state.',
+            'Local Send Path Fixed — Removed wrong attsRef pointer in the IIFE that targeted the last inline attachment instead of the correct large-file attachment. _blobKey now only set after BlobStoreDB.put confirms.'
+          ]],
+          ['Technical', [
+            'Version bumped to v0.2.7-beta.'
+          ]]
+        ]) +
+        vBlock('0.2.6-beta', '', [
           ['New Features', [
             'Undo/Redo System — Full Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y support via the new UndoManager component. Covers: message send/delete/edit, settings changes, profile updates, account switching, and chat navigation. Titlebar buttons with visual disabled state.',
             'Konami Code Easter Egg — Type ↑↑↓↓←→←→BA or ↑↑↓↓←→←→AB to toggle Developer Mode. Visual sequence feedback in the title bar.',
@@ -6405,16 +6429,15 @@ document.addEventListener('DOMContentLoaded', function() {
           var attUrl = '';
           try { attUrl = URL.createObjectURL(new Blob([_mergedBuf.buffer], { type: mimeType })); } catch(e) { attUrl = ''; }
           // Persist file data for cross-restart survival:
-          // ALL files (any size) are stored as raw ArrayBuffer in IndexedDB.
-          // No data: URL is created — blob URLs are restored from IndexedDB on startup.
+          // Store in IndexedDB FIRST, then only save _blobKey metadata after write confirms.
           var blobKey = packet.payload.fileId;
-          (function(key, buf) {
-            window.BlobStoreDB.put(key, buf).then(function() {
-              console.log('[P2P] Stored file in IndexedDB:', key, buf.byteLength + ' bytes');
-            }).catch(function(err) {
-              console.warn('[P2P] IndexedDB store failed for', key, err);
-            });
-          })(blobKey, _mergedBuf.buffer);
+          var _blobWriteDone = window.BlobStoreDB.put(blobKey, _mergedBuf.buffer).then(function() {
+            console.log('[P2P] Stored file in IndexedDB:', blobKey, _mergedBuf.buffer.byteLength + ' bytes');
+            return true;
+          }).catch(function(err) {
+            console.warn('[P2P] IndexedDB store failed for', blobKey, err);
+            return false;
+          });
 
           // CRIT-4: Try to find existing message with matching _fileId attachment, update it instead of creating duplicate
           // Search for pending message across both chatId and msgFrom (DM chatId mismatch fix)
@@ -6429,15 +6452,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 for (var ai = 0; ai < atts.length; ai++) {
                   if (atts[ai]._fileId === packet.payload.fileId) {
                     atts[ai].url = attUrl;
-                    atts[ai]._blobKey = blobKey;
-                    atts[ai]._blobCreated = true; atts[ai]._blobSession = window._orbitSessionId;
                     if (!atts[ai].type || atts[ai].type === 'file') {
                       atts[ai].type = isImage ? 'image' : (isVideo ? 'video' : (isAudio ? 'audio' : 'file'));
                     }
                     atts[ai].mimeType = mimeType;
                     atts[ai]._pending = false;
                     atts[ai].name = txEnd.fileName || atts[ai].name;
-                    MStore._saveMsgs(searchIds[si]);
+                    // Defer _blobKey save until IndexedDB write confirms (avoids dangling refs)
+                    _blobWriteDone.then(function(success) {
+                      if (success) {
+                        atts[ai]._blobKey = blobKey;
+                        atts[ai]._blobCreated = true;
+                        atts[ai]._blobSession = window._orbitSessionId;
+                        MStore._saveMsgs(searchIds[si]);
+                      }
+                    });
                     found = true;
                     break;
                   }
@@ -6449,20 +6478,29 @@ document.addEventListener('DOMContentLoaded', function() {
 
           if (!found) {
             // Fallback: create a new message entry if no matching _fileId found
+            var newAtt = {
+              id: packet.payload.fileId,
+              name: txEnd.fileName,
+              type: isImage ? 'image' : (isVideo ? 'video' : (isAudio ? 'audio' : 'file')),
+              url: attUrl,
+              _fileId: packet.payload.fileId
+              // _blobKey/_blobCreated/_blobSession deferred until IndexedDB confirms
+            };
             MStore.addMessage(chatId, {
               id: 'p2p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
               from: msgFrom,
               text: '',
               time: new Date().toISOString(),
-              attachments: [{
-                id: packet.payload.fileId,
-                name: txEnd.fileName,
-                type: isImage ? 'image' : (isVideo ? 'video' : (isAudio ? 'audio' : 'file')),
-                url: attUrl,
-                _blobKey: blobKey,
-                _blobCreated: true, _blobSession: window._orbitSessionId,
-                _fileId: packet.payload.fileId
-              }]
+              attachments: [newAtt]
+            });
+            // Add persistence refs after IndexedDB write completes
+            _blobWriteDone.then(function(success) {
+              if (success) {
+                newAtt._blobKey = blobKey;
+                newAtt._blobCreated = true;
+                newAtt._blobSession = window._orbitSessionId;
+                MStore._saveMsgs(chatId);
+              }
             });
           }
           

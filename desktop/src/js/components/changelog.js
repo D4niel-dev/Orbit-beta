@@ -14,7 +14,19 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.2.6-beta', 'Latest', [
+        versionBlock('0.2.7-beta', 'Latest', [
+          ['CRITICAL: Audio/Video Persistence Fix (Mobile)', [
+            'Mobile file persistence overhaul — P2P audio and video files no longer lost after app restart.',
+            'IndexedDB Write Order Fixed (CRITICAL) — BlobStoreDB.put() must complete before _blobKey is saved to localStorage. Prevents dangling references.',
+            'All Chat Pre-Loading — _restoreAllBlobAttachments now loads ALL chat messages before restoration runs.',
+            'Exponential Backoff Retry — _resUrl retries 5 times instead of giving up after one attempt.',
+            'Local Send Path Fixed — Corrected attsRef pointer for large-file _blobKey tracking.'
+          ]],
+          ['Technical', [
+            'Version bumped to v0.2.7-beta.'
+          ]]
+        ]) +
+        versionBlock('0.2.6-beta', '', [
           ['New Features', [
             'Undo/Redo System — Full Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y support via the new UndoManager component. Covers: message send/delete/edit, settings changes (all tabs), profile updates (username, bio, avatar, banner), account switching, and chat navigation. Titlebar buttons with visual disabled state and tooltip hints.',
             'Konami Code Easter Egg — Type ↑↑↓↓←→←→BA or ↑↑↓↓←→←→AB to toggle Developer Mode. Visual sequence feedback shown in the title bar.',
