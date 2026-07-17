@@ -3062,12 +3062,11 @@ document.addEventListener('DOMContentLoaded', function() {
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
         vBlock('0.2.7-beta', 'Latest', [
-          ['CRITICAL: Audio/Video Persistence Fix', [
-            'Mobile file persistence overhaul — P2P audio and video files no longer lost after app restart.',
-            'IndexedDB Write Order Fixed (CRITICAL) — BlobStoreDB.put() must complete before _blobKey is saved to localStorage. Prevents dangling references where metadata says data exists but the write never finished.',
-            'All Chat Pre-Loading — _restoreAllBlobAttachments now loads ALL chat messages (not just Orbit Echo) before restoration runs. P2P chat attachments are restored proactively at startup.',
+          ['Mobile A/V Persistence Fix', [
+            'All Chat Pre-Loading — _restoreAllBlobAttachments now loads ALL chat messages before restoration runs, not just Orbit Echo. P2P chat attachments are restored proactively at startup.',
             'Exponential Backoff Retry — _resUrl blob restoration retries 5 times (300ms→4.8s) instead of giving up after one attempt. Eliminates permanent "Restoring..." dead state.',
-            'Local Send Path Fixed — Removed wrong attsRef pointer in the IIFE that targeted the last inline attachment instead of the correct large-file attachment. _blobKey now only set after BlobStoreDB.put confirms.'
+            'Local Send Path Cleanup — Fixed the attsRef pointer in large-file BlobStoreDB.put which targeted the last inline attachment instead of the correct large-file attachment due to IIFE timing.',
+            'FILE_TRANSFER_END _blobKey restored to synchronous save — _blobKey is set before _saveMsgs (v0.2.6 pattern), ensuring the render path finds the field on restart and shows the correct media player / "Restoring..." state instead of a generic file icon.'
           ]],
           ['Technical', [
             'Version bumped to v0.2.7-beta.'
@@ -6429,15 +6428,18 @@ document.addEventListener('DOMContentLoaded', function() {
           var attUrl = '';
           try { attUrl = URL.createObjectURL(new Blob([_mergedBuf.buffer], { type: mimeType })); } catch(e) { attUrl = ''; }
           // Persist file data for cross-restart survival:
-          // Store in IndexedDB FIRST, then only save _blobKey metadata after write confirms.
+          // ALL files (any size) are stored as raw ArrayBuffer in IndexedDB.
+          // _blobKey must be set SYNCHRONOUSLY (before _saveMsgs) so the render
+          // path can show "Restoring..." after restart. The IndexedDB write is
+          // fire-and-forget; if it fails, _blobKey is cleaned up in the catch.
           var blobKey = packet.payload.fileId;
-          var _blobWriteDone = window.BlobStoreDB.put(blobKey, _mergedBuf.buffer).then(function() {
-            console.log('[P2P] Stored file in IndexedDB:', blobKey, _mergedBuf.buffer.byteLength + ' bytes');
-            return true;
-          }).catch(function(err) {
-            console.warn('[P2P] IndexedDB store failed for', blobKey, err);
-            return false;
-          });
+          (function(key, buf) {
+            window.BlobStoreDB.put(key, buf).then(function() {
+              console.log('[P2P] Stored file in IndexedDB:', key, buf.byteLength + ' bytes');
+            }).catch(function(err) {
+              console.warn('[P2P] IndexedDB store failed for', key, err);
+            });
+          })(blobKey, _mergedBuf.buffer);
 
           // CRIT-4: Try to find existing message with matching _fileId attachment, update it instead of creating duplicate
           // Search for pending message across both chatId and msgFrom (DM chatId mismatch fix)
@@ -6452,21 +6454,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 for (var ai = 0; ai < atts.length; ai++) {
                   if (atts[ai]._fileId === packet.payload.fileId) {
                     atts[ai].url = attUrl;
+                    atts[ai]._blobKey = blobKey;
+                    atts[ai]._blobCreated = true; atts[ai]._blobSession = window._orbitSessionId;
                     if (!atts[ai].type || atts[ai].type === 'file') {
                       atts[ai].type = isImage ? 'image' : (isVideo ? 'video' : (isAudio ? 'audio' : 'file'));
                     }
                     atts[ai].mimeType = mimeType;
                     atts[ai]._pending = false;
                     atts[ai].name = txEnd.fileName || atts[ai].name;
-                    // Defer _blobKey save until IndexedDB write confirms (avoids dangling refs)
-                    _blobWriteDone.then(function(success) {
-                      if (success) {
-                        atts[ai]._blobKey = blobKey;
-                        atts[ai]._blobCreated = true;
-                        atts[ai]._blobSession = window._orbitSessionId;
-                        MStore._saveMsgs(searchIds[si]);
-                      }
-                    });
+                    MStore._saveMsgs(searchIds[si]);
                     found = true;
                     break;
                   }
@@ -6478,29 +6474,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
           if (!found) {
             // Fallback: create a new message entry if no matching _fileId found
-            var newAtt = {
-              id: packet.payload.fileId,
-              name: txEnd.fileName,
-              type: isImage ? 'image' : (isVideo ? 'video' : (isAudio ? 'audio' : 'file')),
-              url: attUrl,
-              _fileId: packet.payload.fileId
-              // _blobKey/_blobCreated/_blobSession deferred until IndexedDB confirms
-            };
             MStore.addMessage(chatId, {
               id: 'p2p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
               from: msgFrom,
               text: '',
               time: new Date().toISOString(),
-              attachments: [newAtt]
-            });
-            // Add persistence refs after IndexedDB write completes
-            _blobWriteDone.then(function(success) {
-              if (success) {
-                newAtt._blobKey = blobKey;
-                newAtt._blobCreated = true;
-                newAtt._blobSession = window._orbitSessionId;
-                MStore._saveMsgs(chatId);
-              }
+              attachments: [{
+                id: packet.payload.fileId,
+                name: txEnd.fileName,
+                type: isImage ? 'image' : (isVideo ? 'video' : (isAudio ? 'audio' : 'file')),
+                url: attUrl,
+                _blobKey: blobKey,
+                _blobCreated: true, _blobSession: window._orbitSessionId,
+                _fileId: packet.payload.fileId
+              }]
             });
           }
           

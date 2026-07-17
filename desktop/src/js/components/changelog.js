@@ -15,12 +15,11 @@ window.Changelog = {
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
         versionBlock('0.2.7-beta', 'Latest', [
-          ['CRITICAL: Audio/Video Persistence Fix (Mobile)', [
-            'Mobile file persistence overhaul — P2P audio and video files no longer lost after app restart.',
-            'IndexedDB Write Order Fixed (CRITICAL) — BlobStoreDB.put() must complete before _blobKey is saved to localStorage. Prevents dangling references.',
+          ['Mobile A/V Persistence Fix', [
             'All Chat Pre-Loading — _restoreAllBlobAttachments now loads ALL chat messages before restoration runs.',
             'Exponential Backoff Retry — _resUrl retries 5 times instead of giving up after one attempt.',
-            'Local Send Path Fixed — Corrected attsRef pointer for large-file _blobKey tracking.'
+            'Local Send Path Cleanup — Fixed attsRef pointer for large-file _blobKey tracking.',
+            'FILE_TRANSFER_END _blobKey restored to synchronous save — prevents file-icon regression.'
           ]],
           ['Technical', [
             'Version bumped to v0.2.7-beta.'
