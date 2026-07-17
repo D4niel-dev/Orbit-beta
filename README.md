@@ -346,7 +346,6 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Auto-Discovery Diagnostic Logging** — [AutoConnect] logs for firewall debugging.
 </details>
 <details>
-<details>
 <summary>v0.2.0-beta</summary>
 
 - **CRITICAL: Mobile Background Notifications Fixed** — `document.hidden` unreliable in Capacitor WebView. Fixed: JS tracks background via `appStateChange`; Java plugin creates notifications directly via `NotificationManager`.
@@ -363,6 +362,7 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - CRITICAL: Duplicate messages for large files fixed
 - File transfer stability improvements
 </details>
+<details>
 <summary>v0.2.2-beta</summary>
 
 - Mobile metadata preload (muted=true forces immediate duration)
