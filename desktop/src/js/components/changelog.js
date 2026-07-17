@@ -22,7 +22,10 @@ window.Changelog = {
             'FILE_TRANSFER_END _blobKey restored to synchronous save — prevents file-icon regression.'
           ]],
           ['Video Duration Fix', [
-            'parseMp4Duration Return Priority — Returns max of mvhdDur and bestTrackDur. Fixes fragmented MP4 duration mismatch (e.g., 3:39→2:14) on received videos.'
+            'Backward moov scan fallback for non-faststart MP4s.',
+            'Return max(mvhdDur, bestTrackDur) for fragmented MP4s.',
+            'durationchange handler updates knownDuration on correction.',
+            'dur() uses max(knownDuration, video.duration) safety net.'
           ]],
           ['Technical', [
             'Version bumped to v0.2.7-beta.'

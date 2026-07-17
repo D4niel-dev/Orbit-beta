@@ -71,6 +71,19 @@
       if (type === 'moov') { moovStart = i; moovEnd = i + size; break; }
       i += size;
     }
+    if (moovStart < 0) {
+      // Backward scan for 'moov' — catches cases where a size=0 box before
+      // moov caused the forward scan to jump to end-of-file and skip moov.
+      // Common in non-faststart MP4 files and fMP4 init segments.
+      var back = len - 8;
+      while (back >= 8) {
+        if (str4(back) === 'moov') {
+          var bsize = u32(back);
+          if (bsize >= 8) { moovStart = back; moovEnd = back + bsize; break; }
+        }
+        back--;
+      }
+    }
     if (moovStart < 0) return null;
 
     var mvhdDur = null, mvhdTs = 0, bestTrackDur = null;
@@ -370,6 +383,12 @@
         });
         video.addEventListener('durationchange', function() {
           dbg('[' + _logId + '] durationchange  knownDuration=' + knownDuration + '  browserDuration=' + video.duration + ' (' + fmt(video.duration) + ')  readyState=' + video.readyState);
+          if (isFinite(video.duration) && video.duration > 0) {
+            if (knownDuration === null || video.duration > knownDuration) {
+              knownDuration = video.duration;
+              dbg('[' + _logId + '] durationchange updated knownDuration to ' + knownDuration + ' (' + fmt(knownDuration) + ')');
+            }
+          }
           updTime();
         });
 
@@ -639,7 +658,13 @@
         }
       }
 
-      function dur() { return knownDuration || (video ? video.duration : 0); }
+      function dur() {
+        var d = knownDuration;
+        if (video && isFinite(video.duration) && video.duration > 0) {
+          if (d === null || video.duration > d) d = video.duration;
+        }
+        return d || 0;
+      }
 
       function updTime() {
         if (!video) return;

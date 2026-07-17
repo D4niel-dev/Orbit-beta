@@ -3069,7 +3069,10 @@ document.addEventListener('DOMContentLoaded', function() {
             'FILE_TRANSFER_END _blobKey restored to synchronous save — _blobKey is set before _saveMsgs (v0.2.6 pattern), ensuring the render path finds the field on restart and shows the correct media player / "Restoring..." state instead of a generic file icon.'
           ]],
           ['Video Duration Fix', [
-            'parseMp4Duration Return Priority Fix — Changed mvhdDur/bestTrackDur logic to return the MAX of both values. For fragmented MP4s, the initial mvhd atom contains a partial duration; mehd fragment duration and moof→trun sample sums now correctly override it. Fixes wrong duration display on received videos (e.g., 3:39→2:14).'
+            'Backward moov scan — Added fallback backward scan for moov atom when forward scan fails (non-faststart MP4s). Prevents null duration from triggering wrong fallbacks.',
+            'Duration return priority — max(mvhdDur, bestTrackDur) for fragmented MP4s where mvhd has partial initial duration.',
+            'durationchange handler updates knownDuration — Browser duration corrections propagate into knownDuration, preventing wrong values from sticking.',
+            'dur() uses max(knownDuration, video.duration) — Read-side safety net displays the best available duration from both sources.'
           ]],
           ['Technical', [
             'Version bumped to v0.2.7-beta.'
