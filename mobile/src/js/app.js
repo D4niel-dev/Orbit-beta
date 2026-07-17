@@ -2794,7 +2794,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var friendsCount = MStore ? MStore.friends.length : 0;
         var chatsCount = MStore ? MStore.chats.length : 0;
         return '<div class="settings-row">' +
-          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.2.6-beta · Capacitor Android</div></div>' +
+          '<div class="settings-row-content"><span class="settings-row-title">Orbit Mobile</span><div class="settings-row-desc">v0.2.7-beta · Capacitor Android</div></div>' +
         '</div>' +
         '<div class="settings-row">' +
           '<div class="settings-row-content"><span class="settings-row-title">Statistics</span><div class="settings-row-desc">' + friendsCount + ' friends · ' + chatsCount + ' chats</div></div>' +
@@ -3067,6 +3067,9 @@ document.addEventListener('DOMContentLoaded', function() {
             'Exponential Backoff Retry — _resUrl blob restoration retries 5 times (300ms→4.8s) instead of giving up after one attempt. Eliminates permanent "Restoring..." dead state.',
             'Local Send Path Cleanup — Fixed the attsRef pointer in large-file BlobStoreDB.put which targeted the last inline attachment instead of the correct large-file attachment due to IIFE timing.',
             'FILE_TRANSFER_END _blobKey restored to synchronous save — _blobKey is set before _saveMsgs (v0.2.6 pattern), ensuring the render path finds the field on restart and shows the correct media player / "Restoring..." state instead of a generic file icon.'
+          ]],
+          ['Video Duration Fix', [
+            'parseMp4Duration Return Priority Fix — Changed mvhdDur/bestTrackDur logic to return the MAX of both values. For fragmented MP4s, the initial mvhd atom contains a partial duration; mehd fragment duration and moof→trun sample sums now correctly override it. Fixes wrong duration display on received videos (e.g., 3:39→2:14).'
           ]],
           ['Technical', [
             'Version bumped to v0.2.7-beta.'

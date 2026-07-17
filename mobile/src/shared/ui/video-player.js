@@ -166,9 +166,15 @@
       }
     }
 
-    if (mvhdDur !== null && mvhdDur > 0) return mvhdDur;
-    if (bestTrackDur !== null && bestTrackDur > 0) return bestTrackDur;
-    return null;
+    // Return the maximum of mvhdDur and bestTrackDur
+    // bestTrackDur includes mehd fragment durations and moof→trun sample sums,
+    // which are more reliable for fragmented MP4s where mvhd may be partial
+    var finalDur = null;
+    if (mvhdDur !== null && mvhdDur > 0) finalDur = mvhdDur;
+    if (bestTrackDur !== null && bestTrackDur > 0) {
+      if (finalDur === null || bestTrackDur > finalDur) finalDur = bestTrackDur;
+    }
+    return finalDur;
   }
 
   var _players = [];

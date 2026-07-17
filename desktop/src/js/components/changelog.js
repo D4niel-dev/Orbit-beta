@@ -21,6 +21,9 @@ window.Changelog = {
             'Local Send Path Cleanup — Fixed attsRef pointer for large-file _blobKey tracking.',
             'FILE_TRANSFER_END _blobKey restored to synchronous save — prevents file-icon regression.'
           ]],
+          ['Video Duration Fix', [
+            'parseMp4Duration Return Priority — Returns max of mvhdDur and bestTrackDur. Fixes fragmented MP4 duration mismatch (e.g., 3:39→2:14) on received videos.'
+          ]],
           ['Technical', [
             'Version bumped to v0.2.7-beta.'
           ]]
