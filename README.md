@@ -18,10 +18,10 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20MacOS%20%7C%20Linux%20%7C%20Mobile-lightgrey" alt="Platform: Windows | macOS | Linux | Android">
-  <img src="https://img.shields.io/badge/Electron-32-47848F?style=flat-square&logo=electron&logoColor=white" alt="Electron 32">
-  <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License: MIT">
-  <img src="https://img.shields.io/badge/status-beta-orange?style=flat-square" alt="Status: Beta">
+![Status](https://img.shields.io/badge/Status-beta-blue)
+![Build](https://img.shields.io/badge/Build-0.2.7-blue)
+![Electron](https://img.shields.io/badge/Electron-32.10%2B-blue)
+![License](https://img.shields.io/badge/License-MIT-green)
 </p>
 
 ## Release Status
