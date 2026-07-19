@@ -17,12 +17,10 @@
   <strong>Current version:</strong> <a href="CHANGELOG.md#v027-beta-stable-release">v0.2.7-beta</a>
 </p>
 
-<p align="center">
 ![Status](https://img.shields.io/badge/Status-beta-blue)
 ![Build](https://img.shields.io/badge/Build-0.2.7-blue)
 ![Electron](https://img.shields.io/badge/Electron-32.10%2B-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
-</p>
 
 ## Release Status
 
