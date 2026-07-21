@@ -4887,25 +4887,31 @@ document.addEventListener('DOMContentLoaded', function() {
       return userId;
     }
     function getAvatarHtml(userId, name) {
+      var initial = (name ? name.charAt(0).toUpperCase() : '?');
       if (userId === myId && state.user && state.user.avatar) {
-        return '<img class="activity-sender-avatar" src="' + escapeHtml(state.user.avatar) + '">';
+        return '<img class="activity-sender-avatar" src="' + escapeHtml(state.user.avatar) + '" loading="lazy" onerror="this.onerror=null;this.style.display=\'none\';var p=this.parentNode;if(p&&!p.querySelector(\'.act-fallback\')){var d=document.createElement(\'div\');d.className=\'act-fallback\';d.style.cssText=\'width:32px;height:32px;border-radius:50%;background:var(--accent-soft);color:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;\';d.textContent=\'' + initial + '\';p.insertBefore(d,this);}">';
       }
       var f = getFriend(userId);
       if (f && f.avatar) {
-        return '<img class="activity-sender-avatar" src="' + escapeHtml(f.avatar) + '">';
+        return '<img class="activity-sender-avatar" src="' + escapeHtml(f.avatar) + '" loading="lazy" onerror="this.onerror=null;this.style.display=\'none\';var p=this.parentNode;if(p&&!p.querySelector(\'.act-fallback\')){var d=document.createElement(\'div\');d.className=\'act-fallback\';d.style.cssText=\'width:32px;height:32px;border-radius:50%;background:var(--accent-soft);color:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;\';d.textContent=\'' + initial + '\';p.insertBefore(d,this);}">';
       }
-      return '<div class="activity-sender-placeholder">' + (name ? name.charAt(0).toUpperCase() : '?') + '</div>';
+      return '<div class="activity-sender-placeholder">' + initial + '</div>';
     }
     function getChatAvatarHtml(chatId, chatName) {
+      var initial = (chatName ? chatName.charAt(0).toUpperCase() : '?');
       var f = getFriend(chatId);
       if (f && f.avatar) {
-        return '<img class="activity-chat-badge-avatar" src="' + escapeHtml(f.avatar + (f.avatar.indexOf('?') === -1 ? '?t=' + Date.now() : '')) + '">';
+        var src = f.avatar;
+        if (src.indexOf('blob:') !== 0 && src.indexOf('data:') !== 0 && src.indexOf('?') === -1) {
+          src += '?t=' + Date.now();
+        }
+        return '<img class="activity-chat-badge-avatar" src="' + escapeHtml(src) + '" loading="lazy" onerror="this.onerror=null;this.style.display=\'none\';var p=this.parentNode;if(p&&!p.querySelector(\'.act-cb-fallback\')){var d=document.createElement(\'div\');d.className=\'act-cb-fallback\';d.style.cssText=\'width:24px;height:24px;border-radius:50%;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:700;\';d.textContent=\'' + initial + '\';p.insertBefore(d,this);}">';
       }
       var g = getGroup(chatId);
       if (g && g.avatar) {
-        return '<img class="activity-chat-badge-avatar" style="border-radius:4px;" src="' + escapeHtml(g.avatar) + '">';
+        return '<img class="activity-chat-badge-avatar" style="border-radius:4px;" src="' + escapeHtml(g.avatar) + '" loading="lazy" onerror="this.onerror=null;this.style.display=\'none\';var p=this.parentNode;if(p&&!p.querySelector(\'.act-cb-fallback\')){var d=document.createElement(\'div\');d.className=\'act-cb-fallback\';d.style.cssText=\'width:24px;height:24px;border-radius:4px;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:700;\';d.textContent=\'' + initial + '\';p.insertBefore(d,this);}">';
       }
-      return '<div class="activity-chat-badge-avatar" style="background:var(--accent-primary);display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:700;">' + (chatName ? chatName.charAt(0).toUpperCase() : '?') + '</div>';
+      return '<div class="activity-chat-badge-avatar" style="background:var(--accent-primary);display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:700;">' + initial + '</div>';
     }
 
     // Build tabs HTML
@@ -7940,7 +7946,13 @@ document.addEventListener('DOMContentLoaded', function() {
           var oldChatId = ipFriend.id;
           if (oldChatId !== peerId) {
             if (MStore.messages[oldChatId] && MStore.messages[oldChatId].length) {
-              MStore.messages[peerId] = MStore.getMessages(peerId).concat(MStore.messages[oldChatId]);
+              var existingMsgs = MStore.getMessages(peerId);
+              var mergedMsgs = (MStore.messages[oldChatId] || []).map(function(m) {
+                var clone = JSON.parse(JSON.stringify(m));
+                if (clone.from === oldChatId) clone.from = peerId;
+                return clone;
+              });
+              MStore.messages[peerId] = existingMsgs.concat(mergedMsgs);
               MStore._saveMsgs(peerId);
               delete MStore.messages[oldChatId];
               localStorage.removeItem('orbit_msg_' + oldChatId);

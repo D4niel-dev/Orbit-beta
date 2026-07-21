@@ -160,13 +160,41 @@ var OrbitChat = {
         statusDotHtml + OrbitChat._escapeAttr(statusText) +
       '</div>';
     
-    // Avatar
+    // Avatar with profile frame support
     if (avatarEl) {
       var initial = displayName.charAt(0).toUpperCase();
+      avatarEl.style.position = 'relative';
       if (chat.avatar) {
         avatarEl.innerHTML = '<img src="' + OrbitChat._escapeAttr(chat.avatar) + '" alt="">';
       } else {
         avatarEl.textContent = initial;
+      }
+      // Add profile frame for DM chats
+      if (chat.type !== 'group' && chat.id !== 'echo') {
+        var pfNum = 0;
+        var friends = MStore.friends || [];
+        for (var fi = 0; fi < friends.length; fi++) {
+          if (friends[fi].id === chat.peerId || friends[fi].peerId === chat.peerId || friends[fi].id === chat.id) {
+            pfNum = parseInt(friends[fi].profileFrame, 10) || 0;
+            break;
+          }
+        }
+        var oldFrame = avatarEl.querySelector('.pfp-frame');
+        if (pfNum > 0) {
+          if (!oldFrame) {
+            var frameEl = document.createElement('img');
+            frameEl.className = 'pfp-frame';
+            frameEl.draggable = false;
+            frameEl.alt = '';
+            frameEl.style.cssText = 'position:absolute;top:-15%;left:-17%;pointer-events:none;';
+            avatarEl.appendChild(frameEl);
+          } else {
+            var frameEl = oldFrame;
+          }
+          frameEl.src = 'icons/frames/pfp_frame_' + pfNum + '.png';
+        } else if (oldFrame) {
+          oldFrame.remove();
+        }
       }
       avatarEl.style.display = '';
     }
