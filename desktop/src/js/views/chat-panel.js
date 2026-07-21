@@ -579,8 +579,18 @@ window.ChatPanel = {
     }
     let hasUnreadInFeed = false;
 
+    // Snapshot existing message IDs from current DOM before re-render
+    // so we can apply entry animation only to genuinely new messages
+    var existingMsgIds = {};
+    var _existingRows = (this.container || document.getElementById('chat-message-feed')).querySelectorAll('.message-row');
+    for (var _ei = 0; _ei < _existingRows.length; _ei++) {
+      var _eid = _existingRows[_ei].getAttribute('data-msg-id');
+      if (_eid) existingMsgIds[_eid] = true;
+    }
+
     for (var mi = 0; mi < messages.length; mi++) {
       var msg = messages[mi];
+      var _animAttr = existingMsgIds[msg.id] ? '' : ' data-msg-anim="slide"';
 
       // Insert unread divider before the first unread message
       if (lastReadIdx >= 0 && mi === lastReadIdx + 1) {
@@ -731,7 +741,7 @@ window.ChatPanel = {
       const actionsBar = '<div class="msg-actions-bar' + (isMine ? ' msg-actions-left' : ' msg-actions-right') + '">' + actionBtns + '</div>';
 
       const bubblePadding = (sanitizedText || attachmentsHtml) ? 'padding: 10px 14px;' : 'padding: 0;';
-      const bubbleBgMine = (sanitizedText || attachmentsHtml) ? 'background-color: var(--bg-hover); color: white; box-shadow: var(--shadow-sm);' : 'background: transparent;';
+      const bubbleBgMine = (sanitizedText || attachmentsHtml) ? 'background-color: var(--bg-surface); color: var(--text-primary); box-shadow: var(--shadow-sm);' : 'background: transparent;';
       const bubbleBgOther = (sanitizedText || attachmentsHtml) ? 'background-color: var(--bg-surface); box-shadow: var(--shadow-sm);' : 'background: transparent;';
 
       // Link Preview detection
@@ -770,7 +780,7 @@ window.ChatPanel = {
         }
         var readHtml = isRead ? '<span style="font-size:10px;color:var(--accent-primary);margin-left:4px;">✓✓</span>' : '';
 
-        messagesHtml += '<div class="message-row message-own" data-msg-id="' + msg.id + '" data-debug="MsgID: ' + msg.id + ' Sender: ' + window.Sanitize.escapeHtml(msg.sender) + ' TS: ' + msg.timestamp + '" style="display:flex; margin-bottom: var(--spacing-md); flex-direction: row-reverse; align-items: flex-end;">' +
+        messagesHtml += '<div class="message-row message-own" data-msg-id="' + msg.id + '"' + _animAttr + ' data-debug="MsgID: ' + msg.id + ' Sender: ' + window.Sanitize.escapeHtml(msg.sender) + ' TS: ' + msg.timestamp + '" style="display:flex; margin-bottom: var(--spacing-md); flex-direction: row-reverse; align-items: flex-end;">' +
           '<div style="padding-bottom: 10px; display:' + (showAvatars ? 'flex' : 'none') + ';">' +
             '<div class="avatar avatar-sm msg-avatar" data-user-id="' + state.currentUser.userId + '" style="margin-left: var(--spacing-sm); flex-shrink: 0; cursor:pointer;">' + myAvatarContainer + '</div>' +
           '</div>' +
@@ -810,7 +820,7 @@ window.ChatPanel = {
           ? '<img src="' + window.Sanitize.escapeHtml(senderAvatar) + '" style="width:100%;height:100%;border-radius:50%;">'
           : '<i data-lucide="user" style="width:14px;"></i>';
         var otherAvatarContainer = '<div style="position:relative;display:inline-block;">' + avatarImg + (senderFrame ? '<img src="icons/frames/pfp_frame_' + senderFrame + '.png" style="position:absolute;top:-21%;left:-17%;width:133%;height:133%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '') + '</div>';
-        messagesHtml += '<div class="message-row" data-msg-id="' + msg.id + '" data-debug="MsgID: ' + msg.id + ' Sender: ' + window.Sanitize.escapeHtml(msg.sender) + ' TS: ' + msg.timestamp + '" style="display:flex; margin-bottom: var(--spacing-md);">' +
+        messagesHtml += '<div class="message-row" data-msg-id="' + msg.id + '"' + _animAttr + ' data-debug="MsgID: ' + msg.id + ' Sender: ' + window.Sanitize.escapeHtml(msg.sender) + ' TS: ' + msg.timestamp + '" style="display:flex; margin-bottom: var(--spacing-md);">' +
           '<div class="avatar avatar-sm msg-avatar" data-user-id="' + msg.sender + '" style="margin-right: var(--spacing-sm); margin-top: 4px; flex-shrink: 0; cursor:pointer;' + (showAvatars ? '' : 'display:none;') + '">' + otherAvatarContainer + '</div>' +
           '<div style="max-width: 65%; display:flex; flex-direction:column; align-items:flex-start;">' +
             '<div style="font-size: 11px; color: var(--text-secondary); font-weight: 500; margin-bottom: 2px; margin-left: 4px;">' + senderName + '</div>' +
@@ -964,12 +974,6 @@ window.ChatPanel = {
           '</button>' +
         '</div>' +
       '</div>';
-
-    // Suppress message enter animation during initial scroll to prevent 12px over-correction
-    var suppressingRows = this.container.querySelectorAll('.message-row');
-    for (var si = 0; si < suppressingRows.length; si++) {
-      suppressingRows[si].style.animation = 'none';
-    }
 
     // Syntax-highlight code blocks
     if (window.Prism) setTimeout(function() { Prism.highlightAll(); }, 0);

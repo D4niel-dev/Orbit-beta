@@ -1,0 +1,56 @@
+// mobile/src/js/components/bottom-sheet.js
+// v0.2.8 — Bottom Sheet System
+
+var OrbitSheet = {
+  /** Show a bottom sheet with items */
+  show: function(items) {
+    var overlay = document.getElementById('bottom-sheet-overlay');
+    var content = document.getElementById('bottom-sheet-content');
+    var backdrop = document.getElementById('bottom-sheet-backdrop');
+    
+    if (!overlay || !content) return;
+    
+    // Build content
+    var html = '';
+    items.forEach(function(item) {
+      html += '<button class="bottom-sheet-item" data-action="' + (item.action || '') + '">';
+      if (item.icon) {
+        html += '<i data-lucide="' + item.icon + '"></i>';
+      }
+      html += '<span>' + (item.label || '') + '</span>';
+      html += '</button>';
+    });
+    content.innerHTML = html;
+    
+    // Show
+    overlay.classList.add('active');
+    
+    // Re-init icons
+    if (window.lucide) lucide.createIcons();
+    
+    // Wire click handlers
+    content.querySelectorAll('.bottom-sheet-item').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        var action = this.dataset.action;
+        OrbitSheet.hide();
+        if (typeof OrbitSheet._callbacks === 'object' && OrbitSheet._callbacks[action]) {
+          OrbitSheet._callbacks[action]();
+        }
+      });
+    });
+    
+    // Backdrop click to dismiss
+    if (backdrop) {
+      backdrop.onclick = function() { OrbitSheet.hide(); };
+    }
+  },
+
+  /** Hide bottom sheet */
+  hide: function() {
+    var overlay = document.getElementById('bottom-sheet-overlay');
+    if (overlay) overlay.classList.remove('active');
+  },
+
+  /** Set callbacks for actions */
+  _callbacks: {}
+};

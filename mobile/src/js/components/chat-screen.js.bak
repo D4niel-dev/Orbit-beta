@@ -1,0 +1,256 @@
+// mobile/src/js/components/chat-screen.js
+// v0.2.8 — Chat Screen Renderer
+
+var OrbitChat = {
+  _currentChatId: null,
+
+  /** Open a chat and render everything */
+  openChat: function(chatId) {
+    if (!chatId) return;
+    this._currentChatId = chatId;
+    
+    // Get chat info
+    var chat = this._getChat(chatId);
+    if (!chat) return;
+    
+    // Sync with app.js state
+    window.activeChatId = chatId;
+    window.editingMsg = null;
+    window.replyingTo = null;
+    
+    // Update header
+    this._renderHeader(chat);
+    
+    // Open panel
+    OrbitNav.openChat();
+    
+    // Render messages
+    this.renderMessages(chatId);
+    
+    // Reset unread
+    if (MStore.unreadCounts) {
+      MStore.unreadCounts[chatId] = 0;
+    }
+    
+    // Scroll to bottom
+    setTimeout(function() {
+      var feed = document.getElementById('message-feed');
+      if (feed) feed.scrollTop = feed.scrollHeight;
+    }, 100);
+  },
+
+  /** Close current chat */
+  closeChat: function() {
+    this._currentChatId = null;
+    window.activeChatId = null;
+    OrbitNav.closeChat();
+  },
+
+  /** Get chat or group data */
+  _getChat: function(chatId) {
+    if (!chatId) return null;
+    if (chatId.indexOf('dm_') === 0) {
+      var peerId = chatId.substring(3);
+      var friends = MStore.friends || [];
+      for (var i = 0; i < friends.length; i++) {
+        if (friends[i].peerId === peerId) return friends[i];
+      }
+      return { peerId: peerId, name: peerId };
+    }
+    if (chatId.indexOf('group_') === 0) {
+      var groups = MStore.groups || [];
+      for (var i = 0; i < groups.length; i++) {
+        if (groups[i].id === chatId) return groups[i];
+      }
+    }
+    // Check chats array
+    var chats = MStore.chats || [];
+    for (var i = 0; i < chats.length; i++) {
+      if (chats[i].id === chatId || chats[i].chatId === chatId) return chats[i];
+    }
+    return null;
+  },
+
+  /** Render chat header */
+  _renderHeader: function(chat) {
+    var nameEl = document.getElementById('chat-header-name');
+    var statusEl = document.getElementById('chat-header-status');
+    var avatarEl = document.getElementById('chat-header-avatar');
+    
+    if (!nameEl || !statusEl) return;
+    
+    var displayName = chat.name || chat.peerId || 'Chat';
+    nameEl.textContent = displayName;
+    
+    var isOnline = chat.status === 'online' || chat.lastSeen > Date.now() - 45000;
+    if (isOnline) {
+      statusEl.textContent = 'Online';
+      statusEl.style.color = 'var(--accent-success)';
+    } else if (chat.lastSeen) {
+      var d = new Date(chat.lastSeen);
+      statusEl.textContent = 'Last seen ' + d.toLocaleDateString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+      statusEl.style.color = '';
+    } else {
+      statusEl.textContent = 'Offline';
+      statusEl.style.color = '';
+    }
+    
+    // Avatar
+    if (avatarEl) {
+      var initial = displayName.charAt(0).toUpperCase();
+      if (chat.avatar) {
+        avatarEl.innerHTML = '<img src="' + OrbitChat._escapeAttr(chat.avatar) + '" alt="">';
+      } else {
+        avatarEl.textContent = initial;
+      }
+    }
+  },
+
+  _escapeAttr: function(str) {
+    return String(str).replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  },
+
+  /** Render all messages for a chat */
+  renderMessages: function(chatId) {
+    var feed = document.getElementById('message-feed');
+    if (!feed) return;
+    
+    var messages = MStore.messages && MStore.messages[chatId] || [];
+    
+    if (messages.length === 0) {
+      feed.innerHTML = '<div class="empty-state" style="flex:1;display:flex;"><i data-lucide="message-circle"></i><div class="empty-state-text">No messages yet</div><div class="empty-state-sub">Say hello to start the conversation</div></div>';
+      return;
+    }
+    
+    var html = '';
+    var lastSenderId = null;
+    
+    for (var i = 0; i < messages.length; i++) {
+      var msg = messages[i];
+      var isMine = msg.from === 'me' || msg.from === MStore.user?.peerId;
+      var isGrouped = (i > 0 && messages[i-1].from === msg.from && 
+                       (msg.time - messages[i-1].time) < 120000); // 2 min threshold
+      
+      html += this._renderSingleMessage(msg, isMine, isGrouped);
+      lastSenderId = msg.from;
+    }
+    
+    feed.innerHTML = html;
+    
+    // Re-init Lucide
+    if (window.lucide) lucide.createIcons();
+    
+    // Scroll to bottom
+    setTimeout(function() {
+      feed.scrollTop = feed.scrollHeight;
+    }, 50);
+  },
+
+  /** Render a single message bubble */
+  _renderSingleMessage: function(msg, isMine, isGrouped) {
+    var text = msg.text || '';
+    var time = msg.time ? new Date(msg.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
+    var reactions = msg.reactions || [];
+    var hasReactions = reactions.length > 0;
+    
+    var html = '<div class="message-row' + (isMine ? ' mine' : ' other') + (isGrouped ? ' grouped' : '') + '" data-msg-id="' + (msg.id || '') + '">';
+    html += '  <div class="message-bubble">';
+    
+    // Text content (sanitized)
+    if (text) {
+      html += '    <div class="msg-text">' + OrbitChat._sanitizeHtml(text) + '</div>';
+    }
+    
+    // Reactions
+    if (hasReactions) {
+      html += '    <div class="reactions-row" data-msg-id="' + (msg.id || '') + '">';
+      reactions.forEach(function(r) {
+        html += '      <span class="reaction-pill' + (r.mine ? ' mine' : '') + '">' + r.emoji + ' <span class="reaction-pill-count">' + r.count + '</span></span>';
+      });
+      html += '    </div>';
+    }
+    
+    // Time
+    html += '    <div class="message-time">' + time + '</div>';
+    html += '  </div>';
+    html += '</div>';
+    
+    return html;
+  },
+
+  /** Sanitize HTML (allow only safe tags) */
+  _sanitizeHtml: function(str) {
+    if (!str) return '';
+    // Basic sanitization: escape HTML but allow line breaks
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(str));
+    var escaped = div.innerHTML;
+    // Convert newlines to <br>
+    escaped = escaped.replace(/\n/g, '<br>');
+    return escaped;
+  },
+
+  /** Add a reaction to a message */
+  addReaction: function(msgId, emoji) {
+    if (!msgId || !this._currentChatId) return;
+    var chatId = this._currentChatId;
+    var messages = MStore.messages && MStore.messages[chatId] || [];
+    
+    for (var i = 0; i < messages.length; i++) {
+      if (messages[i].id === msgId) {
+        if (!messages[i].reactions) messages[i].reactions = [];
+        
+        // Toggle: if same emoji from user, remove it
+        var existing = null;
+        for (var j = 0; j < messages[i].reactions.length; j++) {
+          if (messages[i].reactions[j].emoji === emoji && messages[i].reactions[j].mine) {
+            existing = j;
+            break;
+          }
+        }
+        
+        if (existing !== null) {
+          messages[i].reactions[existing].count--;
+          if (messages[i].reactions[existing].count <= 0) {
+            messages[i].reactions.splice(existing, 1);
+          } else {
+            messages[i].reactions[existing].mine = false;
+          }
+        } else {
+          // Find if anyone reacted with this emoji
+          var found = false;
+          for (var j = 0; j < messages[i].reactions.length; j++) {
+            if (messages[i].reactions[j].emoji === emoji) {
+              messages[i].reactions[j].count++;
+              messages[i].reactions[j].mine = true;
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            messages[i].reactions.push({ emoji: emoji, count: 1, mine: true });
+          }
+        }
+        
+        // Re-render
+        this.renderMessages(this._currentChatId);
+        
+        // Save
+        if (window.MStore) {
+          MStore.saveToLocalStorage();
+        }
+        
+        // Send reaction via network
+        if (window.Orbit && Orbit.sendReaction) {
+          Orbit.sendReaction(chatId, msgId, emoji);
+        }
+        break;
+      }
+    }
+  }
+};
+
+// Expose for backward compatibility
+window.openChat = function(chatId) { OrbitChat.openChat(chatId); };
+window.closeChat = function() { OrbitChat.closeChat(); };
+window.renderChatList = function(filter) { OrbitHome.renderChatList(filter); };

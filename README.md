@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v027-beta-stable-release">v0.2.7-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v028-beta-latest-version">v0.2.8-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@
 
 | Channel | Version | Status |
 |---------|---------|--------|
-| *Development* | v0.2.7-beta | Latest build (stable) |
+| *Development* | v0.2.8-beta | Latest Build |
 | **Stable** | v0.2.7-beta | Stable release |
 | Previous **Stable** | v0.1.1-beta | Legacy stable release |
 
@@ -90,15 +90,15 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage desktop app** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
-## Highlights (v0.2.7-beta)
+## Highlights (v0.2.8-beta)
 
-- **4-Layer Video Duration Fix:** Backward moov scan for non-faststart MP4s, max(mvhdDur, bestTrackDur) for fragmented MP4s, durationchange→knownDuration propagation, dur() max safety net.
-- **Mobile A/V Persistence Fixed:** All chat pre-loading, exponential backoff retry, local send path cleanup, synchronous _blobKey save.
-- **Mobile Status Circle Fixed:** PONG/MESSAGE/onPeerFound handlers now properly update friend.lastSeen to prevent false offline display.
-- **Emoji Reactions Fixed:** Desktop→mobile REACTION packet.from routing fixed; mobile reactions-row data-msg-id attribute added.
-- **Mobile Overlay Controls Fixed:** Instant touch response with touchstart handler and _touchTap guard, no more 300ms delay.
-- **Code Block UI Redesign:** Styled container with language badge and Copy button (clipboard API + "Copied!" feedback).
-- **Chat List Preview Cleaning:** Markdown syntax stripped from sidebar previews — cleaner chat list display.
+- **Settings Redesign** — All settings items now card-based with Lucide icons, gradient icon containers, and search bar for instant filtering.
+- **Message Re-Animation Fixed** — Messages no longer re-animate on every chat re-render. Only genuinely new messages get the fade-in animation. Desktop also ported.
+- **Auto-Scroll Fixed** — Chat feed scrolls to bottom reliably on new messages, even with lazy-loaded images and media players.
+- **Own Message Bubble Unified** — Changed from accent blue to theme surface color (`var(--bg-surface)`), matching other users' bubbles. Text color unified to `var(--text-primary)`.
+- **Version Auto-Detection** — Settings About section reads live version from `window.APP_VERSION`, auto-generated from `package.json`.
+- **Theme CSS Cache-Busting** — All theme stylesheets now load with versioned query parameter to prevent stale CSS after updates.
+- **Desktop UI Polish** — Message animation fix, bubble background consistency, and cache-busting all ported to desktop codebase.
 
 ## Version History
 <details>
@@ -395,8 +395,8 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - File persistence investigation: root cause found (P2P chats invisible to _restoreAllBlobAttachments at startup)
 - Player file identity enforced (byte-identical across platforms)
 </details>
-<details open>
-<summary>v0.2.7-beta (Latest Stable)</summary>
+<details>
+<summary>v0.2.7-beta (Stable)</summary>
 
 - Video duration: 4-layer fix (backward moov scan, max return priority, durationchange→knownDuration, dur() max safety net)
 - Mobile A/V persistence: all-chat pre-loading, exponential backoff retry, local send path cleanup
@@ -405,6 +405,18 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - Overlay controls: touchstart handler, _touchTap guard
 - Code blocks: redesigned with Copy button + language badge
 - Chat list: markdown-stripped previews
+</details>
+<details>
+<summary>v0.2.8-beta</summary>
+
+- **Settings Redesign** — Card-based items with Lucide icons, gradient containers, and search filtering across all 7 sections
+- **Message Re-Animation Fix** — Granular `data-msg-anim` attribute only on new messages (cross-platform)
+- **Auto-Scroll Fix** — Removed `scroll-behavior: smooth` from feed, deferred re-scroll for lazy-loaded media
+- **Own Message Bubble Unified** — `var(--bg-surface)` with right-alignment instead of blue accent
+- **Message Text Color Fixed** — `var(--text-primary)` on own messages instead of hardcoded `#fff`
+- **Settings Search Bar** — Type to filter settings cards by keyword with empty state
+- **Version Auto-Detection** — `version.js` generated from `package.json`, About section reads live value
+- **Theme CSS Cache-Busting** — `?v=20260721` on all theme `<link>` tags (both platforms)
 </details>
 
 See [CHANGELOG.md](CHANGELOG.md) for the full version history.
@@ -564,22 +576,21 @@ Transparency matters in beta. Current constraints include:
 
 ## Roadmap
 
-### Shipped (v0.2.7-beta)
+### Shipped (v0.2.8-beta)
 
-- **4-Layer Video Duration Fix** — backward moov scan, max duration return, durationchange→knownDuration, dur() safety net
-- **Mobile A/V Persistence Fix** — all chat pre-loading, exponential backoff, synchronous _blobKey
-- **Mobile Status Circle Fix** — lastSeen updated on PONG/MESSAGE/onPeerFound
-- **Emoji Reaction Fix** — packet.from routing for DM reactions
-- **Mobile Overlay Controls Fix** — touchstart handler, zero-delay overlay
-- **Code Block UI Redesign** — styled container with Copy button and language badge
-- **Chat List Preview Cleaned** — markdown stripped in sidebar
+- **Card-Based Settings Items** — All 7 sections redesigned with Lucide icons, gradient containers, search filtering
+- **Message Re-Animation Fix** — Granular `data-msg-anim` attribute only on new messages (cross-platform)
+- **Auto-Scroll Fix** — Removed `scroll-behavior: smooth` from feed, deferred re-scroll for lazy-loaded media
+- **Own Message Bubble Unified** — `var(--bg-surface)` with right-alignment instead of blue accent
+- **Message Text Color Fixed** — `var(--text-primary)` on own messages instead of hardcoded `#fff`
+- **Version Auto-Detection** — `version.js` generated from `package.json`, About section reads live value
+- **Theme CSS Cache-Busting** — `?v=20260721` on all theme `<link>` tags (both platforms)
 
 ### In Progress / Planned
 
 - **Mobile Account Switcher** — Multi-account support on Android (desktop done in v0.1.5-beta)
 - **E2EE cross-platform unification** — Align key derivation (SHA-256 vs HKDF) so desktop and mobile can exchange encrypted DMs and group messages
 - **Group E2EE** — Extend end-to-end encryption to group chats (currently DM-only)
-- **Mobile UI redesign** — Modernized touch interface
 - **Large file transfer stability** — Cross-platform transfer hardening
 - **Resumable file transfers** — Pause and resume across sessions
 - **Voice messages** — Record and send voice clips

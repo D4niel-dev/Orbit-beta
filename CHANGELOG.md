@@ -1,5 +1,35 @@
 # Orbit Changelog
 
+## v0.2.8-beta **(Latest Version)**
+
+> **Note:** This is not a stable release — latest development version with experimental features.
+
+### Settings Redesign
+
+- **Card-Based Settings Items** — All details items across 7 sections now render as `.settings-item-card` with Lucide icons, gradient 36×36 icon containers, `data-search` attribute for filtering, and consistent card layout with icon, title, description, and action area.
+- **Settings Search Bar** — New `#search-settings` input filters settings cards by `data-search` attribute (case-insensitive partial match). Search is scoped to the current section. "No matching settings" empty state shown when no results.
+- **Settings Search Cleanup** — Input cleared on section entry and when navigating back to overview.
+- **Card Styling Polish** — Cards rendered flush against panel background (removed extraneous border/bg/border-radius).
+
+### Message & Animation Fixes
+
+- **Message Re-Animation on Refresh Fixed** — Removed base `.message-row` CSS animation (was causing all messages to re-animate on every re-render). Implemented `existingMsgIds` DOM snapshot before re-render and granular `data-msg-anim` attribute only on genuinely new messages.
+- **Auto-Scroll Not Reaching Bottom Fixed** — Removed `scroll-behavior: smooth` from message feed (interferes with programmatic scrollTop). Added deferred re-scroll (150ms) after initial `scrollTop = scrollHeight` to catch lazy-loaded images, Lucide SVGs, and media players.
+- **Desktop Message Animation Fix** — Same `existingMsgIds` + `data-msg-anim` strategy ported to desktop `chat-panel.js`. Old brute-force `animation: none` suppression removed. CSS updated to use `.message-row[data-msg-anim]` attribute selector.
+
+### UI Polish
+
+- **Own Message Background Consistency** — Changed own message bubble from accent blue (`var(--accent-primary)`) to theme surface color (`var(--bg-surface)`) on both platforms. Both own and other messages now share the same surface color, differentiated only by alignment (right vs left). Desktop inline style updated accordingly.
+- **Message Text Color Unified** — Own messages changed from hardcoded `color: #fff` to `color: var(--text-primary)` on both platforms, matching the text color of other users' messages for visual consistency.
+- **Light Mode Text Cache-Busting** — Added `?v=20260721` query parameter to all theme CSS `<link>` tags in both `mobile/src/index.html` and `desktop/src/index.html` to force fresh CSS load after light-mode text color fix.
+- **App Version Auto-Detection** — Created `mobile/src/js/version.js` auto-generated from `mobile/package.json` via `npm run version:sync`. About section now reads `window.APP_VERSION || '0.2.8-beta'` — eliminating stale hardcoded versions.
+
+### Technical
+
+- **Version:** Bumped to v0.2.8-beta across all manifests.
+- **Platforms:** Mobile (Android) + Desktop — both platforms updated with UI polish fixes.
+- **Android Sync:** `npx cap sync android` run to copy web assets to Capacitor Android project.
+
 ## v0.2.7-beta — **Stable Release**
 
 ### Features

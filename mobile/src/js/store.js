@@ -77,6 +77,9 @@ class Store {
     this.peerPublicKeys = {};
     this.activeChatId = null;
     this.activeView = 'chats';
+    this.activityLog = [];
+    this.activityClearedAt = 0;
+    this.systemLogClearedAt = 0;
     this.transferProgress = {};
     this.transferErrors = {};
 
@@ -267,10 +270,11 @@ class Store {
     if (!echoChat) {
       this.chats.unshift({
         id: 'echo', name: 'Orbit Echo', avatar: 'icons/app/orbit_1024.png',
-        lastMessage: '', lastTime: '', unread: 0
+        status: 'online', lastMessage: '', lastTime: '', unread: 0
       });
     } else {
       echoChat.avatar = 'icons/app/orbit_1024.png';
+      echoChat.status = 'online';
     }
     // Add default echo messages
     if (this.getMessages('echo').length === 0) {
@@ -300,6 +304,22 @@ class Store {
     this.set('mentionCounts', this.mentionCounts);
     this.set('lastReadIds', this.lastReadIds);
     this.set('peerPublicKeys', this.peerPublicKeys);
+    this.set('activityLog', this.activityLog);
+    this.set('activityClearedAt', this.activityClearedAt);
+    this.set('systemLogClearedAt', this.systemLogClearedAt);
+  }
+
+  addActivityLogEntry(type, message) {
+    this.activityLog.push({
+      type: type,
+      message: message,
+      timestamp: new Date().toISOString()
+    });
+    // Keep only last 200 entries
+    if (this.activityLog.length > 200) {
+      this.activityLog = this.activityLog.slice(-200);
+    }
+    this.set('activityLog', this.activityLog);
   }
 
   // Enriched chat list

@@ -14,7 +14,28 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.2.7-beta', 'Latest', [
+        versionBlock('0.2.8-beta', 'Latest', [
+          ['Settings Redesign', [
+            'Card-Based Settings Items — All details items across 7 sections now render as cards with Lucide icons, gradient icon containers, and data-search attribute for filtering.',
+            'Settings Search Bar — Type to filter settings cards by keyword. Scoped to current section with "No matching settings" empty state.',
+            'Card Styling Polish — Cards rendered flush against panel background for clean modern look.'
+          ]],
+          ['Message & Animation Fixes', [
+            'Message Re-Animation Fixed — Messages no longer re-animate on every chat re-render. Only genuinely new messages get the fade-in animation.',
+            'Auto-Scroll Fixed — Chat feed scrolls to bottom reliably on new messages, even with lazy-loaded images and media players.',
+            'Desktop Message Animation Fix — Same existingMsgIds + data-msg-anim strategy implemented in desktop chat panel. Removed old brute-force animation suppression.'
+          ]],
+          ['UI Polish', [
+            'Own Message Bubble Color — Changed from accent blue (var(--accent-primary)) to theme surface color (var(--bg-surface)) matching other messages. Differentiated by right vs left alignment.',
+            'Message Text Color Unified — Own messages now use var(--text-primary) instead of hardcoded #fff.',
+            'Version auto-detection for mobile — Settings About section reads live version from window.APP_VERSION, generated from package.json.'
+          ]],
+          ['Technical', [
+            'Version bumped to v0.2.8-beta across all manifests.',
+            'Theme CSS cache-busting (?v=20260721) on both platforms for fresh light-mode CSS.'
+          ]]
+        ]) +
+        versionBlock('0.2.7-beta', '', [
           ['Mobile A/V Persistence Fix', [
             'All Chat Pre-Loading — _restoreAllBlobAttachments now loads ALL chat messages before restoration runs.',
             'Exponential Backoff Retry — _resUrl retries 5 times instead of giving up after one attempt.',
