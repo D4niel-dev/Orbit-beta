@@ -1,6 +1,33 @@
 # Orbit Changelog
 
-## v0.2.8-beta **(Latest Version)**
+## v0.2.9-beta **(Latest Version)**
+
+> **Note:** This is not a stable release — latest development version with experimental features.
+
+### Mobile Settings Additions
+
+- **App Zoom Slider** — New zoom slider (50–200%, default 100%) in Appearance → Text & Layout, matching desktop functionality. Stored as `appZoom` in settings.
+- **Disable Light Mode Flashbang Toggle** — New "Disable Light Mode Flashbang" toggle in Appearance. When enabled, switching to a Light theme skips the brightness warning dialog entirely. Stored as `noFlashbang` in settings.
+- **Light Mode Flashbang Warning** — When the user selects a Light theme (Light, Solarized Light, etc.) while the flashbang toggle is disabled, a themed warning dialog appears explaining the sudden brightness change, with a "Don't show again" option that auto-enables the `noFlashbang` setting.
+- **GitHub Links in About** — "GitHub Repository" (opens repo URL) and "Report an Issue" (opens issues page) links added to the About section with Lucide icons.
+
+### Desktop Global Gallery Layout Fix
+
+- **Scroll Wrapper Separation** — The global gallery now wraps each display mode (grid, compact, masonry, list) in a dedicated `overflow-y: auto` scroll container, separated from the inner layout `<div>`. This prevents layout breakage when the gallery holds more than 10–20 items. Previously the layout container and scroll wrapper were the same element, causing flex/grid layout conflicts under overflow scroll.
+
+### Fixes
+
+- **Experimental Card Icon Fixed** — The Experimental card in mobile settings now renders correctly. Lucide renamed `flask` to `flask-conical` in v1.17.0, and the old icon name was silently failing (rendering nothing).
+- **Mobile Store Defaults** — Added `noFlashbang: false` and `appZoom: 1.0` defaults in store.js settings.
+- **Flashbang Dialog Render Path** — added `data-flashbang-disable` checkbox handler, confirmed Flashbang dialog triggers only on Light theme selection (not System/Auto).
+
+### Technical
+
+- **Version:** Bumped to v0.2.9-beta across all manifests (workspace root, desktop, mobile).
+- **Version Sync:** `mobile/package.json` set to `0.2.9-beta`, `version.js` auto-regenerated via `npm run version:sync`.
+- **Android Sync:** `npx cap sync android` completed — web assets synced to Capacitor Android project.
+
+## v0.2.8-beta
 
 > **Note:** This is not a stable release — latest development version with experimental features.
 

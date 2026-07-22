@@ -21,11 +21,49 @@ var OrbitChat = {
     // Hide reply bar when opening new chat
     if (window.cancelReplyEdit) window.cancelReplyEdit();
     
-    // Update header
+    // Update header (includes profile frame support)
     this._renderHeader(chat);
     
-    // Open panel
+    // Show/hide members button for groups
+    var galleryBtn = document.getElementById('btn-gallery');
+    var moreBtn = document.getElementById('btn-chat-more');
+    var group = (MStore.groups || []).find(function(g) { return g.id === chatId; });
+    if (group) {
+      if (galleryBtn) galleryBtn.style.display = 'flex';
+      var membersBtn = document.getElementById('btn-chat-members');
+      if (!membersBtn && galleryBtn && moreBtn) {
+        membersBtn = document.createElement('button');
+        membersBtn.id = 'btn-chat-members';
+        membersBtn.title = 'Members';
+        membersBtn.innerHTML = '<i data-lucide="users"></i>';
+        galleryBtn.parentNode.insertBefore(membersBtn, moreBtn);
+        membersBtn.addEventListener('click', function() { if (window.showGroupInfo) window.showGroupInfo(chatId); });
+        if (window.lucide) lucide.createIcons();
+      }
+      if (membersBtn) membersBtn.style.display = 'flex';
+    } else {
+      var membersBtn = document.getElementById('btn-chat-members');
+      if (membersBtn) membersBtn.style.display = 'none';
+    }
+    
+    // Show/hide privacy badge
+    var privacyBtn = document.getElementById('btn-privacy-badge');
+    if (privacyBtn) {
+      privacyBtn.style.display = (MStore.settings && MStore.settings.privacyMode) ? 'flex' : 'none';
+    }
+    
+    // Highlight active chat in list
+    document.querySelectorAll('.chat-row').forEach(function(r) { r.classList.remove('active-chat'); });
+    var activeRow = document.querySelector('.chat-row[data-chat="' + chatId + '"]') || document.querySelector('.chat-row[data-chatid="' + chatId + '"]');
+    if (activeRow) activeRow.classList.add('active-chat');
+    
+    // Open panel with animation
     OrbitNav.openChat();
+    var panel = document.getElementById('panel-chat');
+    if (panel) {
+      panel.classList.add('anim-enter-up');
+      setTimeout(function() { panel.classList.remove('anim-enter-up'); }, 300);
+    }
     
     // Render messages
     this.renderMessages(chatId);
@@ -169,8 +207,8 @@ var OrbitChat = {
       } else {
         avatarEl.textContent = initial;
       }
-      // Add profile frame for DM chats
-      if (chat.type !== 'group' && chat.id !== 'echo') {
+      // Add profile frame for DM chats (friend's profile frame)
+      if (chat.type !== 'group') {
         var pfNum = 0;
         var friends = MStore.friends || [];
         for (var fi = 0; fi < friends.length; fi++) {
@@ -318,13 +356,14 @@ var OrbitChat = {
   /** Sanitize HTML (allow only safe tags) */
   _sanitizeHtml: function(str) {
     if (!str) return '';
-    // Basic sanitization: escape HTML but allow line breaks
+    // Use markdown renderer if available, fall back to basic sanitization
+    if (window.Sanitize && window.Sanitize.markdown) {
+      return window.Sanitize.markdown(str);
+    }
+    // Basic fallback: escape HTML but allow line breaks
     var div = document.createElement('div');
     div.appendChild(document.createTextNode(str));
-    var escaped = div.innerHTML;
-    // Convert newlines to <br>
-    escaped = escaped.replace(/\n/g, '<br>');
-    return escaped;
+    return div.innerHTML.replace(/\n/g, '<br>');
   },
 
   /** Escape HTML for safe inline insertion */
@@ -584,6 +623,7 @@ var OrbitChat = {
 };
 
 // Expose for backward compatibility
-window.openChat = function(chatId) { OrbitChat.openChat(chatId); };
+// window.openChat is the old complete function from app.js (with profile frames)
+// OrbitChat.openChat is kept for internal component use but window.openChat takes priority
 window.closeChat = function() { OrbitChat.closeChat(); };
 window.renderChatList = function(filter) { OrbitHome.renderChatList(filter); };

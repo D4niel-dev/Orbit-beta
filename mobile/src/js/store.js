@@ -64,6 +64,8 @@ class Store {
       experimentalFpsMonitor: false,
       experimentalDevOverlay: false,
       mutedChats: {},      // stored inside settings for backward compat (app.js uses MStore.settings.mutedChats)
+      noFlashbang: false,
+      appZoom: 100,
       ...initialState.settings
     };
 
@@ -276,15 +278,9 @@ class Store {
       echoChat.avatar = 'icons/app/orbit_1024.png';
       echoChat.status = 'online';
     }
-    // Add default echo messages
-    if (this.getMessages('echo').length === 0) {
-      this.messages['echo'] = [
-        { id: 'e1', from: 'echo', text: "Hi! I'm Orbit Echo! You can call me Bit if you want.", time: new Date().toISOString() },
-        { id: 'e2', from: 'echo', text: "You can send messages in here and i'll echo it back at you! (except for images, files, folders and sounds files)", time: new Date().toISOString() },
-        { id: 'e3', from: 'echo', text: 'THIS MESSAGE WILL SELF-DESTRUCT AFTER 5s', time: new Date().toISOString() },
-        { id: 'e4', from: 'echo', text: 'Just kidding..', time: new Date().toISOString() }
-      ];
-      this._saveMsgs('echo');
+    // Ensure echo messages array is loaded from storage (don't overwrite saved ones)
+    if (!this.messages['echo']) {
+      this.messages['echo'] = this.get('msg_echo', []);
     }
     this.save();
   }
@@ -349,7 +345,7 @@ class Store {
     // Update chat summary
     var chat = this.chats.find(function(c) { return c.id === chatId; });
     if (chat) {
-      chat.lastMessage = msg.text;
+      chat.lastMessage = msg.text || (msg.attachments && msg.attachments.length > 0 ? '[Media]' : '');
       chat.lastTime = msg.time;
     }
     this._saveMsgs(chatId);

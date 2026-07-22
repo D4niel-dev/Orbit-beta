@@ -135,6 +135,7 @@ html, body {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  border-radius: 50%;
 }
 .settings-profile-info {
   flex: 1;
@@ -440,6 +441,7 @@ html, body {
   font-weight: 700;
   font-size: 18px;
   flex-shrink: 0;
+  position: relative;
   /* overflow:hidden removed — status dot needs to be visible */
 }
 
@@ -492,6 +494,18 @@ html, body {
   height: 12px;
   flex-shrink: 0;
   color: var(--text-muted);
+}
+
+.chat-row-you {
+  font-weight: 600;
+  color: var(--accent-primary);
+  flex-shrink: 0;
+}
+
+.chat-row-sender {
+  font-weight: 600;
+  color: var(--text-secondary);
+  flex-shrink: 0;
 }
 
 .chat-row-typing {
@@ -2543,11 +2557,66 @@ textarea#chat-input {
 }
 
 /* ─── Gallery Panel ─── */
+.gallery-filter-bar {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.gallery-filter-btn {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.gallery-filter-btn:active {
+  transform: scale(0.96);
+}
+
+.gallery-filter-btn.active {
+  background: var(--accent-primary);
+  color: #fff;
+  border-color: var(--accent-primary);
+}
+
+.gallery-count {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 4px 12px 0;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.gallery-section-date {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 12px 12px 4px;
+  letter-spacing: 0.02em;
+}
+
 .gallery-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 4px;
-  padding: 4px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+  padding: 4px 4px;
+}
+
+.gallery-grid.single-col {
+  grid-template-columns: 1fr;
 }
 
 .gallery-item {
@@ -2556,12 +2625,104 @@ textarea#chat-input {
   border-radius: 4px;
   background: var(--bg-hover);
   cursor: pointer;
+  position: relative;
+  transition: transform 0.12s ease;
+}
+
+.gallery-item:active {
+  transform: scale(0.96);
 }
 
 .gallery-item img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
+}
+
+.gallery-item video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.gallery-item-audio {
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-surface);
+  border-radius: 4px;
+  cursor: pointer;
+  gap: 6px;
+  transition: transform 0.12s ease;
+}
+
+.gallery-item-audio:active {
+  transform: scale(0.96);
+}
+
+.gallery-item-audio i {
+  width: 28px;
+  height: 28px;
+  color: var(--accent-success);
+}
+
+.gallery-item-audio span {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.gallery-item-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 6px;
+  background: linear-gradient(transparent, rgba(0,0,0,0.55));
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.gallery-item:hover .gallery-item-overlay,
+.gallery-item.show-overlay .gallery-item-overlay {
+  opacity: 1;
+}
+
+.gallery-item-type-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: rgba(0,0,0,0.6);
+  border-radius: 4px;
+  padding: 2px 5px;
+  font-size: 10px;
+  color: #fff;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  pointer-events: none;
+}
+
+.gallery-item-type-badge i {
+  width: 11px;
+  height: 11px;
+}
+
+.gallery-item-sender {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .gallery-empty {
@@ -2579,6 +2740,190 @@ textarea#chat-input {
   width: 48px;
   height: 48px;
   opacity: 0.4;
+}
+
+/* ─── Gallery Lightbox ─── */
+.gallery-lightbox {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.95);
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.15s ease;
+}
+
+.lightbox-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: rgba(255,255,255,0.12);
+  border: none;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #fff;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 10001;
+  transition: background 0.15s;
+}
+
+.lightbox-close:active {
+  background: rgba(255,255,255,0.25);
+}
+
+.lightbox-close i {
+  width: 20px;
+  height: 20px;
+}
+
+.lightbox-nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(255,255,255,0.1);
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #fff;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 10001;
+  transition: background 0.15s, transform 0.15s;
+}
+
+.lightbox-nav-btn:active {
+  background: rgba(255,255,255,0.25);
+  transform: translateY(-50%) scale(0.92);
+}
+
+.lightbox-nav-btn i {
+  width: 22px;
+  height: 22px;
+}
+
+.lightbox-nav-prev {
+  left: 12px;
+}
+
+.lightbox-nav-next {
+  right: 12px;
+}
+
+.lightbox-media-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 60px 50px;
+  position: relative;
+}
+
+.lightbox-media-wrap img,
+.lightbox-media-wrap video {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  animation: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  border-radius: 4px;
+}
+
+.lightbox-media-wrap audio {
+  width: 80%;
+  max-width: 400px;
+  animation: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.lightbox-footer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 16px 20px;
+  padding-bottom: calc(16px + var(--safe-area-bottom, 0px));
+  background: linear-gradient(transparent, rgba(0,0,0,0.7));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 10001;
+}
+
+.lightbox-footer-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.lightbox-footer-sender {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.lightbox-footer-date {
+  font-size: 12px;
+  color: rgba(255,255,255,0.6);
+}
+
+.lightbox-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.lightbox-counter {
+  font-size: 13px;
+  color: rgba(255,255,255,0.7);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.lightbox-dl-btn {
+  background: rgba(255,255,255,0.1);
+  border: none;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #fff;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: background 0.15s;
+}
+
+.lightbox-dl-btn:active {
+  background: rgba(255,255,255,0.25);
+}
+
+.lightbox-dl-btn i {
+  width: 18px;
+  height: 18px;
+}
+
+.lightbox-hidden {
+  display: none !important;
 }
 
 /* ─── Activity Panel ─── */
@@ -4175,7 +4520,7 @@ textarea#chat-input {
   flex-shrink: 0;
 }
 .bottom-sheet-content {
-  padding: 4px 0;
+  padding: 4px 0 calc(8px + var(--safe-area-bottom, 0px));
 }
 .bottom-sheet-item {
   display: flex;
@@ -4237,7 +4582,7 @@ textarea#chat-input {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  overflow: hidden;
+  overflow: visible;
   background: var(--accent-primary);
   display: flex;
   align-items: center;
@@ -4251,6 +4596,15 @@ textarea#chat-input {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  clip-path: circle(50%);
+}
+.chat-header-avatar .pfp-frame,
+.chat-row-avatar .pfp-frame,
+.online-friend-avatar .pfp-frame {
+  z-index: 5;
+  width: 134%;
+  height: 134%;
+  max-width: none;
 }
 .chat-header-info {
   flex: 1;
@@ -4300,7 +4654,7 @@ textarea#chat-input {
 /* 7. Message Bubbles — Premium Redesign */
 /* v0.2.8 Premium message bubbles */
 .message-bubble {
-  max-width: 65% !important;
+  max-width: 82% !important;
   border-radius: 20px !important;
   padding: 12px 16px !important;
   font-size: 15px;
@@ -4800,7 +5154,7 @@ textarea#chat-input {
 /* 26. Online indicator idle state */
 .online-indicator.idle {
   background: var(--text-muted);
-  opacity: 0.4;
+  opacity: 0.7;
 }
 
 /* 27. Hide old bottom-nav references */

@@ -198,16 +198,23 @@ window.GlobalGallery = {
           '</div>' +
         '</div>';
     } else {
+      // Common scroll wrapper - separates overflow from layout rendering
+      var scrollWrapOpen = '<div style="flex:1; overflow-y:auto; overflow-x:hidden; padding:var(--spacing-lg);">';
+      var scrollWrapClose = '</div>';
+      
       if (this.displayMode === 'grid') {
-        contentHtml = '<div style="flex:1; overflow-y:auto; padding:var(--spacing-lg); display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:16px; align-content:start;">';
+        contentHtml = scrollWrapOpen +
+          '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:16px; align-content:start;">';
         allAttachments.forEach(function(a) { contentHtml += renderGridItem(a); });
-        contentHtml += '</div>';
+        contentHtml += '</div>' + scrollWrapClose;
       } else if (this.displayMode === 'compact') {
-        contentHtml = '<div style="flex:1; overflow-y:auto; padding:var(--spacing-lg); display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:8px; align-content:start;">';
+        contentHtml = scrollWrapOpen +
+          '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:8px; align-content:start;">';
         allAttachments.forEach(function(a) { contentHtml += renderGridItem(a); });
-        contentHtml += '</div>';
+        contentHtml += '</div>' + scrollWrapClose;
       } else if (this.displayMode === 'masonry') {
-        contentHtml = '<div style="flex:1; overflow-y:auto; padding:var(--spacing-lg); column-count: 3; column-gap: 16px;">';
+        contentHtml = scrollWrapOpen +
+          '<div style="column-count: 3; column-gap: 16px;">';
         var mediaFiles = allAttachments.filter(function(a) { return isMediaType(a); });
         var otherFiles = allAttachments.filter(function(a) { return !isMediaType(a); });
         mediaFiles.forEach(function(a) {
@@ -243,11 +250,12 @@ window.GlobalGallery = {
           });
           contentHtml += '</div>';
         }
-        contentHtml += '</div>';
+        contentHtml += '</div>' + scrollWrapClose;
       } else if (this.displayMode === 'list') {
-        contentHtml = '<div style="flex:1; overflow-y:auto; padding:var(--spacing-lg); display:flex; flex-direction:column; gap:12px;">';
+        contentHtml = scrollWrapOpen +
+          '<div style="display:flex; flex-direction:column; gap:12px;">';
         allAttachments.forEach(function(a) { contentHtml += renderListItem(a); });
-        contentHtml += '</div>';
+        contentHtml += '</div>' + scrollWrapClose;
       }
     }
 

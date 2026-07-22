@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v028-beta-latest-version">v0.2.8-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v029-beta-latest-version">v0.2.9-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@
 
 | Channel | Version | Status |
 |---------|---------|--------|
-| *Development* | v0.2.8-beta | Latest Build |
+| *Development* | v0.2.9-beta | Latest Build |
 | **Stable** | v0.2.7-beta | Stable release |
 | Previous **Stable** | v0.1.1-beta | Legacy stable release |
 
@@ -90,15 +90,13 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage desktop app** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
-## Highlights (v0.2.8-beta)
+## Highlights (v0.2.9-beta)
 
-- **Settings Redesign** — All settings items now card-based with Lucide icons, gradient icon containers, and search bar for instant filtering.
-- **Message Re-Animation Fixed** — Messages no longer re-animate on every chat re-render. Only genuinely new messages get the fade-in animation. Desktop also ported.
-- **Auto-Scroll Fixed** — Chat feed scrolls to bottom reliably on new messages, even with lazy-loaded images and media players.
-- **Own Message Bubble Unified** — Changed from accent blue to theme surface color (`var(--bg-surface)`), matching other users' bubbles. Text color unified to `var(--text-primary)`.
-- **Version Auto-Detection** — Settings About section reads live version from `window.APP_VERSION`, auto-generated from `package.json`.
-- **Theme CSS Cache-Busting** — All theme stylesheets now load with versioned query parameter to prevent stale CSS after updates.
-- **Desktop UI Polish** — Message animation fix, bubble background consistency, and cache-busting all ported to desktop codebase.
+- **Mobile App Zoom Slider** — Zoom slider (50–200%) in Appearance → Text & Layout to match desktop functionality.
+- **Mobile Light Mode Safety** — One-time flashbang warning dialog when switching to a Light theme, with configurable "Disable Light Mode Flashbang" toggle in Appearance.
+- **Mobile GitHub Links** — "GitHub Repository" and "Report an Issue" links added to About section.
+- **Desktop Global Gallery Layout Fix** — Scroll wrapper separated from layout container for grid/compact/masonry/list display modes — no more layout breaks with >10–20 items.
+- **Experimental Card Icon Fixed** — `flask` renamed to `flask-conical` (Lucide v1.17.0 rename) so the Experimental card icon renders correctly on mobile.
 
 ## Version History
 <details>
@@ -418,6 +416,14 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Version Auto-Detection** — `version.js` generated from `package.json`, About section reads live value
 - **Theme CSS Cache-Busting** — `?v=20260721` on all theme `<link>` tags (both platforms)
 </details>
+<details>
+<summary>v0.2.9-beta</summary>
+
+- **Mobile Settings Additions** — App Zoom slider (50–200%) in Appearance, Disable Light Mode Flashbang toggle, flashbang warning dialog on Light theme selection, GitHub Repository and Report an Issue links in About.
+- **Desktop Global Gallery Layout Fix** — Scroll wrapper separated from inner layout container for grid/compact/masonry/list display modes — no more layout breaks with >10–20 items.
+- **Experimental Card Icon Fixed** — `flask` renamed to `flask-conical` (Lucide v1.17.0 rename) so the icon renders correctly on mobile.
+- **Version bumped to v0.2.9-beta** across all manifests. Android web assets synced via `npx cap sync android`.
+</details>
 
 See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
@@ -576,15 +582,13 @@ Transparency matters in beta. Current constraints include:
 
 ## Roadmap
 
-### Shipped (v0.2.8-beta)
+### Shipped (v0.2.9-beta)
 
-- **Card-Based Settings Items** — All 7 sections redesigned with Lucide icons, gradient containers, search filtering
-- **Message Re-Animation Fix** — Granular `data-msg-anim` attribute only on new messages (cross-platform)
-- **Auto-Scroll Fix** — Removed `scroll-behavior: smooth` from feed, deferred re-scroll for lazy-loaded media
-- **Own Message Bubble Unified** — `var(--bg-surface)` with right-alignment instead of blue accent
-- **Message Text Color Fixed** — `var(--text-primary)` on own messages instead of hardcoded `#fff`
-- **Version Auto-Detection** — `version.js` generated from `package.json`, About section reads live value
-- **Theme CSS Cache-Busting** — `?v=20260721` on all theme `<link>` tags (both platforms)
+- **Mobile App Zoom Slider** — Zoom slider (50–200%) in Appearance settings
+- **Mobile Light Mode Safety** — Flashbang warning dialog on Light theme + "Disable Light Mode Flashbang" toggle
+- **Mobile GitHub Links** — Repository and Issue links in About
+- **Desktop Global Gallery Layout Fix** — Scroll wrapper isolation for all display modes
+- **Experimental Card Icon Fixed** — `flask` → `flask-conical` Lucide rename
 
 ### In Progress / Planned
 
