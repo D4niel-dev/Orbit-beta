@@ -284,14 +284,17 @@ jobs:
       - name: Sign checksums
         if: env.GPG_KEY != ''
         run: |
-          if [ -n "$GPG_PASS" ]; then
-            gpg --batch --no-tty --passphrase "$GPG_PASS" \
-              --detach-sign --armor release-artifacts/SHA256SUMS.txt
-          else
-            gpg --batch --no-tty \
-              --detach-sign --armor release-artifacts/SHA256SUMS.txt
-          fi
-          ls -la release-artifacts/SHA256SUMS.txt.sig
+          echo "=== Checking imported key ==="
+          gpg --list-keys "Orbit Release Key"
+          echo "=== Checking input file ==="
+          ls -la release-artifacts/SHA256SUMS.txt
+          echo "=== Signing ==="
+          cd release-artifacts
+          gpg --batch --no-tty --verbose \
+            --detach-sign --armor SHA256SUMS.txt
+          echo "=== Checking output ==="
+          ls -la SHA256SUMS.txt.sig
+          pwd
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
