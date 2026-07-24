@@ -284,8 +284,13 @@ jobs:
       - name: Sign checksums
         if: env.GPG_KEY != ''
         run: |
-          gpg --batch --no-tty --passphrase "$GPG_PASS" \
-            --detach-sign --armor release-artifacts/SHA256SUMS.txt
+          if [ -n "$GPG_PASS" ]; then
+            gpg --batch --no-tty --passphrase "$GPG_PASS" \
+              --detach-sign --armor release-artifacts/SHA256SUMS.txt
+          else
+            gpg --batch --no-tty \
+              --detach-sign --armor release-artifacts/SHA256SUMS.txt
+          fi
           ls -la release-artifacts/SHA256SUMS.txt.sig
 
       - name: Create GitHub Release
