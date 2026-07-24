@@ -213,6 +213,9 @@ jobs:
     needs: [build-windows, build-macos, build-linux, build-android]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    env:
+      GPG_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+      GPG_PASS: ${{ secrets.GPG_PASSPHRASE }}
     steps:
       - uses: actions/checkout@v4
 
@@ -273,6 +276,18 @@ jobs:
             done
           fi
 
+      - name: Import GPG key
+        if: env.GPG_KEY != ''
+        run: |
+          echo "$GPG_KEY" | gpg --import --batch --no-tty
+
+      - name: Sign checksums
+        if: env.GPG_KEY != ''
+        run: |
+          cd release-artifacts
+          gpg --batch --no-tty --passphrase "$GPG_PASS" \
+            --detach-sign --armor SHA256SUMS.txt
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -299,14 +314,26 @@ jobs:
             ### Verify Your Download
 
             A `SHA256SUMS.txt` file is included with this release.  
-            Use it to verify the integrity of any downloaded artifact:
+            Since v0.3.0-beta, the checksum file is also GPG-signed (`SHA256SUMS.txt.sig`).
+
+            Use the [Orbit Release public key](https://raw.githubusercontent.com/D4niel-dev/Orbit-beta/main/security/public-key.asc) to verify:
 
             ```sh
-            # Linux / macOS
-            shasum -a 256 --check SHA256SUMS.txt
+            # 1. Import the public key
+            curl -O https://raw.githubusercontent.com/D4niel-dev/Orbit-beta/main/security/public-key.asc
+            gpg --import public-key.asc
 
-            # Windows (PowerShell)
+            # 2. Verify the signature
+            gpg --verify SHA256SUMS.txt.sig SHA256SUMS.txt
+
+            # 3. Verify your downloaded file
+            sha256sum --check SHA256SUMS.txt --ignore-missing
+            ```
+
+            For Windows PowerShell:
+            ```powershell
             Get-FileHash Orbit-Setup.exe -Algorithm SHA256
+            Compare-Object (Get-Content SHA256SUMS.txt) (Get-FileHash Orbit-Setup.exe -Algorithm SHA256) -Property Hash
             ```
 
             ### Security
@@ -326,6 +353,7 @@ jobs:
             release-artifacts/**/*.deb
             release-artifacts/**/*.apk
             release-artifacts/SHA256SUMS.txt
+            release-artifacts/SHA256SUMS.txt.sig
           draft: ${{ github.event_name == 'workflow_dispatch' }}
           prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.event.inputs.version, 'beta') }}
         env:
