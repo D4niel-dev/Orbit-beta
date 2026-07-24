@@ -51,6 +51,10 @@ sha256sum --check SHA256SUMS.txt --ignore-missing
 
 ## Key Fingerprint
 
+> 914F C63B 5690 FFAC 855F  3A5C 1681 D97E 850F 9A3A
+
+If you haven't :
+
 Once generated, run:
 ```bash
 gpg --fingerprint "Orbit Release Key"
