@@ -270,18 +270,48 @@ window.SettingsModal = {
 
       var avatarFileInput = content.querySelector('#input-avatar-file');
       if (avatarFileInput) {
-        avatarFileInput.addEventListener('change', function(e) {
+        function openAvatarCropper(source) {
+        if (window.ImageCropper) {
+          window.ImageCropper.open(source, {
+            aspectRatio: 1,
+            cropWidth: 300,
+            cropHeight: 300,
+            title: 'Crop Avatar'
+          }, function(result) {
+            if (result) {
+              var input = content.querySelector('#input-avatar');
+              if (input) {
+                input.value = result;
+                updatePreview();
+              }
+            }
+          });
+        }
+      }
+
+      function openBannerCropper(source) {
+        if (window.ImageCropper) {
+          window.ImageCropper.open(source, {
+            aspectRatio: 3,
+            cropWidth: 600,
+            cropHeight: 200,
+            title: 'Crop Banner'
+          }, function(result) {
+            if (result) {
+              var input = content.querySelector('#input-banner');
+              if (input) {
+                input.value = result;
+                updatePreview();
+              }
+            }
+          });
+        }
+      }
+
+      avatarFileInput.addEventListener('change', function(e) {
           var file = e.target.files[0];
           if (!file) return;
-          var reader = new FileReader();
-          reader.onload = function(evt) {
-            var input = content.querySelector('#input-avatar');
-            if (input && input.parentNode) {
-              input.value = evt.target.result;
-              updatePreview();
-            }
-          };
-          reader.readAsDataURL(file);
+          openAvatarCropper(file);
           e.target.value = '';
         });
       }
@@ -290,15 +320,7 @@ window.SettingsModal = {
         bannerFileInput.addEventListener('change', function(e) {
           var file = e.target.files[0];
           if (!file) return;
-          var reader = new FileReader();
-          reader.onload = function(evt) {
-            var input = content.querySelector('#input-banner');
-            if (input && input.parentNode) {
-              input.value = evt.target.result;
-              updatePreview();
-            }
-          };
-          reader.readAsDataURL(file);
+          openBannerCropper(file);
           e.target.value = '';
         });
       }
@@ -306,6 +328,22 @@ window.SettingsModal = {
       content.querySelector('#input-username').addEventListener('input', updatePreview);
       content.querySelector('#input-avatar').addEventListener('input', updatePreview);
       content.querySelector('#input-banner').addEventListener('input', updatePreview);
+
+      // Enter key in avatar/banner URL inputs opens cropper
+      content.querySelector('#input-avatar').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          var val = this.value.trim();
+          if (val) openAvatarCropper(val);
+        }
+      });
+      content.querySelector('#input-banner').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          var val = this.value.trim();
+          if (val) openBannerCropper(val);
+        }
+      });
 
       content.querySelector('#btn-save-account').addEventListener('click', function() {
         try {

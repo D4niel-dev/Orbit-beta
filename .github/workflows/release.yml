@@ -1,0 +1,179 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-desktop:
+    name: Build Desktop (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Cache npm dependencies
+        uses: actions/cache@v4
+        with:
+          path: desktop/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('desktop/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: cd desktop && npm ci
+
+      - name: Build for Linux
+        run: cd desktop && npm run build:linux
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-linux
+          path: desktop/dist/
+          if-no-files-found: error
+
+  build-windows:
+    name: Build Desktop (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Cache npm dependencies
+        uses: actions/cache@v4
+        with:
+          path: desktop/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('desktop/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: cd desktop && npm ci
+
+      - name: Build for Windows
+        run: cd desktop && npm run build:win
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows
+          path: desktop/dist/
+          if-no-files-found: error
+
+  build-macos:
+    name: Build Desktop (macOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Cache npm dependencies
+        uses: actions/cache@v4
+        with:
+          path: desktop/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('desktop/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: cd desktop && npm ci
+
+      - name: Build for macOS
+        run: cd desktop && npm run build:mac
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-macos
+          path: desktop/dist/
+          if-no-files-found: error
+
+  build-android:
+    name: Build Android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Cache npm dependencies
+        uses: actions/cache@v4
+        with:
+          path: mobile/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('mobile/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: cd mobile && npm ci
+
+      - name: Sync shared modules
+        run: cd mobile && npm run shared:sync
+
+      - name: Sync Capacitor
+        run: cd mobile && npx cap sync android
+
+      - name: Build APK
+        run: cd mobile/android && ./gradlew assembleRelease
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: mobile/android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+  sign-and-release:
+    name: Sign and Release
+    runs-on: ubuntu-latest
+    needs:
+      - build-desktop
+      - build-windows
+      - build-macos
+      - build-android
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Generate checksums
+        run: |
+          cd artifacts
+          find . -type f | sort | xargs sha256sum > SHA256SUMS.txt
+
+      - name: Import GPG key
+        if: secrets.GPG_PRIVATE_KEY != ''
+        run: |
+          echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --import --batch --no-tty
+
+      - name: Sign checksums
+        if: secrets.GPG_PRIVATE_KEY != ''
+        run: |
+          cd artifacts
+          gpg --batch --no-tty --passphrase "${{ secrets.GPG_PASSPHRASE }}" \
+            --detach-sign --armor SHA256SUMS.txt
+
+      - name: Create Release
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "Orbit ${{ github.ref_name }}" \
+            --notes "See CHANGELOG.md for details." \
+            artifacts/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

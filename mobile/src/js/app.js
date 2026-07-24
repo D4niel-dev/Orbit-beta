@@ -538,6 +538,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
   /* -- Render Chat View -- */
   function openChat(chatId) {
+    // Save draft for current chat before switching
+    if (activeChatId) {
+      var _oldInput = document.getElementById('chat-input');
+      if (_oldInput && _oldInput.value.trim()) {
+        localStorage.setItem('orbit_draft_' + activeChatId, _oldInput.value);
+      }
+    }
     activeChatId = chatId;
     editingMsg = null;
     replyingTo = null;
@@ -663,6 +670,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
     renderMessages(chatId);
     if (window.renderTypingIndicator) window.renderTypingIndicator();
+
+    // Restore draft for this chat
+    var _draft = localStorage.getItem('orbit_draft_' + chatId);
+    var _input = document.getElementById('chat-input');
+    if (_draft && _input) {
+      _input.value = _draft;
+      _input.style.height = 'auto';
+      _input.style.height = Math.min(_input.scrollHeight, 150) + 'px';
+      updateSendButton();
+    }
   }
 
   window.openChat = openChat;
@@ -935,6 +952,13 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function closeChat() {
+    // Save draft before closing
+    if (activeChatId) {
+      var _closeInput = document.getElementById('chat-input');
+      if (_closeInput && _closeInput.value.trim()) {
+        localStorage.setItem('orbit_draft_' + activeChatId, _closeInput.value);
+      }
+    }
     // Send stop-typing indicator before clearing activeChatId
     if (activeChatId && activeChatId !== 'local-echo' && window.Orbit && window.Orbit.P2P && Orbit.P2P.isAvailable()) {
       var isGrp = MStore.groups.some(function(g) { return g.id === activeChatId; });
@@ -2180,6 +2204,7 @@ document.addEventListener('DOMContentLoaded', function() {
       renderMessages(activeChatId);
       renderChatList();
       input.value = '';
+      localStorage.removeItem('orbit_draft_' + activeChatId);
       input.style.height = 'auto';
       return;
     }
@@ -2307,6 +2332,7 @@ document.addEventListener('DOMContentLoaded', function() {
     renderMessages(activeChatId);
     renderChatList();
     input.value = '';
+    localStorage.removeItem('orbit_draft_' + activeChatId);
     input.style.height = 'auto';
     updateSendButton();
     replyingTo = null;
@@ -3500,23 +3526,28 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button id="changelog-close-mobile" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;font-size:20px;">✕</button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
-        vBlock('0.2.9-beta', 'Latest', [
-          ['Mobile Settings Additions', [
-            'App Zoom Slider — New zoom slider (50–200%) in Appearance → Text & Layout. Matches desktop functionality.',
-            'Disable Light Mode Flashbang — Toggle in Appearance to skip the brightness warning dialog entirely.',
-            'Light Mode Flashbang Warning — Themed warning dialog when switching to a Light theme, with "Don\'t show again" checkbox.',
-            'GitHub Links in About — "GitHub Repository" and "Report an Issue" links added to the About section.'
+        vBlock('0.3.0-beta', 'Latest', [
+          ['Image Cropper (Desktop + Mobile)', [
+            'Shared Image Cropper — New crop tool with drag, zoom (slider + pinch + wheel), rotate 90° CW/CCW, mirror, and reset. Integrated into desktop avatar/banner inputs and mobile profile sheet.',
+            'Avatar Circular Crop Guide — Three-level SVG mask with dimmed corners and transparent circle for precise avatar framing.',
+            'Zoom & Centering Fixes — Drag scales proportionally; image sized-to-fit (Math.min); base centering separated from user drag.'
           ]],
-          ['Desktop Gallery Layout Fix', [
-            'Scroll Wrapper Separation — Each display mode (grid, compact, masonry, list) now has a dedicated scroll container separate from the inner layout. Prevents layout breakage with >10–20 items.'
+          ['Mobile Improvements', [
+            'Gallery A/V Playback Fixed — base64→blob URL conversion in openLightbox() for native Android WebView media playback.',
+            'Real-Time Profile Overlay Refresh — Beacon handlers call refreshProfileOverlay() so peer cards update instantly on friend changes.',
+            'Immersive Mode — System bars auto-hide on full-screen content (Android 7+).',
+            'Input Box Draft Saving — Chat drafts auto-saved to localStorage (debounced 300ms), restored on chat switch, cleared on send.'
           ]],
-          ['Fixes', [
-            'Experimental Card Icon Fixed — flask renamed to flask-conical (Lucide v1.17.0 rename) so the icon renders correctly.',
-            'Mobile store defaults added for noFlashbang and appZoom settings.'
+          ['Desktop Improvements', [
+            'Real-Time Profile Card Updates — profile-card.js watches friends array; open cards re-render on beacon-driven friend changes.',
+            'Receiving Audio/Video Progress — File transfers show "Receiving Audio..." or "Receiving Video..." with Lucide icons.',
+            'Input Box Draft Saving — Same localStorage draft pattern, cross-session persistence.'
           ]],
-          ['Technical', [
-            'Version bumped to v0.2.9-beta across all manifests.',
-            'Android web assets synced via npx cap sync android.'
+          ['Release Signing & Security', [
+            'GitHub Actions Release Workflow — 5 parallel build jobs (Linux/Windows/macOS/Android) + SHA256SUMS.txt + GPG signing.',
+            'GPG Signing — Release artifacts verified with Orbit Release Key. Key setup docs in security/README.md.',
+            'Security Policy — SECURITY.md with supported versions and vulnerability reporting.',
+            'Verification Docs — README.md "Release Verification" section with copy-paste commands.'
           ]]
         ]) +
         vBlock('0.2.8-beta', '', [
@@ -4306,6 +4337,40 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('edit-avatar').addEventListener('input', checkChanges);
     document.getElementById('edit-banner').addEventListener('input', checkChanges);
 
+    // Enter key in avatar/banner URL inputs opens cropper
+    document.getElementById('edit-avatar').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        var val = this.value.trim();
+        if (val && window.ImageCropper) {
+          window.ImageCropper.open(val, {
+            aspectRatio: 1, cropWidth: 300, cropHeight: 300, title: 'Crop Avatar'
+          }, function(result) {
+            if (result) {
+              document.getElementById('edit-avatar').value = result;
+              checkChanges();
+            }
+          });
+        }
+      }
+    });
+    document.getElementById('edit-banner').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        var val = this.value.trim();
+        if (val && window.ImageCropper) {
+          window.ImageCropper.open(val, {
+            aspectRatio: 3, cropWidth: 600, cropHeight: 200, title: 'Crop Banner'
+          }, function(result) {
+            if (result) {
+              document.getElementById('edit-banner').value = result;
+              checkChanges();
+            }
+          });
+        }
+      }
+    });
+
     // Profile frame selector
     var frameSelect = document.getElementById('profile-frame-select');
     if (frameSelect) {
@@ -4320,7 +4385,7 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     }
 
-    // File upload handlers for avatar/banner
+    // File upload handlers for avatar/banner using cropper
     function setupProfileUpload(btnId, inputId) {
       var btn = document.getElementById(btnId);
       if (!btn) return;
@@ -4333,14 +4398,21 @@ document.addEventListener('DOMContentLoaded', function() {
         document.body.appendChild(input);
         input.addEventListener('change', function() {
           if (this.files && this.files[0]) {
-            var reader = new FileReader();
-            reader.onload = function(e) {
-              MStore.compressImage(e.target.result, 800, 800, 0.8, function(compressedUrl) {
-                document.getElementById(inputId).value = compressedUrl;
-                checkChanges();
+            var file = this.files[0];
+            var isAvatar = inputId === 'edit-avatar';
+            if (window.ImageCropper) {
+              window.ImageCropper.open(file, {
+                aspectRatio: isAvatar ? 1 : 3,
+                cropWidth: isAvatar ? 300 : 600,
+                cropHeight: isAvatar ? 300 : 200,
+                title: isAvatar ? 'Crop Avatar' : 'Crop Banner'
+              }, function(result) {
+                if (result) {
+                  document.getElementById(inputId).value = result;
+                  checkChanges();
+                }
               });
-            };
-            reader.readAsDataURL(this.files[0]);
+            }
           }
           document.body.removeChild(input);
         });
@@ -4398,6 +4470,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     var backdrop = document.createElement('div');
     backdrop.id = 'profile-view-overlay';
+    backdrop.dataset.profileUserId = chatId;
     var safeBottom = 'var(--safe-area-bottom, 0px)';
     backdrop.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100dvh;z-index:99999;background:rgba(0,0,0,0.5);display:flex;flex-direction:column;justify-content:flex-end;animation:fadeIn 0.15s;';
     backdrop.addEventListener('click', function(e) { if (e.target === backdrop) backdrop.remove(); });
@@ -4466,6 +4539,13 @@ document.addEventListener('DOMContentLoaded', function() {
       backdrop.remove();
       openChat(chatId);
     });
+  }
+
+  function refreshProfileOverlay(chatId) {
+    var overlay = document.querySelector('#profile-view-overlay');
+    if (!overlay || overlay.dataset.profileUserId !== chatId) return;
+    overlay.remove();
+    showProfileOverlay(chatId);
   }
 
   /** Show own profile as a slide-up bottom sheet */
@@ -4639,26 +4719,38 @@ document.addEventListener('DOMContentLoaded', function() {
     _profileFileInput.id = 'profile-file-input';
     sheet.appendChild(_profileFileInput);
     
-    var _pickTarget = null;
+    var _pickMode = null;
     _profileFileInput.addEventListener('change', function() {
-      if (_pickTarget && this.files && this.files[0]) {
-        var reader = new FileReader();
-        reader.onload = function(e) {
-          _pickTarget.value = e.target.result;
-          _pickTarget = null;
-          checkChanges();
-        };
-        reader.readAsDataURL(this.files[0]);
+      if (_pickMode && this.files && this.files[0]) {
+        var file = this.files[0];
+        var isAvatar = _pickMode === 'avatar';
+        _pickMode = null;
+        if (window.ImageCropper) {
+          window.ImageCropper.open(file, {
+            aspectRatio: isAvatar ? 1 : 3,
+            cropWidth: isAvatar ? 300 : 600,
+            cropHeight: isAvatar ? 300 : 200,
+            title: isAvatar ? 'Crop Avatar' : 'Crop Banner'
+          }, function(result) {
+            if (result) {
+              var input = document.getElementById(isAvatar ? 'edit-avatar' : 'edit-banner');
+              if (input) {
+                input.value = result;
+                checkChanges();
+              }
+            }
+          });
+        }
       }
       this.value = '';
     });
     
     document.getElementById('btn-pick-avatar').addEventListener('click', function() {
-      _pickTarget = document.getElementById('edit-avatar');
+      _pickMode = 'avatar';
       _profileFileInput.click();
     });
     document.getElementById('btn-pick-banner').addEventListener('click', function() {
-      _pickTarget = document.getElementById('edit-banner');
+      _pickMode = 'banner';
       _profileFileInput.click();
     });
 
@@ -4693,6 +4785,40 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('edit-bio').addEventListener('input', checkChanges);
     document.getElementById('edit-avatar').addEventListener('input', checkChanges);
     document.getElementById('edit-banner').addEventListener('input', checkChanges);
+
+    // Enter key in avatar/banner inputs opens cropper
+    document.getElementById('edit-avatar').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        var val = this.value.trim();
+        if (val && window.ImageCropper) {
+          window.ImageCropper.open(val, {
+            aspectRatio: 1, cropWidth: 300, cropHeight: 300, title: 'Crop Avatar'
+          }, function(result) {
+            if (result) {
+              document.getElementById('edit-avatar').value = result;
+              checkChanges();
+            }
+          });
+        }
+      }
+    });
+    document.getElementById('edit-banner').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        var val = this.value.trim();
+        if (val && window.ImageCropper) {
+          window.ImageCropper.open(val, {
+            aspectRatio: 3, cropWidth: 600, cropHeight: 200, title: 'Crop Banner'
+          }, function(result) {
+            if (result) {
+              document.getElementById('edit-banner').value = result;
+              checkChanges();
+            }
+          });
+        }
+      }
+    });
 
     // Action button default behavior
     document.getElementById('btn-profile-sheet-action').onclick = closeProfileSheet;
@@ -4928,9 +5054,29 @@ document.addEventListener('DOMContentLoaded', function() {
       // Media content
       var contentHtml = '';
       if (item.type === 'video') {
-        contentHtml = '<video src="' + escapeHtml(item.url) + '" controls autoplay style="max-width:100%;max-height:100%;object-fit:contain;animation:scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);"></video>';
+        var playUrl = item.url;
+        if (playUrl.indexOf('data:') === 0) {
+          try {
+            var vm = playUrl.match(/^data:(video\/[^;]+|application\/octet-stream);base64,(.+)$/);
+            if (vm) {
+              var blobUrl = window.orbitBase64ToBlob(vm[2], vm[1]);
+              if (blobUrl) playUrl = blobUrl;
+            }
+          } catch(e) { console.warn('[Gallery] video data URL convert failed', e); }
+        }
+        contentHtml = '<video src="' + escapeHtml(playUrl) + '" controls autoplay style="max-width:100%;max-height:100%;object-fit:contain;animation:scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);"></video>';
       } else if (item.type === 'audio') {
-        contentHtml = '<audio src="' + escapeHtml(item.url) + '" controls autoplay style="width:80%;max-width:400px;animation:scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);"></audio>';
+        var playUrl = item.url;
+        if (playUrl.indexOf('data:') === 0) {
+          try {
+            var vm = playUrl.match(/^data:(audio\/[^;]+|application\/octet-stream);base64,(.+)$/);
+            if (vm) {
+              var blobUrl = window.orbitBase64ToBlob(vm[2], vm[1]);
+              if (blobUrl) playUrl = blobUrl;
+            }
+          } catch(e) { console.warn('[Gallery] audio data URL convert failed', e); }
+        }
+        contentHtml = '<audio src="' + escapeHtml(playUrl) + '" controls autoplay style="width:80%;max-width:400px;animation:scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);"></audio>';
       } else {
         contentHtml = '<img src="' + escapeHtml(item.url) + '" style="max-width:100%;max-height:100%;object-fit:contain;animation:scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);">';
       }
@@ -6166,7 +6312,21 @@ document.addEventListener('DOMContentLoaded', function() {
     this.style.height = 'auto';
     this.style.height = Math.min(this.scrollHeight, 150) + 'px';
     updateSendButton();
-    
+
+    // Debounced draft save
+    if (window._draftTimer) clearTimeout(window._draftTimer);
+    var _inpVal = this.value;
+    window._draftTimer = setTimeout(function() {
+      if (activeChatId) {
+        var _v = _inpVal.trim();
+        if (_v) {
+          localStorage.setItem('orbit_draft_' + activeChatId, _v);
+        } else {
+          localStorage.removeItem('orbit_draft_' + activeChatId);
+        }
+      }
+    }, 300);
+
     // Send typing indicator
     if (activeChatId && activeChatId !== 'local-echo' && window.Orbit && window.Orbit.P2P && Orbit.P2P.isAvailable()) {
       var now = Date.now();
@@ -7653,13 +7813,16 @@ document.addEventListener('DOMContentLoaded', function() {
           existing.status = bp.status || 'online';
           existing.lastSeen = Date.now();
           existing.name = peerName;
+          existing.tag = peerTag;
           if (bp.avatar) existing.avatar = bp.avatar;
+          if (bp.bio !== undefined) existing.bio = bp.bio;
           if (bp.profileFrame !== undefined) existing.profileFrame = bp.profileFrame;
           if (bp.banner) existing.banner = bp.banner;
           if (bp.tcpPort) existing.tcpPort = bp.tcpPort;
           if (data.connectionId) existing.ip = data.connectionId.split(':')[0];
           if (data.connectionId) existing.connectionId = data.connectionId;
         }
+        refreshProfileOverlay(peerId);
         // Ensure chat exists (avoid duplicates from host:port→UUID merge)
         var chatExists = MStore.chats.find(function(c) { return c.id === peerId; });
         if (!chatExists) {
@@ -8494,8 +8657,11 @@ document.addEventListener('DOMContentLoaded', function() {
         debugLog('P2P', 'Updating existing friend status', { name: existing.name, id: peerId });
         existing.status = 'online';
         existing.lastSeen = Date.now();
+        existing.name = peerName;
+        existing.tag = peerTag;
         existing.ip = data.host;
         if (pPayload.avatar) existing.avatar = pPayload.avatar;
+        if (pPayload.bio !== undefined) existing.bio = pPayload.bio;
         if (pPayload.publicKey) existing.publicKey = pPayload.publicKey;
         if (pPayload.profileFrame !== undefined) existing.profileFrame = pPayload.profileFrame;
         if (pPayload.banner) existing.banner = pPayload.banner;
@@ -8504,6 +8670,7 @@ document.addEventListener('DOMContentLoaded', function() {
         renderFriends();
         renderChatList();
       }
+      refreshProfileOverlay(peerId);
 
       // Ensure chat exists (avoid duplicates from host:port→UUID merge)
       var chatExists = MStore.chats.find(function(c) { return c.id === peerId; });

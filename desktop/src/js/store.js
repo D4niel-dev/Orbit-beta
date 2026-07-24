@@ -349,15 +349,29 @@ class Store {
     }
   }
 
+  _detectFileType(name) {
+    if (!name) return 'file';
+    const ext = name.split('.').pop().toLowerCase();
+    const audioExts = ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma', 'opus'];
+    const videoExts = ['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', 'm4v', '3gp', 'ogv'];
+    if (audioExts.includes(ext)) return 'audio';
+    if (videoExts.includes(ext)) return 'video';
+    return 'file';
+  }
+
   handleTransferProgress(data) {
     const { fileId, received, total, isSending, name } = data;
     const currentProgress = { ...this.state.transferProgress };
     if (received >= total) {
       delete currentProgress[fileId];
     } else {
-      // Preserve name if previously set, or use name from event, or use existing
       const existing = currentProgress[fileId];
-      currentProgress[fileId] = { received, total, isSending, name: name || (existing ? existing.name : undefined) };
+      const resolvedName = name || (existing ? existing.name : undefined);
+      var progType = this._detectFileType(resolvedName);
+      if (!progType || progType === 'file') {
+        progType = existing ? existing.progType : undefined;
+      }
+      currentProgress[fileId] = { received, total, isSending, name: resolvedName, progType };
     }
     this.setStateBatch({ transferProgress: currentProgress });
   }

@@ -12,7 +12,15 @@ window.ProfileCard = {
     var self = this;
     this.currentUserBeingViewed = null;
     window.store.subscribe(function(state, changedState) {
-      if (self.isOpen && self.currentUserBeingViewed === state.currentUser.userId && (!changedState || 'currentUser' in changedState)) self.render(state.currentUser);
+      if (!self.isOpen || !self.currentUserBeingViewed) return;
+      if (self.currentUserBeingViewed === state.currentUser.userId && (!changedState || 'currentUser' in changedState)) {
+        self.render(state.currentUser);
+        return;
+      }
+      if (self.currentUserBeingViewed !== state.currentUser.userId && (!changedState || 'friends' in changedState)) {
+        var friend = state.friends.find(function(f) { return f.userId === self.currentUserBeingViewed; });
+        if (friend) self.render(friend);
+      }
     });
   },
 

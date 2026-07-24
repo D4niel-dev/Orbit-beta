@@ -23,6 +23,13 @@ window.ChatPanel = {
     this.unsubscribe = window.store.subscribe((state, changedState) => {
       var relevant = ['messages', 'activeChatId', 'activeTab', 'groups', 'currentUser', 'settings'];
       if (!changedState || relevant.some(function(k) { return k in changedState; })) {
+        // Save draft when switching away from a chat
+        if (changedState && 'activeChatId' in changedState && this._prevChatId) {
+          var oldInput = document.getElementById('chat-input');
+          if (oldInput && oldInput.value.trim()) {
+            localStorage.setItem('orbit_draft_' + this._prevChatId, oldInput.value);
+          }
+        }
         // Prevent interrupting audio/video playback during re-renders
         var savedAudio = null;
         var savedVideo = null;
@@ -38,6 +45,17 @@ window.ChatPanel = {
           window.store.loadFullChatMessages(state.activeChatId);
         }
         this.renderChat(state);
+        // Restore draft for this chat after render
+        if (state.activeChatId) {
+          var draft = localStorage.getItem('orbit_draft_' + state.activeChatId);
+          var newInput = document.getElementById('chat-input');
+          if (draft && newInput) {
+            newInput.value = draft;
+            newInput.style.height = 'auto';
+            newInput.style.height = Math.min(newInput.scrollHeight, 200) + 'px';
+          }
+        }
+        this._prevChatId = state.activeChatId;
         if (savedAudio && window.OrbitAudioPlayer.restorePlaying) window.OrbitAudioPlayer.restorePlaying(savedAudio);
         if (savedVideo && window.OrbitVideoPlayer.restorePlaying) window.OrbitVideoPlayer.restorePlaying(savedVideo);
       }
@@ -52,6 +70,7 @@ window.ChatPanel = {
     
     // Initial render
     this.renderChat(window.store.getState());
+    this._prevChatId = window.store.getState().activeChatId;
   },
 
   initDelegatedActions() {
@@ -907,8 +926,20 @@ window.ChatPanel = {
       Object.keys(state.transferProgress).forEach(function(fileId) {
         const prog = state.transferProgress[fileId];
         const pct = Math.max(0, Math.min(100, Math.floor((prog.received / prog.total) * 100)));
-        const fileName = prog.name || (prog.isSending ? 'Sending file...' : 'Receiving file...');
-        const icon = prog.isSending ? 'upload-cloud' : 'download-cloud';
+        let fileName, icon;
+        if (prog.isSending) {
+          fileName = prog.name || 'Sending file...';
+          icon = 'upload-cloud';
+        } else if (prog.progType === 'audio') {
+          fileName = 'Receiving Audio...';
+          icon = 'music';
+        } else if (prog.progType === 'video') {
+          fileName = 'Receiving Video...';
+          icon = 'video';
+        } else {
+          fileName = prog.name || 'Receiving file...';
+          icon = 'download-cloud';
+        }
         progressHtml += '<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:12px;background:var(--bg-surface);border:1px solid var(--border-subtle);box-shadow:var(--shadow-sm);">' +
           '<i data-lucide="' + icon + '" style="width:20px;height:20px;color:var(--accent-primary);flex-shrink:0;"></i>' +
           '<div style="flex:1;min-width:0;">' +
@@ -1314,6 +1345,19 @@ window.ChatPanel = {
       input.addEventListener('input', function() {
         this.style.height = 'auto';
         this.style.height = Math.min(this.scrollHeight, 200) + 'px';
+        // Debounced draft save
+        if (self._draftTimer) clearTimeout(self._draftTimer);
+        self._draftTimer = setTimeout(function() {
+          var chatId = window.store.getState().activeChatId;
+          if (chatId) {
+            var val = input.value.trim();
+            if (val) {
+              localStorage.setItem('orbit_draft_' + chatId, val);
+            } else {
+              localStorage.removeItem('orbit_draft_' + chatId);
+            }
+          }
+        }, 300);
       });
     }
 
@@ -2205,6 +2249,7 @@ window.ChatPanel = {
       this.editingMsg = null;
       var input = document.getElementById('chat-input');
       if (input) input.value = '';
+      localStorage.removeItem('orbit_draft_' + activeChatId);
       window.store.notify();
       this._sending = false;
       return;
@@ -2489,6 +2534,7 @@ window.ChatPanel = {
     // Clear UI state
     var input = document.getElementById('chat-input');
     if (input) input.value = '';
+    localStorage.removeItem('orbit_draft_' + activeChatId);
     window.store.notify();
     this._sending = false;
   },

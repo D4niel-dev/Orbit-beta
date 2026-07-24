@@ -197,7 +197,7 @@ class TransferManager {
     transfer.lastActivity = Date.now();
 
     if (this.onProgress) {
-      this.onProgress(payload.fileId, { received: transfer.receivedCount, total: transfer.totalChunks, isSending: false });
+      this.onProgress(payload.fileId, { received: transfer.receivedCount, total: transfer.totalChunks, isSending: false, name: transfer.fileName });
     }
   }
 

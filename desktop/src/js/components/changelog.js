@@ -14,23 +14,28 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.2.9-beta', 'Latest', [
-          ['Mobile Settings Additions', [
-            'App Zoom Slider — New zoom slider (50–200%) in Appearance → Text & Layout. Matches desktop functionality.',
-            'Disable Light Mode Flashbang — Toggle in Appearance to skip the brightness warning dialog entirely.',
-            'Light Mode Flashbang Warning — Themed warning dialog when switching to a Light theme, with "Don\'t show again" checkbox.',
-            'GitHub Links in About — "GitHub Repository" and "Report an Issue" links added to the About section.'
+        versionBlock('0.3.0-beta', 'Latest', [
+          ['Image Cropper (Desktop + Mobile)', [
+            'Shared Image Cropper — New crop tool with drag, zoom (slider + pinch + wheel), rotate 90° CW/CCW, mirror, and reset. Integrated into desktop avatar/banner inputs and mobile profile sheet.',
+            'Avatar Circular Crop Guide — Three-level SVG mask with dimmed corners and transparent circle for precise avatar framing.',
+            'Zoom & Centering Fixes — Drag scales proportionally; image sized-to-fit (Math.min); base centering separated from user drag.'
           ]],
-          ['Desktop Gallery Layout Fix', [
-            'Scroll Wrapper Separation — Each display mode (grid, compact, masonry, list) now has a dedicated scroll container separate from the inner layout. Prevents layout breakage with >10–20 items.'
+          ['Mobile Improvements', [
+            'Gallery A/V Playback Fixed — base64→blob URL conversion in openLightbox() for native Android WebView media playback.',
+            'Real-Time Profile Overlay Refresh — Beacon handlers call refreshProfileOverlay() so peer cards update instantly on friend changes.',
+            'Immersive Mode — System bars auto-hide on full-screen content (Android 7+).',
+            'Input Box Draft Saving — Chat drafts auto-saved to localStorage (debounced 300ms), restored on chat switch, cleared on send.'
           ]],
-          ['Fixes', [
-            'Experimental Card Icon Fixed — flask renamed to flask-conical (Lucide v1.17.0 rename) so the icon renders correctly.',
-            'Mobile store defaults added for noFlashbang and appZoom settings.'
+          ['Desktop Improvements', [
+            'Real-Time Profile Card Updates — profile-card.js watches friends array; open cards re-render on beacon-driven friend changes.',
+            'Receiving Audio/Video Progress — File transfers show "Receiving Audio..." or "Receiving Video..." with Lucide icons.',
+            'Input Box Draft Saving — Same localStorage draft pattern, cross-session persistence.'
           ]],
-          ['Technical', [
-            'Version bumped to v0.2.9-beta across all manifests.',
-            'Android web assets synced via npx cap sync android.'
+          ['Release Signing & Security', [
+            'GitHub Actions Release Workflow — 5 parallel build jobs (Linux/Windows/macOS/Android) + SHA256SUMS.txt + GPG signing.',
+            'GPG Signing — Release artifacts verified with Orbit Release Key. Key setup docs in security/README.md.',
+            'Security Policy — SECURITY.md with supported versions and vulnerability reporting.',
+            'Verification Docs — README.md "Release Verification" section with copy-paste commands.'
           ]]
         ]) +
         versionBlock('0.2.8-beta', '', [

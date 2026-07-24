@@ -1,6 +1,36 @@
 # Orbit Changelog
 
-## v0.2.9-beta **(Latest Version)**
+## v0.3.0-beta **(Latest Version)**
+
+> **Note:** This is not a stable release — latest development version with experimental features.
+
+### Image Cropper (Desktop + Mobile)
+
+- **Shared Image Cropper** — New `shared/ui/image-cropper.js` module with drag, zoom (slider + pinch + wheel), rotate 90° CW/CCW, mirror, and reset. Integrated into desktop avatar/banner inputs and mobile profile sheet.
+- **Avatar Circular Crop Guide** — Three-level SVG mask (dimmed corners, transparent circle) with dashed circle border for precise avatar framing.
+- **Zoom & Centering Fixes** — Drag proportional to zoom level; image sized-to-fit (`Math.min`); base centering offset separated from user drag offset.
+
+### Mobile Improvements
+
+- **Gallery A/V Playback Fixed** — `data:`→`blob:` URL conversion in `openLightbox()` enables native Android WebView playback of base64-encoded media.
+- **Real-Time Profile Overlay Refresh** — Beacon handlers call `refreshProfileOverlay()` so profile cards update immediately on friend changes.
+- **Immersive Mode** — `MainActivity.java` `enableImmersiveMode()` hides system bars on full-screen content (Android 7+).
+- **Input Box Draft Saving** — Chat draft auto-saved to `localStorage` (debounced 300ms), restored on chat switch, cleared on send.
+
+### Desktop Improvements
+
+- **Real-Time Profile Card Updates** — `profile-card.js` watches `friends` array — open cards re-render when friend avatar/name/bio updates via beacon.
+- **Receiving Audio/Video Progress** — File transfers show `"Receiving Audio..."` or `"Receiving Video..."` with appropriate Lucide icons based on extension detection.
+- **Input Box Draft Saving** — Same `localStorage` draft save/restore/clear pattern, cross-session.
+
+### Release Signing & Security
+
+- **GitHub Actions Release Workflow** — 5 parallel build jobs (Linux, Windows, macOS, Android) + sign step that generates `SHA256SUMS.txt`, GPG-signs it, and uploads everything to a GitHub Release on tag push.
+- **GPG Signing** — Release artifacts verified with Orbit Release Key. Key setup docs in `security/README.md`.
+- **Security Policy** — `SECURITY.md` with supported versions and vulnerability reporting.
+- **Verification Docs** — README.md "Release Verification" section with copy-paste commands.
+
+## v0.2.9-beta
 
 > **Note:** This is not a stable release — latest development version with experimental features.
 

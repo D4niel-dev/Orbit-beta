@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v029-beta-latest-version">v0.2.9-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v030-beta-latest-version">v0.3.0-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@
 
 | Channel | Version | Status |
 |---------|---------|--------|
-| *Development* | v0.2.9-beta | Latest Build |
+| *Development* | v0.3.0-beta | Latest Build |
 | **Stable** | v0.2.7-beta | Stable release |
 | Previous **Stable** | v0.1.1-beta | Legacy stable release |
 
@@ -424,6 +424,17 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Experimental Card Icon Fixed** — `flask` renamed to `flask-conical` (Lucide v1.17.0 rename) so the icon renders correctly on mobile.
 - **Version bumped to v0.2.9-beta** across all manifests. Android web assets synced via `npx cap sync android`.
 </details>
+<details open>
+<summary>v0.3.0-beta</summary>
+
+- **Image Cropper (Desktop + Mobile)** — `shared/ui/image-cropper.js` with drag, zoom, rotate, mirror, reset. Avatar circular crop guide with three-level SVG mask. Integrated into desktop settings and mobile profile sheet.
+- **Mobile Gallery A/V Playback Fixed** — `data:`→`blob:` URL conversion for native Android WebView playback.
+- **Real-Time Profile Card Updates** — Beacon handlers on both platforms refresh profile overlays/cards instantly on friend changes.
+- **Android Immersive Mode** — System bars auto-hide on full-screen content (Android 7+).
+- **Desktop "Receiving Audio/Video..."** — Transfer progress now shows file-type-specific labels and Lucide icons.
+- **Input Box Draft Saving (Both Platforms)** — Chat drafts persisted in `localStorage`, restored on chat switch, cleared on send.
+- **Release Signing Infrastructure** — GitHub Actions release workflow, GPG-signed SHA256SUMS.txt, `SECURITY.md`, and release verification documentation.
+</details>
 
 See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
@@ -548,6 +559,36 @@ Orbit serves **local resources** through privileged custom schemes instead of ex
 
 This keeps the renderer sandboxed while still allowing rich media in chat and the gallery sidebar.
 
+## Release Verification
+
+Every Orbit release since v0.3.0-beta includes cryptographic signatures so you can verify the authenticity and integrity of your download.
+
+### Why verify?
+
+- **Provenance** — confirms the release was created by the official Orbit repository, not an impostor
+- **Integrity** — guarantees the file hasn't been tampered with in transit
+- **Trust** — builds confidence in the software supply chain
+
+### How to verify
+
+```bash
+# 1. Import the Orbit Release public key
+curl -O https://raw.githubusercontent.com/D4niel-dev/Orbit-beta/main/security/public-key.asc
+gpg --import public-key.asc
+
+# 2. Download your release assets (Orbit-v0.3.0-setup.exe, SHA256SUMS.txt, SHA256SUMS.txt.sig)
+
+# 3. Verify the signature on the checksums file
+gpg --verify SHA256SUMS.txt.sig SHA256SUMS.txt
+
+# 4. Verify your downloaded file matches the published checksum
+sha256sum --check SHA256SUMS.txt --ignore-missing
+```
+
+The `--ignore-missing` flag skips checks for files you didn't download, so you can verify a single artifact without downloading everything.
+
+The public key is also available in the [security/](security/) directory of this repository.
+
 ## Configuration
 
 Orbit stores settings and the database under your OS user data directory (Electron `userData`). There is no `.env` required for normal use.
@@ -582,13 +623,20 @@ Transparency matters in beta. Current constraints include:
 
 ## Roadmap
 
-### Shipped (v0.2.9-beta)
+### Shipped (v0.3.0-beta)
 
 - **Mobile App Zoom Slider** — Zoom slider (50–200%) in Appearance settings
 - **Mobile Light Mode Safety** — Flashbang warning dialog on Light theme + "Disable Light Mode Flashbang" toggle
 - **Mobile GitHub Links** — Repository and Issue links in About
 - **Desktop Global Gallery Layout Fix** — Scroll wrapper isolation for all display modes
 - **Experimental Card Icon Fixed** — `flask` → `flask-conical` Lucide rename
+- **Image Cropper** — Shared image cropper with drag, zoom, rotate, mirror for avatar/banner (desktop + mobile)
+- **Gallery A/V Playback Fix** — base64→blob conversion for Android WebView
+- **Real-Time Profile Cards** — Instant overlay/card refresh on friend changes (both platforms)
+- **Android Immersive Mode** — Full-screen system bar hiding
+- **Receiving Audio/Video Progress** — Desktop transfer type labels
+- **Input Box Draft Saving** — Chat drafts persisted across sessions (both platforms)
+- **Release Signing** — GPG-signed SHA256SUMS.txt, GitHub Actions automation, security policy
 
 ### In Progress / Planned
 
