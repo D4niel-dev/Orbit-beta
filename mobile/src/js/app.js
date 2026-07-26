@@ -4675,8 +4675,8 @@ document.addEventListener('DOMContentLoaded', function() {
     function saveProfileChanges() {
       var username = document.getElementById('edit-username').value.trim();
       var bio = document.getElementById('edit-bio').value.trim();
-      var avatar = document.getElementById('edit-avatar').value.trim();
-      var banner = document.getElementById('edit-banner').value.trim();
+      var avatar = document.getElementById('edit-avatar-sheet').value.trim();
+      var banner = document.getElementById('edit-banner-sheet').value.trim();
       if (!username) { showToast('Username cannot be empty', 'info'); return false; }
       MStore.user.name = username;
       MStore.user.bio = bio;
@@ -4687,6 +4687,7 @@ document.addEventListener('DOMContentLoaded', function() {
       renderSettings();
       renderFriends();
       renderChatList();
+      renderProfile();
       // Broadcast updated profile to all connected peers in real time
       if (window.Orbit && window.Orbit.P2P && Orbit.P2P.isAvailable()) {
         var beaconData = buildBeacon().payload;
@@ -4715,6 +4716,35 @@ document.addEventListener('DOMContentLoaded', function() {
         actionBtn.onclick = closeProfileSheet;
       }
       showToast('Profile saved', 'success');
+      // Update hero section banner and avatar display
+      var heroEl = sheet.querySelector('.profile-hero');
+      if (heroEl) {
+        if (avatar) {
+          heroEl.style.backgroundImage = 'url(' + avatar + ')';
+        } else {
+          heroEl.style.backgroundImage = '';
+        }
+      }
+      var avatarWrapper = sheet.querySelector('.profile-avatar-wrapper');
+      if (avatarWrapper) {
+        var img = avatarWrapper.querySelector('img');
+        if (avatar) {
+          if (img) {
+            img.src = avatar;
+          } else {
+            var placeholder = avatarWrapper.querySelector('.avatar-placeholder');
+            if (placeholder) {
+              placeholder.outerHTML = '<img src="' + escapeHtml(avatar) + '">';
+            } else {
+              avatarWrapper.innerHTML = '<img src="' + escapeHtml(avatar) + '">' + avatarWrapper.querySelector('.pfp-frame' || '');
+            }
+          }
+        } else {
+          // No avatar — show placeholder
+          var newInitial = (MStore.user.name || '?').charAt(0).toUpperCase();
+          avatarWrapper.innerHTML = '<div class="avatar-placeholder">' + newInitial + '</div>' + (avatarWrapper.querySelector('.pfp-frame') ? avatarWrapper.querySelector('.pfp-frame').outerHTML : '');
+        }
+      }
       return true;
     }
 
@@ -4734,14 +4764,14 @@ document.addEventListener('DOMContentLoaded', function() {
         '<div class="profile-field">' +
           '<label class="profile-field-label">Avatar URL</label>' +
           '<div class="profile-input-row">' +
-            '<input class="profile-input" id="edit-avatar" value="' + escapeHtml(u.avatar || '') + '" placeholder="https://example.com/avatar.jpg">' +
+            '<input class="profile-input" id="edit-avatar-sheet" value="' + escapeHtml(u.avatar || '') + '" placeholder="https://example.com/avatar.jpg">' +
             '<button id="btn-pick-avatar" class="profile-image-pick-btn" type="button" title="Choose from gallery"><i data-lucide="image" style="width:18px;height:18px;"></i></button>' +
           '</div>' +
         '</div>' +
         '<div class="profile-field" style="border:none;margin-bottom:0;">' +
           '<label class="profile-field-label">Banner URL</label>' +
           '<div class="profile-input-row">' +
-            '<input class="profile-input" id="edit-banner" value="' + escapeHtml(u.banner || '') + '" placeholder="https://example.com/banner.jpg">' +
+            '<input class="profile-input" id="edit-banner-sheet" value="' + escapeHtml(u.banner || '') + '" placeholder="https://example.com/banner.jpg">' +
             '<button id="btn-pick-banner" class="profile-image-pick-btn" type="button" title="Choose from gallery"><i data-lucide="image" style="width:18px;height:18px;"></i></button>' +
           '</div>' +
         '</div>' +
@@ -4794,7 +4824,7 @@ document.addEventListener('DOMContentLoaded', function() {
             title: isAvatar ? 'Crop Avatar' : 'Crop Banner'
           }, function(result) {
             if (result) {
-              var input = document.getElementById(isAvatar ? 'edit-avatar' : 'edit-banner');
+              var input = document.getElementById(isAvatar ? 'edit-avatar-sheet' : 'edit-banner-sheet');
               if (input) {
                 input.value = result;
                 checkChanges();
@@ -4819,8 +4849,8 @@ document.addEventListener('DOMContentLoaded', function() {
     function checkChanges() {
       var name = document.getElementById('edit-username').value.trim();
       var bio = document.getElementById('edit-bio').value.trim();
-      var avatar = document.getElementById('edit-avatar').value.trim();
-      var banner = document.getElementById('edit-banner').value.trim();
+      var avatar = document.getElementById('edit-avatar-sheet').value.trim();
+      var banner = document.getElementById('edit-banner-sheet').value.trim();
       var changed = name !== _origName || bio !== _origBio || avatar !== _origAvatar || banner !== _origBanner;
       if (changed !== _hasUnsavedChanges) {
         _hasUnsavedChanges = changed;
@@ -4844,11 +4874,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Wire input listeners for change detection
     document.getElementById('edit-username').addEventListener('input', checkChanges);
     document.getElementById('edit-bio').addEventListener('input', checkChanges);
-    document.getElementById('edit-avatar').addEventListener('input', checkChanges);
-    document.getElementById('edit-banner').addEventListener('input', checkChanges);
+    document.getElementById('edit-avatar-sheet').addEventListener('input', checkChanges);
+    document.getElementById('edit-banner-sheet').addEventListener('input', checkChanges);
 
     // Enter key in avatar/banner inputs opens cropper
-    document.getElementById('edit-avatar').addEventListener('keydown', function(e) {
+    document.getElementById('edit-avatar-sheet').addEventListener('keydown', function(e) {
       if (e.key === 'Enter') {
         e.preventDefault();
         var val = this.value.trim();
@@ -4858,7 +4888,7 @@ document.addEventListener('DOMContentLoaded', function() {
               aspectRatio: 1, cropWidth: 300, cropHeight: 300, title: 'Crop Avatar'
             }, function(result) {
               if (result) {
-                document.getElementById('edit-avatar').value = result;
+                document.getElementById('edit-avatar-sheet').value = result;
                 checkChanges();
               }
             });
@@ -4866,7 +4896,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       }
     });
-    document.getElementById('edit-banner').addEventListener('keydown', function(e) {
+    document.getElementById('edit-banner-sheet').addEventListener('keydown', function(e) {
       if (e.key === 'Enter') {
         e.preventDefault();
         var val = this.value.trim();
@@ -4876,7 +4906,7 @@ document.addEventListener('DOMContentLoaded', function() {
               aspectRatio: 3, cropWidth: 600, cropHeight: 200, title: 'Crop Banner'
             }, function(result) {
               if (result) {
-                document.getElementById('edit-banner').value = result;
+                document.getElementById('edit-banner-sheet').value = result;
                 checkChanges();
               }
             });
