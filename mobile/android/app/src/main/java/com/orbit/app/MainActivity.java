@@ -19,12 +19,14 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         // Install splash screen BEFORE super.onCreate() — prevents splash exit from re-showing bars
         SplashScreen splashScreen = SplashScreen.installSplashScreen(this);
-        splashScreen.setKeepOnScreenCondition(() -> false);
+        if (splashScreen != null) {
+            splashScreen.setKeepOnScreenCondition(() -> false);
+        }
+
+        // Register plugin BEFORE super.onCreate() — known requirement from v0.0.9.1-beta fix
+        registerPlugin(OrbitP2PPlugin.class);
 
         super.onCreate(savedInstanceState);
-
-        // Register plugin AFTER super.onCreate() (Capacitor best practice)
-        registerPlugin(OrbitP2PPlugin.class);
 
         enableImmersiveMode();
         createNotificationChannels();
