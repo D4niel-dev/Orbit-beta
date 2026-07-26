@@ -4726,6 +4726,26 @@ document.addEventListener('DOMContentLoaded', function() {
           pillAvatar.innerHTML = newName.charAt(0).toUpperCase();
         }
       }
+      // Update profile frame in the pill
+      var frameNum = getProfileFrame(MStore.settings);
+      var pillFrame = pillAvatar ? pillAvatar.parentNode.querySelector('.pfp-frame') : null;
+      if (frameNum > 0) {
+        if (!pillFrame) {
+          pillFrame = document.createElement('img');
+          pillFrame.className = 'pfp-frame';
+          pillFrame.draggable = false;
+          pillFrame.alt = '';
+          pillFrame.style.cssText = 'position:absolute;top:-1px;left:-1px;pointer-events:none;';
+          if (pillAvatar) {
+            pillAvatar.parentNode.appendChild(pillFrame);
+          }
+        }
+        if (pillFrame) {
+          pillFrame.src = 'icons/frames/pfp_frame_' + frameNum + '.png';
+        }
+      } else if (pillFrame) {
+        pillFrame.remove();
+      }
       var pillName = document.getElementById('profile-pill-name');
       if (pillName) {
         pillName.textContent = MStore.user.name || 'User';
