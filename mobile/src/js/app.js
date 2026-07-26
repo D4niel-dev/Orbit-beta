@@ -4715,12 +4715,27 @@ document.addEventListener('DOMContentLoaded', function() {
         actionBtn.style.background = 'rgba(0,0,0,0.2)';
         actionBtn.onclick = closeProfileSheet;
       }
+      // Update the floating profile pill
+      var pillAvatar = document.getElementById('profile-pill-avatar');
+      if (pillAvatar) {
+        var newAvatar = MStore.user.avatar;
+        var newName = MStore.user.name || 'User';
+        if (newAvatar) {
+          pillAvatar.innerHTML = '<img src="' + escapeHtml(newAvatar) + '" alt="">';
+        } else {
+          pillAvatar.innerHTML = newName.charAt(0).toUpperCase();
+        }
+      }
+      var pillName = document.getElementById('profile-pill-name');
+      if (pillName) {
+        pillName.textContent = MStore.user.name || 'User';
+      }
       showToast('Profile saved', 'success');
       // Update hero section banner and avatar display
       var heroEl = sheet.querySelector('.profile-hero');
       if (heroEl) {
         if (avatar) {
-          heroEl.style.backgroundImage = 'url(' + avatar + ')';
+          heroEl.style.backgroundImage = 'url(' + banner + ')';
         } else {
           heroEl.style.backgroundImage = '';
         }
@@ -4828,6 +4843,32 @@ document.addEventListener('DOMContentLoaded', function() {
               if (input) {
                 input.value = result;
                 checkChanges();
+                // Also update the hero preview in real-time
+                var heroEl = sheet.querySelector('.profile-hero');
+                if (isAvatar) {
+                  // Update avatar in hero
+                  var avatarWrapper = sheet.querySelector('.profile-avatar-wrapper');
+                  if (avatarWrapper) {
+                    var img = avatarWrapper.querySelector('img');
+                    if (img) {
+                      img.src = result;
+                    } else {
+                      var ph = avatarWrapper.querySelector('.avatar-placeholder');
+                      var frameEl = avatarWrapper.querySelector('.pfp-frame');
+                      var frameStr = frameEl ? frameEl.outerHTML : '';
+                      if (ph) {
+                        ph.outerHTML = '<img src="' + result.replace(/"/g, '&quot;') + '">';
+                      } else {
+                        avatarWrapper.innerHTML = '<img src="' + result.replace(/"/g, '&quot;') + '">' + frameStr;
+                      }
+                    }
+                  }
+                } else {
+                  // Update banner in hero
+                  if (heroEl) {
+                    heroEl.style.backgroundImage = 'url(' + result + ')';
+                  }
+                }
               }
             }
           });
@@ -4929,6 +4970,28 @@ document.addEventListener('DOMContentLoaded', function() {
         updateNavAvatar();
         renderChatList();
         renderFriends();
+        // Update hero section frame
+        var heroFrame = sheet.querySelector('.profile-avatar-wrapper .pfp-frame');
+        var frameNum = parseInt(this.value, 10) || 0;
+        if (frameNum > 0) {
+          if (heroFrame) {
+            heroFrame.src = 'icons/frames/pfp_frame_' + frameNum + '.png';
+          } else {
+            // Create new frame img
+            var aw = sheet.querySelector('.profile-avatar-wrapper');
+            if (aw) {
+              var newFrame = document.createElement('img');
+              newFrame.className = 'pfp-frame';
+              newFrame.style.cssText = 'position:absolute;top:-15%;left:-17%;pointer-events:none;';
+              newFrame.draggable = false;
+              newFrame.alt = '';
+              newFrame.src = 'icons/frames/pfp_frame_' + frameNum + '.png';
+              aw.appendChild(newFrame);
+            }
+          }
+        } else {
+          if (heroFrame) heroFrame.remove();
+        }
       });
     }
 
