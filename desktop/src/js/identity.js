@@ -142,6 +142,12 @@ window.Identity = {
 
     this.save(newState);
     window.store.setState({ currentUser: newState });
+
+    // Broadcast updated profile to all connected peers in real time
+    if (window.orbitAPI && window.orbitAPI.broadcastBeacon) {
+      window.orbitAPI.broadcastBeacon(newState);
+    }
+
     return newState;
   }
 };

@@ -14,7 +14,24 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.3.0-beta', 'Latest', [
+        versionBlock('0.3.1-beta', 'Latest', [
+          ['Bug Fixes', [
+            'Android Immersive Mode Fixed — Taskbar now hides correctly. Root cause: Capacitor SystemBars plugin was calling show() after immersive mode. Fixed with SystemBars config, SplashScreen API, lifecycle handlers, and FLAG_FULLSCREEN for legacy API levels.',
+            'Real-Time Profile Cards Fixed — Avatar/banner/bio/frame changes now propagate instantly. Desktop added broadcastBeacon IPC bridge; mobile sends BEACON on profile save; both platforms fixed null-propagation checks.',
+            'DM Avatar Render Fix — No more missing avatars during rapid chat switching. closeChat/openChat race condition fixed, dm_ prefix stripped from friend lookup.',
+            'Mobile Startup Performance — Lazy message loading, early-exit blob restoration, deferred cropper init.'
+          ]],
+          ['UI Polish', [
+            'Image Cropper Redesigned — Premium look with Lucide icons, checkerboard preview, rule-of-thirds grid, corner handles, gradient Apply button, and smooth entrance animations.',
+            'Smooth Zoom — Finer zoom steps (0.01 slider, 5% buttons, 2% scroll), GPU-accelerated sub-pixel positioning.',
+            'Bottom Sheet Safe Area Cleaned — Removed safe-area-bottom padding from all bottom sheets.'
+          ]],
+          ['Technical', [
+            'Version bumped to v0.3.1-beta across all manifests.',
+            'Android web assets synced via npx cap sync android.'
+          ]]
+        ]) +
+        versionBlock('0.3.0-beta', '', [
           ['Image Cropper (Desktop + Mobile)', [
             'Shared Image Cropper — New crop tool with drag, zoom (slider + pinch + wheel), rotate 90° CW/CCW, mirror, and reset. Integrated into desktop avatar/banner inputs and mobile profile sheet.',
             'Avatar Circular Crop Guide — Three-level SVG mask with dimmed corners and transparent circle for precise avatar framing.',

@@ -44,7 +44,9 @@ import java.util.concurrent.Executors;
 public class OrbitForegroundService extends Service {
 
     private static final String TAG = "OrbitFgService";
-    private static final String CHANNEL_ID = "orbit_service";
+    public static final String CHANNEL_ID = "orbit_service";
+    public static final String ACTION_START = "com.orbit.app.START_FOREGROUND";
+    public static final String ACTION_STOP = "com.orbit.app.STOP_FOREGROUND";
     private static final int NOTIFICATION_ID = 1;
     private static final int TCP_BUFFER_SIZE = 4194304;
     private static final String MULTICAST_ADDR = "224.0.0.251";
@@ -91,6 +93,11 @@ public class OrbitForegroundService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.d(TAG, "onStartCommand");
         if (intent != null) {
+            String action = intent.getAction();
+            if (ACTION_STOP.equals(action)) {
+                stopSelf();
+                return START_NOT_STICKY;
+            }
             int newTcpPort = intent.getIntExtra("tcpPort", 46000);
             int newUdpPort = intent.getIntExtra("udpPort", DISCOVERY_PORT);
             if (newTcpPort != tcpPort) { tcpPort = newTcpPort; }

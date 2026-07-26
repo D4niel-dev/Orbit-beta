@@ -305,6 +305,7 @@
       ctrl.appendChild(moreBtn);
       var videoBox = document.createElement('div');
       videoBox.className = 'ovp-video-box';
+      videoBox.style.touchAction = 'manipulation';
       videoBox.appendChild(loadingOverlay);
       // Center overlay controls (backward, play/pause, forward) — fade in/out on click
       var centerOverlay = document.createElement('div');
@@ -339,6 +340,7 @@
         video.currentTime = Math.max(0, Math.min(d, video.currentTime + secs));
       }
       var _centerOverlayTimer = null;
+      var _touchTap = false; // flag: touchstart already handled the toggle, skip click
       function _showCenterOverlay() {
         if (!video) return;
         centerOverlay.classList.add('visible');
@@ -745,8 +747,25 @@
       centerPlayBtn.addEventListener('click', function(e) { e.stopPropagation(); if (!video || video.paused) doPlay(); else doPause(); _showCenterOverlay(); });
       fwdBtn.addEventListener('click', function(e) { e.stopPropagation(); seekRelative(10); _showCenterOverlay(); });
       
+      // Touch to toggle center overlay immediately (bypasses 300ms mobile tap delay)
+      videoBox.addEventListener('touchstart', function(e) {
+        if (e.target.closest('.ovp-loading')) return;
+        if (e.target.closest('.ovp-center-btn')) return;
+        if (e.target.closest('.ovp-ctrl')) return;
+        if (e.target.closest('.ovp-seek')) return;
+        _touchTap = true;
+        if (centerOverlay.classList.contains('visible')) {
+          _hideCenterOverlay();
+        } else {
+          _showCenterOverlay();
+        }
+        // Reset flag after a short window — covers touchcancel / no-click scenarios
+        setTimeout(function() { _touchTap = false; }, 400);
+      });
       // Click video to toggle center overlay
       videoBox.addEventListener('click', function(e) {
+        // If touchstart already handled this tap, skip to avoid destructive toggle
+        if (_touchTap) { _touchTap = false; return; }
         if (e.target.closest('.ovp-loading')) return;
         if (e.target.closest('.ovp-center-btn')) return;
         if (e.target.closest('.ovp-ctrl')) return;

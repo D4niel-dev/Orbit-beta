@@ -397,6 +397,10 @@ window.SettingsModal = {
             var updated = { ...cu, profileFrame: val || null };
             window.store.setState({ currentUser: updated });
             if (window.orbitAPI) window.orbitAPI.dbSaveUser(updated);
+            // Broadcast profile frame change to connected peers in real time
+            if (window.orbitAPI && window.orbitAPI.broadcastBeacon) {
+              window.orbitAPI.broadcastBeacon(updated);
+            }
           }
         }
       };

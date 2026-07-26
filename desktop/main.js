@@ -1099,6 +1099,21 @@ app.whenReady().then(() => {
     }
   });
 
+  ipcMain.on('broadcast-beacon', (event, identity) => {
+    if (identity) {
+      currentIdentity = identity;
+    }
+    // Send BEACON over all connected TCP sockets so peers get updated profile data in real time
+    if (socketInstance) {
+      socketInstance.connections.forEach((socket, peerId) => {
+        if (!socket.destroyed) {
+          socketInstance.sendBeacon(socket);
+        }
+      });
+    }
+    // UDP discovery runs on a 5s interval and will pick up the new currentIdentity automatically
+  });
+
   // Open Graph metadata fetch for link previews
   ipcMain.handle('fetch-og', async (event, url) => {
     try {

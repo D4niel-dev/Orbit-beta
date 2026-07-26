@@ -736,7 +736,7 @@ document.addEventListener('DOMContentLoaded', () => {
           var friends = state.friends.map(function(f) {
             if (f.userId === (packet.from || bp.userId)) {
               var updated = { ...f, lastSeen: Date.now(), status: bp.status || f.status };
-              if (bp.avatar) updated.avatar = bp.avatar;
+              if (bp.avatar !== undefined) updated.avatar = bp.avatar;
               if (bp.banner !== undefined) updated.banner = bp.banner;
               if (bp.bio !== undefined) updated.bio = bp.bio;
               if (bp.profileFrame !== undefined) updated.profileFrame = bp.profileFrame;

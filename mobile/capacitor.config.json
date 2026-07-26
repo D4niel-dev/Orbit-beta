@@ -10,6 +10,9 @@
     "SplashScreen": {
       "launchShowDuration": 2000,
       "backgroundColor": "#1e1e2e"
+    },
+    "SystemBars": {
+      "hidden": true
     }
   }
 }

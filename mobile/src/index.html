@@ -311,7 +311,6 @@
   <script src="shared/network/p2p-mobile.js"></script>
   <script src="shared/ui/audio-player.js?v=20260719a"></script>
   <script src="shared/ui/video-player.js?v=20260719a"></script>
-  <script src="shared/ui/image-cropper.js?v=20260724"></script>
   <script src="shared/database/index.js"></script>
   <script src="shared/database/sqlite-mobile.js"></script>
 
@@ -324,6 +323,28 @@
   <script src="js/store.js?v=20260719a"></script>
 
   <script src="js/components/bottom-sheet.js?v=20260727"></script>
+
+  <!-- Lazy-load image cropper (defined early so app.js can use it; loads async after startup) -->
+  <script>
+  window._loadImageCropper = function _loadImageCropper(callback) {
+    if (window.ImageCropper) { if (callback) callback(); return; }
+    if (window._imageCropperLoading) {
+      var _check = setInterval(function() {
+        if (window.ImageCropper) { clearInterval(_check); if (callback) callback(); }
+      }, 50);
+      return;
+    }
+    window._imageCropperLoading = true;
+    var s = document.createElement('script');
+    s.src = 'shared/ui/image-cropper.js?v=20260724';
+    s.async = true;
+    s.onload = function() { window._imageCropperLoading = false; if (callback) callback(); };
+    s.onerror = function() { window._imageCropperLoading = false; };
+    document.body.appendChild(s);
+  };
+  // Start loading cropper after a short delay so critical rendering finishes first
+  setTimeout(function() { window._loadImageCropper(); }, 1500);
+  </script>
 
   <script src="js/app.js?v=20260727"></script>
 

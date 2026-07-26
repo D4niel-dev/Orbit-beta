@@ -8,6 +8,8 @@ import android.os.Bundle;
 import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
+import android.view.WindowManager;
+import androidx.core.splashscreen.SplashScreen;
 import com.getcapacitor.BridgeActivity;
 import com.orbit.app.plugins.OrbitP2PPlugin;
 import com.orbit.app.services.OrbitForegroundService;
@@ -15,21 +17,48 @@ import com.orbit.app.services.OrbitForegroundService;
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        registerPlugin(OrbitP2PPlugin.class);
+        // Install splash screen BEFORE super.onCreate() — prevents splash exit from re-showing bars
+        SplashScreen splashScreen = SplashScreen.installSplashScreen(this);
+        splashScreen.setKeepOnScreenCondition(() -> false);
+
         super.onCreate(savedInstanceState);
+
+        // Register plugin AFTER super.onCreate() (Capacitor best practice)
+        registerPlugin(OrbitP2PPlugin.class);
+
         enableImmersiveMode();
         createNotificationChannels();
         startForegroundService();
     }
 
+    @Override
+    public void onResume() {
+        super.onResume();
+        enableImmersiveMode();
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) {
+            enableImmersiveMode();
+        }
+    }
+
     private void enableImmersiveMode() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // API 30+ — modern WindowInsetsController API
             getWindow().setDecorFitsSystemWindows(false);
-            getWindow().getInsetsController().hide(WindowInsets.Type.systemBars());
-            getWindow().getInsetsController().setSystemBarsBehavior(
-                WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            );
+            WindowInsetsController controller = getWindow().getInsetsController();
+            if (controller != null) {
+                controller.hide(WindowInsets.Type.systemBars());
+                controller.setSystemBarsBehavior(
+                    WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                );
+            }
         } else {
+            // API 24-29 — legacy SYSTEM_UI_FLAG approach
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
             getWindow().getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
                 | View.SYSTEM_UI_FLAG_FULLSCREEN
@@ -43,40 +72,48 @@ public class MainActivity extends BridgeActivity {
 
     private void createNotificationChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel messages = new NotificationChannel(
-                "orbit_messages",
-                "Messages",
-                NotificationManager.IMPORTANCE_HIGH
-            );
-            messages.setDescription("New messages from friends and groups");
-            messages.enableVibration(true);
-            messages.setShowBadge(true);
-
-            NotificationChannel general = new NotificationChannel(
-                "orbit_general",
-                "General",
-                NotificationManager.IMPORTANCE_DEFAULT
-            );
-            general.setDescription("Group invites and other notifications");
-
-            NotificationManager nm = getSystemService(NotificationManager.class);
-            if (nm != null) {
-                nm.createNotificationChannel(messages);
-                nm.createNotificationChannel(general);
+            try {
+                var serviceChannel = new NotificationChannel(
+                    OrbitForegroundService.CHANNEL_ID,
+                    "Orbit P2P Service",
+                    NotificationManager.IMPORTANCE_LOW
+                );
+                serviceChannel.setDescription("Keeps Orbit connected in the background");
+                var manager = getSystemService(NotificationManager.class);
+                if (manager != null) {
+                    manager.createNotificationChannel(serviceChannel);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
             }
         }
     }
 
     private void startForegroundService() {
         try {
-            Intent intent = new Intent(this, OrbitForegroundService.class);
+            var serviceIntent = new Intent(this, OrbitForegroundService.class);
+            serviceIntent.setAction(OrbitForegroundService.ACTION_START);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(intent);
+                startForegroundService(serviceIntent);
             } else {
-                startService(intent);
+                startService(serviceIntent);
             }
         } catch (Exception e) {
-            android.util.Log.e("MainActivity", "Failed to start foreground service", e);
+            e.printStackTrace();
+        }
+    }
+
+    private void stopForegroundService() {
+        try {
+            var serviceIntent = new Intent(this, OrbitForegroundService.class);
+            serviceIntent.setAction(OrbitForegroundService.ACTION_STOP);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent);
+            } else {
+                startService(serviceIntent);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 }

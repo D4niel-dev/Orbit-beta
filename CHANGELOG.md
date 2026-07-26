@@ -1,6 +1,29 @@
 # Orbit Changelog
 
-## v0.3.0-beta **(Latest Version)**
+## v0.3.1-beta **(Latest Version)**
+
+> **Note:** This is not a stable release — latest development version with experimental features.
+
+### Bug Fixes
+
+- **Android Immersive Mode Fixed** — Taskbar now correctly hides on all Android versions. Root cause: Capacitor's SystemBars plugin was calling `show()` after immersive mode. Fixed by adding `SystemBars.hidden: true` to Capacitor config, installing SplashScreen API, adding `onResume()`/`onWindowFocusChanged()` lifecycle handlers, null-safe `getInsetsController()`, and proper `FLAG_FULLSCREEN` for legacy API levels.
+- **Real-Time Profile Card Updates Fixed** — Profile cards now properly update when a friend changes their avatar, banner, bio, or profile frame. Fixed 4 bugs: desktop never broadcast a BEACON after profile changes (added `broadcastBeacon` IPC bridge), mobile `saveProfileChanges()` never sent a BEACON to peers (now sends `Orbit.P2P.send()`), both platforms used truthy checks (`if (bp.avatar)`) that blocked null propagation for removed avatars/banners.
+- **Mobile Startup Performance Improved** — No longer loads all chat messages into memory at startup (only loads last active chat). Blob restoration exits early when no `_blobKey` entries exist. Image cropper lazy-loaded instead of blocking parser.
+- **DM Avatar Rendering on Quick Switch Fixed** — `closeChat()` timeout no longer strips `open`/`active` classes after `openChat()` sets them. Friend lookup now strips `dm_` prefix from chatId.
+
+### UI Polish
+
+- **Image Cropper Redesigned** — Modern premium look with Lucide icons, checkerboard preview background, rule-of-thirds grid, corner handles, gradient Apply button, smooth entrance animations.
+- **Removed Decorative Rings from Avatar Crop** — Clean minimal look: just a sharp white circle border, no spinning/dashing/glowing rings.
+- **Smooth Zoom for Cropper** — Finer zoom steps (slider 0.01, buttons 5%, scroll 2%), GPU-accelerated sub-pixel image positioning.
+- **Bottom Sheet Safe Area Cleaned** — Removed `var(--safe-area-bottom)` padding from all bottom sheets (no longer needed with working immersive mode).
+
+### Technical
+
+- **Version:** Bumped to v0.3.1-beta across all manifests.
+- **Android Sync:** `npx cap sync android` completed — web assets synced to Capacitor Android project.
+
+## v0.3.0-beta
 
 > **Note:** This is not a stable release — latest development version with experimental features.
 

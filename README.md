@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v030-beta-latest-version">v0.3.0-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v031-beta-latest-version">v0.3.1-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@
 
 | Channel | Version | Status |
 |---------|---------|--------|
-| *Development* | v0.3.0-beta | Latest Build |
+| *Development* | v0.3.1-beta | Latest Build |
 | **Stable** | v0.2.7-beta | Stable release |
 | Previous **Stable** | v0.1.1-beta | Legacy stable release |
 
@@ -90,13 +90,13 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage desktop app** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
-## Highlights (v0.2.9-beta)
+## Highlights (v0.3.1-beta)
 
-- **Mobile App Zoom Slider** — Zoom slider (50–200%) in Appearance → Text & Layout to match desktop functionality.
-- **Mobile Light Mode Safety** — One-time flashbang warning dialog when switching to a Light theme, with configurable "Disable Light Mode Flashbang" toggle in Appearance.
-- **Mobile GitHub Links** — "GitHub Repository" and "Report an Issue" links added to About section.
-- **Desktop Global Gallery Layout Fix** — Scroll wrapper separated from layout container for grid/compact/masonry/list display modes — no more layout breaks with >10–20 items.
-- **Experimental Card Icon Fixed** — `flask` renamed to `flask-conical` (Lucide v1.17.0 rename) so the Experimental card icon renders correctly on mobile.
+- **Android Immersive Mode Fixed** — Taskbar now hides correctly across all Android versions. Capacitor SystemBars conflict resolved with lifecycle handlers and proper flags.
+- **Real-Time Profile Card Updates Fixed** — Avatar, banner, bio, and profile frame changes now propagate instantly to peers. BEACON broadcast added to both desktop and mobile save paths.
+- **Image Cropper Redesigned** — Premium UI with Lucide icons, checkerboard preview, corner handles, rule-of-thirds grid. Smoother zoom with sub-pixel positioning.
+- **Mobile Performance** — Faster startup via lazy message loading, early-exit blob checks, and deferred cropper initialization.
+- **DM Avatar Render Fix** — No more missing avatars during rapid chat switching.
 
 ## Version History
 <details>
@@ -424,7 +424,7 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Experimental Card Icon Fixed** — `flask` renamed to `flask-conical` (Lucide v1.17.0 rename) so the icon renders correctly on mobile.
 - **Version bumped to v0.2.9-beta** across all manifests. Android web assets synced via `npx cap sync android`.
 </details>
-<details open>
+<details>
 <summary>v0.3.0-beta</summary>
 
 - **Image Cropper (Desktop + Mobile)** — `shared/ui/image-cropper.js` with drag, zoom, rotate, mirror, reset. Avatar circular crop guide with three-level SVG mask. Integrated into desktop settings and mobile profile sheet.
@@ -434,6 +434,16 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Desktop "Receiving Audio/Video..."** — Transfer progress now shows file-type-specific labels and Lucide icons.
 - **Input Box Draft Saving (Both Platforms)** — Chat drafts persisted in `localStorage`, restored on chat switch, cleared on send.
 - **Release Signing Infrastructure** — GitHub Actions release workflow, GPG-signed SHA256SUMS.txt, `SECURITY.md`, and release verification documentation.
+</details>
+<details open>
+<summary>v0.3.1-beta</summary>
+
+- **Android Immersive Mode Fixed** — Taskbar now hides correctly across all Android versions. Capacitor SystemBars conflict resolved, lifecycle handlers added.
+- **Real-Time Profile Card Updates Fixed** — Avatar/banner/bio/frame changes now propagate instantly to peers. BEACON broadcast added to both desktop and mobile save paths.
+- **Image Cropper Redesigned** — Premium UI with Lucide icons, checkerboard preview, corner handles, rule-of-thirds grid. Smoother zoom with sub-pixel positioning and finer steps.
+- **Mobile Performance** — Faster startup (lazy message loading, early-exit blob check, deferred cropper load).
+- **DM Avatar Render Fix** — No more missing avatars during rapid chat switching.
+- **Bottom Sheet Cleanup** — Removed safe-area padding (no longer needed with immersive mode).
 </details>
 
 See [CHANGELOG.md](CHANGELOG.md) for the full version history.
@@ -576,7 +586,7 @@ Every Orbit release since v0.3.0-beta includes cryptographic signatures so you c
 curl -O https://raw.githubusercontent.com/D4niel-dev/Orbit-beta/main/security/public-key.asc
 gpg --import public-key.asc
 
-# 2. Download your release assets (Orbit-v0.3.0-setup.exe, SHA256SUMS.txt, SHA256SUMS.txt.sig)
+# 2. Download your release assets (Orbit-v0.3.1-setup.exe, SHA256SUMS.txt, SHA256SUMS.txt.sig)
 
 # 3. Verify the signature on the checksums file
 gpg --verify SHA256SUMS.txt.sig SHA256SUMS.txt
@@ -623,20 +633,15 @@ Transparency matters in beta. Current constraints include:
 
 ## Roadmap
 
-### Shipped (v0.3.0-beta)
+### Shipped (v0.3.1-beta)
 
-- **Mobile App Zoom Slider** — Zoom slider (50–200%) in Appearance settings
-- **Mobile Light Mode Safety** — Flashbang warning dialog on Light theme + "Disable Light Mode Flashbang" toggle
-- **Mobile GitHub Links** — Repository and Issue links in About
-- **Desktop Global Gallery Layout Fix** — Scroll wrapper isolation for all display modes
-- **Experimental Card Icon Fixed** — `flask` → `flask-conical` Lucide rename
-- **Image Cropper** — Shared image cropper with drag, zoom, rotate, mirror for avatar/banner (desktop + mobile)
-- **Gallery A/V Playback Fix** — base64→blob conversion for Android WebView
-- **Real-Time Profile Cards** — Instant overlay/card refresh on friend changes (both platforms)
-- **Android Immersive Mode** — Full-screen system bar hiding
-- **Receiving Audio/Video Progress** — Desktop transfer type labels
-- **Input Box Draft Saving** — Chat drafts persisted across sessions (both platforms)
-- **Release Signing** — GPG-signed SHA256SUMS.txt, GitHub Actions automation, security policy
+- **Android Immersive Mode Fixed** — Taskbar properly hidden, Capacitor SystemBars conflict resolved
+- **Real-Time Profile Card Updates** — Avatar/banner/bio/frame changes propagate instantly to peers
+- **Image Cropper Redesign** — Premium Lucide icons, checkerboard preview, corner handles, rule-of-thirds
+- **Smooth Cropper Zoom** — Sub-pixel positioning, finer step values, GPU-accelerated
+- **Mobile Performance** — Lazy message loading, deferred cropper, early blob exit
+- **DM Avatar Fix** — No missing avatars on quick chat switch
+- **Bottom Sheet Cleanup** — Safe-area padding removed
 
 ### In Progress / Planned
 
