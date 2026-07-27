@@ -395,7 +395,7 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - File persistence investigation: root cause found (P2P chats invisible to _restoreAllBlobAttachments at startup)
 - Player file identity enforced (byte-identical across platforms)
 </details>
-<details>
+<details open>
 <summary>v0.2.7-beta (Stable)</summary>
 
 - Video duration: 4-layer fix (backward moov scan, max return priority, durationchange→knownDuration, dur() max safety net)
@@ -437,7 +437,17 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Input Box Draft Saving (Both Platforms)** — Chat drafts persisted in `localStorage`, restored on chat switch, cleared on send.
 - **Release Signing Infrastructure** — GitHub Actions release workflow, GPG-signed SHA256SUMS.txt, `SECURITY.md`, and release verification documentation.
 </details>
-<details open>
+<details>
+<summary>v0.3.1-beta</summary>
+
+- **Android Immersive Mode Fixed** — Taskbar now hides correctly across all Android versions. Capacitor SystemBars conflict resolved, lifecycle handlers added.
+- **Real-Time Profile Card Updates Fixed** — Avatar/banner/bio/frame changes now propagate instantly to peers. BEACON broadcast added to both desktop and mobile save paths.
+- **Image Cropper Redesigned** — Premium UI with Lucide icons, checkerboard preview, corner handles, rule-of-thirds grid. Smoother zoom with sub-pixel positioning and finer steps.
+- **Mobile Performance** — Faster startup (lazy message loading, early-exit blob check, deferred cropper load).
+- **DM Avatar Render Fix** — No more missing avatars during rapid chat switching.
+- **Bottom Sheet Cleanup** — Removed safe-area padding (no longer needed with immersive mode).
+</details>
+<details>
 <summary>v0.3.2-beta</summary>
 
 - **Android Crash-on-Launch Fixed** — SplashScreen theme attributes, plugin lifecycle order fix, missing colors.xml created.
@@ -451,16 +461,6 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Status Text Color Fix** — Profile pill no longer gray on startup. Local `statusColors` map in home-screen.js.
 - **Mobile Search Enhanced** — Categorized results (Chats/Friends/Messages), text highlighting, recent searches (max 5), empty-state prompt on focus.
 - **Search CSS** — New `.search-results-*` and `.recent-search-*` styles in mobile.css.
-</details>
-<details>
-<summary>v0.3.1-beta</summary>
-
-- **Android Immersive Mode Fixed** — Taskbar now hides correctly across all Android versions. Capacitor SystemBars conflict resolved, lifecycle handlers added.
-- **Real-Time Profile Card Updates Fixed** — Avatar/banner/bio/frame changes now propagate instantly to peers. BEACON broadcast added to both desktop and mobile save paths.
-- **Image Cropper Redesigned** — Premium UI with Lucide icons, checkerboard preview, corner handles, rule-of-thirds grid. Smoother zoom with sub-pixel positioning and finer steps.
-- **Mobile Performance** — Faster startup (lazy message loading, early-exit blob check, deferred cropper load).
-- **DM Avatar Render Fix** — No more missing avatars during rapid chat switching.
-- **Bottom Sheet Cleanup** — Removed safe-area padding (no longer needed with immersive mode).
 </details>
 
 See [CHANGELOG.md](CHANGELOG.md) for the full version history.
