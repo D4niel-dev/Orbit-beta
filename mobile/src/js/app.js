@@ -402,7 +402,7 @@ document.addEventListener('DOMContentLoaded', function() {
             var cf = MStore.friends.find(function(f) { return f.id === c.id; });
             var cfNum = cf ? getProfileFrame(cf) : 0;
             if (cfNum > 0) {
-              chatFrameHtml = '<img src="icons/frames/pfp_frame_' + cfNum + '.png" class="pfp-frame" style="position:absolute;top:-15%;left:-17%;pointer-events:none;" draggable="false" alt="">';
+              chatFrameHtml = '<img src="icons/frames/pfp_frame_' + cfNum + '.png" class="pfp-frame" style="position:absolute;top:-13%;left:-13%;width:120%;height:120%;pointer-events:none;object-fit:contain;" draggable="false" alt="">';
             }
           }
         }
@@ -629,7 +629,7 @@ document.addEventListener('DOMContentLoaded', function() {
           frameEl.className = 'pfp-frame';
           frameEl.draggable = false;
           frameEl.alt = '';
-          frameEl.style.cssText = 'position:absolute;top:-15%;left:-17%;pointer-events:none;';
+          frameEl.style.cssText = 'position:absolute;top:-15%;left:-15%;pointer-events:none;';
           _avatarEl.appendChild(frameEl);
           oldFrame = frameEl;
         }
@@ -1058,7 +1058,7 @@ document.addEventListener('DOMContentLoaded', function() {
   };
 
   function getStatusColor(status) {
-    var colors = { online: 'var(--accent-success)', away: 'var(--accent-warning)', busy: 'var(--accent-danger)', offline: 'var(--text-muted)' };
+    var colors = { online: 'var(--accent-success)', away: 'var(--accent-warning)', dnd: 'var(--accent-danger)', invisible: 'var(--text-muted)', offline: 'var(--text-muted)' };
     return colors[status] || 'var(--text-muted)';
   }
 
@@ -2853,7 +2853,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var color = statusColors[f.status] || 'var(--text-muted)';
       var initial = f.name ? f.name.charAt(0).toUpperCase() : '?';
       var fPfNum = getProfileFrame(f);
-      var fPfHtml = fPfNum > 0 ? '<img src="icons/frames/pfp_frame_' + fPfNum + '.png" class="pfp-frame" style="position:absolute;top:-15%;left:-17%;pointer-events:none;" draggable="false" alt="">' : '';
+      var fPfHtml = fPfNum > 0 ? '<img src="icons/frames/pfp_frame_' + fPfNum + '.png" class="pfp-frame" style="position:absolute;top:-16%;left:-16%;pointer-events:none;" draggable="false" alt="">' : '';
       html += '<div class="list-row friend-row" data-friend="' + f.id + '">' +
         '<div class="chat-row-avatar-wrapper" style="width:44px;height:44px;">' +
           '<div class="chat-row-avatar" style="width:44px;height:44px;font-size:16px;">' + (f.avatar ? '<img src="' + escapeHtml(f.avatar) + '">' : initial) + '</div>' +
@@ -2924,7 +2924,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var sPfNum = 0;
     try { sPfNum = getProfileFrame(MStore.settings); } catch(e) {}
     
-    var sPfHtml = sPfNum > 0 ? '<img src="icons/frames/pfp_frame_' + sPfNum + '.png" class="pfp-frame" style="position:absolute;top:-15%;left:-17%;pointer-events:none;" draggable="false" alt="">' : '';
+    var sPfHtml = sPfNum > 0 ? '<img src="icons/frames/pfp_frame_' + sPfNum + '.png" class="pfp-frame" style="position:absolute;top:-16%;left:-16%;pointer-events:none;" draggable="false" alt="">' : '';
     
     container.innerHTML =
       '<div class="settings-profile-card" id="settings-profile-card">' +
@@ -3555,7 +3555,32 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button id="changelog-close-mobile" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;font-size:20px;">✕</button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
-        vBlock('0.3.1-beta', 'Latest', [
+        vBlock('0.3.2-beta', 'Latest', [
+          ['Bug Fixes', [
+            'Android Crash-on-Launch Fixed (3 bugs) — styles.xml SplashScreen attributes missing, registerPlugin() called after super.onCreate(), colors.xml entirely missing.',
+            'Profile Card Real-Time Updates Fixed (4 bugs) — Duplicate DOM IDs in profile sheet vs panel renamed; cropped image hero preview not updating after save fixed; avatar mistakenly used for banner background fixed; profile pill never updated after save wired up.',
+            'Status Text Color Fixed (Profile Pill) — Status text appeared gray on startup because getStatusColor() depended on app.js load order. Fixed with local statusColors map in home-screen.js renderProfilePill().'
+          ]],
+          ['UI Polish', [
+            'Frame Picker Redesigned (Mobile) — Changed from full-screen flex backdrop to compact fixed-position bottom sheet (position:fixed;bottom:0;left:0;width:100%;max-height:75vh) appended to backdrop with slideUp CSS animation, guarded by _framePickerOpen flag.',
+            'Frame Preview in Button Fixed — Removed position:absolute;top:-16%;left:-16% from frame image and overflow:hidden from container. Frame now flexbox-centered without clipping by circular avatar edge.',
+            'Frame Cap Increased — 42 to 78 on both platforms (mobile app.js two loops, desktop settings-modal.js). 36 new frame images added (43–78).',
+            'Status Selection Added — New select dropdown with 4 statuses (Online, Away, Do Not Disturb, Offline). Saves to store and broadcasts BEACON immediately.',
+            '"Busy" Status Removed — From both mobile and desktop.',
+            'Desktop Status Icons — Changed to filled colored circles.'
+          ]],
+          ['Search Enhancement', [
+            'Categorized Results — Search results organized into Chats, Friends, and Messages sections with count headers.',
+            'Text Highlighting — Matched terms highlighted with accent color via _highlightText() helper.',
+            'Recent Searches — Last 5 searches stored in MStore.settings.recentSearches, shown on input focus with empty-state prompt.',
+            'CSS Added — New styles for .search-results-* and .recent-search-* classes in mobile.css.'
+          ]],
+          ['Technical', [
+            'Version bumped to v0.3.2-beta across all manifests.',
+            '36 new profile frame images (43–78) added to asset directories.'
+          ]]
+        ]) +
+        vBlock('0.3.1-beta', '', [
           ['Bug Fixes', [
             'Android Immersive Mode Fixed — Taskbar now hides correctly. Root cause: Capacitor SystemBars plugin was calling show() after immersive mode. Fixed with SystemBars config, SplashScreen API, lifecycle handlers, and FLAG_FULLSCREEN for legacy API levels.',
             'Real-Time Profile Cards Fixed — Avatar/banner/bio/frame changes now propagate instantly. Desktop added broadcastBeacon IPC bridge; mobile sends BEACON on profile save; both platforms fixed null-propagation checks.',
@@ -4301,7 +4326,7 @@ document.addEventListener('DOMContentLoaded', function() {
       : '';
 
     var pfNum = getProfileFrame(MStore.settings);
-    var selfFrameHtml = pfNum > 0 ? '<img src="icons/frames/pfp_frame_' + pfNum + '.png" class="pfp-frame" style="position:absolute;top:-15%;left:-17%;pointer-events:none;" draggable="false" alt="">' : '';
+    var selfFrameHtml = pfNum > 0 ? '<img src="icons/frames/pfp_frame_' + pfNum + '.png" class="pfp-frame" style="position:absolute;top:-16%;left:-16%;pointer-events:none;" draggable="false" alt="">' : '';
 
     container.innerHTML =
       '<div class="profile-hero" style="' + bannerStyle + '">' +
@@ -4345,7 +4370,7 @@ document.addEventListener('DOMContentLoaded', function() {
           '<select id="profile-frame-select" style="background:var(--bg-hover);color:var(--text-primary);border:1px solid var(--border-subtle);border-radius:8px;padding:6px 10px;font-size:13px;outline:none;margin-left:auto;">' +
             (function() {
               var opts = '';
-              for (var fi = 0; fi <= 42; fi++) {
+              for (var fi = 0; fi <= 78; fi++) {
                 opts += '<option value="' + fi + '"' + (MStore.settings.profileFrame == fi ? ' selected' : '') + '>' + (fi === 0 ? 'None' : '#' + fi) + '</option>';
               }
               return opts;
@@ -4525,7 +4550,7 @@ document.addEventListener('DOMContentLoaded', function() {
     backdrop.addEventListener('click', function(e) { if (e.target === backdrop) backdrop.remove(); });
 
     var sheet = document.createElement('div');
-    sheet.style.cssText = 'background:var(--bg-surface);border-radius:24px 24px 0 0;animation:slideUp 0.3s cubic-bezier(0.16,1,0.3,1);max-height:90dvh;overflow-y:auto;';
+    sheet.style.cssText = 'background:var(--bg-surface);border-radius:24px 24px 0 0;animation:slideUp 0.3s cubic-bezier(0.16,1,0.3,1);max-height:90dvh;overflow-y:auto;position:relative;';
     sheet.addEventListener('click', function(e) { e.stopPropagation(); });
 
     var bannerUrl = friend.banner;
@@ -4533,7 +4558,7 @@ document.addEventListener('DOMContentLoaded', function() {
       ? 'background-image:url(' + escapeHtml(bannerUrl) + ');background-size:cover;background-position:center;'
       : 'background:linear-gradient(135deg,var(--accent-primary),#EC4899);';
 
-    var frameHtml = frameNum > 0 ? '<img src="icons/frames/pfp_frame_' + frameNum + '.png" class="pfp-frame" style="position:absolute;top:-15%;left:-17%;pointer-events:none;" draggable="false" alt="">' : '';
+    var frameHtml = frameNum > 0 ? '<img src="icons/frames/pfp_frame_' + frameNum + '.png" class="pfp-frame" style="position:absolute;top:-16%;left:-16%;pointer-events:none;" draggable="false" alt="">' : '';
     var avatarEl = friend.avatar
       ? '<img src="' + escapeHtml(friend.avatar) + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">'
       : '<div class="avatar-placeholder">' + initial + '</div>';
@@ -4634,7 +4659,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     var sheet = document.createElement('div');
     sheet.className = 'profile-sheet-scroll';
-    sheet.style.cssText = 'background:var(--bg-surface);border-radius:24px 24px 0 0;animation:slideUp 0.3s cubic-bezier(0.16,1,0.3,1);max-height:90dvh;overflow-y:auto;';
+    sheet.style.cssText = 'background:var(--bg-surface);border-radius:24px 24px 0 0;animation:slideUp 0.3s cubic-bezier(0.16,1,0.3,1);max-height:90dvh;overflow-y:auto;position:relative;';
     sheet.addEventListener('click', function(e) { e.stopPropagation(); });
 
     var initial = u.name ? u.name.charAt(0).toUpperCase() : '?';
@@ -4642,7 +4667,7 @@ document.addEventListener('DOMContentLoaded', function() {
       ? 'background-image:url(' + escapeHtml(u.banner) + ');background-size:cover;background-position:center;'
       : '';
     var pfNum = getProfileFrame(MStore.settings);
-    var frameHtml = pfNum > 0 ? '<img src="icons/frames/pfp_frame_' + pfNum + '.png" class="pfp-frame" style="position:absolute;top:-15%;left:-17%;pointer-events:none;" draggable="false" alt="">' : '';
+    var frameHtml = pfNum > 0 ? '<img src="icons/frames/pfp_frame_' + pfNum + '.png" class="pfp-frame" style="position:absolute;top:-13%;left:-13%;width:120%;height:120%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '';
 
     // Build profile content HTML (hero + edit form)
     var contentHtml =
@@ -4811,19 +4836,31 @@ document.addEventListener('DOMContentLoaded', function() {
           '</div>' +
         '</div>' +
       '</div>' +
+      // Status selector
+      '<div class="settings-section">' +
+        '<div class="settings-section-title">Status</div>' +
+        '<div class="settings-item" style="border:none;display:flex;align-items:center;gap:12px;">' +
+          '<span class="status-dot status-' + (u.status || 'online') + '" style="width:14px;height:14px;border-radius:50%;flex-shrink:0;background:' + getStatusColor(u.status || 'online') + ';border:2px solid var(--bg-surface);box-sizing:content-box;"></span>' +
+          '<select id="status-select" style="flex:1;background:var(--bg-hover);color:var(--text-primary);border:1px solid var(--border-subtle);border-radius:8px;padding:8px 10px;font-size:14px;outline:none;">' +
+            '<option value="online"' + ((u.status || 'online') === 'online' ? ' selected' : '') + '>Online</option>' +
+            '<option value="away"' + (u.status === 'away' ? ' selected' : '') + '>Away</option>' +
+            
+            '<option value="dnd"' + (u.status === 'dnd' ? ' selected' : '') + '>Do Not Disturb</option>' +
+            '<option value="invisible"' + (u.status === 'invisible' ? ' selected' : '') + '>Invisible</option>' +
+          '</select>' +
+        '</div>' +
+      '</div>' +
       (MStore.settings.experimentalProfileFrames ? (
       '<div class="settings-section">' +
-        '<div class="settings-item" style="border:none;">' +
-          '<div style="color:var(--text-secondary);font-size:14px;flex-shrink:0;">Frame</div>' +
-          '<select id="profile-frame-select" style="background:var(--bg-hover);color:var(--text-primary);border:1px solid var(--border-subtle);border-radius:8px;padding:6px 10px;font-size:13px;outline:none;margin-left:auto;">' +
-            (function() {
-              var opts = '';
-              for (var fi = 0; fi <= 42; fi++) {
-                opts += '<option value="' + fi + '"' + (MStore.settings.profileFrame == fi ? ' selected' : '') + '>' + (fi === 0 ? 'None' : '#' + fi) + '</option>';
-              }
-              return opts;
-            })() +
-          '</select>' +
+        '<div class="settings-section-title">Profile Frame</div>' +
+        '<div class="settings-item" style="border:none;cursor:pointer;" id="frame-picker-btn">' +
+          '<div style="display:flex;align-items:center;gap:12px;width:100%;padding:4px 0;">' +
+            '<div style="width:40px;height:40px;border-radius:50%;background:var(--bg-base);flex-shrink:0;display:flex;align-items:center;justify-content:center;">' +
+              (MStore.settings.profileFrame > 0 ? '<img src="icons/frames/pfp_frame_' + MStore.settings.profileFrame + '.png" style="width:125%;height:125%;pointer-events:none;object-fit:contain;flex-shrink:0;display:block;" draggable="false" alt="">' : '<span style="font-size:10px;color:var(--text-muted);">None</span>') +
+            '</div>' +
+            '<span style="flex:1;font-size:14px;color:var(--text-primary);">' + (MStore.settings.profileFrame > 0 ? 'Frame #' + MStore.settings.profileFrame : 'No Frame') + '</span>' +
+            '<i data-lucide="chevron-up" style="width:16px;height:16px;color:var(--text-muted);flex-shrink:0;"></i>' +
+          '</div>' +
         '</div>' +
       '</div>'
       ) : '') +
@@ -4975,46 +5012,162 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       }
     });
+    
+    // Status selector change handler
+    var statusSelect = document.getElementById('status-select');
+    if (statusSelect) {
+      statusSelect.addEventListener('change', function() {
+        var newStatus = this.value;
+        u.status = newStatus;
+        MStore.user.status = newStatus;
+        MStore.save();
+        // Update the status dot in the sheet
+        var statusDot = this.parentNode.querySelector('.status-dot');
+        if (statusDot) {
+          statusDot.style.background = getStatusColor(newStatus);
+          statusDot.className = 'status-dot status-' + newStatus;
+        }
+        // Update the pill status dot too
+        var pillStatus = document.getElementById('profile-pill-status');
+        if (pillStatus) {
+          var statusLabels = { online: 'Online', away: 'Away', dnd: 'Do Not Disturb', invisible: 'Invisible', offline: 'Offline' };
+          pillStatus.textContent = statusLabels[newStatus] || newStatus.charAt(0).toUpperCase() + newStatus.slice(1);
+          pillStatus.style.color = getStatusColor(newStatus);
+        }
+        // Broadcast status change to peers
+        if (window.Orbit && window.Orbit.P2P && Orbit.P2P.isAvailable()) {
+          var beaconData = buildBeacon().payload;
+          var conns = Orbit.P2P.getConnections ? Orbit.P2P.getConnections() : [];
+          var myId = MStore.user ? MStore.user.id : '';
+          (conns || []).forEach(function(conn) {
+            var peerId = conn.peerId || conn.remotePeer || (typeof conn === 'string' ? conn : '');
+            if (peerId && peerId !== myId) {
+              var pkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.BEACON, myId, peerId, beaconData);
+              Orbit.P2P.send(peerId, pkt);
+            }
+          });
+        }
+        showToast('Status updated to ' + newStatus, 'success');
+      });
+    }
 
     // Action button default behavior
     document.getElementById('btn-profile-sheet-action').onclick = closeProfileSheet;
 
 
 
-    // Frame selector (saves immediately)
-    var frameSelect = document.getElementById('profile-frame-select');
-    if (frameSelect) {
-      frameSelect.addEventListener('change', function() {
-        MStore.settings.profileFrame = parseInt(this.value, 10) || 0;
-        MStore.save();
-        updateNavAvatar();
-        renderChatList();
-        renderFriends();
-        // Update hero section frame
-        var heroFrame = sheet.querySelector('.profile-avatar-wrapper .pfp-frame');
-        var frameNum = parseInt(this.value, 10) || 0;
-        if (frameNum > 0) {
-          if (heroFrame) {
-            heroFrame.src = 'icons/frames/pfp_frame_' + frameNum + '.png';
-          } else {
-            // Create new frame img
-            var aw = sheet.querySelector('.profile-avatar-wrapper');
-            if (aw) {
-              var newFrame = document.createElement('img');
-              newFrame.className = 'pfp-frame';
-              newFrame.style.cssText = 'position:absolute;top:-15%;left:-17%;pointer-events:none;';
-              newFrame.draggable = false;
-              newFrame.alt = '';
-              newFrame.src = 'icons/frames/pfp_frame_' + frameNum + '.png';
-              aw.appendChild(newFrame);
+        // Frame picker button — opens drop-up inside the sheet
+    var frameBtn = document.getElementById('frame-picker-btn');
+    var _framePickerOpen = false;
+    if (frameBtn) {
+      frameBtn.addEventListener('click', function() {
+        if (_framePickerOpen) return;
+        _framePickerOpen = true;
+        
+        var fOverlay = document.createElement('div');
+        fOverlay.style.cssText = 'position:fixed;bottom:0;left:0;width:100%;background:var(--bg-surface);border-radius:24px 24px 0 0;max-height:75vh;display:flex;flex-direction:column;animation:slideUp 0.3s cubic-bezier(0.16,1,0.3,1) forwards;';
+        
+        var selectedFrame = MStore.settings.profileFrame || 0;
+        
+        fOverlay.innerHTML =
+          '<div style="flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:20px 20px 0;">' +
+            '<div style="font-size:18px;font-weight:700;color:var(--text-primary);">Choose Frame</div>' +
+            '<button id="btn-close-frame-picker" style="width:32px;height:32px;border-radius:50%;background:var(--bg-hover);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-primary);font-size:16px;">✕</button>' +
+          '</div>' +
+          '<div style="flex:1;overflow-y:auto;padding:16px 20px 30px;">' +
+            '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;">' +
+              (function() {
+                var html = '';
+                for (var fi = 0; fi <= 78; fi++) {
+                  var isSel = selectedFrame == fi;
+                  if (fi === 0) {
+                    html += '<div class="frame-option" data-frame="0" style="width:100%;aspect-ratio:1;border-radius:50%;background:var(--bg-hover);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-muted);cursor:pointer;transition:all 0.15s;box-sizing:border-box;overflow:hidden;' + (isSel ? 'border:2px solid var(--accent-primary);' : 'border:2px solid transparent;') + '">None</div>';
+                  } else {
+                    html += '<div class="frame-option" data-frame="' + fi + '" style="width:100%;aspect-ratio:1;border-radius:50%;background:var(--bg-base);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.15s;position:relative;box-sizing:border-box;overflow:hidden;' + (isSel ? 'border:2px solid var(--accent-primary);' : 'border:2px solid transparent;') + '">' +
+                      '<img src="icons/frames/pfp_frame_' + fi + '.png" style="width:100%;height:100%;object-fit:cover;border-radius:50%;pointer-events:none;" draggable="false" alt="">' +
+                    '</div>';
+                  }
+                }
+                return html;
+              })() +
+            '</div>' +
+          '</div>';
+        
+        backdrop.appendChild(fOverlay);
+        
+        document.getElementById('btn-close-frame-picker').addEventListener('click', function() {
+          fOverlay.remove();
+          _framePickerOpen = false;
+        });
+        
+        fOverlay.addEventListener('click', function(e) { e.stopPropagation(); });
+        
+        fOverlay.querySelectorAll('.frame-option').forEach(function(el) {
+          el.addEventListener('click', function() {
+            var frameNum = parseInt(this.getAttribute('data-frame'), 10) || 0;
+            
+            var previewWrap = frameBtn.querySelector('div:first-child > div:first-child');
+            var labelEl = frameBtn.querySelector('span');
+            if (previewWrap) {
+              if (frameNum > 0) {
+                previewWrap.innerHTML = '<img src="icons/frames/pfp_frame_' + frameNum + '.png" style="width:125%;height:125%;pointer-events:none;object-fit:contain;flex-shrink:0;display:block;" draggable="false" alt="">';
+              } else {
+                previewWrap.innerHTML = '<span style="font-size:10px;color:var(--text-muted);">None</span>';
+              }
             }
-          }
-        } else {
-          if (heroFrame) heroFrame.remove();
-        }
+            if (labelEl) {
+              labelEl.textContent = frameNum > 0 ? 'Frame #' + frameNum : 'No Frame';
+            }
+            
+            MStore.settings.profileFrame = frameNum;
+            MStore.save();
+            updateNavAvatar();
+            renderChatList();
+            renderFriends();
+            
+            var heroFrame = sheet.querySelector('.profile-avatar-wrapper .pfp-frame');
+            if (frameNum > 0) {
+              if (heroFrame) {
+                heroFrame.src = 'icons/frames/pfp_frame_' + frameNum + '.png';
+              } else {
+                var aw = sheet.querySelector('.profile-avatar-wrapper');
+                if (aw) {
+                  var newFrame = document.createElement('img');
+                  newFrame.className = 'pfp-frame';
+                  newFrame.style.cssText = 'position:absolute;top:-16%;left:-16%;width:125%;height:125%;pointer-events:none;object-fit:contain;';
+                  newFrame.draggable = false;
+                  newFrame.alt = '';
+                  newFrame.src = 'icons/frames/pfp_frame_' + frameNum + '.png';
+                  aw.appendChild(newFrame);
+                }
+              }
+            } else {
+              if (heroFrame) heroFrame.remove();
+            }
+            
+            var framePill = getProfileFrame(MStore.settings);
+            var pillAvatar = document.getElementById('profile-pill-avatar');
+            var pillFrame = pillAvatar ? pillAvatar.parentNode.querySelector('.pfp-frame') : null;
+            if (framePill > 0) {
+              if (!pillFrame) {
+                pillFrame = document.createElement('img');
+                pillFrame.className = 'pfp-frame';
+                pillFrame.draggable = false;
+                pillFrame.alt = '';
+                pillFrame.style.cssText = 'position:absolute;top:-1px;left:-1px;pointer-events:none;';
+                if (pillAvatar) pillAvatar.parentNode.appendChild(pillFrame);
+              }
+              pillFrame.src = 'icons/frames/pfp_frame_' + framePill + '.png';
+            } else if (pillFrame) {
+              pillFrame.remove();
+            }
+            
+            fOverlay.remove();
+            _framePickerOpen = false;
+          });
+        });
       });
     }
-
     // Hide pill
     var pill = document.getElementById('profile-pill');
     if (pill) { pill.style.opacity = '0'; pill.style.pointerEvents = 'none'; }
@@ -5448,7 +5601,7 @@ document.addEventListener('DOMContentLoaded', function() {
         ? ({ online: 'var(--accent-success)', away: 'var(--accent-warning)', busy: 'var(--accent-danger)', offline: 'var(--text-muted)' }[friend.status] || 'var(--text-muted)')
         : 'var(--text-muted)';
       var mPfNum = mid === myId ? getProfileFrame(MStore.settings) : (friend ? getProfileFrame(friend) : 0);
-      var mPfHtml = mPfNum > 0 ? '<img src="icons/frames/pfp_frame_' + mPfNum + '.png" class="pfp-frame" style="position:absolute;top:-15%;left:-17%;pointer-events:none;" draggable="false" alt="">' : '';
+      var mPfHtml = mPfNum > 0 ? '<img src="icons/frames/pfp_frame_' + mPfNum + '.png" class="pfp-frame" style="position:absolute;top:-16%;left:-16%;pointer-events:none;" draggable="false" alt="">' : '';
 
       var canManage = isOwner || _isGroupAdmin(group, myId);
       var isSelf = mid === myId;

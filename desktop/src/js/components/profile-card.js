@@ -35,7 +35,7 @@ window.ProfileCard = {
 
     var avatarContainerHtml = '<div style="width:80px;height:80px;border-radius:50%;background:var(--bg-surface);border:4px solid var(--bg-surface);position:absolute;top:-40px;display:flex;align-items:center;justify-content:center;overflow:visible;">' +
       avatarHtml +
-      (frame ? '<img src="icons/frames/pfp_frame_' + frame + '.png" style="position:absolute;top:-21%;left:-17%;width:133%;height:133%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '') +
+      (frame ? '<img src="icons/frames/pfp_frame_' + frame + '.png" style="position:absolute;top:-14%;left:-14%;width:122%;height:122%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '') +
     '</div>';
 
     var bioHtml = user.bio
@@ -45,7 +45,7 @@ window.ProfileCard = {
     var statuses = [
       { value: 'online', label: 'Online', icon: 'circle', color: 'var(--accent-success)' },
       { value: 'away', label: 'Away', icon: 'moon', color: 'var(--accent-warning)' },
-      { value: 'busy', label: 'Busy', icon: 'minus-circle', color: 'var(--accent-danger)' },
+
       { value: 'dnd', label: 'Do Not Disturb', icon: 'bell-off', color: 'var(--accent-danger)' },
       { value: 'invisible', label: 'Invisible', icon: 'eye-off', color: 'var(--text-muted)' }
     ];
@@ -60,7 +60,7 @@ window.ProfileCard = {
     var statusBtnsHtml = isMe ? '<div style="margin-top:16px;position:relative;">' +
         '<label style="display:block;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Status</label>' +
         '<button id="status-dropdown-btn" style="width:100%;display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:10px;background:var(--bg-base);border:1px solid var(--border-subtle);color:var(--text-primary);font-size:14px;cursor:pointer;text-align:left;">' +
-          '<i data-lucide="' + curStatus.icon + '" style="width:16px;height:16px;color:' + curStatus.color + ';flex-shrink:0;"></i>' +
+          '<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:' + curStatus.color + ';flex-shrink:0;"></span>' +
           '<span style="flex:1;">' + curStatus.label + '</span>' +
           '<i data-lucide="chevron-up" style="width:14px;height:14px;color:var(--text-muted);flex-shrink:0;"></i>' +
         '</button>' +
@@ -110,7 +110,7 @@ window.ProfileCard = {
           item.className = 'status-dropdown-item';
           item.setAttribute('data-status', s.value);
           item.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;font-size:13px;color:var(--text-primary);transition:background 0.1s;';
-          item.innerHTML = '<i data-lucide="' + s.icon + '" style="width:16px;height:16px;color:' + s.color + ';flex-shrink:0;"></i><span>' + s.label + '</span>';
+          item.innerHTML = '<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:' + s.color + ';flex-shrink:0;"></span><span>' + s.label + '</span>';
           if (s.value === user.status) item.style.background = 'var(--bg-hover)';
           item.addEventListener('mouseenter', function() { item.style.background = 'var(--bg-hover)'; });
           item.addEventListener('mouseleave', function() { item.style.background = s.value === user.status ? 'var(--bg-hover)' : 'transparent'; });
@@ -125,7 +125,7 @@ window.ProfileCard = {
           });
           dropdownMenu.appendChild(item);
         });
-        if (window.lucide) window.lucide.createIcons({ root: dropdownMenu });
+        // Icons are now inline colored circles, no Lucide creation needed
 
         dropdownBtn.addEventListener('click', function(e) {
           e.stopPropagation();

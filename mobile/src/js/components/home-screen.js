@@ -140,6 +140,38 @@ var OrbitHome = {
     return div.innerHTML;
   },
 
+  /** Highlight matching text in search results */
+  _highlightText: function(text, query) {
+    if (!query || !text) return this._escape(text || '');
+    var escaped = this._escape(text);
+    var lower = escaped.toLowerCase();
+    var q = query.toLowerCase();
+    if (lower.indexOf(q) === -1) return escaped;
+    var result = '';
+    var lastIdx = 0;
+    var idx = lower.indexOf(q, lastIdx);
+    while (idx !== -1) {
+      result += escaped.substring(lastIdx, idx);
+      result += '<strong style="color:var(--accent-primary);font-weight:600;">' + escaped.substring(idx, idx + q.length) + '</strong>';
+      lastIdx = idx + q.length;
+      idx = lower.indexOf(q, lastIdx);
+    }
+    result += escaped.substring(lastIdx);
+    return result;
+  },
+
+  /** Save a recent search term (max 5) */
+  _saveRecentSearch: function(q) {
+    if (!q || !q.trim()) return;
+    var recent = (MStore.settings && MStore.settings.recentSearches) || [];
+    recent = recent.filter(function(s) { return s !== q; });
+    recent.unshift(q);
+    if (recent.length > 5) recent.length = 5;
+    if (!MStore.settings) MStore.settings = {};
+    MStore.settings.recentSearches = recent;
+    MStore.save();
+  },
+
   /** Render the profile pill with user info */
   renderProfilePill: function() {
     var avatarEl = document.getElementById('profile-pill-avatar');
@@ -166,7 +198,7 @@ var OrbitHome = {
           frameEl.className = 'pfp-frame';
           frameEl.draggable = false;
           frameEl.alt = '';
-          frameEl.style.cssText = 'position:absolute;top:-15%;left:-17%;pointer-events:none;';
+          frameEl.style.cssText = 'position:absolute;top:-16%;left:-16%;pointer-events:none;';
           avatarEl.appendChild(frameEl);
         } else {
           var frameEl = oldFrame;
@@ -176,9 +208,11 @@ var OrbitHome = {
         oldFrame.remove();
       }
       nameEl.textContent = displayName;
-      var isOnline = user.status === 'online' || (user.lastSeen || 0) > Date.now() - 45000;
-      statusEl.textContent = isOnline ? 'Online' : 'Offline';
-      statusEl.style.color = isOnline ? 'var(--accent-success)' : '';
+      var _s = (user.status || 'offline');
+      var statusLabels = { online: 'Online', away: 'Away', dnd: 'Do Not Disturb', invisible: 'Invisible', offline: 'Offline' };
+      var statusColors = { online: 'var(--accent-success)', away: 'var(--accent-warning)', dnd: 'var(--accent-danger)', invisible: 'var(--text-muted)', offline: 'var(--text-muted)' };
+      statusEl.textContent = statusLabels[_s] || 'Offline';
+      statusEl.style.color = statusColors[_s] || '';
     } else {
       avatarEl.textContent = '?';
       nameEl.textContent = 'User';
@@ -213,7 +247,6 @@ var OrbitHome = {
     var groups = MStore.groups || [];
     
     // Filter by tab: Friends = DMs only, Groups = groups only
-    // Groups are in MStore.groups - check by ID since type field isn't set on chat items
     var groupIds = {};
     (MStore.groups || []).forEach(function(g) { groupIds[g.id || g.groupId] = true; });
     if (filter === 'groups') {
@@ -222,14 +255,15 @@ var OrbitHome = {
       chats = chats.filter(function(c) { return !groupIds[c.id]; });
     }
     
-    // Apply search filter if active
     var searchQ = window._chatSearchQuery || '';
+    
+    // ---- SEARCH MODE: show categorized results ----
     if (searchQ) {
-      chats = chats.filter(function(c) {
-        var name = (c.name || '').toLowerCase();
-        var preview = (c.lastMessage || '').toLowerCase();
-        return name.indexOf(searchQ) !== -1 || preview.indexOf(searchQ) !== -1;
-      });
+      this._saveRecentSearch(searchQ);
+      container.innerHTML = this._buildSearchResults(searchQ, chats, filter);
+      this._addAvatarFrames();
+      if (window.lucide) lucide.createIcons();
+      return;
     }
     
     if (chats.length === 0) {
@@ -268,7 +302,7 @@ var OrbitHome = {
       preview = preview.replace(/`([^`]+)`/g, '$1');
       preview = preview.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
       preview = preview.replace(/[*#_~>]/g, '');
-      preview = preview.length > 80 ? preview.substring(0, 80) + '�' : preview;
+      preview = preview.length > 80 ? preview.substring(0, 80) + '\u2026' : preview;
       
       var timeStr = '';
       if (chat.lastTime) {
@@ -295,7 +329,7 @@ var OrbitHome = {
       html += '  <div class="chat-row-info">';
       html += '    <div class="chat-row-name">' + OrbitHome._escape(displayName) + '</div>';
       if (typing) {
-        html += '    <div class="chat-row-typing">Typing�</div>';
+        html += '    <div class="chat-row-typing">Typing\u2026</div>';
       } else {
         html += '    <div class="chat-row-preview">' + (preview || 'No messages yet') + '</div>';
       }
@@ -319,6 +353,146 @@ var OrbitHome = {
     if (window.lucide) {
       lucide.createIcons();
     }
+  },
+
+  /** Build categorized search results HTML */
+  _buildSearchResults: function(query, chats, filter) {
+    var q = query.toLowerCase();
+    var results = [];
+    
+    // --- Chat results ---
+    var matchedChats = [];
+    chats.forEach(function(c) {
+      var name = (c.name || '').toLowerCase();
+      var preview = (c.lastMessage || '').toLowerCase();
+      if (name.indexOf(q) !== -1 || preview.indexOf(q) !== -1) {
+        matchedChats.push(c);
+      }
+    });
+    if (matchedChats.length) {
+      results.push({ type: 'chats', label: 'Chats', items: matchedChats });
+    }
+    
+    // --- Friend results ---
+    var friends = MStore.friends || [];
+    var matchedFriends = [];
+    friends.forEach(function(f) {
+      var fName = (f.name || '').toLowerCase();
+      if (fName.indexOf(q) !== -1) {
+        matchedFriends.push(f);
+      }
+    });
+    if (matchedFriends.length) {
+      results.push({ type: 'friends', label: 'Friends', items: matchedFriends });
+    }
+    
+    // --- Message results (scan recent chats' last 50 messages) ---
+    var matchedMessages = [];
+    var sortedChats = (MStore.chats || []).slice().sort(function(a, b) {
+      return (b.lastTime || 0) - (a.lastTime || 0);
+    });
+    var scannedCount = 0;
+    for (var ci = 0; ci < sortedChats.length && scannedCount < 10; ci++) {
+      var chat = sortedChats[ci];
+      var chatId = chat.id || chat.chatId;
+      var msgs = (MStore.messages && MStore.messages[chatId]) || [];
+      var startIdx = Math.max(0, msgs.length - 50);
+      for (var mi = startIdx; mi < msgs.length; mi++) {
+        var msg = msgs[mi];
+        if (msg && msg.text && msg.text.toLowerCase().indexOf(q) !== -1) {
+          matchedMessages.push({ chat: chat, message: msg });
+          if (matchedMessages.length >= 8) break;
+        }
+      }
+      scannedCount++;
+      if (matchedMessages.length >= 8) break;
+    }
+    if (matchedMessages.length) {
+      results.push({ type: 'messages', label: 'Messages', items: matchedMessages });
+    }
+    
+    // --- Build HTML ---
+    var totalCount = 0;
+    results.forEach(function(r) { totalCount += r.items.length; });
+    
+    var html = '<div class="search-results-info">' + this._highlightText('Search results for "' + query + '"', query) + ' \u2014 ' + totalCount + ' result' + (totalCount !== 1 ? 's' : '') + '</div>';
+    
+    results.forEach(function(section) {
+      html += '<div class="search-results-section">';
+      html += '<div class="search-results-section-header">' + section.label + ' (' + section.items.length + ')</div>';
+      
+      if (section.type === 'chats') {
+        section.items.forEach(function(chat) {
+          var chatId = chat.id || chat.chatId;
+          var displayName = chat.name || chat.peerId || 'Unknown';
+          var initial = displayName.charAt(0).toUpperCase();
+          var preview = (chat.lastMessage || '');
+          preview = preview.replace(/```[\s\S]*?```/g, '[code]').replace(/`([^`]+)`/g, '$1').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/[*#_~>]/g, '');
+          preview = preview.length > 60 ? preview.substring(0, 60) + '\u2026' : preview;
+          
+          var timeStr = '';
+          if (chat.lastTime) {
+            var d = new Date(chat.lastTime);
+            var now = new Date();
+            timeStr = d.toDateString() === now.toDateString()
+              ? d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})
+              : d.toLocaleDateString([], {month:'short', day:'numeric'});
+          }
+          
+          html += '<div class="search-result-item" onclick="OrbitHome._onChatClick(\'' + chatId + '\')">';
+          html += '  <div class="search-result-avatar">' + (chat.avatar ? '<img src="' + chat.avatar + '">' : OrbitHome._escape(initial)) + '</div>';
+          html += '  <div class="search-result-body">';
+          html += '    <div class="search-result-name">' + OrbitHome._highlightText(displayName, query) + '</div>';
+          html += '    <div class="search-result-preview">' + OrbitHome._highlightText(preview, query) + '</div>';
+          html += '  </div>';
+          html += '  <div class="search-result-suffix">' + timeStr + '</div>';
+          html += '</div>';
+        });
+      }
+      
+      if (section.type === 'friends') {
+        section.items.forEach(function(f) {
+          var fName = f.name || f.peerId || 'Unknown';
+          var fInitial = fName.charAt(0).toUpperCase();
+          var fStatus = f.status || 'offline';
+          var statusColors = { online: 'var(--accent-success)', away: 'var(--accent-warning)', dnd: 'var(--accent-danger)', invisible: 'var(--text-muted)' };
+          var statusDot = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + (statusColors[fStatus] || 'var(--text-muted)') + ';margin-right:4px;vertical-align:middle;"></span>';
+          
+          html += '<div class="search-result-item" onclick="OrbitHome._onStartDM(\'' + (f.id || '') + '\')">';
+          html += '  <div class="search-result-avatar">' + (f.avatar ? '<img src="' + f.avatar + '">' : OrbitHome._escape(fInitial)) + '</div>';
+          html += '  <div class="search-result-body">';
+          html += '    <div class="search-result-name">' + OrbitHome._highlightText(fName, query) + '</div>';
+          html += '    <div class="search-result-preview">' + statusDot + fStatus.charAt(0).toUpperCase() + fStatus.slice(1) + '</div>';
+          html += '  </div>';
+          html += '  <span class="search-result-tag">Friend</span>';
+          html += '</div>';
+        });
+      }
+      
+      if (section.type === 'messages') {
+        section.items.forEach(function(m) {
+          var chatName = m.chat.name || m.chat.peerId || 'Chat';
+          var msgText = m.message.text || '';
+          msgText = msgText.length > 80 ? msgText.substring(0, 80) + '\u2026' : msgText;
+          
+          html += '<div class="search-result-item" onclick="OrbitHome._onChatClick(\'' + (m.chat.id || m.chat.chatId) + '\')">';
+          html += '  <div class="search-result-body">';
+          html += '    <div class="search-result-name">' + OrbitHome._highlightText(chatName, query) + '</div>';
+          html += '    <div class="search-result-preview">\u201c' + OrbitHome._highlightText(msgText, query) + '\u201d</div>';
+          html += '  </div>';
+          html += '  <span class="search-result-tag">Message</span>';
+          html += '</div>';
+        });
+      }
+      
+      html += '</div>';
+    });
+    
+    if (totalCount === 0) {
+      html += '<div class="empty-state enhanced" style="padding-top:40px;"><i data-lucide="search-x"></i><div class="empty-state-text">No results</div><div class="empty-state-sub">Try a different search term</div></div>';
+    }
+    
+    return html;
   },
 
   _onChatClick: function(chatId) {
@@ -405,7 +579,7 @@ var OrbitHome = {
         frameEl.className = 'pfp-frame';
         frameEl.draggable = false;
         frameEl.alt = '';
-        frameEl.style.cssText = 'position:absolute;top:-15%;left:-17%;pointer-events:none;z-index:5;width:134%;height:134%;';
+        frameEl.style.cssText = 'position:absolute;top:-16%;left:-16%;pointer-events:none;z-index:5;width:125%;height:125%;';
         frameEl.src = 'icons/frames/pfp_frame_' + pfNum + '.png';
         el.appendChild(frameEl);
       }
@@ -436,8 +610,73 @@ var OrbitHome = {
         }, 200);
       }
     };
-  }
+  },
+
+  /** Start a DM from search results */
+  _onStartDM: function(peerId) {
+    if (!peerId) return;
+    var chatId = 'dm_' + peerId;
+    if (typeof window.openChat === 'function') {
+      window.openChat(chatId);
+    } else if (typeof openChat === 'function') {
+      openChat(chatId);
+    }
+  },
+
+  /** Render recent searches in the chat list area */
+  renderRecentSearches: function() {
+    var container = document.getElementById("chat-list");
+    if (!container) return;
+    var recent = (MStore.settings && MStore.settings.recentSearches) || [];
+    if (!recent.length) {
+      container.innerHTML = "<div class=\"empty-state enhanced\" style=\"padding-top:30px;\"><i data-lucide=\"search\"></i><div class=\"empty-state-text\">Search chats, friends & messages</div><div class=\"empty-state-sub\">Type to find conversations, people, or past messages</div></div>";
+      return;
+    }
+    var html = "<div class=\"recent-searches-header\"><span>Recent Searches</span><button id=\"btn-clear-recent-searches\">Clear</button></div>";
+    recent.forEach(function(s) {
+      var escaped = (function(str) {
+        var d = document.createElement("div");
+        d.appendChild(document.createTextNode(str));
+        return d.innerHTML;
+      })(s);
+      html += "<div class=\"recent-search-item\" data-query=\"" + escaped + "\"><i data-lucide=\"clock\"></i><span>" + escaped + "</span></div>";
+    });
+    container.innerHTML = html;
+    if (window.lucide) lucide.createIcons();
+    
+    // Wire click on recent search items
+    container.querySelectorAll(".recent-search-item").forEach(function(el) {
+      el.addEventListener("click", function() {
+        var q = this.getAttribute("data-query");
+        var input = document.getElementById("home-search-input");
+        if (input) {
+          input.value = q;
+          window._chatSearchQuery = q.toLowerCase();
+          if (window.renderChatList) window.renderChatList();
+        }
+      });
+    });
+    
+    // Wire clear button
+    var clearBtn = document.getElementById("btn-clear-recent-searches");
+    if (clearBtn) {
+      clearBtn.addEventListener("click", function(e) {
+        e.stopPropagation();
+        if (MStore.settings) MStore.settings.recentSearches = [];
+        MStore.save();
+        OrbitHome.renderRecentSearches();
+      });
+    }
+  },
+
+  /** Clear all recent searches */
+  clearRecentSearches: function() {
+    if (MStore.settings) MStore.settings.recentSearches = [];
+    MStore.save();
+    this.renderRecentSearches();
+  },
 };
+
 
 // --- Event Wiring (runs on DOM ready) ---
 document.addEventListener('DOMContentLoaded', function() {
@@ -548,11 +787,17 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
   
-  // Wire home search input
+  // Wire home search input — shows recent searches on focus, results on type
   var homeSearchInput = document.getElementById('home-search-input');
   if (homeSearchInput) {
+    homeSearchInput.addEventListener('focus', function() {
+      if (!this.value.trim()) {
+        OrbitHome.renderRecentSearches();
+      }
+    });
     homeSearchInput.addEventListener('input', function() {
-      window._chatSearchQuery = this.value.trim().toLowerCase();
+      var val = this.value.trim().toLowerCase();
+      window._chatSearchQuery = val;
       if (window.renderChatList) window.renderChatList();
     });
   }

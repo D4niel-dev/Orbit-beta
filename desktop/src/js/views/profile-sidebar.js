@@ -71,7 +71,7 @@ window.ProfileSidebar = {
             ? (function() {
               var frame = window.Frames.getFrameForUser(user.userId);
               var img = '<img src="' + window.Sanitize.escapeHtml(user.avatar) + '" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:3px solid var(--bg-surface);">';
-              return frame ? '<div style="position:relative;display:inline-block;">' + img + '<img src="icons/frames/pfp_frame_' + frame + '.png" style="position:absolute;top:-21%;left:-17%;width:133%;height:133%;pointer-events:none;object-fit:contain;" draggable="false" alt=""></div>' : img;
+              return frame ? '<div style="position:relative;display:inline-block;">' + img + '<img src="icons/frames/pfp_frame_' + frame + '.png" style="position:absolute;top:-14%;left:-14%;width:122%;height:122%;pointer-events:none;object-fit:contain;" draggable="false" alt=""></div>' : img;
             })()
             : '<div style="width:64px;height:64px;border-radius:50%;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:24px;color:white;font-weight:600;margin:0 auto;">' + user.username.charAt(0).toUpperCase() + '</div>'
           ) +

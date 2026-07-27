@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v031-beta-latest-version">v0.3.1-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v032-beta-latest-version">v0.3.2-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@
 
 | Channel | Version | Status |
 |---------|---------|--------|
-| *Development* | v0.3.1-beta | Latest Build |
+| *Development* | v0.3.2-beta | Latest Build |
 | **Stable** | v0.2.7-beta | Stable release |
 | Previous **Stable** | v0.1.1-beta | Legacy stable release |
 
@@ -90,13 +90,15 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage desktop app** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
-## Highlights (v0.3.1-beta)
+## Highlights (v0.3.2-beta)
 
-- **Android Immersive Mode Fixed** — Taskbar now hides correctly across all Android versions. Capacitor SystemBars conflict resolved with lifecycle handlers and proper flags.
-- **Real-Time Profile Card Updates Fixed** — Avatar, banner, bio, and profile frame changes now propagate instantly to peers. BEACON broadcast added to both desktop and mobile save paths.
-- **Image Cropper Redesigned** — Premium UI with Lucide icons, checkerboard preview, corner handles, rule-of-thirds grid. Smoother zoom with sub-pixel positioning.
-- **Mobile Performance** — Faster startup via lazy message loading, early-exit blob checks, and deferred cropper initialization.
-- **DM Avatar Render Fix** — No more missing avatars during rapid chat switching.
+- **Android Crash-on-Launch Fixed** — SplashScreen attributes, plugin lifecycle order, and missing colors.xml resolved.
+- **Profile Card Real-Time Update Fixes** — 4 bugs fixed: duplicate DOM IDs, cropper preview not updating, avatar/banner mixup, and profile pill never updating.
+- **Frame Picker Redesigned (Mobile)** — Compact fixed-position bottom sheet with slide-up animation replaces full-screen overlay.
+- **Frame Cap Expanded 42→78** — 36 new profile frame images.
+- **Mobile Search Enhanced** — Categorized results (Chats/Friends/Messages), text highlighting, recent searches storage.
+- **Status Selection on Mobile** — New `<select>` dropdown with 4 statuses, instant BEACON broadcast.
+- **Status Text Color Fixed** — Profile pill no longer shows gray text on startup.
 
 ## Version History
 <details>
@@ -436,6 +438,21 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Release Signing Infrastructure** — GitHub Actions release workflow, GPG-signed SHA256SUMS.txt, `SECURITY.md`, and release verification documentation.
 </details>
 <details open>
+<summary>v0.3.2-beta</summary>
+
+- **Android Crash-on-Launch Fixed** — SplashScreen theme attributes, plugin lifecycle order fix, missing colors.xml created.
+- **Profile Card Real-Time Updates (4 bugs fixed)** — Duplicate DOM IDs, cropper preview sync, avatar/banner misassignment, profile pill update wiring.
+- **Frame Picker Redesigned (Mobile)** — Compact fixed-position bottom sheet with slideUp animation replaces full-screen backdrop overlay.
+- **Frame Preview Fixed** — No longer clipped by circular avatar border. Flexbox-centered inside the 40×40 button.
+- **Frame Cap 42→78** — 36 new frame images added to both platforms.
+- **Status Selection (Mobile)** — New dropdown with Online/Away/DND/Offline. Saves and broadcasts BEACON.
+- **"Busy" Status Removed** — Cleaned up from both platforms.
+- **Desktop Status Icons** — Changed to filled colored circles.
+- **Status Text Color Fix** — Profile pill no longer gray on startup. Local `statusColors` map in home-screen.js.
+- **Mobile Search Enhanced** — Categorized results (Chats/Friends/Messages), text highlighting, recent searches (max 5), empty-state prompt on focus.
+- **Search CSS** — New `.search-results-*` and `.recent-search-*` styles in mobile.css.
+</details>
+<details>
 <summary>v0.3.1-beta</summary>
 
 - **Android Immersive Mode Fixed** — Taskbar now hides correctly across all Android versions. Capacitor SystemBars conflict resolved, lifecycle handlers added.
@@ -586,7 +603,7 @@ Every Orbit release since v0.3.0-beta includes cryptographic signatures so you c
 curl -O https://raw.githubusercontent.com/D4niel-dev/Orbit-beta/main/security/public-key.asc
 gpg --import public-key.asc
 
-# 2. Download your release assets (Orbit-v0.3.1-setup.exe, SHA256SUMS.txt, SHA256SUMS.txt.sig)
+# 2. Download your release assets (Orbit-v0.3.2-setup.exe, SHA256SUMS.txt, SHA256SUMS.txt.sig)
 
 # 3. Verify the signature on the checksums file
 gpg --verify SHA256SUMS.txt.sig SHA256SUMS.txt
@@ -633,15 +650,17 @@ Transparency matters in beta. Current constraints include:
 
 ## Roadmap
 
-### Shipped (v0.3.1-beta)
+### Shipped (v0.3.2-beta)
 
-- **Android Immersive Mode Fixed** — Taskbar properly hidden, Capacitor SystemBars conflict resolved
-- **Real-Time Profile Card Updates** — Avatar/banner/bio/frame changes propagate instantly to peers
-- **Image Cropper Redesign** — Premium Lucide icons, checkerboard preview, corner handles, rule-of-thirds
-- **Smooth Cropper Zoom** — Sub-pixel positioning, finer step values, GPU-accelerated
-- **Mobile Performance** — Lazy message loading, deferred cropper, early blob exit
-- **DM Avatar Fix** — No missing avatars on quick chat switch
-- **Bottom Sheet Cleanup** — Safe-area padding removed
+- **Android Crash-on-Launch Fixed** — SplashScreen attributes, plugin lifecycle order, missing colors.xml
+- **Profile Card Real-Time Updates** — 4 bugs fixed for instant peer updates
+- **Frame Picker Redesign** — Bottom sheet with slide-up animation on mobile
+- **Frame Cap 42→78** — 36 new frames added
+- **Mobile Search Enhanced** — Categorized results, text highlighting, recent searches
+- **Status Selection on Mobile** — Dropdown with instant broadcast
+- **Status Text Color Fix** — No more gray on startup
+- **Frame Preview Fixed** — No longer clipped by avatar circle
+- **"Busy" Status Removed** — Cleaned up across both platforms
 
 ### In Progress / Planned
 

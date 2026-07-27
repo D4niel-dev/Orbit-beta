@@ -522,8 +522,8 @@ img.pfp-frame {
   border: none !important;
   background: transparent !important;
   object-fit: contain !important;
-  width: 133% !important;
-  height: 133% !important;
+  width: 125% !important;
+  height: 125% !important;
 }
 /* smaller frame for tiny nav avatar */
 #nav-user-avatar ~ img.pfp-frame {

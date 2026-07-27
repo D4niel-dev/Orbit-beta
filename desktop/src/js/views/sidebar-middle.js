@@ -236,7 +236,7 @@ window.SidebarMiddle = {
           ? '<img src="' + window.Sanitize.escapeHtml(f.avatar) + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover;">'
           : '<div style="width:32px;height:32px;border-radius:50%;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:14px;color:white;font-weight:600;flex-shrink:0;">' + (f.username ? f.username.charAt(0).toUpperCase() : '?') + '</div>';
         var favatarContainer = fFrame
-          ? '<div style="position:relative;display:inline-block;flex-shrink:0;">' + favatar + '<img src="icons/frames/pfp_frame_' + fFrame + '.png" style="position:absolute;top:-21%;left:-17%;width:133%;height:133%;pointer-events:none;object-fit:contain;" draggable="false" alt=""></div>'
+          ? '<div style="position:relative;display:inline-block;flex-shrink:0;">' + favatar + '<img src="icons/frames/pfp_frame_' + fFrame + '.png" style="position:absolute;top:-14%;left:-14%;width:122%;height:122%;pointer-events:none;object-fit:contain;" draggable="false" alt=""></div>'
           : favatar;
         friendOptions += '<label class="friend-picker-option" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;cursor:pointer;">' +
           '<input type="checkbox" class="group-member-cb" value="' + window.Sanitize.escapeHtml(f.userId) + '" style="width:18px;height:18px;accent-color:var(--accent-primary);cursor:pointer;">' +
@@ -482,7 +482,7 @@ window.SidebarMiddle = {
       var avatarImg = friend.avatar
         ? '<img src="' + window.Sanitize.escapeHtml(friend.avatar) + '" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">'
         : '<i data-lucide="user"></i>';
-      var avatarContainer = '<div style="position:relative;display:flex;align-items:center;justify-content:center;width:100%;height:100%;">' + avatarImg + (frame ? '<img src="icons/frames/pfp_frame_' + frame + '.png" style="position:absolute;top:-21%;left:-17%;width:133%;height:133%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '') + '</div>';
+      var avatarContainer = '<div style="position:relative;display:flex;align-items:center;justify-content:center;width:100%;height:100%;">' + avatarImg + (frame ? '<img src="icons/frames/pfp_frame_' + frame + '.png" style="position:absolute;top:-14%;left:-14%;width:122%;height:122%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '') + '</div>';
 
       var unreadCount = unreadCounts[friend.userId] || 0;
       var mentionCount = mentionCounts[friend.userId] || 0;
@@ -927,7 +927,7 @@ window.SidebarMiddle = {
         var mAvatar = bestAvatar
           ? '<img src="' + window.Sanitize.escapeHtml(bestAvatar) + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover;">'
           : '<div style="width:32px;height:32px;border-radius:50%;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:12px;color:white;font-weight:600;">' + m.username.charAt(0).toUpperCase() + '</div>';
-        var mAvatarContainer = '<div style="position:relative;display:inline-block;">' + mAvatar + (mFrame ? '<img src="icons/frames/pfp_frame_' + mFrame + '.png" style="position:absolute;top:-21%;left:-17%;width:133%;height:133%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '') + '</div>';
+        var mAvatarContainer = '<div style="position:relative;display:inline-block;">' + mAvatar + (mFrame ? '<img src="icons/frames/pfp_frame_' + mFrame + '.png" style="position:absolute;top:-14%;left:-14%;width:122%;height:122%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '') + '</div>';
         var role = m.role || 'member';
         var roleBadge = '';
         if (role === 'owner') {
@@ -976,7 +976,7 @@ window.SidebarMiddle = {
         var favatar = f.avatar
           ? '<img src="' + window.Sanitize.escapeHtml(f.avatar) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;">'
           : '<div style="width:28px;height:28px;border-radius:50%;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:11px;color:white;font-weight:600;">' + (f.username || f.name || '?').charAt(0).toUpperCase() + '</div>';
-        var favatarContainer = '<div style="position:relative;display:inline-block;">' + favatar + (fFrame ? '<img src="icons/frames/pfp_frame_' + fFrame + '.png" style="position:absolute;top:-21%;left:-17%;width:133%;height:133%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '') + '</div>';
+        var favatarContainer = '<div style="position:relative;display:inline-block;">' + favatar + (fFrame ? '<img src="icons/frames/pfp_frame_' + fFrame + '.png" style="position:absolute;top:-14%;left:-14%;width:122%;height:122%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '') + '</div>';
         html += '<div class="group-info-add-friend" data-user-id="' + f.userId + '" style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:6px;cursor:pointer;">' +
           favatarContainer +
           '<div style="flex:1;font-size:13px;color:var(--text-primary);">' + window.Sanitize.escapeHtml(f.username || f.name || '') + '</div>' +

@@ -48,7 +48,7 @@ window.AccountSwitcher = {
     function frameHtml(frameNum) {
       if (!frameNum || frameNum === 0) return '';
       var src = 'icons/frames/pfp_frame_' + frameNum + '.png';
-      return '<img src="' + src + '" style="position:absolute;top:-16%;left:-17%;width:133%;height:133%;pointer-events:none;object-fit:contain;" draggable="false">';
+      return '<img src="' + src + '" style="position:absolute;top:-14%;left:-14%;width:122%;height:122%;pointer-events:none;object-fit:contain;" draggable="false">';
     }
 
     // Current account

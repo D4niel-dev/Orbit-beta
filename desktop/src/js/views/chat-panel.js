@@ -788,7 +788,7 @@ window.ChatPanel = {
         const myAvatarImg = state.currentUser.avatar
           ? '<img src="' + window.Sanitize.escapeHtml(state.currentUser.avatar) + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">'
           : '<i data-lucide="user" style="width:14px;"></i>';
-        var myAvatarContainer = '<div style="position:relative;display:inline-block;">' + myAvatarImg + (myFrame ? '<img src="icons/frames/pfp_frame_' + myFrame + '.png" style="position:absolute;top:-21%;left:-17%;width:133%;height:133%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '') + '</div>';
+        var myAvatarContainer = '<div style="position:relative;display:inline-block;">' + myAvatarImg + (myFrame ? '<img src="icons/frames/pfp_frame_' + myFrame + '.png" style="position:absolute;top:-14%;left:-14%;width:122%;height:122%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '') + '</div>';
         const senderName = '';
         // Check if message has been read
         var readReceipts = state.readReceipts || {};
@@ -838,7 +838,7 @@ window.ChatPanel = {
         var avatarImg = senderAvatar
           ? '<img src="' + window.Sanitize.escapeHtml(senderAvatar) + '" style="width:100%;height:100%;border-radius:50%;">'
           : '<i data-lucide="user" style="width:14px;"></i>';
-        var otherAvatarContainer = '<div style="position:relative;display:inline-block;">' + avatarImg + (senderFrame ? '<img src="icons/frames/pfp_frame_' + senderFrame + '.png" style="position:absolute;top:-21%;left:-17%;width:133%;height:133%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '') + '</div>';
+        var otherAvatarContainer = '<div style="position:relative;display:inline-block;">' + avatarImg + (senderFrame ? '<img src="icons/frames/pfp_frame_' + senderFrame + '.png" style="position:absolute;top:-14%;left:-14%;width:122%;height:122%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '') + '</div>';
         messagesHtml += '<div class="message-row" data-msg-id="' + msg.id + '"' + _animAttr + ' data-debug="MsgID: ' + msg.id + ' Sender: ' + window.Sanitize.escapeHtml(msg.sender) + ' TS: ' + msg.timestamp + '" style="display:flex; margin-bottom: var(--spacing-md);">' +
           '<div class="avatar avatar-sm msg-avatar" data-user-id="' + msg.sender + '" style="margin-right: var(--spacing-sm); margin-top: 4px; flex-shrink: 0; cursor:pointer;' + (showAvatars ? '' : 'display:none;') + '">' + otherAvatarContainer + '</div>' +
           '<div style="max-width: 65%; display:flex; flex-direction:column; align-items:flex-start;">' +

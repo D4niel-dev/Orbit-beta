@@ -1,6 +1,38 @@
 # Orbit Changelog
 
-## v0.3.1-beta **(Latest Version)**
+## v0.3.2-beta **(Latest Version)**
+
+> **Note:** This is not a stable release — latest development version with experimental features.
+
+### Bug Fixes
+
+- **Android Crash-on-Launch Fixed (3 bugs)** — `styles.xml` was missing mandatory SplashScreen attributes (crash on cold start). `registerPlugin(OrbitP2PPlugin.class)` was called after `super.onCreate()` — moved before it. `colors.xml` was entirely missing — created it.
+- **Profile Card Real-Time Update Fixes (4 bugs)** — Duplicate DOM IDs in profile sheet vs panel renamed to avoid collisions. Cropped image hero preview not updating after save — added inline DOM update. Avatar mistakenly used for banner background (var banner referencing avatar URL) — fixed. Profile pill never updated on save — wired up the update.
+- **Status Text Color Fix (Profile Pill)** — Status text appeared gray on startup because `getStatusColor()` from app.js wasn't loaded yet. Fixed by adding a local `statusColors` map in `home-screen.js`'s `renderProfilePill()`. Status change handler now also sets pill text color.
+
+### UI Polish
+
+- **Frame Picker Redesigned (Mobile)** — Changed from full-screen flex backdrop to a compact fixed-position bottom sheet (`position:fixed;bottom:0;left:0;width:100%;max-height:75vh`) appended to backdrop with `slideUp` CSS animation, guarded by `_framePickerOpen` flag to prevent double-opens.
+- **Frame Preview in Button Fixed** — Removed `position:absolute;top:-16%;left:-16%` from frame image and `overflow:hidden` from container. Frame now flexbox-centered without being clipped by the circular avatar edge.
+- **Frame Cap Increased** — 42 → 78 on both platforms (mobile app.js two loops, desktop settings-modal.js) to support 36 newly added frame images (43–78).
+- **Status Selection (Mobile)** — Added `<select>` dropdown with 4 statuses (Online, Away, Do Not Disturb, Offline). Saves to store and broadcasts BEACON immediately.
+- **"Busy" Status Removed** — Removed from both mobile status selector and desktop profile-card.js.
+- **Desktop Status Icons Updated** — Changed to filled colored circles instead of text indicators.
+
+### Search Enhancement
+
+- **Mobile Search Categorized Results** — Search results now organized into Chats (ongoing conversations), Friends (friends list), and Messages (message content matches) sections with count headers.
+- **Text Highlighting** — Matched search terms highlighted with accent color via `_highlightText()` helper.
+- **Recent Searches** — Last 5 searches stored in `MStore.settings.recentSearches`, shown on input focus. Empty state prompt when no searches exist.
+- **Focus Handler** — Input focus now shows recent searches or a prompt to type, replacing the previous always-active results view.
+- **CSS Added** — New styles in `mobile.css` for `.search-results-*` and `.recent-search-*` classes.
+
+### Technical
+
+- **Version:** Bumped to v0.3.2-beta across all manifests.
+- **Frames Expanded:** 36 new profile frame images (43–78) added to both desktop and mobile asset directories.
+
+## v0.3.1-beta
 
 > **Note:** This is not a stable release — latest development version with experimental features.
 

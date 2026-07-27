@@ -79,7 +79,7 @@ window.SettingsModal = {
     if (tabName === 'account') {
       var s = state.settings || {};
       var frameNum = (user && user.profileFrame != null ? user.profileFrame : (s.profileFrame || 0));
-      var frameOverlayPreview = frameNum ? '<img src="icons/frames/pfp_frame_' + frameNum + '.png" style="position:absolute;top:-21%;left:-17%;width:133%;height:133%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '';
+      var frameOverlayPreview = frameNum ? '<img src="icons/frames/pfp_frame_' + frameNum + '.png" style="position:absolute;top:-11%;left:-11%;width:117%;height:117%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '';
 
       var avatarPreview = user.avatar
         ? '<div id="preview-avatar-wrapper" style="position:relative;display:inline-block;">' +
@@ -138,7 +138,7 @@ window.SettingsModal = {
               '<button class="frame-option" data-frame="0" style="width:44px;height:44px;border-radius:50%;border:2px solid ' + (!frameNum ? 'var(--accent-primary)' : 'var(--border-subtle)') + ';background:var(--bg-base);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-muted);">None</button>' +
               (function() {
                 var html = '';
-                for (var i = 1; i <= 42; i++) {
+                for (var i = 1; i <= 78; i++) {
                   html += '<button class="frame-option" data-frame="' + i + '" style="width:44px;height:44px;border-radius:50%;border:2px solid ' + (frameNum === i ? 'var(--accent-primary)' : 'var(--border-subtle)') + ';cursor:pointer;overflow:hidden;padding:0;background:var(--bg-base);">' +
                     '<img src="icons/frames/pfp_frame_' + i + '.png" style="width:100%;height:100%;object-fit:contain;" draggable="false">' +
                   '</button>';
@@ -247,7 +247,7 @@ window.SettingsModal = {
             } else {
               innerHtml = '<div id="preview-avatar-img" style="width:80px;height:80px;border-radius:50%;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:32px;color:white;font-weight:600;border:4px solid var(--bg-surface);">' + (name ? name.charAt(0).toUpperCase() : '?') + '</div>';
             }
-            var frameHtml = frame ? '<img src="icons/frames/pfp_frame_' + frame + '.png" style="position:absolute;top:-21%;left:-17%;width:133%;height:133%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '';
+            var frameHtml = frame ? '<img src="icons/frames/pfp_frame_' + frame + '.png" style="position:absolute;top:-11%;left:-11%;width:117%;height:117%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '';
             wrapper.innerHTML = innerHtml + frameHtml;
           }
 

@@ -224,7 +224,7 @@ var OrbitChat = {
             frameEl.className = 'pfp-frame';
             frameEl.draggable = false;
             frameEl.alt = '';
-            frameEl.style.cssText = 'position:absolute;top:-15%;left:-17%;pointer-events:none;';
+            frameEl.style.cssText = 'position:absolute;top:-16%;left:-16%;pointer-events:none;';
             avatarEl.appendChild(frameEl);
           } else {
             var frameEl = oldFrame;

@@ -14,7 +14,32 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.3.1-beta', 'Latest', [
+        versionBlock('0.3.2-beta', 'Latest', [
+          ['Bug Fixes', [
+            'Android Crash-on-Launch Fixed (3 bugs) — SplashScreen theme attributes missing (crash on cold start); registerPlugin() called after super.onCreate(); colors.xml was entirely missing — created.',
+            'Profile Card Real-Time Updates Fixed (4 bugs) — Duplicate DOM IDs in profile sheet vs panel; cropped image hero preview not updating after save; avatar mistakenly used for banner background; profile pill never updated after save.',
+            'Status Text Color Fixed (Profile Pill) — Status text appeared gray on startup because getStatusColor() from app.js wasn\'t loaded yet. Fixed with local statusColors map in home-screen.js renderProfilePill().'
+          ]],
+          ['UI Polish', [
+            'Frame Picker Redesigned (Mobile) — Changed from full-screen backdrop to compact fixed-position bottom sheet (position:fixed;bottom:0;left:0;width:100%;max-height:75vh) with slideUp CSS animation, guarded by _framePickerOpen flag.',
+            'Frame Preview Fixed — Removed position:absolute from frame image and overflow:hidden from container. Frame now flexbox-centered without clipping by avatar circle.',
+            'Frame Cap Increased 42→78 — 36 new profile frame images added to both platforms.',
+            'Status Selection (Mobile) — New select dropdown with 4 statuses (Online/Away/DND/Offline). Saves to store and broadcasts BEACON.',
+            '"Busy" Status Removed — From both mobile status selector and desktop profile-card.js.',
+            'Desktop Status Icons Changed — Filled colored circles replace text indicators.'
+          ]],
+          ['Search Enhancement (Mobile)', [
+            'Categorized Results — Search organized into Chats, Friends, Messages sections with count headers.',
+            'Text Highlighting — Matched terms highlighted with accent color via _highlightText() helper.',
+            'Recent Searches — Last 5 searches stored in MStore.settings.recentSearches, shown on input focus.',
+            'New CSS — .search-results-* and .recent-search-* styles in mobile.css.'
+          ]],
+          ['Technical', [
+            'Version bumped to v0.3.2-beta across all manifests.',
+            '36 new profile frame images added to desktop and mobile asset directories.'
+          ]]
+        ]) +
+        versionBlock('0.3.1-beta', '', [
           ['Bug Fixes', [
             'Android Immersive Mode Fixed — Taskbar now hides correctly. Root cause: Capacitor SystemBars plugin was calling show() after immersive mode. Fixed with SystemBars config, SplashScreen API, lifecycle handlers, and FLAG_FULLSCREEN for legacy API levels.',
             'Real-Time Profile Cards Fixed — Avatar/banner/bio/frame changes now propagate instantly. Desktop added broadcastBeacon IPC bridge; mobile sends BEACON on profile save; both platforms fixed null-propagation checks.',
