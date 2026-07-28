@@ -659,6 +659,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       membersBtn.style.display = 'flex';
     } else {
+      if (galleryBtn) galleryBtn.style.display = 'none';
       var membersBtn = document.getElementById('btn-chat-members');
       if (membersBtn) membersBtn.style.display = 'none';
     }
@@ -3559,7 +3560,8 @@ document.addEventListener('DOMContentLoaded', function() {
           ['Bug Fixes', [
             'Android Crash-on-Launch Fixed (3 bugs) — styles.xml SplashScreen attributes missing, registerPlugin() called after super.onCreate(), colors.xml entirely missing.',
             'Profile Card Real-Time Updates Fixed (4 bugs) — Duplicate DOM IDs in profile sheet vs panel renamed; cropped image hero preview not updating after save fixed; avatar mistakenly used for banner background fixed; profile pill never updated after save wired up.',
-            'Status Text Color Fixed (Profile Pill) — Status text appeared gray on startup because getStatusColor() depended on app.js load order. Fixed with local statusColors map in home-screen.js renderProfilePill().'
+            'Status Text Color Fixed (Profile Pill) — Status text appeared gray on startup because getStatusColor() depended on app.js load order. Fixed with local statusColors map in home-screen.js renderProfilePill().',
+            'Mobile Gallery Bug Fixes (8 bugs) — Null guards on gallery button bindings; null checks in show/hide gallery; blob URL memory leak fixed (video/audio blob URLs revoked on navigation and close); gallery button hidden in DMs; filter index mismatch fixed; date-group visual order mismatch fixed (items grouped by date/section were stored in wrong order — clicking media opened wrong item); missing @keyframes scaleIn animation added; lightbox close button respects safe-area-top.'
           ]],
           ['UI Polish', [
             'Frame Picker Redesigned (Mobile) — Changed from full-screen flex backdrop to compact fixed-position bottom sheet (position:fixed;bottom:0;left:0;width:100%;max-height:75vh) appended to backdrop with slideUp CSS animation, guarded by _framePickerOpen flag.',
@@ -5271,9 +5273,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     html += '</div>';
 
-    // Store the full media list for lightbox navigation
-    window._galleryMediaList = allMedia;
-
     // Group filtered items by date
     var groups = {};
     filteredMedia.forEach(function(item) {
@@ -5315,6 +5314,7 @@ document.addEventListener('DOMContentLoaded', function() {
     html += '<div class="gallery-count">' + filteredMedia.length + ' item' + (filteredMedia.length !== 1 ? 's' : '') + '</div>';
 
     var flatIndex = 0;
+    var visualOrder = [];
     dateKeys.forEach(function(dateKey) {
       html += '<div class="gallery-section-date">' + escapeHtml(dateKey) + '</div>';
       html += '<div class="gallery-grid' + (filter === 'audio' ? ' single-col' : '') + '">';
@@ -5345,9 +5345,13 @@ document.addEventListener('DOMContentLoaded', function() {
             '</div>';
         }
         flatIndex++;
+        visualOrder.push(item);
       });
       html += '</div>';
     });
+
+    // Store visual-order list so clicking flatIndex correctly maps to the right item
+    window._galleryMediaList = visualOrder;
 
     container.innerHTML = html;
     renderLucide({ root: container });
@@ -5368,6 +5372,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!mediaList && window._galleryMediaList) {
       mediaList = window._galleryMediaList;
     }
+    var _blobUrls = [];
     
     var items = mediaList || [];
     var currentIdx = Math.max(0, Math.min(index || 0, items.length - 1));
@@ -5381,6 +5386,10 @@ document.addEventListener('DOMContentLoaded', function() {
       var lb = document.getElementById('gallery-lightbox');
       if (!lb) return;
 
+      // Revoke previous blob URLs to prevent memory leak
+      _blobUrls.forEach(function(u) { try { URL.revokeObjectURL(u); } catch(e) {} });
+      _blobUrls = [];
+
       // Media content
       var contentHtml = '';
       if (item.type === 'video') {
@@ -5390,7 +5399,7 @@ document.addEventListener('DOMContentLoaded', function() {
             var vm = playUrl.match(/^data:(video\/[^;]+|application\/octet-stream);base64,(.+)$/);
             if (vm) {
               var blobUrl = window.orbitBase64ToBlob(vm[2], vm[1]);
-              if (blobUrl) playUrl = blobUrl;
+              if (blobUrl) { playUrl = blobUrl; _blobUrls.push(blobUrl); }
             }
           } catch(e) { console.warn('[Gallery] video data URL convert failed', e); }
         }
@@ -5402,7 +5411,7 @@ document.addEventListener('DOMContentLoaded', function() {
             var vm = playUrl.match(/^data:(audio\/[^;]+|application\/octet-stream);base64,(.+)$/);
             if (vm) {
               var blobUrl = window.orbitBase64ToBlob(vm[2], vm[1]);
-              if (blobUrl) playUrl = blobUrl;
+              if (blobUrl) { playUrl = blobUrl; _blobUrls.push(blobUrl); }
             }
           } catch(e) { console.warn('[Gallery] audio data URL convert failed', e); }
         }
@@ -5456,7 +5465,12 @@ document.addEventListener('DOMContentLoaded', function() {
       lb._currentIdx = idx;
       lb._items = items;
 
-      document.getElementById('lb-close-btn').addEventListener('click', function() { lb.remove(); });
+      document.getElementById('lb-close-btn').addEventListener('click', function() {
+        // Revoke blob URLs on close
+        _blobUrls.forEach(function(u) { try { URL.revokeObjectURL(u); } catch(e) {} });
+        _blobUrls = [];
+        lb.remove();
+      });
       
       var prevBtn = document.getElementById('lb-prev-btn');
       if (prevBtn) prevBtn.addEventListener('click', function(e) { e.stopPropagation(); renderLightbox(idx - 1); });
@@ -5488,6 +5502,8 @@ document.addEventListener('DOMContentLoaded', function() {
         mediaWrap.addEventListener('touchend', function(e) {
           touchEndX = e.changedTouches[0].screenX;
           var diff = touchStartX - touchEndX;
+          var hasPrev = idx > 0;
+          var hasNext = idx < items.length - 1;
           if (Math.abs(diff) > 60) {
             if (diff > 0 && hasNext) {
               renderLightbox(idx + 1);
@@ -5525,13 +5541,15 @@ document.addEventListener('DOMContentLoaded', function() {
     renderGallery('all');
     var panel = document.getElementById('panel-gallery-overlay');
     var backdrop = document.getElementById('gallery-overlay-backdrop');
-    panel.classList.add('open');
-    backdrop.style.display = 'block';
+    if (panel) panel.classList.add('open');
+    if (backdrop) backdrop.style.display = 'block';
   }
 
   function hideGallery() {
-    document.getElementById('panel-gallery-overlay').classList.remove('open');
-    document.getElementById('gallery-overlay-backdrop').style.display = 'none';
+    var panel = document.getElementById('panel-gallery-overlay');
+    var backdrop = document.getElementById('gallery-overlay-backdrop');
+    if (panel) panel.classList.remove('open');
+    if (backdrop) backdrop.style.display = 'none';
   }
 
   /* -- Group Info Panel -- */
@@ -6847,10 +6865,12 @@ document.addEventListener('DOMContentLoaded', function() {
   if (closeScannerBtn) closeScannerBtn.addEventListener('click', stopQRScanner);
 
   // Gallery button
-  document.getElementById('btn-gallery').addEventListener('click', showGallery);
+  var btnGallery = document.getElementById('btn-gallery');
+  if (btnGallery) btnGallery.addEventListener('click', showGallery);
 
   // Close gallery
-  document.getElementById('btn-close-gallery').addEventListener('click', hideGallery);
+  var btnCloseGallery = document.getElementById('btn-close-gallery');
+  if (btnCloseGallery) btnCloseGallery.addEventListener('click', hideGallery);
 
   // Close profile
   document.getElementById('btn-close-profile').addEventListener('click', hideProfile);

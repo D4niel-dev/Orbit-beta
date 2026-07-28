@@ -42,6 +42,7 @@ var OrbitChat = {
       }
       if (membersBtn) membersBtn.style.display = 'flex';
     } else {
+      if (galleryBtn) galleryBtn.style.display = 'none';
       var membersBtn = document.getElementById('btn-chat-members');
       if (membersBtn) membersBtn.style.display = 'none';
     }

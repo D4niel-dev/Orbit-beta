@@ -98,6 +98,7 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Mobile Search Enhanced** — Categorized results (Chats/Friends/Messages), text highlighting, recent searches storage.
 - **Status Selection on Mobile** — New `<select>` dropdown with 4 statuses, instant BEACON broadcast.
 - **Status Text Color Fixed** — Profile pill no longer shows gray text on startup.
+- **Mobile Gallery Fixed (8 bugs)** — Crashes, index mismatch (wrong media opened), blob URL leaks, and more. Full list in CHANGELOG.
 
 ## Version History
 <details>
@@ -459,6 +460,7 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Status Text Color Fix** — Profile pill no longer gray on startup. Local `statusColors` map in home-screen.js.
 - **Mobile Search Enhanced** — Categorized results (Chats/Friends/Messages), text highlighting, recent searches (max 5), empty-state prompt on focus.
 - **Search CSS** — New `.search-results-*` and `.recent-search-*` styles in mobile.css.
+- **Mobile Gallery Bug Fixes (8 bugs)** — Null guards on gallery button/close bindings; null checks in show/hide gallery; blob URL memory leak fixed (video/audio now revoked properly); gallery button hidden in DMs; filter index mismatch fixed; date-group visual order mismatch fixed (clicking media now opens correct item regardless of date sorting); missing scaleIn animation defined; lightbox close button respects safe-area-top.
 </details>
 
 See [CHANGELOG.md](CHANGELOG.md) for the full version history.

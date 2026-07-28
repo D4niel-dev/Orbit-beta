@@ -18,7 +18,8 @@ window.Changelog = {
           ['Bug Fixes', [
             'Android Crash-on-Launch Fixed (3 bugs) — SplashScreen theme attributes missing (crash on cold start); registerPlugin() called after super.onCreate(); colors.xml was entirely missing — created.',
             'Profile Card Real-Time Updates Fixed (4 bugs) — Duplicate DOM IDs in profile sheet vs panel; cropped image hero preview not updating after save; avatar mistakenly used for banner background; profile pill never updated after save.',
-            'Status Text Color Fixed (Profile Pill) — Status text appeared gray on startup because getStatusColor() from app.js wasn\'t loaded yet. Fixed with local statusColors map in home-screen.js renderProfilePill().'
+            'Status Text Color Fixed (Profile Pill) — Status text appeared gray on startup because getStatusColor() from app.js wasn\'t loaded yet. Fixed with local statusColors map in home-screen.js renderProfilePill().',
+            'Mobile Gallery Bug Fixes (8 bugs) — Null guards on gallery bindings, null checks in show/hide, blob URL memory leak, gallery button hidden in DMs, filter index mismatch, date-group visual order mismatch (wrong media opening), missing scaleIn animation, safe-area for lightbox close.'
           ]],
           ['UI Polish', [
             'Frame Picker Redesigned (Mobile) — Changed from full-screen backdrop to compact fixed-position bottom sheet (position:fixed;bottom:0;left:0;width:100%;max-height:75vh) with slideUp CSS animation, guarded by _framePickerOpen flag.',
