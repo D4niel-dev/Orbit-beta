@@ -4751,7 +4751,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       // Update profile frame in the pill
       var frameNum = getProfileFrame(MStore.settings);
-      var pillFrame = pillAvatar ? pillAvatar.parentNode.querySelector('.pfp-frame') : null;
+      var pillFrame = pillAvatar ? pillAvatar.querySelector('.pfp-frame') : null;
       if (frameNum > 0) {
         if (!pillFrame) {
           pillFrame = document.createElement('img');
@@ -4760,7 +4760,7 @@ document.addEventListener('DOMContentLoaded', function() {
           pillFrame.alt = '';
           pillFrame.style.cssText = 'position:absolute;top:-1px;left:-1px;pointer-events:none;';
           if (pillAvatar) {
-            pillAvatar.parentNode.appendChild(pillFrame);
+            pillAvatar.appendChild(pillFrame);
           }
         }
         if (pillFrame) {
@@ -4794,7 +4794,8 @@ document.addEventListener('DOMContentLoaded', function() {
             if (placeholder) {
               placeholder.outerHTML = '<img src="' + escapeHtml(avatar) + '">';
             } else {
-              avatarWrapper.innerHTML = '<img src="' + escapeHtml(avatar) + '">' + avatarWrapper.querySelector('.pfp-frame' || '');
+              var _existingFrame = avatarWrapper.querySelector('.pfp-frame');
+              avatarWrapper.innerHTML = '<img src="' + escapeHtml(avatar) + '">' + (_existingFrame ? _existingFrame.outerHTML : '');
             }
           }
         } else {
@@ -5145,7 +5146,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             var framePill = getProfileFrame(MStore.settings);
             var pillAvatar = document.getElementById('profile-pill-avatar');
-            var pillFrame = pillAvatar ? pillAvatar.parentNode.querySelector('.pfp-frame') : null;
+            var pillFrame = pillAvatar ? pillAvatar.querySelector('.pfp-frame') : null;
             if (framePill > 0) {
               if (!pillFrame) {
                 pillFrame = document.createElement('img');
@@ -5153,7 +5154,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 pillFrame.draggable = false;
                 pillFrame.alt = '';
                 pillFrame.style.cssText = 'position:absolute;top:-1px;left:-1px;pointer-events:none;';
-                if (pillAvatar) pillAvatar.parentNode.appendChild(pillFrame);
+                if (pillAvatar) pillAvatar.appendChild(pillFrame);
               }
               pillFrame.src = 'icons/frames/pfp_frame_' + framePill + '.png';
             } else if (pillFrame) {

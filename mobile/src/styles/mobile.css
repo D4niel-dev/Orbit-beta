@@ -4118,6 +4118,7 @@ textarea#chat-input {
   height: 70px !important;
   top: -9px !important;
   left: -9px !important;
+  object-fit: fill !important;
 }
 
 .profile-pill-info {
