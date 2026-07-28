@@ -3895,8 +3895,8 @@ textarea#chat-input {
 }
 /* Profile card sheet frame — 5% smaller than default (114px = 95% of 120px) */
 .profile-avatar-wrapper img.pfp-frame {
-  width: 114px !important;
-  height: 114px !important;
+  width: 113px !important;
+  height: 113px !important;
   top: -9px !important;
   left: -9px !important;
 }
@@ -4121,8 +4121,8 @@ textarea#chat-input {
 
 /* Scoped override for pfp-frame in profile pill — explicit px avoids percentage-resolution bug (was resolving against pill's 328px flex width instead of 56px avatar) */
 .profile-pill-avatar img.pfp-frame {
-  width: 70px !important;
-  height: 70px !important;
+  width: 69px !important;
+  height: 69px !important;
   top: -7px !important;
   left: -7px !important;
   object-fit: fill !important;
