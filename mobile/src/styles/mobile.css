@@ -3897,6 +3897,8 @@ textarea#chat-input {
 .profile-avatar-wrapper img.pfp-frame {
   width: 114px !important;
   height: 114px !important;
+  top: -9px !important;
+  left: -9px !important;
 }
 .profile-hero .profile-name {
   font-size: 26px;
@@ -4121,8 +4123,8 @@ textarea#chat-input {
 .profile-pill-avatar img.pfp-frame {
   width: 70px !important;
   height: 70px !important;
-  top: -5px !important;
-  left: -5px !important;
+  top: -7px !important;
+  left: -7px !important;
   object-fit: fill !important;
 }
 
