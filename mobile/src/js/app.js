@@ -659,7 +659,6 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       membersBtn.style.display = 'flex';
     } else {
-      if (galleryBtn) galleryBtn.style.display = 'none';
       var membersBtn = document.getElementById('btn-chat-members');
       if (membersBtn) membersBtn.style.display = 'none';
     }
@@ -3561,7 +3560,7 @@ document.addEventListener('DOMContentLoaded', function() {
             'Android Crash-on-Launch Fixed (3 bugs) — styles.xml SplashScreen attributes missing, registerPlugin() called after super.onCreate(), colors.xml entirely missing.',
             'Profile Card Real-Time Updates Fixed (4 bugs) — Duplicate DOM IDs in profile sheet vs panel renamed; cropped image hero preview not updating after save fixed; avatar mistakenly used for banner background fixed; profile pill never updated after save wired up.',
             'Status Text Color Fixed (Profile Pill) — Status text appeared gray on startup because getStatusColor() depended on app.js load order. Fixed with local statusColors map in home-screen.js renderProfilePill().',
-            'Mobile Gallery Bug Fixes (8 bugs) — Null guards on gallery button bindings; null checks in show/hide gallery; blob URL memory leak fixed (video/audio blob URLs revoked on navigation and close); gallery button hidden in DMs; filter index mismatch fixed; date-group visual order mismatch fixed (items grouped by date/section were stored in wrong order — clicking media opened wrong item); missing @keyframes scaleIn animation added; lightbox close button respects safe-area-top.'
+            'Mobile Gallery Bug Fixes (7 bugs) — Null guards on gallery button bindings; null checks in show/hide gallery; blob URL memory leak fixed (video/audio blob URLs revoked on navigation and close); filter index mismatch fixed; date-group visual order mismatch fixed (items grouped by date/section were stored in wrong order — clicking media opened wrong item); missing @keyframes scaleIn animation added; lightbox close button respects safe-area-top.'
           ]],
           ['UI Polish', [
             'Frame Picker Redesigned (Mobile) — Changed from full-screen flex backdrop to compact fixed-position bottom sheet (position:fixed;bottom:0;left:0;width:100%;max-height:75vh) appended to backdrop with slideUp CSS animation, guarded by _framePickerOpen flag.',

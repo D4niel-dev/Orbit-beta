@@ -460,7 +460,7 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Status Text Color Fix** — Profile pill no longer gray on startup. Local `statusColors` map in home-screen.js.
 - **Mobile Search Enhanced** — Categorized results (Chats/Friends/Messages), text highlighting, recent searches (max 5), empty-state prompt on focus.
 - **Search CSS** — New `.search-results-*` and `.recent-search-*` styles in mobile.css.
-- **Mobile Gallery Bug Fixes (8 bugs)** — Null guards on gallery button/close bindings; null checks in show/hide gallery; blob URL memory leak fixed (video/audio now revoked properly); gallery button hidden in DMs; filter index mismatch fixed; date-group visual order mismatch fixed (clicking media now opens correct item regardless of date sorting); missing scaleIn animation defined; lightbox close button respects safe-area-top.
+- **Mobile Gallery Bug Fixes (7 bugs)** — Null guards on gallery button/close bindings; null checks in show/hide gallery; blob URL memory leak fixed (video/audio now revoked properly); filter index mismatch fixed; date-group visual order mismatch fixed (clicking media now opens correct item regardless of date sorting); missing scaleIn animation defined; lightbox close button respects safe-area-top.
 </details>
 
 See [CHANGELOG.md](CHANGELOG.md) for the full version history.
