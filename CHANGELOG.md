@@ -14,7 +14,6 @@
 
 - **Frame Picker Redesigned (Mobile)** — Changed from full-screen flex backdrop to a compact fixed-position bottom sheet (`position:fixed;bottom:0;left:0;width:100%;max-height:75vh`) appended to backdrop with `slideUp` CSS animation, guarded by `_framePickerOpen` flag to prevent double-opens.
 - **Frame Preview in Button Fixed** — Removed `position:absolute;top:-16%;left:-16%` from frame image and `overflow:hidden` from container. Frame now flexbox-centered without being clipped by the circular avatar edge.
-- **Frame Cap Increased** — 42 → 78 on both platforms (mobile app.js two loops, desktop settings-modal.js) to support 36 newly added frame images (43–78).
 - **Status Selection (Mobile)** — Added `<select>` dropdown with 4 statuses (Online, Away, Do Not Disturb, Offline). Saves to store and broadcasts BEACON immediately.
 - **"Busy" Status Removed** — Removed from both mobile status selector and desktop profile-card.js.
 - **Desktop Status Icons Updated** — Changed to filled colored circles instead of text indicators.
@@ -30,7 +29,6 @@
 ### Technical
 
 - **Version:** Bumped to v0.3.2-beta across all manifests.
-- **Frames Expanded:** 36 new profile frame images (43–78) added to both desktop and mobile asset directories.
 
 ## v0.3.1-beta
 

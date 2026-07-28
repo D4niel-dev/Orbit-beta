@@ -2,9 +2,9 @@
 /* Overrides & additions for touch-friendly Android UI */
 
 :root {
-  --mobile-nav-height: calc(56px + env(safe-area-inset-bottom, 0px));
+  --mobile-nav-height: 56px;
   --mobile-header-height: 48px;
-  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-bottom: 0px;
   --safe-area-top: env(safe-area-inset-top, 24px);
   --bg-danger: rgba(239, 68, 68, 0.15);
   --border-color: var(--border-subtle);
@@ -4066,7 +4066,7 @@ textarea#chat-input {
 /* Profile Pill — Floating Bottom (large) */
 .profile-pill.floating {
   position: fixed;
-  bottom: calc(32px + env(safe-area-inset-bottom, 0px));
+  bottom: 32px;
   left: 16px;
   transform: none;
   z-index: 100;
@@ -4112,8 +4112,13 @@ textarea#chat-input {
   background: var(--bg-surface);
 }
 
-/* Avatar ring frame (always visible decorative ring) */
-/* Avatar ring frame (always visible decorative ring) */
+/* Scoped override for pfp-frame in profile pill — explicit px avoids percentage-resolution bug (was resolving against pill's 328px flex width instead of 56px avatar) */
+.profile-pill-avatar img.pfp-frame {
+  width: 70px !important;
+  height: 70px !important;
+  top: -9px !important;
+  left: -9px !important;
+}
 
 .profile-pill-info {
   flex: 1;

@@ -3564,7 +3564,6 @@ document.addEventListener('DOMContentLoaded', function() {
           ['UI Polish', [
             'Frame Picker Redesigned (Mobile) — Changed from full-screen flex backdrop to compact fixed-position bottom sheet (position:fixed;bottom:0;left:0;width:100%;max-height:75vh) appended to backdrop with slideUp CSS animation, guarded by _framePickerOpen flag.',
             'Frame Preview in Button Fixed — Removed position:absolute;top:-16%;left:-16% from frame image and overflow:hidden from container. Frame now flexbox-centered without clipping by circular avatar edge.',
-            'Frame Cap Increased — 42 to 78 on both platforms (mobile app.js two loops, desktop settings-modal.js). 36 new frame images added (43–78).',
             'Status Selection Added — New select dropdown with 4 statuses (Online, Away, Do Not Disturb, Offline). Saves to store and broadcasts BEACON immediately.',
             '"Busy" Status Removed — From both mobile and desktop.',
             'Desktop Status Icons — Changed to filled colored circles.'
@@ -3576,8 +3575,7 @@ document.addEventListener('DOMContentLoaded', function() {
             'CSS Added — New styles for .search-results-* and .recent-search-* classes in mobile.css.'
           ]],
           ['Technical', [
-            'Version bumped to v0.3.2-beta across all manifests.',
-            '36 new profile frame images (43–78) added to asset directories.'
+            'Version bumped to v0.3.2-beta across all manifests.'
           ]]
         ]) +
         vBlock('0.3.1-beta', '', [
@@ -4370,7 +4368,7 @@ document.addEventListener('DOMContentLoaded', function() {
           '<select id="profile-frame-select" style="background:var(--bg-hover);color:var(--text-primary);border:1px solid var(--border-subtle);border-radius:8px;padding:6px 10px;font-size:13px;outline:none;margin-left:auto;">' +
             (function() {
               var opts = '';
-              for (var fi = 0; fi <= 78; fi++) {
+              for (var fi = 0; fi <= 42; fi++) {
                 opts += '<option value="' + fi + '"' + (MStore.settings.profileFrame == fi ? ' selected' : '') + '>' + (fi === 0 ? 'None' : '#' + fi) + '</option>';
               }
               return opts;
@@ -5078,7 +5076,7 @@ document.addEventListener('DOMContentLoaded', function() {
             '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;">' +
               (function() {
                 var html = '';
-                for (var fi = 0; fi <= 78; fi++) {
+                for (var fi = 0; fi <= 42; fi++) {
                   var isSel = selectedFrame == fi;
                   if (fi === 0) {
                     html += '<div class="frame-option" data-frame="0" style="width:100%;aspect-ratio:1;border-radius:50%;background:var(--bg-hover);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-muted);cursor:pointer;transition:all 0.15s;box-sizing:border-box;overflow:hidden;' + (isSel ? 'border:2px solid var(--accent-primary);' : 'border:2px solid transparent;') + '">None</div>';

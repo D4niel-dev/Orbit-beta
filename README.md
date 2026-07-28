@@ -95,7 +95,6 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Android Crash-on-Launch Fixed** — SplashScreen attributes, plugin lifecycle order, and missing colors.xml resolved.
 - **Profile Card Real-Time Update Fixes** — 4 bugs fixed: duplicate DOM IDs, cropper preview not updating, avatar/banner mixup, and profile pill never updating.
 - **Frame Picker Redesigned (Mobile)** — Compact fixed-position bottom sheet with slide-up animation replaces full-screen overlay.
-- **Frame Cap Expanded 42→78** — 36 new profile frame images.
 - **Mobile Search Enhanced** — Categorized results (Chats/Friends/Messages), text highlighting, recent searches storage.
 - **Status Selection on Mobile** — New `<select>` dropdown with 4 statuses, instant BEACON broadcast.
 - **Status Text Color Fixed** — Profile pill no longer shows gray text on startup.
@@ -454,7 +453,6 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Profile Card Real-Time Updates (4 bugs fixed)** — Duplicate DOM IDs, cropper preview sync, avatar/banner misassignment, profile pill update wiring.
 - **Frame Picker Redesigned (Mobile)** — Compact fixed-position bottom sheet with slideUp animation replaces full-screen backdrop overlay.
 - **Frame Preview Fixed** — No longer clipped by circular avatar border. Flexbox-centered inside the 40×40 button.
-- **Frame Cap 42→78** — 36 new frame images added to both platforms.
 - **Status Selection (Mobile)** — New dropdown with Online/Away/DND/Offline. Saves and broadcasts BEACON.
 - **"Busy" Status Removed** — Cleaned up from both platforms.
 - **Desktop Status Icons** — Changed to filled colored circles.
@@ -655,7 +653,6 @@ Transparency matters in beta. Current constraints include:
 - **Android Crash-on-Launch Fixed** — SplashScreen attributes, plugin lifecycle order, missing colors.xml
 - **Profile Card Real-Time Updates** — 4 bugs fixed for instant peer updates
 - **Frame Picker Redesign** — Bottom sheet with slide-up animation on mobile
-- **Frame Cap 42→78** — 36 new frames added
 - **Mobile Search Enhanced** — Categorized results, text highlighting, recent searches
 - **Status Selection on Mobile** — Dropdown with instant broadcast
 - **Status Text Color Fix** — No more gray on startup

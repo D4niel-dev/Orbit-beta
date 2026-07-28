@@ -23,7 +23,6 @@ window.Changelog = {
           ['UI Polish', [
             'Frame Picker Redesigned (Mobile) — Changed from full-screen backdrop to compact fixed-position bottom sheet (position:fixed;bottom:0;left:0;width:100%;max-height:75vh) with slideUp CSS animation, guarded by _framePickerOpen flag.',
             'Frame Preview Fixed — Removed position:absolute from frame image and overflow:hidden from container. Frame now flexbox-centered without clipping by avatar circle.',
-            'Frame Cap Increased 42→78 — 36 new profile frame images added to both platforms.',
             'Status Selection (Mobile) — New select dropdown with 4 statuses (Online/Away/DND/Offline). Saves to store and broadcasts BEACON.',
             '"Busy" Status Removed — From both mobile status selector and desktop profile-card.js.',
             'Desktop Status Icons Changed — Filled colored circles replace text indicators.'
@@ -35,8 +34,7 @@ window.Changelog = {
             'New CSS — .search-results-* and .recent-search-* styles in mobile.css.'
           ]],
           ['Technical', [
-            'Version bumped to v0.3.2-beta across all manifests.',
-            '36 new profile frame images added to desktop and mobile asset directories.'
+            'Version bumped to v0.3.2-beta across all manifests.'
           ]]
         ]) +
         versionBlock('0.3.1-beta', '', [

@@ -138,7 +138,7 @@ window.SettingsModal = {
               '<button class="frame-option" data-frame="0" style="width:44px;height:44px;border-radius:50%;border:2px solid ' + (!frameNum ? 'var(--accent-primary)' : 'var(--border-subtle)') + ';background:var(--bg-base);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-muted);">None</button>' +
               (function() {
                 var html = '';
-                for (var i = 1; i <= 78; i++) {
+                for (var i = 1; i <= 42; i++) {
                   html += '<button class="frame-option" data-frame="' + i + '" style="width:44px;height:44px;border-radius:50%;border:2px solid ' + (frameNum === i ? 'var(--accent-primary)' : 'var(--border-subtle)') + ';cursor:pointer;overflow:hidden;padding:0;background:var(--bg-base);">' +
                     '<img src="icons/frames/pfp_frame_' + i + '.png" style="width:100%;height:100%;object-fit:contain;" draggable="false">' +
                   '</button>';
