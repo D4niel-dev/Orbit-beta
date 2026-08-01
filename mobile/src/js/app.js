@@ -7,6 +7,33 @@ console.log('[APP] app.js loaded at', new Date().toISOString());
 var editingMsg = null;
 var replyingTo = null;
 
+/* ---- Disappearing Messages ---- */
+window._disappearTimers = {};
+
+/* ---- Slash Command Registry ---- */
+var COMMANDS = [
+  { name: '/help', desc: 'Show all available commands', usage: '/help', handler: 'help' },
+  { name: '/poll', desc: 'Create a poll in the group', usage: '/poll "Question?" "Option1" "Option2" ...', handler: 'poll' },
+  { name: '/me', desc: 'Write in third person', usage: '/me waves', handler: 'me' },
+  { name: '/shrug', desc: 'Add a shrug', usage: '/shrug', handler: 'shrug' },
+  { name: '/tableflip', desc: 'Flipping tables', usage: '/tableflip', handler: 'tableflip' },
+  { name: '/unflip', desc: 'Unflip the table', usage: '/unflip', handler: 'unflip' },
+  { name: '/lenny', desc: '( ͡° ͜ʖ ͡°)', usage: '/lenny', handler: 'lenny' },
+  { name: '/roll', desc: 'Roll a die', usage: '/roll 6', handler: 'roll' },
+  { name: '/flip', desc: 'Flip a coin', usage: '/flip', handler: 'flip' },
+  { name: '/spoiler', desc: 'Send text as spoiler', usage: '/spoiler secret text', handler: 'spoiler' },
+  { name: '/clear', desc: 'Clear chat messages (local)', usage: '/clear', handler: 'clear' }
+];
+
+/* ---- Mention Autocomplete State ---- */
+var _mentionActive = false;
+var _mentionQuery = '';
+var _mentionSelectedIndex = 0;
+var _mentionUsers = [];
+var _mentionStartPos = -1;
+var _mentionDropdown = null;
+var _mentionMirror = null;
+
 /* ---- Mobile App ---- */
 document.addEventListener('DOMContentLoaded', function() {
   window._orbitSessionId = Date.now();
@@ -344,6 +371,12 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function renderChatList() {
+    // Delegate to OrbitHome's tab-aware renderer if available
+    if (typeof OrbitHome !== 'undefined' && OrbitHome.renderChatList) {
+      OrbitHome.renderChatList(window._activeHomeTab || 'friends');
+      return;
+    }
+    // Fallback: original rendering
     var container = document.getElementById('chat-list');
     var chats = MStore.getChats();
     var filtered = chats;
@@ -384,7 +417,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var chatFrameHtml = '';
       if (MStore.settings.showChatAvatars !== false) {
         var initial = c.name ? c.name.charAt(0).toUpperCase() : '?';
-        avatarHtml = c.avatar
+        avatarHtml = c.avatar && c.avatar.trim()
           ? '<img src="' + escapeHtml(c.avatar) + '" alt="">'
           : initial;
         if (isGroup) {
@@ -398,7 +431,7 @@ document.addEventListener('DOMContentLoaded', function() {
             avatarHtml = '<div class="avatar-glow-' + statusClass + '" style="border-radius:50%;width:100%;height:100%;overflow:hidden;display:flex;align-items:center;justify-content:center;">' + avatarHtml + '</div>';
           }
           // Profile frame for DM avatars
-          if (MStore.settings.experimentalProfileFrames) {
+          if (MStore.settings.profileFrames) {
             var cf = MStore.friends.find(function(f) { return f.id === c.id; });
             var cfNum = cf ? getProfileFrame(cf) : 0;
             if (cfNum > 0) {
@@ -417,7 +450,8 @@ document.addEventListener('DOMContentLoaded', function() {
       
       var hasAtt = lastMsg && lastMsg.attachments && lastMsg.attachments.length > 0;
       var hasText = lastMsg && lastMsg.text && lastMsg.text.trim();
-      
+      var hasPoll = lastMsg && lastMsg.poll;
+
       if (lastMsg && lastMsg.from === 'me' && lastMsg.from !== 'echo') {
         // Show "You: " prefix for own messages
         previewHtml += '<span class="chat-row-you">You: </span>';
@@ -432,8 +466,10 @@ document.addEventListener('DOMContentLoaded', function() {
           previewHtml += '<span class="chat-row-sender">' + escapeHtml(senderName) + ': </span>';
         }
       }
-      
-      if (hasAtt && !hasText) {
+
+      if (hasPoll) {
+        previewHtml += '<i data-lucide="bar-chart-3" class="chat-row-attachment-icon"></i> Poll';
+      } else if (hasAtt && !hasText) {
         // No text, only attachment — show attachment type label
         var imgAtt = lastMsg.attachments.some(function(a) { var t = (a.type || '').toLowerCase(); return t === 'image' || (a.mimeType || '').startsWith('image/'); });
         var vidAtt = lastMsg.attachments.some(function(a) { var t = (a.type || '').toLowerCase(); return t === 'video' || (a.mimeType || '').startsWith('video/'); });
@@ -478,22 +514,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
     var html = '';
 
-    // Direct Messages section
-    if (dms.length > 0) {
+    // Direct Messages section (only when showing friends tab)
+    if (window._activeHomeTab !== 'groups' && dms.length > 0) {
       html += '<div>';
       dms.forEach(function(c) { html += renderChatRow(c, false); });
       html += '</div>';
     }
 
-    // Groups section
-    if (grpChats.length > 0) {
+    // Groups section (only when showing groups tab)
+    if (window._activeHomeTab === 'groups' && grpChats.length > 0) {
       html += '<div class="chat-section-header"><i data-lucide="users" style="width:14px;height:14px;"></i> Groups</div>';
       html += '<div>';
       grpChats.forEach(function(c) { html += renderChatRow(c, true); });
       html += '</div>';
     }
-
-    // Create Group button
 
     html += endOfListHTML();
 
@@ -505,8 +539,6 @@ document.addEventListener('DOMContentLoaded', function() {
         openChat(this.getAttribute('data-chat'));
       });
     });
-
-
   }
 
   /** Send echo bot welcome messages with typing indicator delays */
@@ -569,6 +601,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }
     activeChatId = chatId;
+    if (window.OrbitChat) window.OrbitChat._currentChatId = chatId;
     // Save last opened chat for next startup (so we can pre-load just this chat's messages)
     try { localStorage.setItem('orbit_last_chat', chatId); } catch(e) {}
     editingMsg = null;
@@ -617,26 +650,28 @@ document.addEventListener('DOMContentLoaded', function() {
       } else {
         _avatarEl.textContent = _displayName.charAt(0).toUpperCase();
       }
-      // Profile frame for DMs (friend's profile frame)
-      var pfNum = 0;
-      if (!group && _friendAv) {
-        pfNum = parseInt(_friendAv.profileFrame, 10) || 0;
-      }
-      if (pfNum > 0) {
-        var oldFrame = _avatarEl.querySelector('.pfp-frame');
-        if (!oldFrame) {
-          var frameEl = document.createElement('img');
-          frameEl.className = 'pfp-frame';
-          frameEl.draggable = false;
-          frameEl.alt = '';
-          frameEl.style.cssText = 'position:absolute;top:-15%;left:-15%;pointer-events:none;';
-          _avatarEl.appendChild(frameEl);
-          oldFrame = frameEl;
+      // Profile frame for DMs (friend's profile frame) — gated on stable setting
+      if (MStore.settings && MStore.settings.profileFrames) {
+        var pfNum = 0;
+        if (!group && _friendAv) {
+          pfNum = parseInt(_friendAv.profileFrame, 10) || 0;
         }
-        oldFrame.src = 'icons/frames/pfp_frame_' + pfNum + '.png';
-      } else {
-        var oldFrame = _avatarEl.querySelector('.pfp-frame');
-        if (oldFrame) oldFrame.remove();
+        if (pfNum > 0) {
+          var oldFrame = _avatarEl.querySelector('.pfp-frame');
+          if (!oldFrame) {
+            var frameEl = document.createElement('img');
+            frameEl.className = 'pfp-frame';
+            frameEl.draggable = false;
+            frameEl.alt = '';
+            frameEl.style.cssText = 'position:absolute;top:-15%;left:-15%;pointer-events:none;';
+            _avatarEl.appendChild(frameEl);
+            oldFrame = frameEl;
+          }
+          oldFrame.src = 'icons/frames/pfp_frame_' + pfNum + '.png';
+        } else {
+          var oldFrame = _avatarEl.querySelector('.pfp-frame');
+          if (oldFrame) oldFrame.remove();
+        }
       }
       _avatarEl.style.display = '';
     }
@@ -654,7 +689,7 @@ document.addEventListener('DOMContentLoaded', function() {
         membersBtn.title = 'Members';
         membersBtn.innerHTML = '<i data-lucide="users"></i>';
         galleryBtn.parentNode.insertBefore(membersBtn, moreBtn);
-        membersBtn.addEventListener('click', showGroupInfo);
+        membersBtn.addEventListener('click', function() { showGroupInfo(); });
         renderLucide({ root: membersBtn });
       }
       membersBtn.style.display = 'flex';
@@ -695,6 +730,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     renderMessages(chatId);
+    // Apply per-chat wallpaper if set
+    applyChatWallpaper(chatId);
     if (window.renderTypingIndicator) window.renderTypingIndicator();
 
     // Restore draft for this chat
@@ -1022,6 +1059,9 @@ document.addEventListener('DOMContentLoaded', function() {
       }, 180);
     }
     activeChatId = null;
+    if (window.OrbitChat) window.OrbitChat._currentChatId = null;
+    // Clear per-chat wallpaper
+    clearChatWallpaper();
     var typingDiv = document.getElementById('typing-indicator');
     if (typingDiv) typingDiv.style.display = 'none';
     
@@ -1441,7 +1481,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function injectMessageParticles(container) {
-    if (!container || !MStore.settings.experimentalMessageFx) return;
+    if (!container || !MStore.settings.messageFx) return;
     var bubbles = container.querySelectorAll('.message-row.mine .message-bubble');
     if (!bubbles.length) return;
     var colors = ['#ffd700','#ff6b6b','#48dbfb','#ff9ff3','#feca57','#a29bfe','#fd79a8','#00cec9'];
@@ -1464,6 +1504,82 @@ document.addEventListener('DOMContentLoaded', function() {
         setTimeout(function(el) { if (el.parentNode) el.parentNode.removeChild(el); }, 1200, p);
       }
     }
+  }
+
+  function renderPoll(msg, chatId) {
+    if (!msg || !msg.poll) return '';
+    var poll = msg.poll;
+    var myId = MStore.user ? MStore.user.id : '';
+    var totalVotes = 0;
+    poll.options.forEach(function(o) { totalVotes += (o.votes || []).length; });
+    var hasVoted = poll.options.some(function(o) { return (o.votes || []).indexOf(myId) !== -1; });
+
+    var html = '<div class="poll-container" data-msg-id="' + msg.id + '">';
+    html += '<div class="poll-question">' + escapeHtml(poll.question) + '</div>';
+
+    poll.options.forEach(function(opt, idx) {
+      var voteCount = (opt.votes || []).length;
+      var pct = totalVotes > 0 ? Math.round(voteCount / totalVotes * 100) : 0;
+      var iVoted = (opt.votes || []).indexOf(myId) !== -1;
+
+      html += '<div class="poll-option' + (iVoted ? ' voted' : '') + '" data-opt-index="' + idx + '">';
+      html += '<div class="poll-option-bar" style="width:' + pct + '%;"></div>';
+      html += '<div class="poll-option-text">' + escapeHtml(opt.text) + '</div>';
+      html += '<div class="poll-option-count">' + voteCount + '</div>';
+      html += '</div>';
+    });
+
+    html += '<div class="poll-footer">' + totalVotes + ' vote' + (totalVotes !== 1 ? 's' : '') + '</div>';
+    html += '</div>';
+    return html;
+  }
+
+  function handlePollVote(chatId, msgId, optIndex) {
+    var msgs = MStore.messages[chatId];
+    if (!msgs) return;
+    var msg = msgs.find(function(m) { return String(m.id) === String(msgId); });
+    if (!msg || !msg.poll) return;
+    var poll = msg.poll;
+    var myId = MStore.user ? MStore.user.id : '';
+    if (!myId) return;
+    var opt = poll.options[optIndex];
+    if (!opt) return;
+
+    // Toggle: if already voted for this option, remove vote
+    var voteIdx = (opt.votes || []).indexOf(myId);
+    if (voteIdx !== -1) {
+      opt.votes.splice(voteIdx, 1);
+    } else {
+      // Remove vote from other options if not multi-select
+      if (!poll.multiSelect) {
+        poll.options.forEach(function(o) { o.votes = (o.votes || []).filter(function(v) { return v !== myId; }); });
+      }
+      if (!opt.votes) opt.votes = [];
+      opt.votes.push(myId);
+    }
+
+    MStore.save();
+    renderMessages(chatId);
+
+    // Broadcast vote to group members via P2P
+    broadcastPollVote(chatId, msgId, optIndex);
+  }
+
+  function broadcastPollVote(chatId, msgId, optIndex) {
+    if (!window.Orbit || !window.Orbit.P2P || !Orbit.P2P.isAvailable()) return;
+    var isGroup = MStore.groups.some(function(g) { return g.id === chatId; });
+    if (!isGroup) return;
+    var myId = MStore.user ? MStore.user.id : '';
+    var grp = MStore.groups.find(function(g) { return g.id === chatId; });
+    if (!grp) return;
+    (grp.members || []).forEach(function(m) {
+      var memberId = typeof m === 'string' ? m : m.userId;
+      if (memberId === myId) return;
+      Orbit.P2P.send(memberId, Orbit.Protocol.createPacket(
+        Orbit.Protocol.Types.POLL_VOTE, myId, memberId,
+        { msgId: msgId, optIndex: optIndex, chatId: chatId }
+      ));
+    });
   }
 
   function renderMessages(chatId) {
@@ -1601,7 +1717,8 @@ document.addEventListener('DOMContentLoaded', function() {
       if (isGroup && !isMine && !isGrouped) {
         var senderFriend = MStore.friends.find(function(f) { return f.id === m.from; });
         var senderName = senderFriend ? senderFriend.name : (m.fromName || m.from);
-        senderLabel = '<div style="font-size:11px;font-weight:600;color:var(--accent-primary);margin-bottom:2px;">' + escapeHtml(senderName) + '</div>';
+        // data-user-id lets the global long-press handler open the user actions sheet on the sender name
+        senderLabel = '<div style="font-size:11px;font-weight:600;color:var(--accent-primary);margin-bottom:2px;" data-user-id="' + escapeHtml(String(m.from)) + '">' + escapeHtml(senderName) + '</div>';
       }
       // Reply quote
       var replyHtml = '';
@@ -1722,18 +1839,29 @@ document.addEventListener('DOMContentLoaded', function() {
         reactionsHtml = '<div class="reactions-row" data-msg-id="' + m.id + '">' + rxHtml + '</div>';
       }
 
+      // Poll rendering
+      var pollHtml = '';
+      if (m.poll) {
+        pollHtml = renderPoll(m, chatId);
+      }
+
       // Only set data-msg-anim on genuinely new messages to prevent re-animation on re-render
       var _animType = MStore.settings.messageAnim || 'slide';
       var _animAttr = existingMsgIds[m.id] ? '' : ' data-msg-anim="' + _animType + '"';
+      var _renderedText = _renderMsgText(m.text, m.mentions);
+      if (m.isSpoiler) {
+        _renderedText = '<span class="spoiler-text" onclick="this.classList.toggle(\'revealed\')">' + _renderedText + '</span>';
+      }
       html += '<div class="message-row ' + (isMine ? 'mine' : 'other') + (isGrouped ? ' grouped' : '') + '" data-msg-id="' + m.id + '"' + _animAttr + '>' +
         '<div class="message-bubble">' +
           senderLabel +
           replyHtml +
-          '<div class="msg-text-mob">' + (window.Sanitize ? window.Sanitize.markdown(m.text) : escapeHtml(m.text)) + editedBadge + '</div>' +
+          '<div class="msg-text-mob">' + _renderedText + editedBadge + '</div>' +
           attachmentsHtml +
           linkPreviewHtml +
+          pollHtml +
           reactionsHtml +
-          '<div class="message-time">' + formatTime(m.time) + '</div>' +
+          '<div class="message-time">' + (_getDisappearTimer(chatId) !== 'off' ? '<span class="msg-disappear-indicator" title="Auto-deletes after ' + _getDisappearTimer(chatId) + '">⏱</span>' : '') + formatTime(m.time) + '</div>' +
           (MStore.settings.showMessageIds ? '<div style="font-size:9px;color:var(--text-muted);opacity:0.5;margin-top:2px;">' + m.id + '</div>' : '') +
         '</div>' +
       '</div>';
@@ -1744,6 +1872,10 @@ document.addEventListener('DOMContentLoaded', function() {
     if (window.OrbitVideoPlayer && typeof OrbitVideoPlayer.isAnyPlaying === 'function' && OrbitVideoPlayer.isAnyPlaying() && typeof OrbitVideoPlayer.savePlaying === 'function') _savedVideo = OrbitVideoPlayer.savePlaying();
     feed.setAttribute('data-refreshing', 'true');
     feed.innerHTML = html;
+    // Wire the message long-press context menu (idempotent — safe on every render).
+    // The live chat path is window.openChat → this renderMessages; the old
+    // OrbitChat.renderMessages path that used to own this is no longer the entry point.
+    if (window.OrbitChat && typeof OrbitChat._initContextMenu === 'function') OrbitChat._initContextMenu();
     if (window.Prism) setTimeout(function() { Prism.highlightAll(); }, 0);
     // Wire up copy-code buttons
     setTimeout(function() {
@@ -1907,6 +2039,16 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       });
     });
+    // Poll option click handlers
+    feed.querySelectorAll('.poll-option').forEach(function(el) {
+      el.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var pollContainer = this.closest('.poll-container');
+        var msgId = pollContainer.getAttribute('data-msg-id');
+        var optIndex = parseInt(this.getAttribute('data-opt-index'), 10);
+        handlePollVote(chatId, msgId, optIndex);
+      });
+    });
     feed.scrollTop = feed.scrollHeight;
     // Deferred re-scroll after content settles (catches lazy-loaded images, lucide SVGs, players)
     setTimeout(function() {
@@ -1996,7 +2138,7 @@ document.addEventListener('DOMContentLoaded', function() {
     feed.addEventListener('touchstart', function(e) {
       if (MStore.settings.swipeToReply === false || e.touches.length !== 1) return;
       var row = e.target.closest('.message-row');
-      if (!row || e.target.closest('button, input, textarea, select, a, label, .reaction-pill, .reply-quote, .msg-action-btn')) return;
+      if (!row || e.target.closest('button, input, textarea, select, a, label, .reaction-pill, .reply-quote, .msg-action-btn, .poll-option')) return;
       var t = e.touches[0];
       swipe = { id: row.getAttribute('data-msg-id'), x: t.clientX, y: t.clientY, locked: false };
       _hapticFired = false;
@@ -2022,7 +2164,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
 
-      e.preventDefault();
+      if (e.cancelable) e.preventDefault();
       var row = getRow(swipe.id);
       if (row) {
         applyDrag(row, dx);
@@ -2152,6 +2294,97 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  /* ---- Disappearing Messages Timer ---- */
+
+  function _parseTimerValue(val) {
+    if (val === 'off' || !val) return 0;
+    var unit = val.slice(-1);
+    var num = parseInt(val.slice(0, -1), 10);
+    if (unit === 's') return num * 1000;
+    if (unit === 'm') return num * 60000;
+    if (unit === 'h') return num * 3600000;
+    if (val === '24h') return 86400000;
+    return 0;
+  }
+
+  function _getDisappearTimer(chatId) {
+    // Check groups first
+    var grp = MStore.groups.find(function(g) { return g.id === chatId; });
+    if (grp && grp.disappearTimer !== undefined) return grp.disappearTimer;
+    // Then check DM chats
+    var chat = MStore.chats.find(function(c) { return c.id === chatId; });
+    if (chat && chat.disappearTimer !== undefined) return chat.disappearTimer;
+    return 'off';
+  }
+
+  function _setDisappearTimer(chatId, val) {
+    var grp = MStore.groups.find(function(g) { return g.id === chatId; });
+    if (grp) { grp.disappearTimer = val; MStore.save(); return; }
+    var chat = MStore.chats.find(function(c) { return c.id === chatId; });
+    if (chat) { chat.disappearTimer = val; MStore.save(); }
+  }
+
+  function _startDisappearTimer(chatId, msgId) {
+    var timerVal = _getDisappearTimer(chatId);
+    var ms = _parseTimerValue(timerVal);
+    if (ms <= 0) return;
+    var key = chatId + '_' + msgId;
+    // Cancel any existing timer for this message
+    if (window._disappearTimers[key]) {
+      clearTimeout(window._disappearTimers[key]);
+    }
+    window._disappearTimers[key] = setTimeout(function() {
+      MStore.deleteMessage(chatId, msgId);
+      delete window._disappearTimers[key];
+      if (activeChatId === chatId) renderMessages(chatId);
+      renderChatList();
+    }, ms);
+  }
+
+  function _cancelDisappearTimer(chatId, msgId) {
+    var key = chatId + '_' + msgId;
+    if (window._disappearTimers[key]) {
+      clearTimeout(window._disappearTimers[key]);
+      delete window._disappearTimers[key];
+    }
+  }
+
+  /* ---- Scheduled Messages ---- */
+
+  function _checkScheduledMessages() {
+    var due = MStore.getDueScheduledMessages();
+    due.forEach(function(sched) {
+      // Mark sent immediately to prevent double-sending
+      sched.sent = true;
+      MStore.set('scheduledMessages', MStore.scheduledMessages);
+      // Clone attachments for the send pipeline
+      var prevActiveChatId = activeChatId;
+      var prevStaged = stagedFiles.slice();
+      if (sched.attachments && sched.attachments.length > 0) {
+        stagedFiles = sched.attachments.map(function(a) {
+          return { name: a.name, type: a.type, size: a.size, url: a.url };
+        });
+      } else {
+        stagedFiles = [];
+      }
+      // Temporarily switch active chat and send
+      activeChatId = sched.chatId;
+      var input = document.getElementById('chat-input');
+      var savedInput = input.value;
+      input.value = sched.text;
+      sendMessage();
+      input.value = savedInput;
+      activeChatId = prevActiveChatId;
+      stagedFiles = prevStaged;
+      showToast('Scheduled message sent', 'success');
+    });
+  }
+
+  // Start scheduled message checker
+  var _schedInterval = setInterval(_checkScheduledMessages, 10000);
+  // Run once on startup after a short delay to let everything initialize
+  setTimeout(_checkScheduledMessages, 2000);
+
   function updateSendButton() {
     var input = document.getElementById('chat-input');
     var sendBtn = document.getElementById('btn-send');
@@ -2159,6 +2392,13 @@ document.addEventListener('DOMContentLoaded', function() {
     var hasText = input.value.trim().length > 0;
     var hasFiles = typeof stagedFiles !== 'undefined' && stagedFiles.length > 0;
     sendBtn.disabled = !(hasText || hasFiles);
+    // Update scheduled messages badge
+    var badge = document.getElementById('scheduled-badge');
+    if (badge) {
+      var pendCount = MStore.scheduledMessages.filter(function(m) { return !m.sent; }).length;
+      badge.style.display = pendCount > 0 ? 'flex' : 'none';
+      badge.textContent = pendCount;
+    }
   }
 
   async function sendMessage() {
@@ -2352,15 +2592,47 @@ document.addEventListener('DOMContentLoaded', function() {
       time: new Date().toISOString(),
       attachments: allAttachments.length > 0 ? allAttachments : undefined
     };
+
+    // ── Handle slash commands ──
+    var cmdResult = _handleSlashCommand(text, newMsg);
+    if (cmdResult) {
+      if (cmdResult.cancel) return;
+      if (cmdResult.handled) {
+        if (cmdResult.msg.text !== undefined) newMsg.text = cmdResult.msg.text;
+        if (cmdResult.msg.poll) newMsg.poll = cmdResult.msg.poll;
+        if (cmdResult.msg.isSpoiler) newMsg.isSpoiler = true;
+      }
+    }
     if (MStore.user) newMsg.fromName = MStore.user.name;
     if (replyingTo) newMsg.replyTo = replyingTo.id;
+    // Extract @mention data from text
+    if (text) {
+      var mentionMatches = text.match(/@(\w+)/g);
+      if (mentionMatches) {
+        var mentionUsers = _getMentionableUsers(activeChatId);
+        var mentions = [];
+        mentionMatches.forEach(function(match) {
+          var username = match.substring(1).toLowerCase();
+          var found = mentionUsers.find(function(u) { return u.name.toLowerCase() === username; });
+          if (found) {
+            // Avoid duplicates
+            if (!mentions.some(function(m) { return m.userId === found.id; })) {
+              mentions.push({ userId: found.id, username: found.name, name: found.name, tag: found.tag });
+            }
+          }
+        });
+        if (mentions.length > 0) newMsg.mentions = mentions;
+      }
+    }
     MStore.addMessage(activeChatId, newMsg);
+    _startDisappearTimer(activeChatId, newMsg.id);
     stagedFiles = [];
     renderFilePreview();
 
     renderMessages(activeChatId);
     renderChatList();
     input.value = '';
+    hideCommandTooltip();
     localStorage.removeItem('orbit_draft_' + activeChatId);
     input.style.height = 'auto';
     updateSendButton();
@@ -2370,12 +2642,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // Echo bot
     if (activeChatId === 'echo') {
       setTimeout(function() {
+        var echoMsgId = 'm' + Date.now();
         MStore.addMessage('echo', {
-          id: 'm' + Date.now(),
+          id: echoMsgId,
           from: 'echo',
           text: 'Echo: ' + text,
           time: new Date().toISOString()
         });
+        _startDisappearTimer('echo', echoMsgId);
         renderMessages('echo');
         renderChatList();
       }, 500);
@@ -2395,7 +2669,8 @@ document.addEventListener('DOMContentLoaded', function() {
         var payload = {
           text: textToSend, groupId: groupId, msgId: newMsg.id, replyTo: newMsg.replyTo,
           attachments: grpAttachments.length > 0 ? grpAttachments : undefined,
-          fromName: newMsg.fromName
+          fromName: newMsg.fromName,
+          poll: newMsg.poll || undefined
         };
         if (isE2EE && memberKey) {
           Orbit.E2EE.encrypt(textToSend, memberKey).then(function(encrypted) {
@@ -2403,6 +2678,7 @@ document.addEventListener('DOMContentLoaded', function() {
               payload.e2ee = true;
               payload.ciphertext = encrypted.ciphertext;
               payload.nonce = encrypted.nonce;
+              payload.poll = newMsg.poll || undefined;
               Orbit.P2P.send(memberId, Orbit.Protocol.createPacket(Orbit.Protocol.Types.MESSAGE, MStore.user.id, memberId, payload));
             }
           });
@@ -2573,7 +2849,7 @@ document.addEventListener('DOMContentLoaded', function() {
               largeFiles.forEach(function(lf) { e2eeAttachments.push({ id: lf.id, _fileId: lf.id, name: lf.name, type: lf.type, _poster: lf._poster || undefined, _pending: true }); });
               Orbit.P2P.send(activeChatId, Orbit.Protocol.createPacket(
                 Orbit.Protocol.Types.MESSAGE, myId, activeChatId,
-                { e2ee: true, ciphertext: encrypted.ciphertext, nonce: encrypted.nonce, msgId: newMsg.id, replyTo: newMsg.replyTo, attachments: e2eeAttachments.length > 0 ? e2eeAttachments : undefined, fromName: newMsg.fromName }
+                { e2ee: true, ciphertext: encrypted.ciphertext, nonce: encrypted.nonce, msgId: newMsg.id, replyTo: newMsg.replyTo, attachments: e2eeAttachments.length > 0 ? e2eeAttachments : undefined, fromName: newMsg.fromName, poll: newMsg.poll || undefined }
               ));
             }
           });
@@ -2589,12 +2865,192 @@ document.addEventListener('DOMContentLoaded', function() {
       largeFiles.forEach(function(lf) { msgAttachments.push({ id: lf.id, _fileId: lf.id, name: lf.name, type: lf.type, _poster: lf._poster || undefined, _pending: true }); });
       Orbit.P2P.send(activeChatId, Orbit.Protocol.createPacket(
         Orbit.Protocol.Types.MESSAGE, myId, activeChatId,
-        { text: text, msgId: newMsg.id, replyTo: newMsg.replyTo, attachments: msgAttachments.length > 0 ? msgAttachments : undefined, fromName: newMsg.fromName }
+        { text: text, msgId: newMsg.id, replyTo: newMsg.replyTo, attachments: msgAttachments.length > 0 ? msgAttachments : undefined, fromName: newMsg.fromName, poll: newMsg.poll || undefined }
       ));
       if (largeFiles.length > 0) {
         largeFiles.forEach(function(att) { _sendLargeFileToPeer(att, activeChatId, false); });
       }
     }
+  }
+
+  /* -- Poll Helpers -- */
+
+  function parsePollArgs(str) {
+    var args = [];
+    var current = '';
+    var inQuotes = false;
+    for (var i = 6; i < str.length; i++) {
+      var c = str[i];
+      if (c === '"') {
+        inQuotes = !inQuotes;
+        if (!inQuotes && current) { args.push(current); current = ''; }
+      } else if (c === ' ' && !inQuotes) {
+        if (current) { args.push(current); current = ''; }
+      } else {
+        current += c;
+      }
+    }
+    if (current) args.push(current);
+    return args;
+  }
+
+  /* ---- Slash Command Handler ---- */
+  function _handleSlashCommand(text, newMsg) {
+    if (!text || !text.startsWith('/')) return null;
+
+    var parts = text.split(' ');
+    var cmd = parts[0].toLowerCase();
+    var args = parts.slice(1).join(' ');
+
+    switch(cmd) {
+      case '/help':
+        showHelpModal();
+        return { cancel: true };
+
+      case '/poll':
+        var pollArgs = parsePollArgs(text);
+        if (pollArgs.length < 3) {
+          showToast('Usage: /poll "Question?" "Option1" "Option2" ...', 'info');
+          return { cancel: true };
+        }
+        newMsg.poll = {
+          question: pollArgs[0],
+          options: pollArgs.slice(1).map(function(opt) { return { text: opt, votes: [] }; }),
+          multiSelect: false,
+          expiresAt: null
+        };
+        newMsg.text = '';
+        return { handled: true, msg: newMsg };
+
+      case '/me':
+        newMsg.text = '*_' + args.trim() + '_*';
+        return { handled: true, msg: newMsg };
+
+      case '/shrug':
+        newMsg.text = '¯\\\\_(ツ)_/¯';
+        return { handled: true, msg: newMsg };
+
+      case '/tableflip':
+        newMsg.text = '(╯°□°）╯︵ ┻━┻';
+        return { handled: true, msg: newMsg };
+
+      case '/unflip':
+        newMsg.text = '┬─┬ ノ( ゜-゜ノ)';
+        return { handled: true, msg: newMsg };
+
+      case '/lenny':
+        newMsg.text = '( ͡° ͜ʖ ͡°)';
+        return { handled: true, msg: newMsg };
+
+      case '/roll':
+        var max = parseInt(args, 10) || 6;
+        if (max < 1) max = 6;
+        if (max > 1000) max = 1000;
+        var result = Math.floor(Math.random() * max) + 1;
+        newMsg.text = '🎲 Rolled ' + result + ' (1-' + max + ')';
+        return { handled: true, msg: newMsg };
+
+      case '/flip':
+        var outcomes = ['Heads', 'Tails'];
+        newMsg.text = '🪙 ' + outcomes[Math.floor(Math.random() * 2)];
+        return { handled: true, msg: newMsg };
+
+      case '/spoiler':
+        var spoilerText = args.trim();
+        if (!spoilerText) {
+          showToast('Usage: /spoiler hidden text', 'info');
+          return { cancel: true };
+        }
+        newMsg.text = spoilerText;
+        newMsg.isSpoiler = true;
+        return { handled: true, msg: newMsg };
+
+      case '/clear':
+        if (activeChatId && MStore.messages[activeChatId]) {
+          if (confirm('Clear all messages in this chat? This cannot be undone.')) {
+            MStore.messages[activeChatId] = [];
+            localStorage.removeItem('orbit_msg_' + activeChatId);
+            MStore.save();
+            renderMessages(activeChatId);
+            renderChatList();
+            showToast('Chat cleared', 'info');
+          }
+        }
+        return { cancel: true };
+
+      default:
+        showToast('Unknown command. Type /help to see all commands.', 'info');
+        return { cancel: true };
+    }
+  }
+
+  function showHelpModal() {
+    var html = '<div style="padding:20px;max-width:340px;">';
+    html += '<h3 style="margin:0 0 16px;font-size:17px;font-weight:700;color:var(--text-primary);">Slash Commands</h3>';
+    for (var i = 0; i < COMMANDS.length; i++) {
+      var c = COMMANDS[i];
+      html += '<div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border-subtle);">';
+      html += '  <div style="flex:1;min-width:0;">';
+      html += '    <div style="font-size:14px;font-weight:600;color:var(--accent-primary);font-family:monospace;">' + c.name + '</div>';
+      html += '    <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">' + c.desc + '</div>';
+      html += '    <div style="font-size:11px;color:var(--text-muted);margin-top:1px;font-family:monospace;">' + c.usage + '</div>';
+      html += '  </div>';
+      html += '</div>';
+    }
+    html += '</div>';
+    OrbitSheet.showCustom(html);
+  }
+
+  /* ---- Slash Command Tooltip ---- */
+  function showCommandTooltip(val) {
+    var tooltip = document.getElementById('slash-tooltip');
+    if (!tooltip) {
+      tooltip = document.createElement('div');
+      tooltip.id = 'slash-tooltip';
+      tooltip.className = 'slash-tooltip';
+      var chatInputArea = document.getElementById('chat-input-area');
+      if (chatInputArea) chatInputArea.appendChild(tooltip);
+      else document.body.appendChild(tooltip);
+    }
+    var q = val.toLowerCase().substring(1);
+    var matches = COMMANDS.filter(function(c) {
+      return c.name.indexOf(q) !== -1 || c.desc.toLowerCase().indexOf(q) !== -1;
+    });
+    if (matches.length === 0) {
+      tooltip.style.display = 'none';
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < Math.min(matches.length, 5); i++) {
+      var m = matches[i];
+      html += '<div class="slash-tooltip-item" data-cmd="' + m.name + '">' +
+        '<span class="slash-tooltip-name">' + m.name + '</span>' +
+        '<span class="slash-tooltip-desc">' + m.desc + '</span>' +
+      '</div>';
+    }
+    tooltip.innerHTML = html;
+    tooltip.style.display = 'block';
+
+    // Wire click handlers
+    tooltip.querySelectorAll('.slash-tooltip-item').forEach(function(item) {
+      item.addEventListener('click', function() {
+        var cmd = this.getAttribute('data-cmd');
+        var input = document.getElementById('chat-input');
+        if (input) {
+          input.value = cmd + ' ';
+          input.selectionStart = input.selectionEnd = cmd.length + 1;
+          input.focus();
+          var evt = new Event('input', { bubbles: true });
+          input.dispatchEvent(evt);
+        }
+        hideCommandTooltip();
+      });
+    });
+  }
+
+  function hideCommandTooltip() {
+    var tooltip = document.getElementById('slash-tooltip');
+    if (tooltip) tooltip.style.display = 'none';
   }
 
   /* -- Emoji Picker -- */
@@ -2651,6 +3107,176 @@ document.addEventListener('DOMContentLoaded', function() {
 
   /* -- File Upload -- */
   var stagedFiles = [];
+  var _voiceRecorder = {
+    mediaRecorder: null,
+    audioChunks: [],
+    stream: null,
+    startTime: null,
+    timerInterval: null,
+    isRecording: false
+  };
+
+  function _getAudioMimeType() {
+    if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) return 'audio/webm;codecs=opus';
+    if (MediaRecorder.isTypeSupported('audio/webm')) return 'audio/webm';
+    if (MediaRecorder.isTypeSupported('audio/mp4')) return 'audio/mp4';
+    return 'audio/webm';
+  }
+
+  function startVoiceRecording() {
+    if (_voiceRecorder.isRecording) return;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      // Show the button but disabled — a check already happened at init
+      showToast('Microphone not available on this device', 'warning');
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
+      _voiceRecorder.stream = stream;
+      _voiceRecorder.audioChunks = [];
+      _voiceRecorder.startTime = Date.now();
+
+      var mimeType = _getAudioMimeType();
+      var recorder;
+      try {
+        recorder = new MediaRecorder(stream, { mimeType: mimeType });
+      } catch(e) {
+        // Fallback: let MediaRecorder pick default
+        recorder = new MediaRecorder(stream);
+      }
+      _voiceRecorder.mediaRecorder = recorder;
+
+      recorder.ondataavailable = function(e) {
+        if (e.data && e.data.size > 0) {
+          _voiceRecorder.audioChunks.push(e.data);
+        }
+      };
+
+      recorder.onstop = function() {
+        // Show indicator briefly before pushing to staged files
+        var btnVoice = document.getElementById('btn-voice');
+        if (btnVoice) btnVoice.classList.remove('recording');
+
+        var indicator = document.getElementById('voice-recording-indicator');
+        if (indicator) indicator.style.display = 'none';
+
+        clearInterval(_voiceRecorder.timerInterval);
+        _voiceRecorder.timerInterval = null;
+
+        if (_voiceRecorder.audioChunks.length === 0) {
+          _voiceRecorder.isRecording = false;
+          return;
+        }
+
+        var blob = new Blob(_voiceRecorder.audioChunks, { type: _getAudioMimeType() });
+        var ext = blob.type.indexOf('mp4') !== -1 ? '.mp4' : '.webm';
+        var fileName = 'Voice Message' + ext;
+        var audioFile = new File([blob], fileName, { type: blob.type });
+        var blobUrl = URL.createObjectURL(blob);
+
+        stagedFiles.push({
+          id: 'voice_' + Date.now(),
+          file: audioFile,
+          type: 'audio',
+          name: fileName,
+          url: blobUrl,
+          mimeType: blob.type,
+          size: blob.size,
+          _arrayBuffer: null
+        });
+
+        // Read the blob as ArrayBuffer for the send pipeline
+        var reader = new FileReader();
+        reader.onload = function(ev) {
+          var lastIdx = stagedFiles.length - 1;
+          if (lastIdx >= 0 && stagedFiles[lastIdx].id.indexOf('voice_') === 0) {
+            stagedFiles[lastIdx]._arrayBuffer = ev.target.result;
+          }
+        };
+        reader.readAsArrayBuffer(blob);
+
+        renderFilePreview();
+        showToast('Voice message recorded', 'success');
+
+        _voiceRecorder.audioChunks = [];
+        _voiceRecorder.isRecording = false;
+      };
+
+      recorder.onerror = function() {
+        stopVoiceRecording(true);
+        showToast('Recording failed', 'error');
+      };
+
+      recorder.start(250); // Collect data every 250ms for low latency
+      _voiceRecorder.isRecording = true;
+
+      // Update UI
+      var btnVoice = document.getElementById('btn-voice');
+      if (btnVoice) btnVoice.classList.add('recording');
+
+      var indicator = document.getElementById('voice-recording-indicator');
+      if (indicator) indicator.style.display = 'flex';
+
+      // Start timer
+      _voiceRecorder.timerInterval = setInterval(function() {
+        var elapsed = Math.floor((Date.now() - _voiceRecorder.startTime) / 1000);
+        var maxDuration = 300; // 5 minutes
+        if (elapsed >= maxDuration) {
+          stopVoiceRecording(false);
+          return;
+        }
+        var mins = Math.floor(elapsed / 60);
+        var secs = elapsed % 60;
+        var timerEl = document.getElementById('voice-recording-timer');
+        if (timerEl) timerEl.textContent = mins + ':' + (secs < 10 ? '0' : '') + secs;
+      }, 200);
+    }).catch(function(err) {
+      console.warn('[Voice] getUserMedia error:', err.message);
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        showToast('Microphone permission denied', 'warning');
+      } else if (err.name === 'NotFoundError') {
+        showToast('No microphone found', 'warning');
+      } else {
+        showToast('Could not access microphone: ' + err.message, 'warning');
+      }
+      _voiceRecorder.isRecording = false;
+    });
+  }
+
+  function stopVoiceRecording(cancel) {
+    if (!_voiceRecorder.isRecording && !_voiceRecorder.mediaRecorder) return;
+
+    // Stop the MediaRecorder
+    if (_voiceRecorder.mediaRecorder && _voiceRecorder.mediaRecorder.state !== 'inactive') {
+      try { _voiceRecorder.mediaRecorder.stop(); } catch(e) {}
+    }
+
+    // Stop all tracks on the stream
+    if (_voiceRecorder.stream) {
+      var tracks = _voiceRecorder.stream.getTracks();
+      tracks.forEach(function(t) { t.stop(); });
+      _voiceRecorder.stream = null;
+    }
+
+    clearInterval(_voiceRecorder.timerInterval);
+    _voiceRecorder.timerInterval = null;
+
+    // Clean up UI
+    var btnVoice = document.getElementById('btn-voice');
+    if (btnVoice) btnVoice.classList.remove('recording');
+
+    var indicator = document.getElementById('voice-recording-indicator');
+    if (indicator) indicator.style.display = 'none';
+
+    var timerEl = document.getElementById('voice-recording-timer');
+    if (timerEl) timerEl.textContent = '0:00';
+
+    if (cancel) {
+      // Discard all chunks
+      _voiceRecorder.audioChunks = [];
+      _voiceRecorder.isRecording = false;
+      // Revoke any blob URLs that might have been created
+    }
+  }
 
   function handleFileInput(e) {
     if (!e.target.files || e.target.files.length === 0) return;
@@ -2854,7 +3480,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var initial = f.name ? f.name.charAt(0).toUpperCase() : '?';
       var fPfNum = getProfileFrame(f);
       var fPfHtml = fPfNum > 0 ? '<img src="icons/frames/pfp_frame_' + fPfNum + '.png" class="pfp-frame" style="position:absolute;top:-16%;left:-16%;pointer-events:none;" draggable="false" alt="">' : '';
-      html += '<div class="list-row friend-row" data-friend="' + f.id + '">' +
+      html += '<div class="list-row friend-row" data-friend="' + f.id + '" data-user-id="' + f.id + '">' +
         '<div class="chat-row-avatar-wrapper" style="width:44px;height:44px;">' +
           '<div class="chat-row-avatar" style="width:44px;height:44px;font-size:16px;">' + (f.avatar ? '<img src="' + escapeHtml(f.avatar) + '">' : initial) + '</div>' +
           fPfHtml +
@@ -3077,6 +3703,8 @@ document.addEventListener('DOMContentLoaded', function() {
       html += '<div class="settings-category-header">' + cat.label + '</div>';
       html += '<div class="settings-category-card">';
       cat.items.forEach(function(sec, idx) {
+        // Folders section is experimental — hide unless the experimental flag is on
+        if (sec.key === 'folders' && !(MStore.settings && MStore.settings.experimentalFolders)) return;
         html +=
           '<div class="settings-section-card" data-section="' + sec.key + '">' +
             '<div class="settings-card-icon"><i data-lucide="' + sec.icon + '"></i></div>' +
@@ -3152,7 +3780,9 @@ document.addEventListener('DOMContentLoaded', function() {
         card('maximize-2', 'App Zoom', 'Zoom the entire app interface',
           '<div style="display:flex;align-items:center;gap:6px;width:140px;"><input type="range" min="80" max="150" value="' + (s.appZoom || 100) + '" class="settings-slider" id="set-zoom" style="flex:1;height:4px;"><span id="zoom-val-label" style="font-size:12px;min-width:36px;text-align:right;font-weight:600;color:var(--accent-primary);">' + (s.appZoom || 100) + '%</span></div>') +
         card('sun', 'Disable Light Mode Flashbang', 'Skip the white flash when switching to Light Mode',
-          '<button class="settings-toggle ' + (s.noFlashbang ? 'on' : '') + '" id="set-nobang"></button>');
+          '<button class="settings-toggle ' + (s.noFlashbang ? 'on' : '') + '" id="set-nobang"></button>') +
+        card('frame', 'Profile Frames', 'Overlay decorative frames on avatars',
+          '<button class="settings-toggle ' + (s.profileFrames ? 'on' : '') + '" id="set-profile-frames"></button>');
       case 'chat':
         return card('corner-down-left', 'Enter to Send', 'Press Enter to send messages',
           '<button class="settings-toggle ' + (s.enterToSend ? 'on' : '') + '" id="set-enter-send"></button>') +
@@ -3164,6 +3794,8 @@ document.addEventListener('DOMContentLoaded', function() {
           sel([{v:'slide',l:'Slide'},{v:'fade',l:'Fade'}], 'set-msg-anim', s.messageAnim || 'slide')) +
         card('minimize-2', 'Compact Spacing', 'Tighter message layout',
           '<button class="settings-toggle ' + (s.experimentalCompactSpacing ? 'on' : '') + '" id="set-compact-spacing"></button>') +
+        card('sparkles', 'Message Effects', 'Show sparkle animations on new messages',
+          '<button class="settings-toggle ' + (s.messageFx ? 'on' : '') + '" id="set-message-fx"></button>') +
         card('grid', 'Background Pattern', 'Dots or Grid on chat background',
           sel([{v:'None',l:'None'},{v:'Dots',l:'Dots'},{v:'Grid',l:'Grid'}], 'set-pattern', s.bgPattern || 'None')) +
         card('image', 'Image Previews', 'Show inline image previews in chat',
@@ -3294,25 +3926,106 @@ document.addEventListener('DOMContentLoaded', function() {
         (s.enableExperimental ? (
           card('circle-dot', 'Animated Avatars', 'Animate avatar borders with pulse effect',
             '<button class="settings-toggle ' + (s.experimentalAnimatedAvatars ? 'on' : '') + '" id="set-exp-avatars"></button>') +
-          card('sparkles', 'Message Effects', 'Show sparkle animations on new messages',
-            '<button class="settings-toggle ' + (s.experimentalMessageFx ? 'on' : '') + '" id="set-exp-fx"></button>') +
           card('droplet', 'Custom Colors', 'Pick custom accent color',
             '<button class="settings-toggle ' + (s.enableCustomColors ? 'on' : '') + '" id="set-exp-colors"></button>') +
-          card('frame', 'Profile Frames', 'Overlay decorative frames on avatars',
-            '<button class="settings-toggle ' + (s.experimentalProfileFrames ? 'on' : '') + '" id="set-exp-frames"></button>') +
           card('monitor', 'FPS Monitor', 'Display real-time frame rate',
             '<button class="settings-toggle ' + (s.experimentalFpsMonitor ? 'on' : '') + '" id="set-exp-fps"></button>') +
           card('layout', 'Developer Overlay', 'Connection stats and debug info',
             '<button class="settings-toggle ' + (s.experimentalDevOverlay ? 'on' : '') + '" id="set-exp-dev-overlay"></button>') +
+          card('folder', 'Chat Folders', 'Organize chats into custom folders',
+            '<button class="settings-toggle ' + (s.experimentalFolders ? 'on' : '') + '" id="set-exp-folders"></button>') +
           card('zap-off', 'Performance Mode', 'Kill animations, reduce CPU usage',
             '<button class="settings-toggle ' + (s.experimentalPerformanceMode ? 'on' : '') + '" id="set-exp-perf"></button>')
         ) : '');
+      case 'folders':
+        if (!s.experimentalFolders) return '';
+        var folders = MStore.getChatFolders();
+        if (folders.length === 0) {
+          return '<div class="settings-item-card" data-search="Folders No folders yet">' +
+            '<div class="settings-item-icon"><i data-lucide="folder"></i></div>' +
+            '<div class="settings-item-info">' +
+              '<span class="settings-item-title">No Folders Yet</span>' +
+              '<span class="settings-item-desc">Create a folder to organize your chats</span>' +
+            '</div>' +
+          '</div>' +
+          '<div class="settings-btn-row"><button id="btn-create-folder" class="settings-btn-primary"><i data-lucide="plus"></i> Create New Folder</button></div>';
+        }
+        var html = '';
+        for (var fi = 0; fi < folders.length; fi++) {
+          var f = folders[fi];
+          var chatCount = f.chatIds.length;
+          html += '<div class="settings-folder-row" data-folder-id="' + f.id + '">' +
+            '<div class="settings-folder-icon"><i data-lucide="' + (f.icon || 'folder') + '"></i></div>' +
+            '<div class="settings-folder-info">' +
+              '<div class="settings-folder-name">' + escapeHtml(f.name) + '</div>' +
+              '<div class="settings-folder-count">' + chatCount + ' chat' + (chatCount !== 1 ? 's' : '') + '</div>' +
+            '</div>' +
+            '<button class="settings-folder-rename-btn" data-folder-id="' + f.id + '" title="Rename"><i data-lucide="pencil" style="width:16px;height:16px;"></i></button>' +
+            '<button class="settings-folder-delete-btn" data-folder-id="' + f.id + '" title="Delete"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></button>' +
+          '</div>';
+        }
+        return html +
+          '<div class="settings-btn-row"><button id="btn-create-folder" class="settings-btn-primary"><i data-lucide="plus"></i> Create New Folder</button></div>';
       default:
         return '';
     }
   }
 
   function bindSectionEvents(key, s) {
+    // Helper for rename/delete folder events
+    function _bindFolderActions() {
+      // Rename buttons
+      document.querySelectorAll('.settings-folder-rename-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          var fid = this.getAttribute('data-folder-id');
+          var folder = MStore.chatFolders[fid];
+          if (!folder) return;
+          var name = prompt('Rename folder:', folder.name);
+          if (name && name.trim()) {
+            MStore.renameFolder(fid, name.trim());
+            showSettingsSection('folders');
+          }
+        });
+      });
+      // Delete buttons
+      document.querySelectorAll('.settings-folder-delete-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          var fid = this.getAttribute('data-folder-id');
+          var folder = MStore.chatFolders[fid];
+          if (!folder) return;
+          if (confirm('Delete folder "' + folder.name + '"? Chats inside it will not be deleted.')) {
+            MStore.deleteFolder(fid);
+            // If we were viewing this folder in home, reset to friends
+            if (window._activeHomeTab === fid) {
+              window._activeHomeTab = 'friends';
+            }
+            if (typeof OrbitHome !== 'undefined' && OrbitHome.renderFolderTabs) {
+              OrbitHome.renderFolderTabs();
+            }
+            if (window.renderChatList) window.renderChatList(window._activeHomeTab);
+            showSettingsSection('folders');
+          }
+        });
+      });
+      // Create Folder button
+      var createBtn = document.getElementById('btn-create-folder');
+      if (createBtn) {
+        createBtn.addEventListener('click', function() {
+          var name = prompt('Enter folder name:');
+          if (name && name.trim()) {
+            MStore.createFolder(name.trim(), 'folder');
+            if (typeof OrbitHome !== 'undefined' && OrbitHome.renderFolderTabs) {
+              OrbitHome.renderFolderTabs();
+            }
+            showSettingsSection('folders');
+            showToast('Folder "' + name.trim() + '" created', 'info');
+          }
+        });
+      }
+    }
+
     switch (key) {
       case 'appearance':
         // Theme select with light mode flashbang interception
@@ -3369,13 +4082,16 @@ document.addEventListener('DOMContentLoaded', function() {
         })();
         // No flashbang toggle
         bindToggle('set-nobang', function(on) { s.noFlashbang = on; MStore.save(); }, s.noFlashbang);
+        // Profile Frames (graduated from Experimental)
+        bindToggle('set-profile-frames', function(on) { s.profileFrames = on; MStore.save(); if (on) document.documentElement.setAttribute('data-exp-frames','true'); else document.documentElement.removeAttribute('data-exp-frames'); }, s.profileFrames);
         break;
       case 'chat':
         bindToggle('set-enter-send', function(on) { s.enterToSend = on; MStore.save(); }, s.enterToSend);
         bindToggle('set-swipe-reply', function(on) { s.swipeToReply = on; MStore.save(); }, s.swipeToReply !== false);
         bindToggle('set-chat-avatars', function(on) { s.showChatAvatars = on; MStore.save(); renderChatList(); }, s.showChatAvatars !== false);
         bindSelect('set-msg-anim', function(v) { s.messageAnim = v; MStore.save(); if (activeChatId) renderMessages(activeChatId); });
-        bindToggle('set-compact-spacing', function(on) { s.experimentalCompactSpacing = on; MStore.save(); document.documentElement.setAttribute('data-compact-spacing', on ? 'true' : ''); if (activeChatId) renderMessages(activeChatId); }, s.experimentalCompactSpacing);
+        bindToggle('set-compact-spacing', function(on) { s.experimentalCompactSpacing = on; MStore.save(); if (on) document.documentElement.setAttribute('data-compact-spacing', 'true'); else document.documentElement.removeAttribute('data-compact-spacing'); if (activeChatId) renderMessages(activeChatId); }, s.experimentalCompactSpacing);
+        bindToggle('set-message-fx', function(on) { s.messageFx = on; MStore.save(); if (on) document.documentElement.setAttribute('data-exp-fx', 'true'); else document.documentElement.removeAttribute('data-exp-fx'); }, s.messageFx);
         bindSelect('set-pattern', function(v) { s.bgPattern = v; MStore.save(); applyBgPattern(); });
         bindToggle('set-image-previews', function(on) { s.showImagePreviews = on; MStore.save(); if (activeChatId) renderMessages(activeChatId); }, s.showImagePreviews !== false);
         bindToggle('set-link-previews', function(on) { s.showLinkPreviews = on; MStore.save(); if (activeChatId) renderMessages(activeChatId); }, s.showLinkPreviews !== false);
@@ -3442,6 +4158,9 @@ document.addEventListener('DOMContentLoaded', function() {
         var addFriendRow = document.getElementById('row-add-friend');
         if (addFriendRow) addFriendRow.addEventListener('click', showAddFriendModal);
         break;
+      case 'folders':
+        _bindFolderActions();
+        break;
       case 'advanced':
         bindToggle('set-dev-mode', function(on) {
           s.devMode = on; MStore.save(); document.documentElement.setAttribute('data-dev-mode', on ? 'true' : ''); updateDebugOverlay();
@@ -3482,15 +4201,22 @@ document.addEventListener('DOMContentLoaded', function() {
           s.enableExperimental = on; MStore.save();
           showSettingsSection('advanced');
         }, s.enableExperimental);
-        bindToggle('set-exp-avatars', function(on) { s.experimentalAnimatedAvatars = on; MStore.save(); document.documentElement.setAttribute('data-exp-avatars', on ? 'true' : ''); }, s.experimentalAnimatedAvatars);
-        bindToggle('set-exp-fx', function(on) { s.experimentalMessageFx = on; MStore.save(); document.documentElement.setAttribute('data-exp-fx', on ? 'true' : ''); }, s.experimentalMessageFx);
+        bindToggle('set-exp-avatars', function(on) { s.experimentalAnimatedAvatars = on; MStore.save(); if (on) document.documentElement.setAttribute('data-exp-avatars', 'true'); else document.documentElement.removeAttribute('data-exp-avatars'); }, s.experimentalAnimatedAvatars);
+        bindToggle('set-exp-folders', function(on) {
+          s.experimentalFolders = on; MStore.save();
+          // If disabling while a folder tab is active, fall back to Friends so the
+          // chat list doesn't stay stuck on a now-hidden folder filter.
+          if (!on && typeof window._activeHomeTab === 'string' && window._activeHomeTab.indexOf('folder_') === 0) {
+            window._activeHomeTab = 'friends';
+          }
+          if (typeof OrbitHome !== 'undefined') { OrbitHome.renderFolderTabs(); if (window.renderChatList) window.renderChatList(window._activeHomeTab); }
+        }, s.experimentalFolders);
         bindToggle('set-exp-colors', function(on) { s.enableCustomColors = on; MStore.save(); document.documentElement.setAttribute('data-exp-colors', on ? 'true' : ''); }, s.enableCustomColors);
-        bindToggle('set-exp-frames', function(on) { s.experimentalProfileFrames = on; MStore.save(); document.documentElement.setAttribute('data-exp-frames', on ? 'true' : ''); renderSettings(); }, s.experimentalProfileFrames);
         bindToggle('set-exp-fps', function(on) { s.experimentalFpsMonitor = on; MStore.save(); toggleFpsMonitor(on); }, s.experimentalFpsMonitor);
         bindToggle('set-exp-dev-overlay', function(on) { s.experimentalDevOverlay = on; MStore.save(); toggleDevOverlay(on); }, s.experimentalDevOverlay);
         bindToggle('set-exp-perf', function(on) {
           s.experimentalPerformanceMode = on; MStore.save();
-          document.documentElement.setAttribute('data-perf-mode', on ? 'true' : '');
+          if (on) document.documentElement.setAttribute('data-perf-mode', 'true'); else document.documentElement.removeAttribute('data-perf-mode');
           if (on) {
             freezeGifImages(document, true);
             // Slow offline check to 60s
@@ -3555,7 +4281,28 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button id="changelog-close-mobile" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;font-size:20px;">✕</button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
-        vBlock('0.3.2-beta', 'Latest', [
+        vBlock('0.4.0-beta', 'Latest Stable', [
+          ['Bug Fixes', [
+            'Message Long-Press Menu Fixed — Press-and-hold on a message bubble now opens the reactions + actions sheet (Copy/Reply/Translate/Forward/Delete). Previously the wiring only ran through a secondary code path the app no longer uses, so the menu never initialized.',
+            'Profile Frame Leak Fixed (4 renderers) — Avatar frames were still rendering when the Profile Frames setting was off. Gated _addAvatarFrames, renderProfilePill, and both chat-header renderers.',
+            'Experimental Toggle Off-State Bugs Fixed — Avatars / Profile Frames / Perf Mode toggles used empty-string attribute selectors that failed when off. Switched to value-based [data-*="true"] selectors.',
+            'Compact Spacing Toggle Fixed — Setting wrote a class the CSS no longer matched; now uses a [data-compact-spacing] attribute selector.',
+            'FPS Monitor & Dev Overlay Resume on Reload — Debug toggles no longer stay off after an app reload when enabled.'
+          ]],
+          ['UI Polish', [
+            'Folder Tab Icons Removed — Folder tabs show clean text labels only, matching Friends/Groups.',
+            'Folders Gated Behind Experimental — Folder tabs and the Folders settings entry now require the new Experimental toggle (off by default) in Settings → Experimental → Advanced.',
+            'Profile Frame Icon Removed (Desktop) — Account settings "Profile Frame" collapsible header shows the title only.'
+          ]],
+          ['Features', [
+            'Message Effects Graduated — Message Effects (particle confetti on sent messages) moved from Experimental to Chat settings, with one-time automatic migration.',
+            'Profile Frames Graduated — Moved from Experimental to stable settings (Appearance on mobile, Account on desktop), on by default, with one-time automatic migration. Desktop picker no longer requires Developer Mode.'
+          ]],
+          ['Technical', [
+            'Version bumped to v0.4.0-beta across all manifests.'
+          ]]
+        ]) +
+        vBlock('0.3.2-beta', '', [
           ['Bug Fixes', [
             'Android Crash-on-Launch Fixed (3 bugs) — styles.xml SplashScreen attributes missing, registerPlugin() called after super.onCreate(), colors.xml entirely missing.',
             'Profile Card Real-Time Updates Fixed (4 bugs) — Duplicate DOM IDs in profile sheet vs panel renamed; cropped image hero preview not updating after save fixed; avatar mistakenly used for banner background fixed; profile pill never updated after save wired up.',
@@ -4137,6 +4884,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
   var _fpsMonitorInterval = null;
   var _devOverlayEl = null;
+  // Read/written as window._stopDevOverlay by the perf-mode block and the dev
+  // overlay update loop; initialize so `!window._stopDevOverlay` is well-defined.
+  window._stopDevOverlay = false;
 
   function toggleFpsMonitor(on) {
     if (on) {
@@ -4218,6 +4968,99 @@ document.addEventListener('DOMContentLoaded', function() {
       document.documentElement.style.setProperty('--chat-bg-size', '20px 20px');
     } else {
       document.documentElement.style.setProperty('--chat-bg-image', 'none');
+    }
+  }
+
+  // ── Per-chat wallpaper helpers ──
+  function applyChatWallpaper(chatId) {
+    var feed = document.getElementById('message-feed');
+    if (!feed) return;
+    var chat = MStore.chats.find(function(c) { return c.id === chatId; });
+    if (chat && chat.wallpaper) {
+      feed.style.setProperty('--chat-wallpaper-url', 'url("' + chat.wallpaper + '")');
+      feed.classList.add('has-wallpaper');
+    } else {
+      feed.classList.remove('has-wallpaper');
+      feed.style.removeProperty('--chat-wallpaper-url');
+    }
+  }
+
+  function clearChatWallpaper() {
+    var feed = document.getElementById('message-feed');
+    if (!feed) return;
+    feed.classList.remove('has-wallpaper');
+    feed.style.removeProperty('--chat-wallpaper-url');
+  }
+
+  // ── Wallpaper picker UI ──
+  function showChatWallpaperPicker() {
+    if (!activeChatId) return;
+    var chat = MStore.chats.find(function(c) { return c.id === activeChatId; });
+    if (!chat) return;
+
+    var hasWallpaper = !!chat.wallpaper;
+    var previewHtml = hasWallpaper
+      ? '<div style="width:100%;height:80px;border-radius:12px;margin:8px 0;background-size:cover;background-position:center;background-image:url(' + chat.wallpaper + ');border:1px solid var(--border-subtle);"></div>'
+      : '<div style="width:100%;height:48px;border-radius:12px;margin:8px 0;background:var(--bg-hover);display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:13px;">No wallpaper set</div>';
+
+    var html = '<div class="action-sheet-overlay" id="wallpaper-picker-sheet" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;flex-direction:column;justify-content:flex-end;">' +
+      '<div class="action-sheet-content" style="background:var(--bg-surface);border-radius:24px 24px 0 0;padding:24px 16px;animation:slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);">' +
+        '<div style="width:40px;height:5px;background:var(--border-subtle);border-radius:4px;margin:0 auto 24px;"></div>' +
+        '<div style="font-size:18px;font-weight:700;margin-bottom:8px;color:var(--text-primary);">Chat Wallpaper</div>' +
+        '<div style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Set a custom wallpaper behind messages for this chat only.</div>' +
+        '<div id="wallpaper-preview-area">' + previewHtml + '</div>' +
+        '<div class="action-btn" id="action-choose-wallpaper" style="padding:16px;display:flex;align-items:center;gap:14px;font-size:16px;font-weight:600;color:var(--text-primary);cursor:pointer;border-radius:12px;transition:background 0.2s;">' +
+          '<i data-lucide="image"></i> Choose Photo' +
+        '</div>' +
+        (hasWallpaper
+          ? '<div class="action-btn" id="action-remove-wallpaper" style="padding:16px;display:flex;align-items:center;gap:14px;font-size:16px;font-weight:600;color:var(--accent-danger);cursor:pointer;border-radius:12px;transition:background 0.2s;">' +
+            '<i data-lucide="trash-2"></i> Remove Wallpaper' +
+          '</div>'
+          : '') +
+      '</div>' +
+    '</div>';
+
+    var div = document.createElement('div');
+    div.innerHTML = html;
+    var sheet = div.firstChild;
+    document.body.appendChild(sheet);
+    renderLucide({ root: sheet });
+
+    sheet.addEventListener('click', function(e) {
+      if (e.target === sheet) sheet.remove();
+    });
+
+    document.getElementById('action-choose-wallpaper').addEventListener('click', function() {
+      sheet.remove();
+      var input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = function(ev) {
+        var file = ev.target.files[0];
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function(ev2) {
+          MStore.compressImage(ev2.target.result, 1200, 1200, 0.7, function(compressedUrl) {
+            chat.wallpaper = compressedUrl;
+            MStore.save();
+            applyChatWallpaper(activeChatId);
+            showToast('Chat wallpaper updated', 'success');
+          });
+        };
+        reader.readAsDataURL(file);
+      };
+      input.click();
+    });
+
+    var removeBtn = document.getElementById('action-remove-wallpaper');
+    if (removeBtn) {
+      removeBtn.addEventListener('click', function() {
+        sheet.remove();
+        chat.wallpaper = null;
+        MStore.save();
+        clearChatWallpaper();
+        showToast('Chat wallpaper removed', 'info');
+      });
     }
   }
 
@@ -4362,7 +5205,7 @@ document.addEventListener('DOMContentLoaded', function() {
           '</div>' +
         '</div>' +
       '</div>' +
-      (MStore.settings.experimentalProfileFrames ? (
+      (MStore.settings.profileFrames ? (
       '<div class="settings-section">' +
         '<div class="settings-item" style="border:none;">' +
           '<div style="color:var(--text-secondary);font-size:14px;flex-shrink:0;">Frame</div>' +
@@ -4535,7 +5378,31 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function showProfileOverlay(chatId) {
     var friend = MStore.friends.find(function(f) { return f.id === chatId; });
-    if (!friend) { showToast('Friend not found', 'info'); return; }
+    if (!friend) {
+      // Fallback: resolve non-friend users from group membership (e.g. long-press on a group member row)
+      var myId = MStore.user ? MStore.user.id : '';
+      for (var _gi = 0; _gi < MStore.groups.length && !friend; _gi++) {
+        var _g = MStore.groups[_gi];
+        if (!_g || !_g.members) continue;
+        for (var _mi = 0; _mi < _g.members.length; _mi++) {
+          var _mm = _g.members[_mi];
+          var _mmId = typeof _mm === 'string' ? _mm : _mm.userId;
+          if (String(_mmId) === String(chatId)) {
+            friend = {
+              id: _mmId,
+              name: _mm.name || _mm.username || _mmId,
+              avatar: _mm.avatar || null,
+              status: 'offline',
+              tag: _mm.tag || '',
+              bio: '',
+              banner: null
+            };
+            break;
+          }
+        }
+      }
+    }
+    if (!friend) { showToast('User not found', 'info'); return; }
 
     var initial = friend.name ? friend.name.charAt(0).toUpperCase() : '?';
     var statusLabels = { online: 'Online', away: 'Away', busy: 'Busy', offline: 'Offline' };
@@ -4620,6 +5487,166 @@ document.addEventListener('DOMContentLoaded', function() {
     overlay.remove();
     showProfileOverlay(chatId);
   }
+
+  /* ---- User Actions Sheet (long-press on a user: sender names, avatars, group member rows, friend rows, DM header) ---- */
+
+  /** Resolve a userId to a displayable user (friend first, then group member, then raw id fallback) */
+  function _resolveUserForSheet(userId) {
+    if (!userId) return null;
+    // 1. Friends — canonical id or peerId alias
+    var friend = MStore.friends.find(function(f) { return f.id === userId || f.peerId === userId; });
+    if (friend) {
+      return { id: friend.id, name: friend.name || friend.id, avatar: friend.avatar || null, status: friend.status || 'offline', tag: friend.tag || '', isFriend: true };
+    }
+    // 2. Group members (any group this user belongs to)
+    var groups = MStore.groups || [];
+    for (var gi = 0; gi < groups.length; gi++) {
+      var members = groups[gi].members || [];
+      for (var mi = 0; mi < members.length; mi++) {
+        var m = members[mi];
+        var mid = typeof m === 'string' ? m : m.userId;
+        if (String(mid) === String(userId)) {
+          var f = MStore.friends.find(function(fr) { return fr.id === mid || fr.peerId === mid; });
+          return {
+            id: mid,
+            name: f ? f.name : (m.name || m.username || mid),
+            avatar: f ? f.avatar : (m.avatar || null),
+            status: f ? (f.status || 'offline') : 'offline',
+            tag: f ? (f.tag || '') : (m.tag || ''),
+            isFriend: !!f
+          };
+        }
+      }
+    }
+    // 3. Fallback — unknown user (view-profile/message still work with the raw id)
+    return { id: userId, name: userId, avatar: null, status: 'offline', tag: '', isFriend: false };
+  }
+
+  /** Find an existing DM chat for a user, or create one (plain peer id — matches P2P receive convention) */
+  function _ensureDmChatForUser(userId, userName) {
+    if (!userId) return null;
+    var chats = MStore.chats || [];
+    for (var i = 0; i < chats.length; i++) {
+      var c = chats[i];
+      if (c.id === userId || c.id === 'dm_' + userId || c.peerId === userId) return c;
+    }
+    var chat = { id: userId, peerId: userId, name: userName || userId, lastMessage: '', lastTime: '', unread: 0 };
+    MStore.chats.push(chat);
+    MStore.save();
+    if (typeof renderChatList === 'function') renderChatList();
+    return chat;
+  }
+
+  /**
+   * Bottom sheet for a user: View Profile / Message / Add Friend / Close DM / Block.
+   * Only actions that apply are shown (Add Friend & Close DM are friend-only, etc.).
+   */
+  function showUserActionsSheet(userId, sourceContext) {
+    if (typeof OrbitSheet === 'undefined' || !OrbitSheet.show) return;
+    var myId = MStore.user ? MStore.user.id : '';
+    if (!userId || String(userId) === String(myId)) return; // never for yourself
+
+    var u = _resolveUserForSheet(userId);
+    if (!u) { showToast('User not found', 'info'); return; }
+
+    var items = [];
+    var callbacks = {};
+
+    // View Profile — works for friends and group members (showProfileOverlay resolves both)
+    items.push({ icon: 'user', label: 'View Profile', subtext: u.status || '', action: 'user_view_profile' });
+    callbacks['user_view_profile'] = function() {
+      if (typeof showProfileOverlay === 'function') showProfileOverlay(u.id);
+      else showToast(u.name + ' — ' + (u.status || 'offline'), 'info');
+    };
+
+    // Message — open the DM (creates it if the store has none)
+    items.push({ icon: 'message-circle', label: 'Message', action: 'user_message' });
+    callbacks['user_message'] = function() {
+      var chat = _ensureDmChatForUser(u.id, u.name);
+      if (chat && typeof openChat === 'function') openChat(chat.id);
+      else showToast('No active chat with this user', 'info');
+    };
+
+    // Mute / Unmute notifications (friends only — preserves the legacy friend menu behavior)
+    if (u.isFriend) {
+      var isMuted = !!(MStore.settings.mutedChats && MStore.settings.mutedChats[u.id]);
+      items.push({ icon: isMuted ? 'bell' : 'bell-off', label: isMuted ? 'Unmute Notifications' : 'Mute Notifications', action: 'user_mute' });
+      (function(muted) {
+        callbacks['user_mute'] = function() {
+          if (!MStore.settings.mutedChats) MStore.settings.mutedChats = {};
+          if (muted) {
+            delete MStore.settings.mutedChats[u.id];
+          } else {
+            MStore.settings.mutedChats[u.id] = true;
+          }
+          MStore.save();
+          showToast(muted ? 'Unmuted' : 'Muted', 'info');
+        };
+      })(isMuted);
+    }
+
+    // Add Friend — only when they are not already a friend
+    if (!u.isFriend) {
+      items.push({ icon: 'user-plus', label: 'Add Friend', action: 'user_add_friend' });
+      callbacks['user_add_friend'] = function() {
+        var peerId = u.id;
+        var existing = MStore.friends.find(function(f) { return f.id === peerId || f.peerId === peerId; });
+        if (existing) {
+          showToast(u.name + ' is already a friend', 'info');
+          return;
+        }
+        MStore.friends.push({ id: peerId, name: u.name, tag: u.tag || '', status: 'offline', avatar: u.avatar || null, bio: '', ip: null, publicKey: null });
+        var chatExists = MStore.chats.find(function(c) { return c.id === peerId || c.id === 'dm_' + peerId; });
+        if (!chatExists) {
+          MStore.chats.push({ id: peerId, name: u.name, lastMessage: '', lastTime: '', unread: 0 });
+        }
+        MStore.save();
+        if (typeof renderFriends === 'function') renderFriends();
+        if (typeof renderChatList === 'function') renderChatList();
+        showToast(u.name + ' added as friend', 'info');
+      };
+    }
+
+    // Close DM — canonical close-DM flow (also removes the friend entry, matching the legacy menu)
+    if (u.isFriend) {
+      items.push({ icon: 'x', label: 'Close DM', action: 'user_close_dm' });
+      callbacks['user_close_dm'] = function() {
+        var dmId = u.id;
+        MStore.chats = MStore.chats.filter(function(c) { return c.id !== dmId && c.id !== 'dm_' + dmId; });
+        delete MStore.messages[dmId];
+        delete MStore.messages['dm_' + dmId];
+        localStorage.removeItem('orbit_msg_' + dmId);
+        localStorage.removeItem('orbit_msg_dm_' + dmId);
+        MStore.friends = MStore.friends.filter(function(f) { return f.id !== dmId; });
+        MStore.save();
+        if ((activeChatId === dmId || activeChatId === 'dm_' + dmId) && typeof closeChat === 'function') closeChat();
+        if (typeof renderChatList === 'function') renderChatList();
+        if (typeof renderFriends === 'function') renderFriends();
+        showToast(u.name + ' — DM closed', 'info');
+      };
+    }
+
+    // Block / Unblock — always available
+    var isBlocked = MStore.blockedUsers && MStore.blockedUsers.indexOf(u.id) !== -1;
+    items.push({ icon: isBlocked ? 'user-check' : 'ban', label: isBlocked ? 'Unblock User' : 'Block User', action: 'user_block' });
+    (function(blocked) {
+      callbacks['user_block'] = function() {
+        if (blocked) {
+          MStore.blockedUsers = MStore.blockedUsers.filter(function(id) { return id !== u.id; });
+          showToast(u.name + ' unblocked', 'info');
+        } else {
+          MStore.blockedUsers = MStore.blockedUsers.concat([u.id]);
+          showToast(u.name + ' blocked', 'info');
+        }
+        MStore.save();
+      };
+    })(isBlocked);
+
+    OrbitSheet.show(items);
+    OrbitSheet._callbacks = callbacks;
+  }
+
+  window.showUserActionsSheet = showUserActionsSheet;
 
   /** Show own profile as a slide-up bottom sheet */
   function showProfileSheet() {
@@ -4850,7 +5877,7 @@ document.addEventListener('DOMContentLoaded', function() {
           '</select>' +
         '</div>' +
       '</div>' +
-      (MStore.settings.experimentalProfileFrames ? (
+      (MStore.settings.profileFrames ? (
       '<div class="settings-section">' +
         '<div class="settings-section-title">Profile Frame</div>' +
         '<div class="settings-item" style="border:none;cursor:pointer;" id="frame-picker-btn">' +
@@ -5574,10 +6601,11 @@ document.addEventListener('DOMContentLoaded', function() {
     return mem.role === 'admin' || mem.role === 'owner';
   }
 
-  function renderGroupInfo() {
+  function renderGroupInfo(groupId) {
     var container = document.getElementById('members-content');
-    if (!activeChatId) return;
-    var group = MStore.groups.find(function(g) { return g.id === activeChatId; });
+    var gid = groupId || activeChatId;
+    if (!gid) return;
+    var group = MStore.groups.find(function(g) { return g.id === gid; });
     if (!group) {
       container.innerHTML = '<div class="empty-state"><i data-lucide="users"></i><div class="empty-state-text">Not a group</div></div>';
       renderLucide({ root: container });
@@ -5590,10 +6618,13 @@ document.addEventListener('DOMContentLoaded', function() {
     var members = group.members || [];
     var groupInitial = group.name.charAt(0).toUpperCase();
 
-    // ── Avatar section ──
-    var avatarSection = group.avatar
-      ? '<div class="group-info-avatar"><img src="' + escapeHtml(group.avatar) + '" alt=""></div>'
-      : '<div class="group-info-avatar group-info-avatar-placeholder">' + groupInitial + '</div>';
+    // ── Avatar HTML ──
+    var avatarHtml = group.avatar
+      ? '<img src="' + escapeHtml(group.avatar) + '" alt="">'
+      : '<span>' + groupInitial + '</span>';
+    var editOverlay = isOwner
+      ? '<div class="group-info-avatar-edit" id="btn-group-info-avatar">Edit</div>'
+      : '';
 
     // ── Member rows ──
     var membersHtml = '';
@@ -5639,7 +6670,9 @@ document.addEventListener('DOMContentLoaded', function() {
           joinedDate = jd.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
         } catch(e) {}
       }
-      membersHtml += '<div class="group-member-row">' +
+      // data-user-id on the row itself makes the whole member row long-pressable (user actions sheet).
+      // The action buttons below keep their own data-user-id attributes for the delegated click handlers.
+      membersHtml += '<div class="group-member-row" data-user-id="' + mid + '">' +
         '<div class="group-member-avatar-wrap">' +
           '<div class="group-member-avatar">' + mAvatar + '</div>' +
           mPfHtml +
@@ -5647,7 +6680,7 @@ document.addEventListener('DOMContentLoaded', function() {
         '</div>' +
         '<div class="group-member-info">' +
           '<div class="group-member-name">' + escapeHtml(name) + _getMemberRoleBadge(role) + '</div>' +
-          '<div class="group-member-tag">@' + escapeHtml(tag) + '</div>' +
+          (tag ? '<div class="group-member-tag">@' + escapeHtml(tag) + '</div>' : '') +
           (joinedDate ? '<div class="group-member-joined">Joined ' + joinedDate + '</div>' : '') +
         '</div>' +
         '<div class="group-member-actions">' + promoteBtn + demoteBtn + removeBtn + '</div>' +
@@ -5655,75 +6688,111 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // ── Build full panel ──
-    var html =
-      // Avatar
-      '<div class="group-info-avatar-section">' +
-        avatarSection +
-        (isOwner ? '<div class="group-info-change-avatar" id="btn-group-info-avatar">Change</div>' : '') +
+    var html = '<div class="group-info-section">' +
+      // Avatar Section (standalone card)
+      '<div class="group-info-card">' +
+        '<div class="group-info-avatar-section">' +
+          '<div class="group-info-avatar">' + avatarHtml + editOverlay + '</div>' +
+          '<div class="group-info-group-name">' + escapeHtml(group.name) + '</div>' +
+          '<div class="group-info-group-meta">' + members.length + ' member' + (members.length !== 1 ? 's' : '') + '</div>' +
+        '</div>' +
       '</div>' +
 
-      // Group Name
-      '<div class="group-info-field">' +
-        '<label class="group-info-label">Group Name</label>' +
-        '<input id="group-info-name" type="text" value="' + escapeHtml(group.name) + '" class="group-info-input" ' + (isOwner ? '' : 'disabled') + '>' +
+      // Group Details card
+      '<div class="group-info-card">' +
+        '<div class="group-info-field-row">' +
+          '<div class="group-info-field-label">Name</div>' +
+          '<div class="group-info-field-value"><input id="group-info-name" type="text" value="' + escapeHtml(group.name) + '" class="group-info-input" ' + (isOwner ? '' : 'disabled') + '></div>' +
+        '</div>' +
+        '<div class="group-info-field-row">' +
+          '<div class="group-info-field-label">About</div>' +
+          '<div class="group-info-field-value"><textarea id="group-info-desc" rows="2" class="group-info-textarea" ' + (isOwner ? '' : 'disabled') + ' placeholder="Group description">' + escapeHtml(group.description || '') + '</textarea></div>' +
+        '</div>' +
       '</div>' +
 
-      // Description
-      '<div class="group-info-field">' +
-        '<label class="group-info-label">Description</label>' +
-        '<textarea id="group-info-desc" rows="2" class="group-info-textarea" ' + (isOwner ? '' : 'disabled') + '>' + escapeHtml(group.description || '') + '</textarea>' +
-      '</div>' +
-
-      // Invite Code
-      '<div class="group-info-field group-info-invite">' +
-        '<label class="group-info-label">Invite Code</label>' +
+      // Invite Code card
+      '<div class="group-info-card">' +
         '<div class="group-info-invite-row">' +
-          '<span class="group-info-code">' + escapeHtml(group.inviteCode || '') + '</span>' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Invite Code</div>' +
+            '<div class="group-info-code">' + escapeHtml(group.inviteCode || 'No invite code') + '</div>' +
+          '</div>' +
           '<button class="group-info-btn" id="btn-group-copy-invite">Copy</button>' +
           '<button class="group-info-btn" id="btn-group-share-invite">Share</button>' +
         '</div>' +
       '</div>' +
 
-      // Toggles
-      '<div class="group-info-toggle-row">' +
-        '<span>Pin Group</span>' +
-        '<label class="toggle-switch"><input type="checkbox" id="group-info-pin"' + (group.pinned ? ' checked' : '') + '><span class="toggle-slider"></span></label>' +
-      '</div>' +
-      '<div class="group-info-toggle-row">' +
-        '<span>Mute Notifications</span>' +
-        '<label class="toggle-switch"><input type="checkbox" id="group-info-mute"' + (group.notificationMuted ? ' checked' : '') + '><span class="toggle-slider"></span></label>' +
-      '</div>' +
-
-      // Pinned Messages
-      '<div class="group-info-pinned-section">' +
-        '<div class="group-info-pinned-header">Pinned Messages</div>' +
-        '<div class="group-info-pinned-list">' +
-          ((group.pinnedMessages && group.pinnedMessages.length > 0)
-            ? group.pinnedMessages.map(function(pm) {
-                var pmFriend = MStore.friends.find(function(f) { return f.id === pm.pinnedBy; });
-                var pmName = pmFriend ? pmFriend.name : (pm.pinnedBy === (MStore.user ? MStore.user.id : '') ? 'You' : pm.pinnedBy);
-                return '<div class="group-info-pinned-item" data-msg-id="' + pm.msgId + '">' +
-                  '<i data-lucide="pin" style="width:14px;height:14px;flex-shrink:0;color:var(--accent-primary);"></i>' +
-                  '<div class="group-info-pinned-text">' + escapeHtml(pm.text || '') + '</div>' +
-                  '<span class="group-info-pinned-by">' + escapeHtml(pmName) + '</span>' +
-                  '<button class="group-info-pinned-remove" data-pin-msg-id="' + pm.msgId + '" title="Unpin">✕</button>' +
-                '</div>';
-              }).join('')
-            : '<div class="group-info-pinned-empty">No pinned messages</div>') +
+      // Toggles card
+      '<div class="group-info-card">' +
+        '<div class="group-info-toggle-row">' +
+          '<div class="group-info-toggle-label">' +
+            '<span class="group-info-toggle-title">Pin Group</span>' +
+            '<span class="group-info-toggle-desc">Keep at top of chat list</span>' +
+          '</div>' +
+          '<label class="toggle-switch"><input type="checkbox" id="group-info-pin"' + (group.pinned ? ' checked' : '') + '><span class="toggle-slider"></span></label>' +
+        '</div>' +
+        '<div class="group-info-toggle-row">' +
+          '<div class="group-info-toggle-label">' +
+            '<span class="group-info-toggle-title">Mute Notifications</span>' +
+            '<span class="group-info-toggle-desc">Silence alerts from this group</span>' +
+          '</div>' +
+          '<label class="toggle-switch"><input type="checkbox" id="group-info-mute"' + (group.notificationMuted ? ' checked' : '') + '><span class="toggle-slider"></span></label>' +
         '</div>' +
       '</div>' +
 
-      // Members header
-      '<div class="group-info-members-header">Members (' + members.length + ')' +
-        '<button class="group-info-btn" id="btn-group-add-member" style="margin-left:auto;"><i data-lucide="user-plus" style="width:14px;height:14px;"></i> Add</button>' +
+      // Disappearing Messages card
+      '<div class="group-info-card">' +
+        '<div class="group-info-toggle-row">' +
+          '<div class="group-info-toggle-label">' +
+            '<span class="group-info-toggle-title">Disappearing Messages</span>' +
+            '<span class="group-info-toggle-desc">Auto-delete messages after time</span>' +
+          '</div>' +
+          '<select id="group-info-disappear" class="group-info-select">' +
+            '<option value="off"' + (group.disappearTimer === 'off' ? ' selected' : '') + '>Off</option>' +
+            '<option value="5s"' + (group.disappearTimer === '5s' ? ' selected' : '') + '>5 seconds</option>' +
+            '<option value="30s"' + (group.disappearTimer === '30s' ? ' selected' : '') + '>30 seconds</option>' +
+            '<option value="1m"' + (group.disappearTimer === '1m' ? ' selected' : '') + '>1 minute</option>' +
+            '<option value="5m"' + (group.disappearTimer === '5m' ? ' selected' : '') + '>5 minutes</option>' +
+            '<option value="1h"' + (group.disappearTimer === '1h' ? ' selected' : '') + '>1 hour</option>' +
+            '<option value="24h"' + (group.disappearTimer === '24h' ? ' selected' : '') + '>24 hours</option>' +
+          '</select>' +
+        '</div>' +
       '</div>' +
-      '<div class="group-info-members-list">' + membersHtml + '</div>' +
 
-      // Leave / Delete
-      '<div class="group-info-actions">' +
-        (isOwner
-          ? '<button class="group-info-btn group-info-btn-danger" id="btn-group-delete">Delete Group</button>'
-          : '<button class="group-info-btn group-info-btn-danger" id="btn-group-leave">Leave Group</button>') +
+      // Pinned Messages card
+      '<div class="group-info-card">' +
+        '<div class="group-info-pinned-section">' +
+          '<div class="group-info-pinned-header">Pinned Messages</div>' +
+          '<div class="group-info-pinned-list">' +
+            ((group.pinnedMessages && group.pinnedMessages.length > 0)
+              ? group.pinnedMessages.map(function(pm) {
+                  var pmFriend = MStore.friends.find(function(f) { return f.id === pm.pinnedBy; });
+                  var pmName = pmFriend ? pmFriend.name : (pm.pinnedBy === (MStore.user ? MStore.user.id : '') ? 'You' : pm.pinnedBy);
+                  return '<div class="group-info-pinned-item" data-msg-id="' + pm.msgId + '">' +
+                    '<i data-lucide="pin" style="width:14px;height:14px;flex-shrink:0;color:var(--accent-primary);"></i>' +
+                    '<div class="group-info-pinned-text">' + escapeHtml(pm.text || '') + '</div>' +
+                    '<span class="group-info-pinned-by">' + escapeHtml(pmName) + '</span>' +
+                    '<button class="group-info-pinned-remove" data-pin-msg-id="' + pm.msgId + '" title="Unpin">✕</button>' +
+                  '</div>';
+                }).join('')
+              : '<div class="group-info-pinned-empty">No pinned messages</div>') +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+
+      // Members card
+      '<div class="group-info-card">' +
+        '<div class="group-info-members-header">' +
+          'Members (' + members.length + ')' +
+          '<button class="group-info-btn" id="btn-group-add-member"><i data-lucide="user-plus" style="width:14px;height:14px;"></i> Add</button>' +
+        '</div>' +
+        '<div class="group-info-members-list">' + membersHtml + '</div>' +
+      '</div>' +
+
+      // Leave / Delete (standalone danger button)
+      (isOwner
+        ? '<button class="group-info-danger" id="btn-group-delete">Delete Group</button>'
+        : '<button class="group-info-danger" id="btn-group-leave">Leave Group</button>') +
       '</div>';
 
     container.innerHTML = html;
@@ -5731,16 +6800,80 @@ document.addEventListener('DOMContentLoaded', function() {
     renderLucide({ root: container });
   }
 
-  function showGroupInfo() {
-    renderGroupInfo();
+  function showGroupInfo(groupId) {
+    renderGroupInfo(groupId);
     document.getElementById('panel-members-overlay').classList.add('open');
     document.getElementById('members-overlay-backdrop').style.display = 'block';
+    var pill = document.getElementById('profile-pill');
+    if (pill) { pill.style.opacity = '0'; pill.style.pointerEvents = 'none'; }
   }
+
+  window.showGroupInfo = showGroupInfo;
 
   function hideGroupInfo() {
     document.getElementById('panel-members-overlay').classList.remove('open');
     document.getElementById('members-overlay-backdrop').style.display = 'none';
+    var pill = document.getElementById('profile-pill');
+    var chatPanel = document.getElementById('panel-chat');
+    if (pill && !(chatPanel && chatPanel.classList.contains('open'))) {
+      pill.style.opacity = '';
+      pill.style.pointerEvents = '';
+    }
   }
+
+  /* -- Group leave/delete by id (group info overlay + long-press sheet) -- */
+  function leaveGroupById(groupId) {
+    if (!groupId) return;
+    var grp = MStore.groups.find(function(g) { return g.id === groupId; });
+    if (grp && window.Orbit && window.Orbit.P2P && Orbit.P2P.isAvailable()) {
+      (grp.members || []).forEach(function(m) {
+        var mid = typeof m === 'string' ? m : m.userId;
+        if (mid !== (MStore.user ? MStore.user.id : '')) {
+          var leavePkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.GROUP_LEAVE, MStore.user ? MStore.user.id : '', mid, {
+            groupId: groupId, userId: MStore.user ? MStore.user.id : ''
+          });
+          Orbit.P2P.send(mid, leavePkt);
+        }
+      });
+    }
+    MStore.groups = MStore.groups.filter(function(g) { return g.id !== groupId; });
+    MStore.chats = MStore.chats.filter(function(c) { return c.id !== groupId; });
+    delete MStore.messages[groupId];
+    localStorage.removeItem('orbit_msg_' + groupId);
+    MStore.save();
+    if (activeChatId === groupId && typeof closeChat === 'function') closeChat();
+    if (typeof hideGroupInfo === 'function') hideGroupInfo();
+    if (typeof renderChatList === 'function') renderChatList();
+    showToast('Left group', 'info');
+  }
+
+  function deleteGroupById(groupId) {
+    if (!groupId) return;
+    var grp = MStore.groups.find(function(g) { return g.id === groupId; });
+    if (grp && window.Orbit && window.Orbit.P2P && Orbit.P2P.isAvailable()) {
+      (grp.members || []).forEach(function(m) {
+        var mid = typeof m === 'string' ? m : m.userId;
+        if (mid !== (MStore.user ? MStore.user.id : '')) {
+          var removePkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.GROUP_LEAVE, MStore.user ? MStore.user.id : '', mid, {
+            groupId: groupId, userId: mid
+          });
+          Orbit.P2P.send(mid, removePkt);
+        }
+      });
+    }
+    MStore.groups = MStore.groups.filter(function(g) { return g.id !== groupId; });
+    MStore.chats = MStore.chats.filter(function(c) { return c.id !== groupId; });
+    delete MStore.messages[groupId];
+    localStorage.removeItem('orbit_msg_' + groupId);
+    MStore.save();
+    if (activeChatId === groupId && typeof closeChat === 'function') closeChat();
+    if (typeof hideGroupInfo === 'function') hideGroupInfo();
+    if (typeof renderChatList === 'function') renderChatList();
+    showToast('Group deleted', 'info');
+  }
+
+  window.leaveGroupById = leaveGroupById;
+  window.deleteGroupById = deleteGroupById;
 
   /* -- Activity Center (Desktop-style) -- */
   var ActivityCenter = {
@@ -5765,7 +6898,7 @@ document.addEventListener('DOMContentLoaded', function() {
       return friends.find(function(f) { return f.id === id; });
     }
     function getGroup(id) {
-      return groups.find(function(g) { return g.groupId === id; });
+      return groups.find(function(g) { return g.id === id || g.groupId === id; });
     }
     function getMemberAvatar(groupId, userId) {
       var g = getGroup(groupId);
@@ -6511,6 +7644,7 @@ document.addEventListener('DOMContentLoaded', function() {
       setTimeout(function() { el.remove(); }, 300);
     }, duration);
   }
+  window.showToast = showToast;
 
   function compressVideoMobile(dataUrl, maxW, callback) {
     try {
@@ -6626,15 +7760,351 @@ document.addEventListener('DOMContentLoaded', function() {
     } catch(e) { return ''; }
   }
 
+  /* ---- Mention Autocomplete ---- */
+  function _getMentionableUsers(chatId) {
+    var users = [];
+    var seen = {};
+    // Add all friends (excluding current user)
+    (MStore.friends || []).forEach(function(f) {
+      if (!seen[f.id] && f.id !== MStore.user.id) {
+        seen[f.id] = true;
+        users.push({ id: f.id, name: f.name || f.id, tag: f.tag || '', avatar: f.avatar });
+      }
+    });
+    // Add group members for the active group chat
+    var group = (MStore.groups || []).find(function(g) { return g.id === chatId || g.groupId === chatId; });
+    if (group && group.members) {
+      group.members.forEach(function(m) {
+        var mid = typeof m === 'string' ? m : m.userId;
+        if (!seen[mid] && mid !== MStore.user.id) {
+          seen[mid] = true;
+          var friend = (MStore.friends || []).find(function(f) { return f.id === mid; });
+          users.push({
+            id: mid,
+            name: friend ? friend.name : (m.name || mid),
+            tag: friend ? (friend.tag || '') : (m.tag || ''),
+            avatar: friend ? friend.avatar : null
+          });
+        }
+      });
+    }
+    return users;
+  }
+
+  function _getMentionUsers(chatId, query) {
+    var all = _getMentionableUsers(chatId);
+    if (!query) return all;
+    var q = query.toLowerCase();
+    return all.filter(function(u) {
+      return u.name.toLowerCase().indexOf(q) !== -1 || (u.tag && u.tag.toLowerCase().indexOf(q) !== -1);
+    });
+  }
+
+  function _buildMentionDropdownHtml(users, selectedIndex) {
+    var html = '';
+    for (var i = 0; i < users.length; i++) {
+      var u = users[i];
+      var initial = (u.name || '?').charAt(0).toUpperCase();
+      var cleanAvatar = u.avatar && typeof u.avatar === 'string' && u.avatar.trim();
+      var avatarHtml = cleanAvatar
+        ? '<img src="' + u.avatar.trim() + '" alt="">'
+        : '<span class="mention-avatar-placeholder">' + initial + '</span>';
+      var isSelected = i === selectedIndex;
+      html += '<div class="mention-item' + (isSelected ? ' selected' : '') + '" data-index="' + i + '" data-userid="' + u.id + '" data-username="' + u.name + '" data-tag="' + (u.tag || '') + '">' +
+        '<div class="mention-item-avatar">' + avatarHtml + '</div>' +
+        '<div class="mention-item-info">' +
+          '<span class="mention-item-name">' + u.name + '</span>' +
+          '<span class="mention-item-tag">@' + (u.tag || u.name) + '</span>' +
+        '</div>' +
+      '</div>';
+    }
+    return html;
+  }
+
+  function _showMentionDropdown() {
+    if (!_mentionDropdown) _mentionDropdown = document.getElementById('mention-dropdown');
+    if (!_mentionDropdown) {
+      _mentionDropdown = document.createElement('div');
+      _mentionDropdown.id = 'mention-dropdown';
+      _mentionDropdown.className = 'mention-dropdown';
+      _mentionDropdown.style.display = 'none';
+      var chatPanel = document.getElementById('panel-chat') || document.body;
+      chatPanel.appendChild(_mentionDropdown);
+    }
+    var input = document.getElementById('chat-input');
+    if (!input) return;
+
+    var users = _getMentionUsers(activeChatId, _mentionQuery);
+    _mentionUsers = users;
+    _mentionSelectedIndex = 0;
+
+    if (users.length === 0) {
+      _hideMentionDropdown();
+      return;
+    }
+
+    _mentionDropdown.innerHTML = '<div class="mention-header">Mentions</div>' + _buildMentionDropdownHtml(users, 0);
+    _mentionDropdown.style.display = 'block';
+    _mentionActive = true;
+
+    // Position dropdown using mirror div
+    _positionMentionDropdown(input);
+
+    // Wire click handlers
+    _mentionDropdown.querySelectorAll('.mention-item').forEach(function(item) {
+      item.addEventListener('click', function() {
+        var idx = parseInt(this.getAttribute('data-index'), 10);
+        _mentionSelectedIndex = idx;
+        _selectMention();
+      });
+    });
+
+    // Wire hover
+    _mentionDropdown.querySelectorAll('.mention-item').forEach(function(item) {
+      item.addEventListener('mouseenter', function() {
+        _mentionDropdown.querySelectorAll('.mention-item').forEach(function(el) { el.classList.remove('selected'); });
+        this.classList.add('selected');
+        _mentionSelectedIndex = parseInt(this.getAttribute('data-index'), 10);
+      });
+    });
+  }
+
+  function _hideMentionDropdown() {
+    _mentionActive = false;
+    _mentionQuery = '';
+    _mentionUsers = [];
+    _mentionSelectedIndex = 0;
+    _mentionStartPos = -1;
+    if (_mentionDropdown) {
+      _mentionDropdown.style.display = 'none';
+      _mentionDropdown.innerHTML = '';
+    }
+  }
+
+  function _positionMentionDropdown(input) {
+    if (!_mentionDropdown) return;
+    var rect = input.getBoundingClientRect();
+    // Position above the textarea (avoids keyboard overlap on mobile)
+    _mentionDropdown.style.left = Math.max(8, Math.min(rect.left + 8, window.innerWidth - 280)) + 'px';
+    _mentionDropdown.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+    _mentionDropdown.style.maxHeight = Math.min(200, rect.top - 20) + 'px';
+  }
+
+  function _selectMention() {
+    var users = _mentionUsers;
+    if (!users || users.length === 0 || _mentionSelectedIndex < 0 || _mentionSelectedIndex >= users.length) return;
+    var user = users[_mentionSelectedIndex];
+    var input = document.getElementById('chat-input');
+    if (!input) return;
+
+    var val = input.value;
+    var beforeAt = val.substring(0, _mentionStartPos);
+    var afterAt = val.substring(_mentionStartPos);
+    var wordEnd = afterAt.search(/\s|$/);
+    if (wordEnd === -1) wordEnd = afterAt.length;
+    var afterMention = afterAt.substring(wordEnd);
+
+    input.value = beforeAt + '@' + user.name + ' ' + afterMention;
+    var newCursor = beforeAt.length + user.name.length + 2;
+    input.selectionStart = input.selectionEnd = newCursor;
+
+    // Trigger input event to update textarea height and draft save
+    var evt = new Event('input', { bubbles: true });
+    input.dispatchEvent(evt);
+
+    _hideMentionDropdown();
+    input.focus();
+  }
+
+  function _renderMsgText(text, mentions) {
+    if (!text) return '';
+    var processed = text;
+    var placeholders = [];
+    // If we have structured mention data, swap @username for placeholders before markdown
+    if (mentions && mentions.length > 0) {
+      mentions.forEach(function(mt, idx) {
+        var escapedName = mt.username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        var re = new RegExp('@' + escapedName + '\\b', 'g');
+        var placeholder = '\x00MENTION_' + idx + '\x00';
+        processed = processed.replace(re, placeholder);
+        placeholders.push({ idx: idx, userId: mt.userId, username: mt.username, name: mt.name, tag: mt.tag });
+      });
+    }
+    // Run through markdown
+    var html = window.Sanitize ? window.Sanitize.markdown(processed) : escapeHtml(processed);
+    // Restore mention placeholders as clickable spans
+    if (placeholders.length > 0) {
+      placeholders.forEach(function(p) {
+        var ph = '\x00MENTION_' + p.idx + '\x00';
+        var mentionHtml = '<span class="chat-mention mention-clickable" data-userid="' + p.userId + '" data-username="' + p.username + '" onclick="window._onMentionClick(\'' + p.userId + '\')">@' + p.username + '</span>';
+        html = html.split(ph).join(mentionHtml);
+      });
+    }
+    return html;
+  }
+
+  // Click handler for mention spans
+  window._onMentionClick = function(userId) {
+    if (typeof showProfileOverlay === 'function') {
+      showProfileOverlay(userId);
+    } else if (typeof showProfileSheet === 'function') {
+      showProfileSheet(userId);
+    }
+  };
+
   /* -- Event Bindings -- */
   // Back button
   document.getElementById('btn-back').addEventListener('click', closeChat);
 
-  // Send button
-  document.getElementById('btn-send').addEventListener('click', sendMessage);
+  // Send button — with long-press for schedule
+  (function() {
+    var sendBtn = document.getElementById('btn-send');
+    var longPressTimer = null;
+    var isLongPress = false;
 
-  // Enter to send, Shift+Enter to insert newline
+    function _clearLongPress() {
+      if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+    }
+
+    function _startLongPress(e) {
+      if (sendBtn.disabled) return;
+      isLongPress = false;
+      _clearLongPress();
+      longPressTimer = setTimeout(function() {
+        isLongPress = true;
+        // Show schedule action sheet
+        var input = document.getElementById('chat-input');
+        var text = input.value.trim();
+        if (!text && stagedFiles.length === 0) { _clearLongPress(); return; }
+        var schedSheetHtml = '<div class="action-sheet-overlay" id="schedule-action-sheet" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10001;display:flex;flex-direction:column;justify-content:flex-end;">' +
+          '<div class="action-sheet-content" style="background:var(--bg-surface);border-radius:24px 24px 0 0;padding:24px 16px;animation:slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);">' +
+            '<div style="width:40px;height:5px;background:var(--border-subtle);border-radius:4px;margin:0 auto 24px;"></div>' +
+            '<div class="action-btn" id="sched-send-now" style="padding:16px;display:flex;align-items:center;gap:14px;font-size:16px;font-weight:600;color:var(--text-primary);cursor:pointer;border-radius:12px;transition:background 0.2s;">' +
+              '<i data-lucide="send" style="width:20px;height:20px;"></i> Send Now' +
+            '</div>' +
+            '<div class="action-btn" id="sched-schedule" style="padding:16px;display:flex;align-items:center;gap:14px;font-size:16px;font-weight:600;color:var(--text-primary);cursor:pointer;border-radius:12px;transition:background 0.2s;">' +
+              '<i data-lucide="calendar-clock" style="width:20px;height:20px;"></i> Schedule' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+        var schedDiv = document.createElement('div');
+        schedDiv.innerHTML = schedSheetHtml;
+        var schedSheet = schedDiv.firstChild;
+        document.body.appendChild(schedSheet);
+        renderLucide({ root: schedSheet });
+        schedSheet.addEventListener('click', function(se) {
+          if (se.target === schedSheet) schedSheet.remove();
+        });
+        document.getElementById('sched-send-now').addEventListener('click', function() {
+          schedSheet.remove();
+          sendMessage();
+        });
+        document.getElementById('sched-schedule').addEventListener('click', function() {
+          schedSheet.remove();
+          _showSchedulePicker();
+        });
+      }, 500);
+    }
+
+    function _showSchedulePicker() {
+      var input = document.getElementById('chat-input');
+      var text = input.value.trim();
+      if (!text && stagedFiles.length === 0) return;
+      // Build a minimal date-time picker modal
+      var now = new Date();
+      var minStr = now.toISOString().slice(0, 16);
+      var defaultStr = new Date(now.getTime() + 3600000).toISOString().slice(0, 16);
+      var pickerHtml = '<div class="action-sheet-overlay" id="schedule-picker-overlay" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:10002;display:flex;align-items:center;justify-content:center;">' +
+        '<div class="schedule-picker-modal" style="background:var(--bg-surface);border-radius:20px;padding:24px;width:320px;max-width:90vw;box-shadow:0 8px 40px rgba(0,0,0,0.4);">' +
+          '<div style="font-size:18px;font-weight:700;color:var(--text-primary);margin-bottom:20px;text-align:center;">Schedule Message</div>' +
+          '<input type="datetime-local" id="sched-datetime" value="' + defaultStr + '" min="' + minStr + '" style="width:100%;padding:12px;border-radius:12px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);font-size:15px;outline:none;box-sizing:border-box;font-family:inherit;">' +
+          '<div style="display:flex;gap:10px;margin-top:20px;">' +
+            '<button id="sched-cancel-btn" style="flex:1;padding:12px;border-radius:12px;border:1px solid var(--border-subtle);background:transparent;color:var(--text-primary);font-size:15px;font-weight:600;cursor:pointer;">Cancel</button>' +
+            '<button id="sched-confirm-btn" style="flex:1;padding:12px;border-radius:12px;border:none;background:var(--accent-primary);color:#fff;font-size:15px;font-weight:600;cursor:pointer;">Schedule</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+      var pickerDiv = document.createElement('div');
+      pickerDiv.innerHTML = pickerHtml;
+      var pickerOverlay = pickerDiv.firstChild;
+      document.body.appendChild(pickerOverlay);
+      document.getElementById('sched-cancel-btn').addEventListener('click', function() { pickerOverlay.remove(); });
+      document.getElementById('sched-confirm-btn').addEventListener('click', function() {
+        var dtInput = document.getElementById('sched-datetime');
+        if (!dtInput || !dtInput.value) { showToast('Please select a date and time', 'warning'); return; }
+        var scheduledAt = new Date(dtInput.value);
+        if (scheduledAt <= new Date()) { showToast('Please select a future time', 'warning'); return; }
+        // Save the scheduled message
+        var schedMsg = {
+          id: 'sched_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+          chatId: activeChatId,
+          text: text,
+          attachments: stagedFiles.length > 0 ? stagedFiles.map(function(sf) { return { name: sf.name, type: sf.type, size: sf.size, url: sf.url }; }) : [],
+          scheduledAt: scheduledAt.toISOString(),
+          createdAt: new Date().toISOString(),
+          sent: false
+        };
+        MStore.scheduleMessage(schedMsg);
+        pickerOverlay.remove();
+        // Clear input
+        input.value = '';
+        stagedFiles = [];
+        renderFilePreview();
+        updateSendButton();
+        showToast('Message scheduled for ' + dtInput.value, 'success');
+      });
+    }
+
+    // Touch events for mobile
+    sendBtn.addEventListener('touchstart', _startLongPress, { passive: true });
+    sendBtn.addEventListener('touchend', function(e) {
+      _clearLongPress();
+      if (!isLongPress) {
+        hideCommandTooltip();
+        sendMessage();
+      }
+    }, { passive: true });
+    sendBtn.addEventListener('touchmove', _clearLongPress, { passive: true });
+
+    // Mouse events for desktop/testing fallback
+    sendBtn.addEventListener('mousedown', _startLongPress);
+    sendBtn.addEventListener('mouseup', function(e) {
+      _clearLongPress();
+      if (!isLongPress) {
+        hideCommandTooltip();
+        sendMessage();
+      }
+    });
+    sendBtn.addEventListener('mouseleave', _clearLongPress);
+  })();
+
+  // Enter to send, Shift+Enter to insert newline, mention keyboard nav
   document.getElementById('chat-input').addEventListener('keydown', function(e) {
+    // Mention dropdown keyboard navigation
+    if (_mentionActive && _mentionUsers.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        _mentionSelectedIndex = (_mentionSelectedIndex + 1) % _mentionUsers.length;
+        _updateMentionHighlight();
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        _mentionSelectedIndex = (_mentionSelectedIndex - 1 + _mentionUsers.length) % _mentionUsers.length;
+        _updateMentionHighlight();
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        _selectMention();
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        _hideMentionDropdown();
+        return;
+      }
+    }
     if (e.key === 'Enter') {
       if (e.shiftKey) {
         // Insert newline at cursor — some Android keyboards don't default to this in textareas
@@ -6649,16 +8119,64 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       if (MStore.settings.enterToSend) {
         e.preventDefault();
+        hideCommandTooltip();
         sendMessage();
       }
     }
   });
+
+  function _updateMentionHighlight() {
+    if (!_mentionDropdown) return;
+    var items = _mentionDropdown.querySelectorAll('.mention-item');
+    items.forEach(function(el, i) {
+      el.classList.toggle('selected', i === _mentionSelectedIndex);
+    });
+    var selected = items[_mentionSelectedIndex];
+    if (selected) selected.scrollIntoView({ block: 'nearest' });
+  }
 
   // Auto-resize textarea as content grows
   document.getElementById('chat-input').addEventListener('input', function() {
     this.style.height = 'auto';
     this.style.height = Math.min(this.scrollHeight, 150) + 'px';
     updateSendButton();
+
+    // @mention detection
+    if (!_mentionDropdown) _mentionDropdown = document.getElementById('mention-dropdown');
+    var cursorPos = this.selectionStart;
+    var val = this.value;
+    // Find the @ symbol before cursor
+    var textBeforeCursor = val.substring(0, cursorPos);
+    var atIdx = -1;
+    // Walk backwards from cursor to find @ preceded by whitespace or at start
+    for (var ci = cursorPos - 1; ci >= 0; ci--) {
+      var ch = textBeforeCursor[ci];
+      if (ch === '@') {
+        atIdx = ci;
+        break;
+      }
+      if (ch === ' ' || ch === '\n') break;
+    }
+    if (atIdx !== -1) {
+      var query = textBeforeCursor.substring(atIdx + 1);
+      // Only trigger if query is word characters (no spaces)
+      if (/^\w*$/.test(query)) {
+        _mentionStartPos = atIdx;
+        _mentionQuery = query;
+        _showMentionDropdown();
+      } else {
+        _hideMentionDropdown();
+      }
+    } else {
+      _hideMentionDropdown();
+    }
+
+    // ── Slash command suggestion tooltip ──
+    if (!_mentionActive && val.indexOf('/') === 0 && !val.includes(' ')) {
+      showCommandTooltip(val);
+    } else {
+      hideCommandTooltip();
+    }
 
     // Debounced draft save
     if (window._draftTimer) clearTimeout(window._draftTimer);
@@ -6814,6 +8332,12 @@ document.addEventListener('DOMContentLoaded', function() {
           '<div class="action-btn" id="action-mute" style="padding:16px;display:flex;align-items:center;gap:14px;font-size:16px;font-weight:600;color:var(--text-primary);cursor:pointer;border-radius:12px;transition:background 0.2s;">' +
             '<i data-lucide="bell-off"></i> Mute Notifications' +
           '</div>' +
+          '<div class="action-btn" id="action-disappear" style="padding:16px;display:flex;align-items:center;gap:14px;font-size:16px;font-weight:600;color:var(--text-primary);cursor:pointer;border-radius:12px;transition:background 0.2s;">' +
+            '<i data-lucide="clock"></i> Disappearing Messages' +
+          '</div>' +
+          '<div class="action-btn" id="action-wallpaper" style="padding:16px;display:flex;align-items:center;gap:14px;font-size:16px;font-weight:600;color:var(--text-primary);cursor:pointer;border-radius:12px;transition:background 0.2s;">' +
+            '<i data-lucide="image"></i> Wallpaper' +
+          '</div>' +
           '<div class="action-btn" id="action-clear-chat" style="padding:16px;display:flex;align-items:center;gap:14px;font-size:16px;font-weight:600;color:var(--accent-danger);cursor:pointer;border-radius:12px;transition:background 0.2s;">' +
             '<i data-lucide="trash-2"></i> Clear Chat' +
           '</div>' +
@@ -6839,6 +8363,54 @@ document.addEventListener('DOMContentLoaded', function() {
       document.getElementById('action-mute').addEventListener('click', function() {
         sheet.remove();
         showToast('Notifications muted', 'success');
+      });
+      
+      document.getElementById('action-disappear').addEventListener('click', function() {
+        sheet.remove();
+        // Show disappear timer picker
+        var currentVal = _getDisappearTimer(activeChatId);
+        var timerOptions = [
+          { v: 'off', l: 'Off' },
+          { v: '5s', l: '5 seconds' },
+          { v: '30s', l: '30 seconds' },
+          { v: '1m', l: '1 minute' },
+          { v: '5m', l: '5 minutes' },
+          { v: '1h', l: '1 hour' },
+          { v: '24h', l: '24 hours' }
+        ];
+        var timerSheetHtml = '<div class="action-sheet-overlay" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;flex-direction:column;justify-content:flex-end;">' +
+          '<div class="action-sheet-content" style="background:var(--bg-surface);border-radius:24px 24px 0 0;padding:24px 16px;animation:slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);">' +
+            '<div style="width:40px;height:5px;background:var(--border-subtle);border-radius:4px;margin:0 auto 24px;"></div>' +
+            '<div style="font-size:17px;font-weight:700;color:var(--text-primary);margin-bottom:16px;text-align:center;">Disappearing Messages</div>' +
+            timerOptions.map(function(o) {
+              return '<div class="action-btn timer-option" data-value="' + o.v + '" style="padding:14px 16px;display:flex;align-items:center;gap:14px;font-size:16px;font-weight:500;color:var(--text-primary);cursor:pointer;border-radius:12px;transition:background 0.2s;' + (o.v === currentVal ? 'background:var(--accent-soft);color:var(--accent-primary);' : '') + '">' +
+                '<i data-lucide="' + (o.v === 'off' ? 'x-circle' : 'clock') + '" style="width:18px;height:18px;flex-shrink:0;"></i> ' + o.l +
+                (o.v === currentVal ? ' <span style="margin-left:auto;font-size:13px;opacity:0.7;">✓</span>' : '') +
+              '</div>';
+            }).join('') +
+          '</div>' +
+        '</div>';
+        var timerDiv = document.createElement('div');
+        timerDiv.innerHTML = timerSheetHtml;
+        var timerSheet = timerDiv.firstChild;
+        document.body.appendChild(timerSheet);
+        renderLucide({ root: timerSheet });
+        timerSheet.addEventListener('click', function(te) {
+          if (te.target === timerSheet) timerSheet.remove();
+        });
+        timerSheet.querySelectorAll('.timer-option').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            var val = this.getAttribute('data-value');
+            _setDisappearTimer(activeChatId, val);
+            timerSheet.remove();
+            showToast('Disappearing messages: ' + val, 'info');
+          });
+        });
+      });
+      
+      document.getElementById('action-wallpaper').addEventListener('click', function() {
+        sheet.remove();
+        showChatWallpaperPicker();
       });
       
       document.getElementById('action-clear-chat').addEventListener('click', function() {
@@ -7137,30 +8709,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Leave group
     if (target.id === 'btn-group-leave') {
       if (confirm('Leave this group?')) {
-        var grp5 = MStore.groups.find(function(g) { return g.id === activeChatId; });
-        if (grp5) {
-          // Notify remaining members
-          if (window.Orbit && window.Orbit.P2P && Orbit.P2P.isAvailable()) {
-            (grp5.members || []).forEach(function(m) {
-              var mid = typeof m === 'string' ? m : m.userId;
-              if (mid !== (MStore.user ? MStore.user.id : '')) {
-                var leavePkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.GROUP_LEAVE, MStore.user ? MStore.user.id : '', mid, {
-                  groupId: activeChatId, userId: MStore.user ? MStore.user.id : ''
-                });
-                Orbit.P2P.send(mid, leavePkt);
-              }
-            });
-          }
-        }
-        MStore.groups = MStore.groups.filter(function(g) { return g.id !== activeChatId; });
-        MStore.chats = MStore.chats.filter(function(c) { return c.id !== activeChatId; });
-        delete MStore.messages[activeChatId];
-        localStorage.removeItem('orbit_msg_' + activeChatId);
-        MStore.save();
-        hideGroupInfo();
-        closeChat();
-        renderChatList();
-        showToast('Left group', 'info');
+        leaveGroupById(activeChatId);
       }
       return;
     }
@@ -7168,30 +8717,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Delete group (owner only)
     if (target.id === 'btn-group-delete') {
       if (confirm('Delete this group permanently? This cannot be undone.')) {
-        var grp6 = MStore.groups.find(function(g) { return g.id === activeChatId; });
-        if (grp6) {
-          // Notify all members that they were removed
-          if (window.Orbit && window.Orbit.P2P && Orbit.P2P.isAvailable()) {
-            (grp6.members || []).forEach(function(m) {
-              var mid = typeof m === 'string' ? m : m.userId;
-              if (mid !== (MStore.user ? MStore.user.id : '')) {
-                var removePkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.GROUP_LEAVE, MStore.user ? MStore.user.id : '', mid, {
-                  groupId: activeChatId, userId: mid
-                });
-                Orbit.P2P.send(mid, removePkt);
-              }
-            });
-          }
-          MStore.groups = MStore.groups.filter(function(g) { return g.id !== activeChatId; });
-          MStore.chats = MStore.chats.filter(function(c) { return c.id !== activeChatId; });
-          delete MStore.messages[activeChatId];
-          localStorage.removeItem('orbit_msg_' + activeChatId);
-          MStore.save();
-          hideGroupInfo();
-          closeChat();
-          renderChatList();
-          showToast('Group deleted', 'info');
-        }
+        deleteGroupById(activeChatId);
       }
       return;
     }
@@ -7229,6 +8755,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (target.id === 'group-info-mute') {
       group.notificationMuted = target.checked;
       MStore.save();
+    }
+
+    if (target.id === 'group-info-disappear') {
+      group.disappearTimer = target.value;
+      MStore.save();
+      showToast('Disappearing messages: ' + target.value, 'info');
     }
 
     // Unpin from pinned messages section
@@ -7337,6 +8869,46 @@ document.addEventListener('DOMContentLoaded', function() {
           !btnPlus.contains(e.target)) {
         dropupMenu.classList.remove('active');
       }
+    });
+  }
+
+  // Voice recording — Mic button
+  var btnVoice = document.getElementById('btn-voice');
+  if (btnVoice) {
+    // Check MediaRecorder support
+    var voiceSupported = typeof MediaRecorder !== 'undefined' &&
+      navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function';
+    if (!voiceSupported) {
+      btnVoice.style.opacity = '0.3';
+      btnVoice.title = 'Voice recording not supported';
+    }
+
+    // Start recording on press
+    btnVoice.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      if (!voiceSupported) { showToast('Voice recording not supported in this browser', 'warning'); return; }
+      startVoiceRecording();
+    });
+    btnVoice.addEventListener('touchstart', function(e) {
+      if (!voiceSupported) { showToast('Voice recording not supported in this browser', 'warning'); return; }
+      startVoiceRecording();
+    }, { passive: true });
+
+    // Stop recording on release (anywhere on the page)
+    document.addEventListener('mouseup', function() {
+      if (_voiceRecorder.isRecording) stopVoiceRecording(false);
+    });
+    document.addEventListener('touchend', function() {
+      if (_voiceRecorder.isRecording) stopVoiceRecording(false);
+    }, { passive: true });
+  }
+
+  // Cancel voice recording button
+  var btnCancelVoice = document.getElementById('btn-cancel-voice');
+  if (btnCancelVoice) {
+    btnCancelVoice.addEventListener('click', function() {
+      stopVoiceRecording(true);
+      showToast('Recording cancelled', 'info');
     });
   }
 
@@ -7488,6 +9060,9 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   /* -- Long-press context menu for friend rows -- */
+  // NOTE: legacy functions below (showFriendContextMenu / showMessageContextMenu / showChatContextMenu)
+  // are superseded by the [data-user-id] delegated handler + showUserActionsSheet above/below.
+  // Kept only as reference — the close-DM / block logic is ported into showUserActionsSheet.
   var _lpTimer = null;
   var _lpTarget = null;
 
@@ -7497,7 +9072,7 @@ document.addEventListener('DOMContentLoaded', function() {
     backdrop.id = 'friend-context-overlay';
     backdrop.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:99999;background:rgba(0,0,0,0.3);';
     backdrop.addEventListener('click', hideFriendContextMenu);
-    backdrop.addEventListener('touchmove', function(e) { e.preventDefault(); }, { passive: false });
+    backdrop.addEventListener('touchmove', function(e) { if (e.cancelable) e.preventDefault(); }, { passive: false });
 
     var menu = document.createElement('div');
     menu.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:100000;background:var(--bg-surface);border-radius:16px 16px 0 0;padding:16px 0;box-shadow:0 -4px 20px rgba(0,0,0,0.3);';
@@ -7735,7 +9310,7 @@ document.addEventListener('DOMContentLoaded', function() {
     backdrop.id = 'chat-context-overlay';
     backdrop.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:99999;background:rgba(0,0,0,0.3);';
     backdrop.addEventListener('click', function() { hideOverlay('chat-context-overlay'); });
-    backdrop.addEventListener('touchmove', function(e) { e.preventDefault(); }, { passive: false });
+    backdrop.addEventListener('touchmove', function(e) { if (e.cancelable) e.preventDefault(); }, { passive: false });
 
     var menu = document.createElement('div');
     menu.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:100000;background:var(--bg-surface);border-radius:16px 16px 0 0;padding:16px 0;box-shadow:0 -4px 20px rgba(0,0,0,0.3);';
@@ -7807,39 +9382,104 @@ document.addEventListener('DOMContentLoaded', function() {
     renderLucide({ root: menu });
   }
 
-  document.addEventListener('touchstart', function(e) {
-    var row = e.target.closest('.friend-row, .message-row, .chat-row');
-    if (!row) return;
-    var type, id;
-    if (row.classList.contains('friend-row')) { type = 'friend'; id = row.getAttribute('data-friend'); }
-    else if (row.classList.contains('message-row')) { type = 'message'; id = row.getAttribute('data-msg-id'); }
-    else if (row.classList.contains('chat-row')) { type = 'chat'; id = row.getAttribute('data-chat'); }
-    if (!id) return;
-    _lpTarget = id;
-    _lpTimer = setTimeout(function() {
-      _lpTimer = null;
-      if (type === 'friend') {
-        var friend = MStore.friends.find(function(f) { return f.id === id; });
-        if (friend) showFriendContextMenu(friend, e.touches ? e.touches[0].clientX : 0, e.touches ? e.touches[0].clientY : 0);
-      } else if (type === 'message') {
-        if (!activeChatId) return;
-        var msgs = MStore.getMessages(activeChatId);
-        var msg = msgs.find(function(m) { return String(m.id) === String(id); });
-        if (msg) showMessageContextMenu(msg, activeChatId, e.touches ? e.touches[0].clientX : 0, e.touches ? e.touches[0].clientY : 0);
-      } else if (type === 'chat') {
-        var chat = MStore.chats.find(function(c) { return c.id === id; });
-        if (chat) showChatContextMenu(chat, e.touches ? e.touches[0].clientX : 0, e.touches ? e.touches[0].clientY : 0);
+  /* -- Delegated long-press → user actions sheet -- */
+  // Matches any [data-user-id] element: sender names/avatars in bubbles, group member rows,
+  // friend rows (Friends tab) and the DM chat header avatar/name. Replaces the legacy handler
+  // that matched stale .friend-row[data-friend] / .chat-row[data-chat] selectors and conflicted
+  // with chat-screen.js _initContextMenu on .message-row (double context menu).
+  var _userLpTimer = null;
+  var _userLpTarget = null;
+  var _userLpStartX = 0;
+  var _userLpStartY = 0;
+  var _userLpFired = false;
+  var _userLpConsumeClick = false;
+
+  // Pointer Events fire for mouse + touch + pen, so the long-press works in the desktop
+  // browser AND the Android WebView with a single code path (touch events never fire for a
+  // mouse, which is why the old touch-only handler was dead on desktop).
+  document.addEventListener('pointerdown', function(e) {
+    _userLpFired = false;
+    // Look up [data-user-id] FIRST: sender names inside .message-row bubbles and DM chat rows
+    // in the chat list must open the user sheet. .message-row is intentionally NOT excluded —
+    // chat-screen.js's own menu guards (touchstart/contextmenu on [data-user-id]) prevent the
+    // double-fire; message rows without a [data-user-id] ancestor fall through here untouched.
+    var el = e.target.closest ? e.target.closest('[data-user-id]') : null;
+    if (!el) return;
+    // Never long-press interactive controls (member action buttons, links, inputs, ...).
+    // These may sit inside a row/element that also carries data-user-id, so the exclusion
+    // takes precedence over the [data-user-id] match.
+    if (e.target.closest && e.target.closest('button, a, input, textarea, select, label, .group-member-remove, .group-member-promote, .group-member-demote, .group-info-btn, .group-info-pinned-remove')) return;
+    // Mouse: only the primary (left) button starts a long-press — right-click is a separate
+    // action (context menu / native menu) and must never open the user sheet.
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    var userId = el.getAttribute('data-user-id');
+    if (!userId) return;
+    var myId = MStore.user ? MStore.user.id : '';
+    if (String(userId) === String(myId)) return; // never open the sheet for yourself
+    _userLpTarget = { el: el, userId: userId };
+    _userLpStartX = e.clientX;
+    _userLpStartY = e.clientY;
+    _userLpTimer = setTimeout(function() {
+      _userLpTimer = null;
+      if (!_userLpTarget) return;
+      var target = _userLpTarget;
+      _userLpTarget = null;
+      _userLpFired = true;
+      if (e.cancelable) e.preventDefault();
+      showUserActionsSheet(target.userId, { sourceEl: target.el });
+    }, 450);
+  }, { passive: true });
+
+  document.addEventListener('pointermove', function(e) {
+    if (_userLpTimer) {
+      var dx = Math.abs(e.clientX - _userLpStartX);
+      var dy = Math.abs(e.clientY - _userLpStartY);
+      if (dx > 10 || dy > 10) {
+        clearTimeout(_userLpTimer);
+        _userLpTimer = null;
+        _userLpTarget = null;
       }
-    }, 500);
+    }
   }, { passive: true });
 
-  document.addEventListener('touchmove', function(e) {
-    if (_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; _lpTarget = null; }
+  document.addEventListener('pointerup', function() {
+    if (_userLpTimer) { clearTimeout(_userLpTimer); _userLpTimer = null; }
+    _userLpTarget = null;
+    // If a long-press just fired, swallow the single synthetic click that follows release —
+    // otherwise it would open the chat / trigger inline onclick handlers underneath the sheet.
+    if (_userLpFired) {
+      _userLpFired = false;
+      _userLpConsumeClick = true;
+      setTimeout(function() { _userLpConsumeClick = false; }, 500);
+    }
   }, { passive: true });
 
-  document.addEventListener('touchend', function(e) {
-    if (_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; _lpTarget = null; }
+  document.addEventListener('pointercancel', function() {
+    if (_userLpTimer) { clearTimeout(_userLpTimer); _userLpTimer = null; }
+    _userLpTarget = null;
+    _userLpFired = false;
   }, { passive: true });
+
+  // Right-click guard: only suppress contextmenu while the ghost-click guard is armed (i.e.
+  // right after a long-press release) so a native menu can't stack on top of the open sheet.
+  // chat-screen.js / home-screen.js right-click menus are unaffected — they only fire when
+  // this flag is NOT set (their rows are excluded from this long-press anyway).
+  document.addEventListener('contextmenu', function(e) {
+    if (_userLpConsumeClick) {
+      _userLpConsumeClick = false;
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  });
+
+  // Ghost-click guard (capture phase, before OrbitSheet's item buttons see the event):
+  // swallows exactly one click fired right after a long-press release.
+  document.addEventListener('click', function(e) {
+    if (!_userLpConsumeClick) return;
+    _userLpConsumeClick = false;
+    e.preventDefault();
+    e.stopPropagation();
+  }, true);
 
   /* -- Init E2EE (async, non-blocking) -- */
   if (window.Orbit && window.Orbit.E2EE && window.Orbit.E2EE.init) {
@@ -7887,7 +9527,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function getProfileFrame(source) {
-    if (MStore.settings.experimentalProfileFrames !== true) return 0;
+    if (MStore.settings.profileFrames !== true) return 0;
     var val = (source && source.profileFrame != null) ? source.profileFrame : 0;
     return Math.max(0, parseInt(val, 10) || 0);
   }
@@ -8275,15 +9915,26 @@ document.addEventListener('DOMContentLoaded', function() {
               senderFriend.publicKey
             ).then(function(decrypted) {
               if (decrypted) msgText = decrypted;
+              var e2eeMsgId = packet.payload.msgId || ('p2p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6));
               MStore.addMessage(chatId, {
-                id: packet.payload.msgId || ('p2p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)),
+                id: e2eeMsgId,
                 from: msgFrom,
                 fromName: senderName,
                 text: msgText,
                 time: new Date().toISOString(),
                 replyTo: msgReplyTo,
-                attachments: msgAttachments
+                attachments: msgAttachments,
+                poll: packet.payload.poll || undefined
               });
+              _startDisappearTimer(chatId, e2eeMsgId);
+              // Check if this message mentions the current user
+              if (chatId !== activeChatId && MStore.user && msgText) {
+                var myName = MStore.user.name || '';
+                var match = msgText.match(/@(\w+)/g);
+                if (match && myName && match.some(function(m) { return m.substring(1).toLowerCase() === myName.toLowerCase(); })) {
+                  MStore.mentionCounts[chatId] = (MStore.mentionCounts[chatId] || 0) + 1;
+                }
+              }
               if (activeChatId === chatId) renderMessages(activeChatId);
               renderChatList();
               showIncomingNotification(chatId, msgFrom, msgText);
@@ -8293,21 +9944,37 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         debugLog('P2P', 'Incoming MESSAGE from ' + msgFrom + ' chatId=' + chatId, { text: msgText.substring(0, 100) });
+        var incomingMsgId = packet.payload.msgId || ('p2p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6));
         MStore.addMessage(chatId, {
-          id: packet.payload.msgId || ('p2p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)),
+          id: incomingMsgId,
           from: msgFrom,
           fromName: senderName,
           text: msgText,
           time: new Date().toISOString(),
           replyTo: msgReplyTo,
-          attachments: msgAttachments
+          attachments: msgAttachments,
+          poll: packet.payload.poll || undefined
         });
+        _startDisappearTimer(chatId, incomingMsgId);
         // Update sender's status — receiving a message confirms they're online
         var msgFriend = MStore.friends.find(function(f) { return f.id === msgFrom; });
         if (msgFriend) {
           msgFriend.lastSeen = Date.now();
           if (msgFriend.status !== 'online') {
             msgFriend.status = 'online';
+          }
+        }
+        // Check if this message mentions the current user
+        if (chatId !== activeChatId && MStore.user && msgText) {
+          var myName = MStore.user.name || '';
+          var match = msgText.match(/@(\w+)/g);
+          if (match && myName) {
+            var isMentioned = match.some(function(m) {
+              return m.substring(1).toLowerCase() === myName.toLowerCase();
+            });
+            if (isMentioned) {
+              MStore.mentionCounts[chatId] = (MStore.mentionCounts[chatId] || 0) + 1;
+            }
           }
         }
         if (activeChatId === chatId) renderMessages(activeChatId);
@@ -8519,8 +10186,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
           if (!found) {
             // Fallback: create a new message entry if no matching _fileId found
+            var ftMsgId = 'p2p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
             MStore.addMessage(chatId, {
-              id: 'p2p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+              id: ftMsgId,
               from: msgFrom,
               text: '',
               time: new Date().toISOString(),
@@ -8534,6 +10202,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 _fileId: packet.payload.fileId
               }]
             });
+            _startDisappearTimer(chatId, ftMsgId);
           }
           
           delete window.activeTransfers[packet.payload.fileId];
@@ -8820,6 +10489,31 @@ document.addEventListener('DOMContentLoaded', function() {
               if (hi) {
                 var sd2 = hi.querySelector('div:last-child');
                 if (sd2) sd2.textContent = gmGrp.members.length + ' members';
+              }
+            }
+          }
+        }
+        return;
+      }
+
+      // Handle POLL_VOTE — group poll vote
+      if (packet.type === Orbit.Protocol.Types.POLL_VOTE) {
+        var votePayload = packet.payload;
+        if (votePayload && votePayload.msgId && votePayload.optIndex !== undefined && votePayload.chatId) {
+          var voteChatId = votePayload.chatId;
+          var voteMsgs = MStore.messages[voteChatId];
+          if (voteMsgs) {
+            var voteMsg = voteMsgs.find(function(m) { return String(m.id) === String(votePayload.msgId); });
+            if (voteMsg && voteMsg.poll && voteMsg.poll.options[votePayload.optIndex]) {
+              var voteOpt = voteMsg.poll.options[votePayload.optIndex];
+              if (!voteOpt.votes) voteOpt.votes = [];
+              var hasExistingVote = voteOpt.votes.indexOf(packet.from || packet.senderId);
+              if (hasExistingVote === -1) {
+                // Remove this voter's previous vote from all other options
+                voteMsg.poll.options.forEach(function(o) { o.votes = (o.votes || []).filter(function(v) { return v !== (packet.from || packet.senderId); }); });
+                voteOpt.votes.push(packet.from || packet.senderId);
+                MStore.save();
+                if (activeChatId === voteChatId) renderMessages(voteChatId);
               }
             }
           }
@@ -9138,7 +10832,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var tag = e.target.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
     if (e.target.closest('input, textarea, select')) return;
-    if (e.target.closest('button, [role="button"], .btn, .chat-row, .friend-row, .nav-btn, .settings-row, .settings-toggle, .profile-upload-btn, .modal-btn, .msg-action-btn, .dropup-item, .create-group-btn, label, .search-btn')) {
+    if (e.target.closest('button, [role="button"], .btn, .chat-row, .friend-row, .nav-btn, .settings-row, .settings-toggle, .profile-upload-btn, .modal-btn, .msg-action-btn, .dropup-item, .create-group-btn, label, .search-btn, .poll-option')) {
       setTimeout(function() {
         var active = document.activeElement;
         if (active && active.tagName !== 'INPUT' && active.tagName !== 'TEXTAREA' && active.tagName !== 'SELECT') {
@@ -9334,6 +11028,8 @@ document.addEventListener('DOMContentLoaded', function() {
   // Init compact spacing from saved preference
   if (MStore.settings.experimentalCompactSpacing) {
     document.documentElement.setAttribute('data-compact-spacing', 'true');
+  } else {
+    document.documentElement.removeAttribute('data-compact-spacing');
   }
 
   // Init font size
@@ -9342,16 +11038,21 @@ document.addEventListener('DOMContentLoaded', function() {
   // Init experimental data attributes
   var expAttrs = {
     'experimentalAnimatedAvatars': 'data-exp-avatars',
-    'experimentalMessageFx': 'data-exp-fx',
+    'messageFx': 'data-exp-fx',
     'enableCustomColors': 'data-exp-colors',
-    'experimentalProfileFrames': 'data-exp-frames',
+    'profileFrames': 'data-exp-frames',
     'experimentalFpsMonitor': 'data-exp-fps',
     'experimentalDevOverlay': 'data-exp-dev-overlay',
     'experimentalPerformanceMode': 'data-perf-mode'
   };
   Object.keys(expAttrs).forEach(function(key) {
     if (MStore.settings[key]) document.documentElement.setAttribute(expAttrs[key], 'true');
+    else document.documentElement.removeAttribute(expAttrs[key]);
   });
+
+  // Resume FPS monitor / dev overlay after reload if they were enabled
+  if (MStore.settings.experimentalFpsMonitor) toggleFpsMonitor(true);
+  if (MStore.settings.experimentalDevOverlay) toggleDevOverlay(true);
 
   // Auto-delete attachments timer
   function runAutoDelete() {
@@ -9379,6 +11080,19 @@ document.addEventListener('DOMContentLoaded', function() {
     if (interval > 0) setTimeout(runAutoDelete, interval * 60 * 1000);
   }
   runAutoDelete();
+
+  // Create scheduled messages badge on send button
+  (function() {
+    var sendBtn = document.getElementById('btn-send');
+    if (sendBtn) {
+      var badge = document.createElement('span');
+      badge.id = 'scheduled-badge';
+      badge.style.cssText = 'position:absolute;top:-4px;right:-4px;background:var(--accent-primary);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:none;align-items:center;justify-content:center;padding:0 4px;box-sizing:border-box;pointer-events:none;z-index:5;';
+      sendBtn.style.position = 'relative';
+      sendBtn.appendChild(badge);
+    }
+  })();
+  updateSendButton();
 
   showToast('Orbit Mobile ready', 'info');
 

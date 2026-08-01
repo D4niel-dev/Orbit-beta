@@ -157,6 +157,7 @@
       wrapper.appendChild(seek);
       wrapper.appendChild(ctrl);
       container.appendChild(wrapper);
+      updTime(); // paint initial seek fill once the full DOM (incl. timeEl) exists
 
       var analyser = null;
       var srcNode = null;
@@ -236,8 +237,20 @@
       }
 
       function updTime() {
-        timeEl.textContent = fmt(audio.currentTime) + ' / ' + fmt(audio.duration);
-        var pct = audio.duration ? (audio.currentTime / audio.duration * 100) : 0;
+        if (!audio || !seekFill || !timeEl) return; // null-safe: called at create time before the audio element (data-URL lazy path) or before timeEl/seek UI exists
+        var dur = audio.duration;
+        // Harden: on some WebViews duration is 0/Infinity/huge (forced-seek hack) until metadata
+        // arrives — fall back to the buffered end so the seek track + duration line render at once.
+        if (!isFinite(dur) || dur <= 0 || dur > 1e9) {
+          dur = 0;
+          try {
+            if (audio.buffered && audio.buffered.length) {
+              dur = audio.buffered.end(audio.buffered.length - 1);
+            }
+          } catch(e) {}
+        }
+        timeEl.textContent = fmt(audio.currentTime) + ' / ' + fmt(dur);
+        var pct = dur ? Math.min(100, audio.currentTime / dur * 100) : 0;
         seekFill.style.width = pct + '%';
         seekThumb.style.left = pct + '%';
       }
@@ -251,6 +264,11 @@
         audio.style.display = 'none';
         wrapper.appendChild(audio);
         audio.addEventListener('timeupdate', updTime);
+        // Render duration/seek line as soon as playback starts (some WebViews don't emit
+        // loadedmetadata/durationchange reliably before the first play)
+        audio.addEventListener('play', updTime);
+        // Freeze the seek fill at the paused position (no timeupdate fires while paused)
+        audio.addEventListener('pause', updTime);
         audio.addEventListener('loadedmetadata', function() {
           if (!isFinite(audio.duration) || audio.duration === 0) {
             audio._forcedSeek = true;
@@ -298,6 +316,7 @@
         audio.load();
         _audioReady = true;
         try { if (player) player._a = audio; } catch(e) {}
+        updTime(); // paint seek fill/duration once the audio element exists (lazy data-URL path)
       }
 
       function _ensureLoaded(callback) {
@@ -328,10 +347,12 @@
         connectSrc();
         var ctx = getCtx();
         if (ctx && ctx.state === 'suspended') ctx.resume();
+        updTime(); // paint the seek/duration line immediately, before audio.play() resolves
         audio.play().then(function() {
           playing = true;
           _updateCenterPlayBtn();
           _iconToggle(playBtn, true, _pauseSvg, _playSvg);
+          updTime();
           if (!animId) draw();
         }).catch(function(e) {
           if (window.MStore && MStore.settings.logNetworkPackets) console.log('[OAP] play fail:', e.message);

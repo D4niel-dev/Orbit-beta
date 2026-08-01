@@ -14,8 +14,30 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.3.2-beta', 'Latest', [
+        versionBlock('0.4.0-beta', 'Latest Stable', [
           ['Bug Fixes', [
+            'Message Long-Press Menu Fixed — Press-and-hold on a message bubble now opens the reactions + actions sheet (Copy/Reply/Translate/Forward/Delete). Previously the wiring only ran through a secondary code path the app no longer uses, so the menu never initialized.',
+            'Profile Frame Leak Fixed (4 renderers) — Avatar frames were still rendering when the Profile Frames setting was off. Gated _addAvatarFrames, renderProfilePill, and both chat-header renderers.',
+            'Experimental Toggle Off-State Bugs Fixed — Avatars / Profile Frames / Perf Mode toggles used empty-string attribute selectors that failed when off. Switched to value-based [data-*="true"] selectors.',
+            'Compact Spacing Toggle Fixed — Setting wrote a class the CSS no longer matched; now uses a [data-compact-spacing] attribute selector.',
+            'FPS Monitor & Dev Overlay Resume on Reload — Debug toggles no longer stay off after an app reload when enabled.'
+          ]],
+          ['UI Polish', [
+            'Folder Tab Icons Removed — Folder tabs show clean text labels only, matching Friends/Groups.',
+            'Folders Gated Behind Experimental — Folder tabs and the Folders settings entry now require the new Experimental toggle (off by default) in Settings → Experimental → Advanced.',
+            'Profile Frame Icon Removed (Desktop) — Account settings "Profile Frame" collapsible header shows the title only.'
+          ]],
+          ['Features', [
+            'Message Effects Graduated — Message Effects (particle confetti on sent messages) moved from Experimental to Chat settings, with one-time automatic migration.',
+            'Profile Frames Graduated — Moved from Experimental to stable settings (Appearance on mobile, Account on desktop), on by default, with one-time automatic migration. Desktop picker no longer requires Developer Mode.'
+          ]],
+          ['Technical', [
+            'Version bumped to v0.4.0-beta across all manifests.'
+          ]]
+        ]) +
+        versionBlock('0.3.2-beta', '', [
+          ['Bug Fixes', [
+            'Profile Frames Graduated — Experimental Profile Frames feature moved to stable Account settings; no longer requires Developer Mode.',
             'Android Crash-on-Launch Fixed (3 bugs) — SplashScreen theme attributes missing (crash on cold start); registerPlugin() called after super.onCreate(); colors.xml was entirely missing — created.',
             'Profile Card Real-Time Updates Fixed (4 bugs) — Duplicate DOM IDs in profile sheet vs panel; cropped image hero preview not updating after save; avatar mistakenly used for banner background; profile pill never updated after save.',
             'Status Text Color Fixed (Profile Pill) — Status text appeared gray on startup because getStatusColor() from app.js wasn\'t loaded yet. Fixed with local statusColors map in home-screen.js renderProfilePill().',

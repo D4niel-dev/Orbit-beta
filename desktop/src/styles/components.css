@@ -518,16 +518,21 @@ button:active,
   right: 0;
   height: 4px;
   border-radius: 2px;
-  background: rgba(128, 128, 128, 0.35);
+  background: var(--bg-hover, rgba(128,128,128,0.55));
+  /* 1px ring instead of border: keeps the 4px groove height (no layout shift) */
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.10);
   pointer-events: none;
 }
 
 .oap-seek-fill {
   position: absolute;
   left: 0;
+  top: 50%;
   height: 4px;
+  min-width: 2px; /* accent nub at 0% progress so the seek bar is always visible */
+  transform: translateY(-50%);
   border-radius: 2px;
-  background: var(--accent-primary);
+  background: var(--accent-primary, #0A84FF);
   pointer-events: none;
   transition: width 0.1s linear;
 }
@@ -538,7 +543,7 @@ button:active,
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: var(--accent-primary);
+  background: var(--accent-primary, #0A84FF);
   transform: translate(-50%, -50%);
   pointer-events: none;
   transition: left 0.1s linear;

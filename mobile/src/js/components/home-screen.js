@@ -189,23 +189,25 @@ var OrbitHome = {
       } else {
         avatarEl.textContent = initial;
       }
-      // Add profile frame if a frame is selected
-      var pfNum = parseInt(MStore.settings && MStore.settings.profileFrame, 10) || 0;
-      var oldFrame = avatarEl.querySelector('.pfp-frame');
-      if (pfNum > 0) {
-        if (!oldFrame) {
-          var frameEl = document.createElement('img');
-          frameEl.className = 'pfp-frame';
-          frameEl.draggable = false;
-          frameEl.alt = '';
-          frameEl.style.cssText = 'position:absolute;top:-16%;left:-16%;pointer-events:none;';
-          avatarEl.appendChild(frameEl);
-        } else {
-          var frameEl = oldFrame;
+      // Add profile frame if a frame is selected — gated on stable setting
+      if (MStore.settings && MStore.settings.profileFrames) {
+        var pfNum = parseInt(MStore.settings.profileFrame, 10) || 0;
+        var oldFrame = avatarEl.querySelector('.pfp-frame');
+        if (pfNum > 0) {
+          if (!oldFrame) {
+            var frameEl = document.createElement('img');
+            frameEl.className = 'pfp-frame';
+            frameEl.draggable = false;
+            frameEl.alt = '';
+            frameEl.style.cssText = 'position:absolute;top:-16%;left:-16%;pointer-events:none;';
+            avatarEl.appendChild(frameEl);
+          } else {
+            var frameEl = oldFrame;
+          }
+          frameEl.src = 'icons/frames/pfp_frame_' + pfNum + '.png';
+        } else if (oldFrame) {
+          oldFrame.remove();
         }
-        frameEl.src = 'icons/frames/pfp_frame_' + pfNum + '.png';
-      } else if (oldFrame) {
-        oldFrame.remove();
       }
       nameEl.textContent = displayName;
       var _s = (user.status || 'offline');
@@ -246,10 +248,15 @@ var OrbitHome = {
     var chats = MStore.chats || [];
     var groups = MStore.groups || [];
     
-    // Filter by tab: Friends = DMs only, Groups = groups only
+    // Filter by tab: Friends = DMs only, Groups = groups only, Folder = folder's chats
     var groupIds = {};
     (MStore.groups || []).forEach(function(g) { groupIds[g.id || g.groupId] = true; });
-    if (filter === 'groups') {
+    // Folder filter: filter IS the folder ID (e.g., "folder_1234567890")
+    if (filter && filter.indexOf('folder_') === 0) {
+      var folder = MStore.chatFolders[filter];
+      var folderChatIds = folder ? folder.chatIds : [];
+      chats = chats.filter(function(c) { return folderChatIds.indexOf(c.id) !== -1; });
+    } else if (filter === 'groups') {
       chats = chats.filter(function(c) { return groupIds[c.id]; });
     } else {
       chats = chats.filter(function(c) { return !groupIds[c.id]; });
@@ -287,12 +294,14 @@ var OrbitHome = {
       var chatId = chat.id || chat.chatId;
       var isPinned = pinned[chatId];
       var unread = MStore.unreadCounts && MStore.unreadCounts[chatId] || 0;
-      var isGroup = chat.type === 'group';
+      // Group detection: chat objects in MStore.chats don't reliably carry type === 'group',
+      // so also check the MStore.groups index (same source the tab filter above uses).
+      var isGroup = chat.type === 'group' || !!groupIds[chatId];
       var displayName = chat.name || chat.peerId || 'Unknown';
       var initial = displayName.charAt(0).toUpperCase();
       var avatarUrl = chat.avatar;
       
-      var avatarHtml = avatarUrl 
+      var avatarHtml = (avatarUrl && avatarUrl.trim()) 
         ? '<img src="' + avatarUrl + '" alt="' + initial + '" loading="lazy" onerror="var f=this;f.onerror=null;var i=f.getAttribute(\'data-init\')||\'' + initial + '\';f.style.display=\'none\';var d=document.createElement(\'div\');d.textContent=i;d.style.cssText=\'width:40px;height:40px;border-radius:50%;background:var(--accent-soft);color:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;\';f.parentNode.insertBefore(d,f);" data-init="' + initial + '">'
         : initial;
       
@@ -317,13 +326,17 @@ var OrbitHome = {
       
       var isOnline = chat.status === 'online';
       var typing = chat.isTyping;
+      var mentionCount = MStore.mentionCounts && MStore.mentionCounts[chatId] || 0;
       
-      html += '<div class="chat-row' + (unread > 0 ? ' unread' : '') + '" data-chatid="' + chatId + '" onclick="OrbitHome._onChatClick(\'' + chatId + '\')">';
+      html += '<div class="chat-row' + (unread > 0 ? ' unread' : '') + (mentionCount > 0 ? ' has-mention' : '') + '" data-chatid="' + chatId + '"' + (!isGroup ? ' data-user-id="' + OrbitHome._escape(chat.peerId || chat.id) + '"' : '') + ' onclick="OrbitHome._onChatClick(\'' + chatId + '\')">';
       html += '  <div class="chat-row-avatar">' + avatarHtml;
-      if (isOnline) {
-        html += '    <span class="chat-row-status-dot online"></span>';
-      } else {
-        html += '    <span class="chat-row-status-dot offline"></span>';
+      // Presence dot is for DMs/users only — groups don't have online status
+      if (!isGroup) {
+        if (isOnline) {
+          html += '    <span class="chat-row-status-dot online"></span>';
+        } else {
+          html += '    <span class="chat-row-status-dot offline"></span>';
+        }
       }
       html += '  </div>';
       html += '  <div class="chat-row-info">';
@@ -336,7 +349,9 @@ var OrbitHome = {
       html += '  </div>';
       html += '  <div class="chat-row-meta">';
       html += '    <span class="chat-row-time">' + timeStr + '</span>';
-      if (unread > 0) {
+      if (mentionCount > 0) {
+        html += '    <span class="mention-badge">@</span>';
+      } else if (unread > 0) {
         html += '    <span class="chat-row-badge">' + (unread > 99 ? '99+' : unread) + '</span>';
       }
       if (isPinned) {
@@ -530,7 +545,7 @@ var OrbitHome = {
       var isOnline = friend.status === 'online' || friend.lastSeen > Date.now() - 45000;
       var statusColor = isOnline ? 'var(--accent-success)' : 'var(--text-muted)';
       
-      html += '<div class="friend-row" data-peerid="' + (friend.peerId || '') + '" onclick="OrbitHome._onFriendClick(\'' + (friend.peerId || '') + '\')">';
+      html += '<div class="friend-row" data-peerid="' + (friend.peerId || '') + '" data-user-id="' + (friend.id || friend.peerId || '') + '" onclick="OrbitHome._onFriendClick(\'' + (friend.peerId || '') + '\')">';
       html += '  <div class="chat-row-avatar">' + avatarHtml + '</div>';
       html += '  <div class="chat-row-info">';
       html += '    <div class="chat-row-name">' + OrbitHome._escape(displayName) + '</div>';
@@ -545,6 +560,8 @@ var OrbitHome = {
 
   /** Add profile frame overlays to friend avatars that have one selected */
   _addAvatarFrames: function() {
+    // Gated on the stable Profile Frames setting — never inject frames when off
+    if (!(MStore.settings && MStore.settings.profileFrames)) return;
     var avatarEls = document.querySelectorAll('.chat-row-avatar, .online-friend-avatar');
     var groupIds = {};
     (MStore.groups || []).forEach(function(g) { groupIds[g.id || g.groupId] = true; });
@@ -675,6 +692,303 @@ var OrbitHome = {
     MStore.save();
     this.renderRecentSearches();
   },
+
+  /** Render folder tabs in the home tab bar */
+  renderFolderTabs: function() {
+    var tabsContainer = document.getElementById('home-tabs');
+    if (!tabsContainer) return;
+    // Remove existing folder tabs (but keep Friends and Groups)
+    var existingFolderTabs = tabsContainer.querySelectorAll('.home-tab-folder');
+    existingFolderTabs.forEach(function(t) { t.remove(); });
+    // Folders are experimental — when disabled, cleanup only (no tabs rendered)
+    if (!(MStore.settings && MStore.settings.experimentalFolders)) return;
+    var folders = MStore.getChatFolders();
+    var refNode = tabsContainer.querySelector('.home-tab[data-tab="groups"]');
+    if (!refNode) return;
+    for (var i = 0; i < folders.length; i++) {
+      var f = folders[i];
+      var btn = document.createElement('button');
+      btn.className = 'home-tab home-tab-folder' + (window._activeHomeTab === f.id ? ' active' : '');
+      btn.setAttribute('data-tab', f.id);
+      btn.setAttribute('data-folder-id', f.id);
+      btn.innerHTML = OrbitHome._escape(f.name);
+      // Insert after the refNode (Groups tab)
+      refNode.parentNode.insertBefore(btn, refNode.nextSibling);
+      refNode = btn; // next folder goes after this one
+    }
+    if (window.lucide) lucide.createIcons();
+  },
+
+  /** Show context menu for a chat row (long-press) */
+  showChatContextMenu: function(chatId) {
+    if (typeof OrbitSheet === 'undefined') return;
+    var folders = MStore.getChatFolders();
+    var items = [];
+    var foldersEnabled = !!(MStore.settings && MStore.settings.experimentalFolders);
+
+    // Group actions first (only for group chats), then the folder section below
+    var grp = MStore.groups.find(function(g) { return g.id === chatId || g.groupId === chatId; });
+    var isGroup = !!grp;
+    if (isGroup) {
+      var isMuted = !!(MStore.settings.mutedChats && MStore.settings.mutedChats[chatId]);
+      var isPinned = !!(MStore.pinnedDMs && MStore.pinnedDMs[chatId]);
+      var ownerId = grp.ownerId || grp.owner || (grp.creator && grp.creator.id);
+      var isOwner = !!ownerId && String(ownerId) === String(MStore.user ? MStore.user.id : '');
+
+      items.push({ icon: 'users', label: 'Group Info', action: 'group_info' });
+      items.push({ icon: 'check-check', label: 'Mark as Read', action: 'group_mark_read' });
+      items.push({ icon: isMuted ? 'bell' : 'bell-off', label: isMuted ? 'Unmute Notifications' : 'Mute Notifications', action: 'group_mute' });
+      items.push({ icon: isPinned ? 'pin-off' : 'pin', label: isPinned ? 'Unpin Chat' : 'Pin Chat', action: 'group_pin' });
+      if (isOwner) {
+        items.push({ icon: 'trash-2', label: 'Delete Group', danger: true, action: 'group_delete' });
+      } else {
+        items.push({ icon: 'log-out', label: 'Leave Group', danger: true, action: 'group_leave' });
+      }
+    }
+
+    if (foldersEnabled) {
+      // Check which folders this chat already belongs to
+      var inFolders = [];
+      for (var fi = 0; fi < folders.length; fi++) {
+        if (folders[fi].chatIds.indexOf(chatId) !== -1) {
+          inFolders.push(folders[fi]);
+        }
+      }
+
+      // Add folder items
+      for (var fi2 = 0; fi2 < folders.length; fi2++) {
+        var f2 = folders[fi2];
+        var alreadyIn = inFolders.some(function(inf) { return inf.id === f2.id; });
+        (function(folderId, folderName, folderIcon, isIn) {
+          items.push({
+            icon: isIn ? 'check-circle' : (folderIcon || 'folder'),
+            label: (isIn ? '\u2713 ' : '') + folderName,
+            subtext: isIn ? 'Tap to remove' : 'Add chat to folder',
+            action: isIn ? 'remove_folder_' + folderId : 'add_folder_' + folderId
+          });
+        })(f2.id, f2.name, f2.icon, alreadyIn);
+      }
+      items.push({ icon: 'plus', label: 'New Folder\u2026', action: 'new_folder' });
+    }
+
+    OrbitSheet.show(items);
+    OrbitSheet._callbacks = {};
+
+    // Group action callbacks
+    if (isGroup) {
+      OrbitSheet._callbacks['group_info'] = function() {
+        if (window.showGroupInfo) window.showGroupInfo(chatId);
+      };
+      OrbitSheet._callbacks['group_mark_read'] = function() {
+        MStore.markAsRead(chatId);
+        if (window.renderChatList) window.renderChatList(window._activeHomeTab);
+        showToast('Marked as read', 'info');
+      };
+      OrbitSheet._callbacks['group_mute'] = function() {
+        MStore.toggleMute(chatId);
+        if (window.renderChatList) window.renderChatList(window._activeHomeTab);
+        showToast(isMuted ? 'Unmuted' : 'Muted', 'info');
+      };
+      OrbitSheet._callbacks['group_pin'] = function() {
+        MStore.togglePinDM(chatId);
+        if (window.renderChatList) window.renderChatList(window._activeHomeTab);
+      };
+      if (isOwner) {
+        OrbitSheet._callbacks['group_delete'] = function() {
+          if (confirm('Delete this group permanently? This cannot be undone.')) {
+            if (window.deleteGroupById) window.deleteGroupById(chatId);
+          }
+        };
+      } else {
+        OrbitSheet._callbacks['group_leave'] = function() {
+          if (confirm('Leave this group?')) {
+            if (window.leaveGroupById) window.leaveGroupById(chatId);
+          }
+        };
+      }
+    }
+
+    if (foldersEnabled) {
+      for (var fi3 = 0; fi3 < folders.length; fi3++) {
+        var f2 = folders[fi3];
+        var isIn2 = inFolders.some(function(inf) { return inf.id === f2.id; });
+        (function(folderId, isIn, chatId) {
+          var actionKey = (isIn ? 'remove_folder_' : 'add_folder_') + folderId;
+          OrbitSheet._callbacks[actionKey] = function() {
+            if (isIn) {
+              MStore.removeChatFromFolder(folderId, chatId);
+              showToast('Removed from folder', 'info');
+            } else {
+              MStore.addChatToFolder(folderId, chatId);
+              showToast('Added to folder', 'info');
+            }
+            OrbitHome.renderFolderTabs();
+            if (window.renderChatList) window.renderChatList(window._activeHomeTab);
+          };
+        })(f2.id, isIn2, chatId);
+      }
+
+      OrbitSheet._callbacks['new_folder'] = function() {
+        OrbitHome._showNewFolderSheet(chatId);
+      };
+    }
+  },
+
+  /** Show an in-app bottom sheet prompting for a new folder name (+ Folder flow) */
+  _showNewFolderSheet: function(chatId) {
+    if (typeof OrbitSheet === 'undefined') return;
+
+    var html = '';
+    // Static drag handle comes from #bottom-sheet in index.html — no inline handle here
+    html += '<div style="font-size:17px;font-weight:700;color:var(--text-primary);padding:8px 20px 4px;">New Folder</div>';
+    html += '<input id="new-folder-name" type="text" placeholder="Folder name" maxlength="32" style="width:calc(100% - 40px);margin:8px 20px;padding:12px 14px;border:1px solid var(--border-subtle);border-radius:10px;background:var(--bg-base);color:var(--text-primary);font-size:15px;font-family:inherit;outline:none;">';
+    // Create button styled like .bottom-sheet-item
+    html += '<button class="bottom-sheet-item" id="btn-new-folder-create" style="background:transparent;border:none;color:var(--text-primary);font-size:16px;font-weight:500;width:100%;text-align:left;cursor:pointer;display:flex;align-items:center;gap:16px;padding:16px 20px;">';
+    html += '<i data-lucide="plus" style="width:24px;height:24px;color:var(--accent-primary);flex-shrink:0;"></i>';
+    html += '<span>Create Folder</span>';
+    html += '</button>';
+
+    OrbitSheet.showCustom(html);
+
+    // Render the plus icon
+    if (window.lucide) lucide.createIcons();
+
+    var inp = document.getElementById('new-folder-name');
+    var createBtn = document.getElementById('btn-new-folder-create');
+
+    // Focus the input once the sheet animation settles
+    if (inp) setTimeout(function() { inp.focus(); }, 250);
+
+    var doCreate = function() {
+      if (!inp) return;
+      var name = inp.value.trim();
+      if (!name) {
+        showToast('Folder name cannot be empty', 'info');
+        if (inp) inp.focus();
+        return;
+      }
+      var newId = MStore.createFolder(name, 'folder');
+      MStore.addChatToFolder(newId, chatId);
+      OrbitSheet.hide();
+      OrbitHome.renderFolderTabs();
+      if (window.renderChatList) window.renderChatList(window._activeHomeTab);
+      showToast('Folder "' + name + '" created', 'info');
+      // Re-open the context sheet so the new folder shows (checked) — the overlay
+      // is the same DOM element, so delay until the hide animation finishes
+      setTimeout(function() { OrbitHome.showChatContextMenu(chatId); }, 250);
+    };
+
+    if (createBtn) createBtn.addEventListener('click', doCreate);
+
+    // Enter key in the input triggers create
+    if (inp) {
+      inp.addEventListener('keydown', function(ev) {
+        if (ev.key === 'Enter') {
+          ev.preventDefault();
+          if (createBtn) createBtn.click();
+        }
+      });
+    }
+  },
+
+  /** Show folder tab long-press menu (rename/delete) */
+  _showFolderTabMenu: function(folderId) {
+    if (typeof OrbitSheet === 'undefined') return;
+    if (!(MStore.settings && MStore.settings.experimentalFolders)) return;
+    var folder = MStore.chatFolders[folderId];
+    if (!folder) return;
+    OrbitSheet.show([
+      { icon: 'pencil', label: 'Rename Folder', action: 'rename' },
+      { icon: 'trash-2', label: 'Delete Folder', action: 'delete' }
+    ]);
+    OrbitSheet._callbacks = {
+      'rename': function() {
+        var name = prompt('Rename folder:', folder.name);
+        if (name && name.trim()) {
+          MStore.renameFolder(folderId, name.trim());
+          OrbitHome.renderFolderTabs();
+        }
+      },
+      'delete': function() {
+        if (confirm('Delete folder "' + folder.name + '"? Chats will not be deleted.')) {
+          MStore.deleteFolder(folderId);
+          OrbitHome.renderFolderTabs();
+          if (window._activeHomeTab === folderId) {
+            window._activeHomeTab = 'friends';
+            document.querySelectorAll('.home-tab').forEach(function(t) {
+              t.classList.toggle('active', t.dataset.tab === 'friends');
+            });
+            if (window.renderChatList) window.renderChatList('friends');
+          } else {
+            if (window.renderChatList) window.renderChatList(window._activeHomeTab);
+          }
+        }
+      }
+    };
+  },
+
+  /** Initialize long-press on chat rows for context menu */
+  _initChatContextMenu: function() {
+    var container = document.getElementById('chat-list');
+    if (!container) return;
+    if (container._folderCtxInitialized) return;
+    container._folderCtxInitialized = true;
+
+    var pressTimer = null;
+    var startX = 0, startY = 0;
+
+    container.addEventListener('touchstart', function(e) {
+      var row = e.target.closest('.chat-row');
+      if (!row) return;
+      // DM rows carry [data-user-id] — the global long-press handler (app.js) owns those
+      // and opens the user actions sheet; don't start the folder-menu timer.
+      if (e.target.closest && e.target.closest('[data-user-id]')) return;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      pressTimer = setTimeout(function() {
+        pressTimer = null;
+        var chatId = row.getAttribute('data-chatid');
+        if (chatId) {
+          OrbitHome.showChatContextMenu(chatId);
+          if (e.cancelable) { e.preventDefault(); }
+        }
+      }, 400);
+    }, {passive: true});
+
+    container.addEventListener('touchmove', function(e) {
+      if (pressTimer) {
+        var dx = Math.abs(e.touches[0].clientX - startX);
+        var dy = Math.abs(e.touches[0].clientY - startY);
+        if (dx > 10 || dy > 10) {
+          clearTimeout(pressTimer);
+          pressTimer = null;
+        }
+      }
+    }, {passive: true});
+
+    container.addEventListener('touchend', function() {
+      if (pressTimer) {
+        clearTimeout(pressTimer);
+        pressTimer = null;
+      }
+    });
+
+    // Desktop fallback: right-click
+    container.addEventListener('contextmenu', function(e) {
+      var row = e.target.closest('.chat-row');
+      if (!row) return;
+      e.preventDefault();
+      // DM rows carry data-user-id → open the user actions sheet instead of the folder menu.
+      var userEl = e.target.closest ? e.target.closest('[data-user-id]') : null;
+      if (userEl) {
+        var uid = userEl.getAttribute('data-user-id');
+        if (uid && window.showUserActionsSheet) window.showUserActionsSheet(uid);
+        return;
+      }
+      var chatId = row.getAttribute('data-chatid');
+      if (chatId) OrbitHome.showChatContextMenu(chatId);
+    });
+  },
 };
 
 
@@ -743,22 +1057,54 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
   
-  // Wire home tabs (Friends | Groups)
-  document.querySelectorAll('.home-tab').forEach(function(tab) {
-    tab.addEventListener('click', function() {
-      var tabName = this.dataset.tab;
-      
-      // Update active state
-      document.querySelectorAll('.home-tab').forEach(function(t) {
-        t.classList.toggle('active', t.dataset.tab === tabName);
-      });
-      
-      // Re-render chat list with filter
-      if (window.renderChatList) {
-        window.renderChatList(tabName);
-      }
+  // Wire home tabs (Friends | Groups | Folders) — use event delegation for dynamic tabs
+  document.getElementById('home-tabs').addEventListener('click', function(e) {
+    var tab = e.target.closest('.home-tab');
+    if (!tab) return;
+    var tabName = tab.dataset.tab;
+    if (!tabName) return;
+    window._activeHomeTab = tabName;
+
+    // Update active state
+    document.querySelectorAll('.home-tab').forEach(function(t) {
+      t.classList.toggle('active', t.dataset.tab === tabName);
     });
+
+    // Re-render chat list with filter
+    if (window.renderChatList) {
+      window.renderChatList(tabName);
+    }
   });
+
+  // Long-press on folder tabs — rename/delete.
+  // Pointer Events so it works with mouse (desktop testing) as well as touch/pen (WebView).
+  (function() {
+    var tabsContainer = document.getElementById('home-tabs');
+    var folderPressTimer = null;
+    tabsContainer.addEventListener('pointerdown', function(e) {
+      // Mouse: only the primary (left) button — right-click stays the native menu.
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      var tab = e.target.closest('.home-tab-folder');
+      if (!tab) return;
+      folderPressTimer = setTimeout(function() {
+        folderPressTimer = null;
+        var folderId = tab.getAttribute('data-folder-id');
+        if (folderId && MStore.chatFolders[folderId]) {
+          OrbitHome._showFolderTabMenu(folderId);
+          if (e.cancelable) { e.preventDefault(); }
+        }
+      }, 500);
+    }, { passive: true });
+    tabsContainer.addEventListener('pointermove', function() {
+      if (folderPressTimer) { clearTimeout(folderPressTimer); folderPressTimer = null; }
+    }, { passive: true });
+    tabsContainer.addEventListener('pointerup', function() {
+      if (folderPressTimer) { clearTimeout(folderPressTimer); folderPressTimer = null; }
+    }, { passive: true });
+    tabsContainer.addEventListener('pointercancel', function() {
+      if (folderPressTimer) { clearTimeout(folderPressTimer); folderPressTimer = null; }
+    }, { passive: true });
+  })();
   
   // Wire quick-add button — open tabbed sheet
   var addQuick = document.getElementById('btn-add-quick');
@@ -819,7 +1165,10 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   // Initial render with v0.2.8 components
+  window._activeHomeTab = 'friends';
   OrbitHome.renderChatList('friends');
+  OrbitHome.renderFolderTabs();
+  OrbitHome._initChatContextMenu();
 });
 
 // Online friends filter tag clicks

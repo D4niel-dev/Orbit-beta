@@ -1,6 +1,37 @@
 # Orbit Changelog
 
-## v0.3.2-beta **(Latest Version)**
+## v0.4.0-beta — **Stable Release**
+
+### Bug Fixes
+
+- **Message Long-Press Menu Fixed** — Press-and-hold on a message bubble no longer opens nothing: the reactions + actions sheet (Copy/Reply/Translate/Forward/Delete) now initializes correctly on the live chat path. Previously the wiring only ran through a secondary code path that the app no longer uses.
+- **Profile Frame Leak Fixed (4 renderers)** — Avatar frames were still rendering even when the Profile Frames setting was off. Gated `_addAvatarFrames`, `renderProfilePill`, and both chat-header renderers (app.js + chat-screen.js).
+- **Experimental Toggle Off-State Bugs Fixed** — Avatars / Profile Frames / Perf Mode toggles used empty-string attribute selectors that failed when the setting was off. Switched to value-based `[data-*="true"]` selectors so toggling off actually applies.
+- **Compact Spacing Toggle Fixed** — The setting wrote a class the CSS no longer matched; now uses a `[data-compact-spacing]` attribute selector.
+- **FPS Monitor & Dev Overlay Resume on Reload** — These debug toggles no longer stay off after an app reload when enabled.
+
+### UI Polish
+
+- **Folder Tab Icons Removed** — Folder tabs in the home screen now show clean text labels only (matching Friends/Groups); icons removed.
+- **Folders Gated Behind Experimental** — Folder tabs and the Folders settings entry are now hidden behind a new Experimental toggle (`experimentalFolders`, off by default). Enabling it in Settings → Experimental → Advanced restores folder tabs and the Organization settings category.
+- **Profile Frame Icon Removed (Desktop)** — The Account settings "Profile Frame" collapsible header now shows the title only (icon removed).
+
+### Features
+
+- **Message Effects Graduated** — Message Effects (particle confetti on sent messages) moved from Experimental to Chat settings on both platforms, with a one-time automatic migration of the old experimental flag.
+- **Profile Frames Graduated** — Profile Frames moved from Experimental to stable settings on both platforms (Appearance on mobile, Account on desktop), on by default, with one-time automatic migration. The desktop Account picker no longer requires Developer Mode.
+
+### Technical
+
+- **Version:** Bumped to v0.4.0-beta across all manifests.
+
+### Commits in this release
+
+- `f1eaab1` v0.4.0-beta
+
+## v0.3.2-beta
+
+> Previous development release — Android crash fixes, gallery bug fixes, mobile search enhancement, frame picker redesign, status selection.
 
 > **Note:** This is not a stable release — latest development version with experimental features.
 
@@ -13,6 +44,8 @@
 
 ### UI Polish
 
+- **Message Effects Graduated** — Message Effects moved from Experimental to Chat settings.
+- **Profile Frames Graduated** — Profile Frames moved from Experimental to Appearance settings.
 - **Frame Picker Redesigned (Mobile)** — Changed from full-screen flex backdrop to a compact fixed-position bottom sheet (`position:fixed;bottom:0;left:0;width:100%;max-height:75vh`) appended to backdrop with `slideUp` CSS animation, guarded by `_framePickerOpen` flag to prevent double-opens.
 - **Frame Preview in Button Fixed** — Removed `position:absolute;top:-16%;left:-16%` from frame image and `overflow:hidden` from container. Frame now flexbox-centered without being clipped by the circular avatar edge.
 - **Status Selection (Mobile)** — Added `<select>` dropdown with 4 statuses (Online, Away, Do Not Disturb, Offline). Saves to store and broadcasts BEACON immediately.
@@ -155,6 +188,15 @@
 - **Chat List Preview Cleaned** — Markdown stripped from sidebar previews (code→"code", URLs→"link", bold/italic/hash removed, truncated at 80 chars).
 - **Desktop sanitize.js Synced** — Desktop now loads updated copy with all code block improvements (was using old standalone copy).
 - **Technical:** Version bumped to v0.2.7-beta across all manifests.
+
+### Commits in this release
+
+- `41b5773` v0.2.7
+- `2c1dfcd` hotfix for v0.2.7
+- `08da621` hotfix for v0.2.7
+- `116bd68` hotfix for v0.2.7
+- `e80fd58` hotfix for v0.2.7
+- `7f11f52`, `1f556de`, `d92b948`, `6f53ee8`, `cd6ece7`, `0df2d76` — README updates (docs)
 
 ## v0.2.6-beta
 
@@ -624,6 +666,11 @@
 - **Store:** `blockedUsers` array with `blockUser()`/`unblockUser()`/`isUserBlocked()` methods; `messageTranslate` defaults
 - **Version:** Bumped to `v0.1.1-beta` across all manifests, About tabs, and changelog
 
+### Commits in this release
+
+- `5545bd2` v0.1.1-beta-stable
+- `cec3c23` Update CHANGELOG.md (release prep)
+
 ## v0.1.0-beta
 
 ### Performance — Up to 5× Faster Startup & Rendering
@@ -863,6 +910,12 @@
 - **Store:** Added `transferErrors` state and `handleTransferError()` helper with auto-dismiss after 10s. `handleIncomingPacket` now processes `GROUP_LEAVE`. Fixed duplicate `addMemberToGroup`.
 - **Settings Sidebar:** Removed standalone "Privacy & Storage" tab; renamed "Data" to "Data Manager".
 - **sidebar-middle.js:** Group context menu uses programmatic event handler with proper object references instead of fragile inline HTML strings.
+
+### Commits in this release
+
+- `254be18` v0.0.5-beta — Stable Release
+- `88d6324` fixed bug... (post-release fix)
+- `5b7da42`, `160b963`, `c3a9a56` — fixes / README (post-release)
 
 ## v0.0.4-beta
 

@@ -87,7 +87,7 @@ class Store {
         logNetworkPackets: false,
         showConnectionStats: false,
         enableExperimental: false,
-        experimentalProfileFrames: false,
+        profileFrames: true,
         experimentalMessageTranslate: true,
         messageTranslate: true,
         translateTargetLang: '',
@@ -143,6 +143,17 @@ class Store {
       blockedUsers: savedBlockedUsers,
       ...initialState
     };
+
+    // ONE-TIME MIGRATION: Profile Frames graduated from Experimental to a stable setting.
+    // Guard on savedSettings.profileFrames (not the post-spread value) so a user-chosen
+    // profileFrames is never clobbered by a stale legacy experimentalProfileFrames value.
+    if (savedSettings && typeof savedSettings === 'object' && savedSettings.experimentalProfileFrames !== undefined && savedSettings.profileFrames === undefined) {
+      this.state.settings.profileFrames = !!savedSettings.experimentalProfileFrames;
+      // Drop the legacy key from the in-memory object; it is persisted back as part of
+      // the full settings object on the next settings save.
+      delete this.state.settings.experimentalProfileFrames;
+    }
+
     this.listeners = [];
     this._prevActiveChatId = this.state.activeChatId;
     this._messagesFullyLoaded = {};

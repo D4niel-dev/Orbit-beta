@@ -160,6 +160,15 @@ var OrbitChat = {
     
     var displayName = chat.name || chat.peerId || 'Chat';
     
+    // For DM chats the header is the partner's profile → long-press opens the user actions sheet.
+    // Groups and the echo bot don't get a user hook.
+    var dmPeerId = null;
+    var isEcho = chat.id === 'echo' || chat.type === 'echo';
+    var isGroupChat = chat.type === 'group' || (chat.members && Object.prototype.toString.call(chat.members) === '[object Array]');
+    if (!isEcho && !isGroupChat) {
+      dmPeerId = chat.peerId || (chat.id && chat.id.indexOf('dm_') === 0 ? chat.id.substring(3) : chat.id);
+    }
+    
     // Match old app.js status text format
     var statusText = '';
     var statusDotColor = 'var(--text-muted)';
@@ -193,45 +202,50 @@ var OrbitChat = {
     }
     
     headerInfo.innerHTML =
-      '<div class="chat-header-name">' + OrbitChat._escapeAttr(displayName) + '</div>' +
+      '<div class="chat-header-name"' + (dmPeerId ? ' data-user-id="' + OrbitChat._escapeAttr(dmPeerId) + '"' : '') + '>' + OrbitChat._escapeAttr(displayName) + '</div>' +
       '<div class="chat-header-status">' +
         statusDotHtml + OrbitChat._escapeAttr(statusText) +
       '</div>';
     
-    // Avatar with profile frame support
-    if (avatarEl) {
-      var initial = displayName.charAt(0).toUpperCase();
-      avatarEl.style.position = 'relative';
-      if (chat.avatar) {
+      // Avatar with profile frame support
+      if (avatarEl) {
+        var initial = displayName.charAt(0).toUpperCase();
+        avatarEl.style.position = 'relative';
+        // DM chats: the header avatar is the partner → long-press opens the user actions sheet
+        if (dmPeerId) avatarEl.setAttribute('data-user-id', dmPeerId);
+        else avatarEl.removeAttribute('data-user-id');
+        if (chat.avatar) {
         avatarEl.innerHTML = '<img src="' + OrbitChat._escapeAttr(chat.avatar) + '" alt="">';
       } else {
         avatarEl.textContent = initial;
       }
-      // Add profile frame for DM chats (friend's profile frame)
-      if (chat.type !== 'group') {
-        var pfNum = 0;
-        var friends = MStore.friends || [];
-        for (var fi = 0; fi < friends.length; fi++) {
-          if (friends[fi].id === chat.peerId || friends[fi].peerId === chat.peerId || friends[fi].id === chat.id) {
-            pfNum = parseInt(friends[fi].profileFrame, 10) || 0;
-            break;
+      // Add profile frame for DM chats (friend's profile frame) — gated on stable setting
+      if (MStore.settings && MStore.settings.profileFrames) {
+        if (chat.type !== 'group') {
+          var pfNum = 0;
+          var friends = MStore.friends || [];
+          for (var fi = 0; fi < friends.length; fi++) {
+            if (friends[fi].id === chat.peerId || friends[fi].peerId === chat.peerId || friends[fi].id === chat.id) {
+              pfNum = parseInt(friends[fi].profileFrame, 10) || 0;
+              break;
+            }
           }
-        }
-        var oldFrame = avatarEl.querySelector('.pfp-frame');
-        if (pfNum > 0) {
-          if (!oldFrame) {
-            var frameEl = document.createElement('img');
-            frameEl.className = 'pfp-frame';
-            frameEl.draggable = false;
-            frameEl.alt = '';
-            frameEl.style.cssText = 'position:absolute;top:-16%;left:-16%;pointer-events:none;';
-            avatarEl.appendChild(frameEl);
-          } else {
-            var frameEl = oldFrame;
+          var oldFrame = avatarEl.querySelector('.pfp-frame');
+          if (pfNum > 0) {
+            if (!oldFrame) {
+              var frameEl = document.createElement('img');
+              frameEl.className = 'pfp-frame';
+              frameEl.draggable = false;
+              frameEl.alt = '';
+              frameEl.style.cssText = 'position:absolute;top:-16%;left:-16%;pointer-events:none;';
+              avatarEl.appendChild(frameEl);
+            } else {
+              var frameEl = oldFrame;
+            }
+            frameEl.src = 'icons/frames/pfp_frame_' + pfNum + '.png';
+          } else if (oldFrame) {
+            oldFrame.remove();
           }
-          frameEl.src = 'icons/frames/pfp_frame_' + pfNum + '.png';
-        } else if (oldFrame) {
-          oldFrame.remove();
         }
       }
       avatarEl.style.display = '';
@@ -331,9 +345,16 @@ var OrbitChat = {
     
     html += '  <div class="message-bubble">';
     
-    // Text content (sanitized)
+    // Text content (sanitized) with mention support
     if (text) {
-      html += '    <div class="msg-text">' + OrbitChat._sanitizeHtml(text) + '</div>';
+      html += '    <div class="msg-text">' + OrbitChat._sanitizeHtml(text, msg.mentions) + '</div>';
+    }
+    
+    // Translated text (if available)
+    if (msg.translatedText) {
+      html += '    <div class="translated-text">' + OrbitChat._escape(msg.translatedText) + '</div>';
+    } else if (msg._translating) {
+      html += '    <div class="translated-text" style="opacity:0.5;font-style:italic;">Translating…</div>';
     }
     
     // Reactions
@@ -353,17 +374,45 @@ var OrbitChat = {
     return html;
   },
 
-  /** Sanitize HTML (allow only safe tags) */
-  _sanitizeHtml: function(str) {
+  /** Sanitize HTML (allow only safe tags) with mention support */
+  _sanitizeHtml: function(str, mentions) {
     if (!str) return '';
-    // Use markdown renderer if available, fall back to basic sanitization
+    // Use markdown renderer with mention support if available
     if (window.Sanitize && window.Sanitize.markdown) {
-      return window.Sanitize.markdown(str);
+      return this._renderMsgText(str, mentions);
     }
     // Basic fallback: escape HTML but allow line breaks
     var div = document.createElement('div');
     div.appendChild(document.createTextNode(str));
     return div.innerHTML.replace(/\n/g, '<br>');
+  },
+
+  /** Render message text with clickable mention spans */
+  _renderMsgText: function(text, mentions) {
+    if (!text) return '';
+    var processed = text;
+    var placeholders = [];
+    // If we have structured mention data, swap @username for placeholders before markdown
+    if (mentions && mentions.length > 0) {
+      mentions.forEach(function(mt, idx) {
+        var escapedName = mt.username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        var re = new RegExp('@' + escapedName + '\\b', 'g');
+        var placeholder = '\x00MENTION_' + idx + '\x00';
+        processed = processed.replace(re, placeholder);
+        placeholders.push({ idx: idx, userId: mt.userId, username: mt.username, name: mt.name, tag: mt.tag });
+      });
+    }
+    // Run through markdown
+    var html = window.Sanitize ? window.Sanitize.markdown(processed) : OrbitChat._escape(processed);
+    // Restore mention placeholders as clickable spans
+    if (placeholders.length > 0) {
+      placeholders.forEach(function(p) {
+        var ph = '\x00MENTION_' + p.idx + '\x00';
+        var mentionHtml = '<span class="chat-mention mention-clickable" data-userid="' + p.userId + '" data-username="' + p.username + '" onclick="window._onMentionClick(\'' + p.userId + '\')">@' + p.username + '</span>';
+        html = html.split(ph).join(mentionHtml);
+      });
+    }
+    return html;
   },
 
   /** Escape HTML for safe inline insertion */
@@ -376,10 +425,10 @@ var OrbitChat = {
   /** Initialize long-press context menu (event delegation on #message-feed) */
   _initContextMenu: function() {
     if (this._contextMenuInitialized) return;
-    this._contextMenuInitialized = true;
     
     var feed = document.getElementById('message-feed');
     if (!feed) return;
+    this._contextMenuInitialized = true;
     
     var pressTimer = null;
     var startX = 0, startY = 0;
@@ -387,6 +436,9 @@ var OrbitChat = {
     feed.addEventListener('touchstart', function(e) {
       var row = e.target.closest('.message-row');
       if (!row) return;
+      // Sender names/avatars carry [data-user-id] — the global long-press handler (app.js)
+      // owns those and opens the user actions sheet; don't start the message-menu timer.
+      if (e.target.closest && e.target.closest('[data-user-id]')) return;
       startX = e.touches[0].clientX;
       startY = e.touches[0].clientY;
       pressTimer = setTimeout(function() {
@@ -395,7 +447,7 @@ var OrbitChat = {
         if (msgId) {
           OrbitChat._showContextMenu(msgId);
           // Prevent text selection / default action
-          try { e.preventDefault(); } catch(ex) {}
+          if (e.cancelable) { e.preventDefault(); }
         }
       }, 400);
     }, {passive: true});
@@ -422,6 +474,9 @@ var OrbitChat = {
     feed.addEventListener('contextmenu', function(e) {
       var row = e.target.closest('.message-row');
       if (!row) return;
+      // Same guard as touchstart: never show the message menu on [data-user-id] targets
+      // (sender names) — the global user-sheet flow owns those.
+      if (e.target.closest && e.target.closest('[data-user-id]')) return;
       e.preventDefault();
       var msgId = row.getAttribute('data-msg-id');
       if (msgId) OrbitChat._showContextMenu(msgId);
@@ -466,6 +521,7 @@ var OrbitChat = {
     var actions = [
       { icon: 'copy', label: 'Copy', action: 'copy', danger: false },
       { icon: 'reply', label: 'Reply', action: 'reply', danger: false },
+      { icon: 'languages', label: 'Translate', action: 'translate', danger: false },
       { icon: 'forward', label: 'Forward', action: 'forward', danger: false }
     ];
     if (isMine) {
@@ -549,6 +605,9 @@ var OrbitChat = {
           window.showForwardModal(msgId);
         }
         break;
+      case 'translate':
+        OrbitChat.translateMessage(msgId);
+        break;
       case 'delete':
         if (confirm('Delete this message?')) {
           if (window.MStore && this._currentChatId) {
@@ -619,6 +678,47 @@ var OrbitChat = {
         break;
       }
     }
+  },
+
+  /** Translate a message via MyMemory API (toggle on/off) */
+  translateMessage: function(msgId) {
+    if (!msgId || !this._currentChatId) return;
+    var chatId = this._currentChatId;
+    var msgs = MStore.messages && MStore.messages[chatId];
+    if (!msgs) return;
+    var msg = null;
+    for (var i = 0; i < msgs.length; i++) {
+      if (msgs[i].id === msgId) { msg = msgs[i]; break; }
+    }
+    if (!msg || !msg.text) return;
+    
+    // If already translated, toggle off
+    if (msg.translatedText) {
+      delete msg.translatedText;
+      if (window.MStore) MStore.saveToLocalStorage();
+      this.renderMessages(chatId);
+      return;
+    }
+    
+    var targetLang = MStore.settings.translateTargetLang || 'en';
+    
+    // Show loading state
+    msg._translating = true;
+    this.renderMessages(chatId);
+    
+    var url = 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(msg.text) + '&langpair=' + (MStore.settings.autoDetectSource ? '|' : 'auto|') + targetLang;
+    
+    fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+      if (data.responseData && data.responseData.translatedText) {
+        msg.translatedText = data.responseData.translatedText;
+      }
+      delete msg._translating;
+      if (window.MStore) MStore.saveToLocalStorage();
+      OrbitChat.renderMessages(chatId);
+    }).catch(function() {
+      delete msg._translating;
+      OrbitChat.renderMessages(chatId);
+    });
   }
 };
 

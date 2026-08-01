@@ -1,5 +1,8 @@
 /* src/styles/variables.css */
 :root {
+  /* Fallback accent (themes override) */
+  --accent-primary: #0A84FF;
+
   /* Spacing */
   --spacing-xs: 4px;
   --spacing-sm: 8px;

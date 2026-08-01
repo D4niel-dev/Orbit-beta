@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v032-beta-latest-version">v0.3.2-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v040-beta--stable-release">v0.4.0-beta</a>
 </p>
 
 <p align="center">
@@ -28,8 +28,8 @@
 
 | Channel | Version | Status |
 |---------|---------|--------|
-| *Development* | v0.3.2-beta | Latest Build |
-| **Stable** | v0.2.7-beta | Stable release |
+| **Stable** | v0.4.0-beta | Latest stable release |
+| Previous **Stable** | v0.2.7-beta | Stable release |
 | Previous **Stable** | v0.1.1-beta | Legacy stable release |
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
@@ -90,15 +90,14 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage desktop app** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
-## Highlights (v0.3.2-beta)
+## Highlights (v0.4.0-beta)
 
-- **Android Crash-on-Launch Fixed** — SplashScreen attributes, plugin lifecycle order, and missing colors.xml resolved.
-- **Profile Card Real-Time Update Fixes** — 4 bugs fixed: duplicate DOM IDs, cropper preview not updating, avatar/banner mixup, and profile pill never updating.
-- **Frame Picker Redesigned (Mobile)** — Compact fixed-position bottom sheet with slide-up animation replaces full-screen overlay.
-- **Mobile Search Enhanced** — Categorized results (Chats/Friends/Messages), text highlighting, recent searches storage.
-- **Status Selection on Mobile** — New `<select>` dropdown with 4 statuses, instant BEACON broadcast.
-- **Status Text Color Fixed** — Profile pill no longer shows gray text on startup.
-- **Mobile Gallery Fixed (8 bugs)** — Crashes, index mismatch (wrong media opened), blob URL leaks, and more. Full list in CHANGELOG.
+- **Message Long-Press Menu Fixed** — Press-and-hold on message bubbles opens the reactions/actions sheet again.
+- **Message Effects Graduated** — Moved from Experimental to Chat settings, with automatic migration.
+- **Profile Frames Graduated** — Moved from Experimental to stable settings on both platforms (on by default).
+- **Profile Frame Leak Fixed** — Frames no longer render when the setting is off (4 renderers gated).
+- **Folders Now Experimental** — Folder tabs hidden behind a new Experimental toggle (off by default); folder tab icons removed.
+- **Experimental Toggle Audit** — Off-state bugs fixed for Avatars/Frames/Perf Mode toggles; Compact Spacing works again; FPS Monitor & Dev Overlay resume on reload.
 
 ## Version History
 <details>
@@ -462,6 +461,17 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Search CSS** — New `.search-results-*` and `.recent-search-*` styles in mobile.css.
 - **Mobile Gallery Bug Fixes (7 bugs)** — Null guards on gallery button/close bindings; null checks in show/hide gallery; blob URL memory leak fixed (video/audio now revoked properly); filter index mismatch fixed; date-group visual order mismatch fixed (clicking media now opens correct item regardless of date sorting); missing scaleIn animation defined; lightbox close button respects safe-area-top.
 </details>
+<details>
+<summary>v0.4.0-beta (Stable)</summary>
+
+- **Message Long-Press Menu Fixed** — Press-and-hold on message bubbles opens the reactions + actions sheet again (wired into the live chat render path).
+- **Message Effects Graduated** — Moved from Experimental to Chat settings with one-time migration.
+- **Profile Frames Graduated** — Moved from Experimental to stable settings (Appearance on mobile, Account on desktop); on by default.
+- **Profile Frame Leak Fixed** — 4 renderers gated so frames never appear when the setting is off.
+- **Folders Gated Behind Experimental** — New `experimentalFolders` toggle (off by default); folder tab icons removed for clean text-only tabs.
+- **Experimental Toggle Audit** — Value-based selectors fix Avatars/Frames/Perf Mode off-states; Compact Spacing attribute selector restored; FPS Monitor & Dev Overlay resume on reload.
+- **Profile Frame Icon Removed (Desktop)** — Account settings header shows title only.
+</details>
 
 See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
@@ -525,55 +535,104 @@ Or let GitHub Actions build it automatically — push a `v*` tag or trigger the 
 
 ## How it works
 
+Orbit is peer-to-peer: clients connect directly over your local network with no central server.
 ```
-  	 Desktop Orbit             Android Orbit
-       	      │                         │
-       	      │         TCP P2P         │
-       	      ├─────────────────────────┤
-       	      │                         │
-       	      │      UDP Discovery      │
-       	      │     (LAN multicast)     │
-       	      │                         │
-       	      └────  Local  Network   ──┘
+┌──────────────────────────┐        ┌──────────────────────────┐
+│      Desktop Orbit       │        │      Android Orbit       │
+│       (Electron)         │        │       (Capacitor)        │
+└────────────┬─────────────┘        └────────────┬─────────────┘
+             │                                   │
+             │        TCP P2P · E2EE             │
+             ├───────────────────────────────────┤
+             │                                   │
+             │     UDP Discovery · multicast     │
+             │                                   │
+             └────────────────┬──────────────────┘
+                              │
+                      ┌───────┴───────┐
+                      │ Local Network │
+                      └───────────────┘
 ```
 
 Orbit runs on two platforms with a shared cross-platform core:
 
 | Layer | Desktop | Mobile |
 |-------|---------|--------|
-| **Main process** | Electron (`main.js`) — owns networking, DB, E2EE, IPC | N/A (runs in WebView) |
+| **Main process** | Electron (`main.js`) — owns networking, DB, E2EE, IPC | Native Java plugin (OrbitP2PPlugin) — networking & beacon, bridged via Capacitor |
 | **Preload** | Context-bridge (`preload.js`) — typed IPC surface | N/A (uses Web APIs instead) |
 | **Renderer** | `desktop/src/` — HTML/CSS/JS chat UI via `<script>` tags | `mobile/src/` — same UI adapted for touch |
 | **Shared core** | `shared/` — env detection, database factory, protocol, crypto | Same `shared/` modules, mobile backends |
+
+Mobile keeps a working copy of the shared core at `mobile/src/shared/`, refreshed automatically by `npm run shared:sync` before every `cap sync`/build — so `shared/` is always the single source of truth.
 
 Security defaults (desktop): `nodeIntegration: false`, `contextIsolation: true`.
 
 ```
 Orbit-beta/
-├── desktop/                	# Electron desktop app
-│   ├── main.js             	# Electron main process
-│   ├── preload.js          	# Context-isolated IPC bridge
-│   ├── electron-builder.yml
-│   ├── src/
-│   │   ├── index.html      	# App shell
-│   │   ├── js/             	# UI, network, database
-│   │   ├── styles/         	# Themes and layout
-│   │   └── icons/          	# App icons & screenshots
-│   └── package.json
-├── mobile/                 	# Capacitor Android app
-│   ├── src/                	# Mobile web UI
-│   ├── android/            	# Android project (Gradle)
-│   ├── build-android.ps1   	# Build script
-│   └── package.json
-├── shared/                 	# Cross-platform modules
-│   ├── core/env.js         	# Runtime detection
-│   ├── database/           	# DB abstraction factory
-│   ├── network/protocol.js 	# Packet definitions
-│   ├── crypto/             	# E2EE abstraction
-│   └── utils/              	# Format, sanitize
-├── CHANGELOG.md
-└── README.md
+├── package.json                 # Workspace root — desktop/mobile build scripts
+├── CHANGELOG.md                 # Release notes
+├── README.md                    # This file
+├── SECURITY.md                  # Security policy
+│
+├── desktop/                     # Electron desktop app (Windows / macOS / Linux)
+│   ├── main.js                  #   Main process — networking, DB, E2EE, IPC
+│   ├── preload.js               #   Context-isolated IPC bridge (orbitAPI)
+│   ├── electron-builder.yml     #   Packaging (NSIS / DMG / AppImage+deb)
+│   ├── package.json
+│   └── src/
+│       ├── index.html           #   App shell
+│       ├── js/
+│       │   ├── app.js           #   Renderer entry — UI wiring, message rendering
+│       │   ├── store.js         #   Renderer state store
+│       │   ├── identity.js      #   Local identity & account switching
+│       │   ├── components/      #   Toasts, modals, profile-card, emoji-picker,
+│       │   │                    #     webrtc-call, image-viewer, context-menu, ...
+│       │   ├── views/           #   Chat panel, settings modal, sidebars, gallery
+│       │   ├── network/         #   socket.js, discovery.js, protocol.js, transfer.js
+│       │   ├── database/        #   SQLite wrapper + schema migrations
+│       │   └── utils/           #   format, sanitize, profanity, storage
+│       ├── styles/              #   base, layout, components, animations, themes/
+│       └── icons/               #   App icons & screenshots
+│
+├── mobile/                      # Capacitor Android app
+│   ├── capacitor.config.json
+│   ├── build-android.ps1        #   APK build script
+│   ├── icons/                   #   PWA-style icons (48–512px)
+│   ├── android/                 #   Native Android project (Gradle)
+│   ├── package.json
+│   └── src/                     #   Mobile web UI (runs in WebView)
+│       ├── index.html
+│       ├── js/
+│       │   ├── app.js           #   Entry — UI wiring, message rendering
+│       │   ├── store.js         #   State store + localStorage persistence
+│       │   ├── version.js       #   Auto-generated APP_VERSION
+│       │   ├── components/      #   navigation, home-screen, chat-screen, bottom-sheet
+│       │   └── debug.js         #   Dev-mode helpers
+│       ├── styles/              #   base, layout, mobile, components, animations, themes/
+│       ├── lib/                 #   Vendored: lucide, qrcode, jsqr, emoji-picker-element
+│       ├── shared/              #   Auto-synced copy of ../shared (shared:sync)
+│       └── icons/               #   In-app icons (frames, status dots, ...)
+│
+├── shared/                      # Cross-platform modules (desktop + mobile)
+│   ├── core/env.js              #   Runtime detection
+│   ├── database/                #   index.js factory + sqlite-desktop / sqlite-mobile
+│   ├── network/                 #   protocol.js packet defs, p2p-mobile.js
+│   ├── crypto/                  #   e2ee-desktop / e2ee-mobile
+│   ├── ui/                      #   audio-player, video-player, image-cropper
+│   └── utils/                   #   format.js, sanitize.js
+│
+├── docs/                        # Landing / documentation page
+├── security/                    # Release signing keys & docs
+├── plans/                       # Planning notes
+└── .github/                     # CI/CD workflows
 ```
+
+### Message flow at a glance
+
+1. **Discovery** — Clients announce themselves over UDP multicast on the LAN (`discovery.js` / `OrbitP2PPlugin` beacon) and answer peer pings.
+2. **Connect** — Two peers open a direct TCP socket and exchange identity + E2EE public keys.
+3. **Send** — The UI calls `store` → the platform backend encrypts (AES-256-GCM) and frames the packet (`protocol.js`) → writes it to the socket.
+4. **Receive** — The socket handler validates the frame, decrypts, and dispatches the event to the store → the renderer updates the chat in place.
 
 ### Custom protocols
 
@@ -603,7 +662,7 @@ Every Orbit release since v0.3.0-beta includes cryptographic signatures so you c
 curl -O https://raw.githubusercontent.com/D4niel-dev/Orbit-beta/main/security/public-key.asc
 gpg --import public-key.asc
 
-# 2. Download your release assets (Orbit-v0.3.2-setup.exe, SHA256SUMS.txt, SHA256SUMS.txt.sig)
+# 2. Download your release assets (Orbit-v0.4.0-setup.exe, SHA256SUMS.txt, SHA256SUMS.txt.sig)
 
 # 3. Verify the signature on the checksums file
 gpg --verify SHA256SUMS.txt.sig SHA256SUMS.txt
@@ -650,16 +709,13 @@ Transparency matters in beta. Current constraints include:
 
 ## Roadmap
 
-### Shipped (v0.3.2-beta)
+### Shipped (v0.4.0-beta)
 
-- **Android Crash-on-Launch Fixed** — SplashScreen attributes, plugin lifecycle order, missing colors.xml
-- **Profile Card Real-Time Updates** — 4 bugs fixed for instant peer updates
-- **Frame Picker Redesign** — Bottom sheet with slide-up animation on mobile
-- **Mobile Search Enhanced** — Categorized results, text highlighting, recent searches
-- **Status Selection on Mobile** — Dropdown with instant broadcast
-- **Status Text Color Fix** — No more gray on startup
-- **Frame Preview Fixed** — No longer clipped by avatar circle
-- **"Busy" Status Removed** — Cleaned up across both platforms
+- **Message Long-Press Menu Fixed** — Reactions/actions sheet restored on message bubbles
+- **Message Effects & Profile Frames Graduated** — Both moved from Experimental to stable settings with migration
+- **Profile Frame Leak Fixed** — No more frames when the setting is off
+- **Folders Gated Behind Experimental** — New toggle, clean text-only folder tabs
+- **Experimental Toggle Audit** — Off-states, Compact Spacing, FPS/DevOverlay resume fixed
 
 ### In Progress / Planned
 

@@ -32,9 +32,10 @@ class Store {
       logNetworkPackets: false,
       showConnectionStats: false,
       enableExperimental: false,
-      experimentalProfileFrames: false,
+      profileFrames: true,
       experimentalAnimatedAvatars: false,
-      experimentalMessageFx: false,
+      messageFx: false,
+      experimentalFolders: false,
       messageTranslate: true,
       experimentalCompactSpacing: false,
       enableCustomColors: false,
@@ -69,6 +70,10 @@ class Store {
       ...initialState.settings
     };
 
+    // ── Chat Folders ──
+    this.chatFolders = {};      // { "folderId": { id, name, icon, chatIds: [] } }
+    this.chatFolderOrder = [];  // ["folderId1", "folderId2"] — ordered display
+
     // ── Desktop-style state extras ──
     this.unreadCounts = {};
     this.mentionCounts = {};
@@ -84,6 +89,7 @@ class Store {
     this.systemLogClearedAt = 0;
     this.transferProgress = {};
     this.transferErrors = {};
+    this.scheduledMessages = [];
 
     // ── Listeners (subscribe/notify) ──
     this.listeners = [];
@@ -233,11 +239,47 @@ class Store {
     var savedSettings = this.get('settings', {});
     this.settings = Object.assign({}, this.settings, savedSettings);
 
+    // ONE-TIME MIGRATION: "Message Effects" graduated from Experimental to a
+    // stable Chat setting. Legacy persisted key `experimentalMessageFx` → `messageFx`.
+    // Only migrates when the legacy key exists in the loaded (persisted) settings
+    // AND the new key was never persisted, so users who toggle the new setting
+    // afterward keep their choice. `!!` coerces legacy true/false; undefined guard
+    // keeps this safe for malformed saved settings. The legacy key is deleted so it
+    // is never written back to storage again.
+    if (savedSettings && typeof savedSettings === 'object' && savedSettings.experimentalMessageFx !== undefined && savedSettings.messageFx === undefined) {
+      this.settings.messageFx = !!savedSettings.experimentalMessageFx;
+      delete this.settings.experimentalMessageFx;
+    }
+
+    // ONE-TIME MIGRATION: "Profile Frames" graduated from Experimental to a
+    // stable Appearance setting. Legacy persisted key `experimentalProfileFrames` → `profileFrames`.
+    // Only migrates when the legacy key exists in the loaded (persisted) settings
+    // AND the new key was never persisted, so users who toggle the new setting
+    // afterward keep their choice. `!!` coerces legacy true/false; undefined guard
+    // keeps this safe for malformed saved settings. The legacy key is deleted so it
+    // is never written back to storage again.
+    if (savedSettings && typeof savedSettings === 'object' && savedSettings.experimentalProfileFrames !== undefined && savedSettings.profileFrames === undefined) {
+      this.settings.profileFrames = !!savedSettings.experimentalProfileFrames;
+      delete this.settings.experimentalProfileFrames;
+    }
+
     // Re-sync mutedChats alias (must point to same object as settings.mutedChats for backward compat)
     this.mutedChats = this.settings.mutedChats;
 
+    this.chatFolders = this.get('chatFolders', {});
+    this.chatFolderOrder = this.get('chatFolderOrder', []);
+
+    this.scheduledMessages = this.get('scheduledMessages', []);
+
     this.user = this.get('user', null);
     this._migrateGroups();
+
+    // Ensure all chats have disappearTimer
+    var chatsChanged = false;
+    this.chats.forEach(function(c) {
+      if (c.disappearTimer === undefined) { c.disappearTimer = 'off'; chatsChanged = true; }
+    });
+    if (chatsChanged) this.set('chats', this.chats);
 
     // Generate default user identity if missing
     if (!this.user) {
@@ -272,11 +314,13 @@ class Store {
     if (!echoChat) {
       this.chats.unshift({
         id: 'echo', name: 'Orbit Echo', avatar: 'icons/app/orbit_1024.png',
-        status: 'online', lastMessage: '', lastTime: '', unread: 0
+        status: 'online', lastMessage: '', lastTime: '', unread: 0, wallpaper: null,
+        disappearTimer: 'off'
       });
     } else {
       echoChat.avatar = 'icons/app/orbit_1024.png';
       echoChat.status = 'online';
+      if (echoChat.disappearTimer === undefined) echoChat.disappearTimer = 'off';
     }
     // Ensure echo messages array is loaded from storage (don't overwrite saved ones)
     if (!this.messages['echo']) {
@@ -300,9 +344,12 @@ class Store {
     this.set('mentionCounts', this.mentionCounts);
     this.set('lastReadIds', this.lastReadIds);
     this.set('peerPublicKeys', this.peerPublicKeys);
+    this.set('chatFolders', this.chatFolders);
+    this.set('chatFolderOrder', this.chatFolderOrder);
     this.set('activityLog', this.activityLog);
     this.set('activityClearedAt', this.activityClearedAt);
     this.set('systemLogClearedAt', this.systemLogClearedAt);
+    this.set('scheduledMessages', this.scheduledMessages);
   }
 
   addActivityLogEntry(type, message) {
@@ -386,6 +433,26 @@ class Store {
     this.notify({ messages: this.messages });
   }
 
+  // ════════════════════════════════════════════
+  // Scheduled Messages
+  // ════════════════════════════════════════════
+
+  scheduleMessage(msg) {
+    this.scheduledMessages.push(msg);
+    this.set('scheduledMessages', this.scheduledMessages);
+    return msg;
+  }
+
+  cancelScheduledMessage(id) {
+    this.scheduledMessages = this.scheduledMessages.filter(function(m) { return m.id !== id; });
+    this.set('scheduledMessages', this.scheduledMessages);
+  }
+
+  getDueScheduledMessages() {
+    var now = Date.now();
+    return this.scheduledMessages.filter(function(m) { return !m.sent && new Date(m.scheduledAt).getTime() <= now; });
+  }
+
   _migrateGroups() {
     var changed = false;
     var self = this;
@@ -401,6 +468,7 @@ class Store {
       if (g.pinned === undefined) { g.pinned = false; changed = true; }
       if (g.notificationMuted === undefined) { g.notificationMuted = false; changed = true; }
       if (g.pinnedMessages === undefined) { g.pinnedMessages = []; changed = true; }
+      if (g.disappearTimer === undefined) { g.disappearTimer = 'off'; changed = true; }
       if (g.members && g.members.length > 0 && typeof g.members[0] === 'string') {
         g.members = g.members.map(function(id) {
           return { userId: id, role: 'member', joinedAt: g.createdAt || new Date().toISOString() };
@@ -411,6 +479,49 @@ class Store {
       }
     });
     if (changed) { console.log('[Store] Migrated ' + this.groups.length + ' group(s) — added missing fields'); this.save(); }
+  }
+
+  // ════════════════════════════════════════════
+  // Chat Folders CRUD
+  // ════════════════════════════════════════════
+
+  createFolder(name, icon) {
+    var id = 'folder_' + Date.now();
+    this.chatFolders[id] = { id: id, name: name, icon: icon || 'folder', chatIds: [] };
+    this.chatFolderOrder.push(id);
+    this.save();
+    return id;
+  }
+  renameFolder(folderId, name) {
+    if (this.chatFolders[folderId]) {
+      this.chatFolders[folderId].name = name;
+      this.save();
+    }
+  }
+  deleteFolder(folderId) {
+    delete this.chatFolders[folderId];
+    this.chatFolderOrder = this.chatFolderOrder.filter(function(id) { return id !== folderId; });
+    this.save();
+  }
+  addChatToFolder(folderId, chatId) {
+    if (this.chatFolders[folderId] && this.chatFolders[folderId].chatIds.indexOf(chatId) === -1) {
+      this.chatFolders[folderId].chatIds.push(chatId);
+      this.save();
+    }
+  }
+  removeChatFromFolder(folderId, chatId) {
+    if (this.chatFolders[folderId]) {
+      this.chatFolders[folderId].chatIds = this.chatFolders[folderId].chatIds.filter(function(id) { return id !== chatId; });
+      this.save();
+    }
+  }
+  getChatFolders() {
+    var folders = [];
+    for (var i = 0; i < this.chatFolderOrder.length; i++) {
+      var fid = this.chatFolderOrder[i];
+      if (this.chatFolders[fid]) folders.push(this.chatFolders[fid]);
+    }
+    return folders;
   }
 
   // Helper: current user's ID
@@ -443,7 +554,10 @@ class Store {
       activeChatId: this.activeChatId,
       activeView: this.activeView,
       transferProgress: this.transferProgress,
-      transferErrors: this.transferErrors
+      transferErrors: this.transferErrors,
+      scheduledMessages: this.scheduledMessages,
+      chatFolders: this.chatFolders,
+      chatFolderOrder: this.chatFolderOrder
     };
   }
 
@@ -453,7 +567,8 @@ class Store {
                 'settings', 'unreadCounts', 'mentionCounts', 'lastReadIds',
                 'mutedChats', 'pinnedMessages', 'closedDMs', 'pinnedDMs',
                 'peerPublicKeys', 'activeChatId', 'activeView',
-                'transferProgress', 'transferErrors'];
+                'transferProgress', 'transferErrors', 'scheduledMessages',
+                'chatFolders', 'chatFolderOrder'];
     for (var k in newState) {
       if (newState.hasOwnProperty(k) && keys.indexOf(k) !== -1) {
         this[k] = newState[k];
@@ -526,6 +641,7 @@ class Store {
   addGroup(group) {
     if (!group || !group.groupId) return;
     var idx = this.groups.findIndex(function(g) { return g.groupId === group.groupId; });
+    if (group.disappearTimer === undefined) group.disappearTimer = 'off';
     if (!group.inviteCode) {
       var arr = new Uint8Array(4);
       if (window.crypto) window.crypto.getRandomValues(arr);

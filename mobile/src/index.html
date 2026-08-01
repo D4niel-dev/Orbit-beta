@@ -11,20 +11,20 @@
   <title>Orbit</title>
   <!-- CSS -->
   <link rel="stylesheet" href="styles/variables.css">
-  <link rel="stylesheet" href="styles/themes/dark.css?v=20260721">
-  <link rel="stylesheet" href="styles/themes/light.css?v=20260721">
-  <link rel="stylesheet" href="styles/themes/dark-purple.css?v=20260721">
-  <link rel="stylesheet" href="styles/themes/midnight.css?v=20260721">
-  <link rel="stylesheet" href="styles/themes/sunset.css?v=20260721">
-  <link rel="stylesheet" href="styles/themes/nord.css?v=20260721">
-  <link rel="stylesheet" href="styles/themes/seasonal-spring.css?v=20260721">
-  <link rel="stylesheet" href="styles/themes/seasonal-summer.css?v=20260721">
-  <link rel="stylesheet" href="styles/themes/seasonal-fall.css?v=20260721">
-  <link rel="stylesheet" href="styles/themes/seasonal-winter.css?v=20260721">
+  <link rel="stylesheet" href="styles/themes/dark.css?v=20260801">
+  <link rel="stylesheet" href="styles/themes/light.css?v=20260801">
+  <link rel="stylesheet" href="styles/themes/dark-purple.css?v=20260801">
+  <link rel="stylesheet" href="styles/themes/midnight.css?v=20260801">
+  <link rel="stylesheet" href="styles/themes/sunset.css?v=20260801">
+  <link rel="stylesheet" href="styles/themes/nord.css?v=20260801">
+  <link rel="stylesheet" href="styles/themes/seasonal-spring.css?v=20260801">
+  <link rel="stylesheet" href="styles/themes/seasonal-summer.css?v=20260801">
+  <link rel="stylesheet" href="styles/themes/seasonal-fall.css?v=20260801">
+  <link rel="stylesheet" href="styles/themes/seasonal-winter.css?v=20260801">
   <link rel="stylesheet" href="styles/base.css">
-  <link rel="stylesheet" href="styles/components.css">
-  <link rel="stylesheet" href="styles/animations.css">
-  <link rel="stylesheet" href="styles/mobile.css?v=20260723">
+  <link rel="stylesheet" href="styles/components.css?v=20260801">
+  <link rel="stylesheet" href="styles/animations.css?v=20260801">
+  <link rel="stylesheet" href="styles/mobile.css?v=20260804">
 
   <!-- Syntax Highlighting (Prism) -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
@@ -179,6 +179,7 @@
           <div class="chat-input-wrapper">
             <button id="btn-plus" title="Attach"><i data-lucide="plus"></i></button>
             <textarea id="chat-input" class="chat-input-field" placeholder="Message..." rows="1"></textarea>
+            <button id="btn-voice" title="Voice message"><i data-lucide="mic"></i></button>
             <button id="btn-emoji" title="Emoji"><i data-lucide="smile"></i></button>
             <button id="btn-send"><i data-lucide="send"></i></button>
           </div>
@@ -195,6 +196,11 @@
             <button class="dropup-item" data-upload="folder">
               <i data-lucide="folder"></i> Upload Folder
             </button>
+          </div>
+          <div id="voice-recording-indicator" style="display:none;">
+            <div class="voice-recording-dot"></div>
+            <span id="voice-recording-timer">0:00</span>
+            <button id="btn-cancel-voice" title="Cancel recording">&times;</button>
           </div>
         </div>
         <input type="file" id="file-input" style="display:none;" multiple>
@@ -309,8 +315,8 @@
   <script src="shared/network/protocol.js"></script>
   <script src="shared/crypto/e2ee-mobile.js"></script>
   <script src="shared/network/p2p-mobile.js"></script>
-  <script src="shared/ui/audio-player.js?v=20260719a"></script>
-  <script src="shared/ui/video-player.js?v=20260719a"></script>
+  <script src="shared/ui/audio-player.js?v=20260801"></script>
+  <script src="shared/ui/video-player.js?v=20260801"></script>
   <script src="shared/database/index.js"></script>
   <script src="shared/database/sqlite-mobile.js"></script>
 
@@ -319,10 +325,10 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
 
   <!-- Data Store -->
-  <script src="js/version.js?v=20260721"></script>
-  <script src="js/store.js?v=20260719a"></script>
+  <script src="js/version.js?v=20260801"></script>
+  <script src="js/store.js?v=20260804"></script>
 
-  <script src="js/components/bottom-sheet.js?v=20260727"></script>
+  <script src="js/components/bottom-sheet.js?v=20260801"></script>
 
   <!-- Lazy-load image cropper (defined early so app.js can use it; loads async after startup) -->
   <script>
@@ -336,7 +342,7 @@
     }
     window._imageCropperLoading = true;
     var s = document.createElement('script');
-    s.src = 'shared/ui/image-cropper.js?v=20260724';
+    s.src = 'shared/ui/image-cropper.js?v=20260801';
     s.async = true;
     s.onload = function() { window._imageCropperLoading = false; if (callback) callback(); };
     s.onerror = function() { window._imageCropperLoading = false; };
@@ -346,11 +352,11 @@
   setTimeout(function() { window._loadImageCropper(); }, 1500);
   </script>
 
-  <script src="js/app.js?v=20260727"></script>
+  <script src="js/app.js?v=20260809"></script>
 
   <!-- v0.2.8 Components -->
   <script src="js/components/navigation.js"></script>
-  <script src="js/components/chat-screen.js?v=20260727"></script>
-  <script src="js/components/home-screen.js?v=20260719d"></script>
+  <script src="js/components/chat-screen.js?v=20260809"></script>
+  <script src="js/components/home-screen.js?v=20260808"></script>
 </body>
 </html>

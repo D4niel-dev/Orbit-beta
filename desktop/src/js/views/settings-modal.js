@@ -127,10 +127,9 @@ window.SettingsModal = {
         '</div>' +
 
         // Collapsible: Profile Frame
-        (s.experimentalProfileFrames
-        ? '<div class="settings-collapsible" style="margin-bottom:12px;border-radius:10px;border:1px solid var(--border-subtle);overflow:hidden;">' +
+        '<div class="settings-collapsible" style="margin-bottom:12px;border-radius:10px;border:1px solid var(--border-subtle);overflow:hidden;">' +
           '<div class="collapsible-header" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--bg-base);cursor:pointer;user-select:none;" onclick="var b=this.nextElementSibling;var i=this.querySelector(\'.collapse-icon\');if(b.style.display===\'none\'){b.style.display=\'block\';i.style.transform=\'rotate(0deg)\'}else{b.style.display=\'none\';i.style.transform=\'rotate(-90deg)\'}">' +
-            '<div style="display:flex;align-items:center;gap:8px;"><i data-lucide="image" style="width:16px;height:16px;color:var(--text-muted);"></i><span style="font-size:13px;font-weight:600;color:var(--text-primary);">Profile Frame</span>' + experimentalBadge + '</div>' +
+            '<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:13px;font-weight:600;color:var(--text-primary);">Profile Frame</span></div>' +
             '<i data-lucide="chevron-down" class="collapse-icon" style="width:16px;height:16px;color:var(--text-muted);transition:transform 0.2s;"></i>' +
           '</div>' +
           '<div class="collapsible-body" style="padding:16px;display:block;">' +
@@ -147,8 +146,7 @@ window.SettingsModal = {
               })() +
             '</div>' +
           '</div>' +
-        '</div>'
-        : '') +
+        '</div>' +
 
         // Collapsible: Avatar & Banner
         '<div class="settings-collapsible" style="margin-bottom:12px;border-radius:10px;border:1px solid var(--border-subtle);overflow:hidden;">' +
@@ -1576,8 +1574,6 @@ window.SettingsModal = {
               (s.enableExperimental && s.devMode
                 ? '<div style="border-top:1px solid var(--border-subtle);margin-top:4px;"></div>' +
                   '<div style="padding-top:4px;">' +
-                    gatedToggleRow('adv-profile-frames', 'Profile Frames' + experimentalBadge, 'Decorate profile avatars with frame overlays.', s.experimentalProfileFrames, true) +
-                    '<div style="border-top:1px solid var(--border-subtle);"></div>' +
                     gatedToggleRow('adv-custom-colors', 'Custom Colors' + experimentalBadge, 'Customize UI colors with a live preview editor.', s.enableCustomColors, true) +
                     '<div style="border-top:1px solid var(--border-subtle);"></div>' +
                     gatedToggleRow('adv-animated-avatars', 'Animated Avatars' + experimentalBadge, 'Subtle pulse animation on user avatars.', s.experimentalAnimatedAvatars, true) +
@@ -1649,7 +1645,6 @@ window.SettingsModal = {
           var s = { ...window.store.getState().settings };
           s.devMode = false;
           s.enableExperimental = false;
-          s.experimentalProfileFrames = false;
           s.enableCustomColors = false;
           s.experimentalAnimatedAvatars = false;
           s.experimentalMessageFx = false;
@@ -1724,7 +1719,6 @@ window.SettingsModal = {
       expToggle('adv-custom-colors', 'enableCustomColors');
       expToggle('adv-animated-avatars', 'experimentalAnimatedAvatars');
       expToggle('adv-message-fx', 'experimentalMessageFx');
-      expToggle('adv-profile-frames', 'experimentalProfileFrames');
       expToggle('adv-fps-monitor', 'experimentalFpsMonitor');
       expToggle('adv-dev-overlay', 'experimentalDevOverlay');
       // Performance Mode — two-step confirmation on enable

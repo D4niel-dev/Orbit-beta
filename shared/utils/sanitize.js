@@ -82,8 +82,10 @@ window.Sanitize = {
       return '<a href="' + url + '" target="_blank" rel="noopener noreferrer" style="color: var(--accent-primary); text-decoration: underline;">' + url + '</a>';
     });
 
-    // @mentions
-    html = html.replace(/@(\w+)/g, '<span class="chat-mention" style="color:var(--accent-primary);font-weight:600;background:var(--accent-soft);padding:1px 4px;border-radius:4px;">@$1</span>');
+    // @mentions — require at least 2 word chars to reduce false positives on email addresses
+    html = html.replace(/(^|\s)@(\w{2,})/g, function(match, before, name) {
+      return before + '<span class="chat-mention" style="color:var(--accent-primary);font-weight:600;background:var(--accent-soft);padding:1px 4px;border-radius:4px;">@' + name + '</span>';
+    });
 
     // Horizontal rules (---, ***, ___ — three or more)
     html = html.replace(/^(-{3,}|\*{3,}|_{3,})$/gm, '<hr style="border:none;border-top:2px solid var(--border-subtle);margin:12px 0;">');

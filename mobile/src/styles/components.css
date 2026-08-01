@@ -504,10 +504,10 @@ button:active,
 }
 
 /* Experimental: Animated Avatars */
-[data-exp-avatars] .chat-row-avatar,
-[data-exp-avatars] .group-member-avatar,
-[data-exp-avatars] .activity-group-avatar,
-[data-exp-avatars] .friend-row .chat-row-avatar {
+[data-exp-avatars="true"] .chat-row-avatar,
+[data-exp-avatars="true"] .group-member-avatar,
+[data-exp-avatars="true"] .activity-group-avatar,
+[data-exp-avatars="true"] .friend-row .chat-row-avatar {
   animation: avatar-pulse 3s ease-in-out infinite;
 }
 
@@ -534,10 +534,10 @@ img.pfp-frame {
 }
 
 /* Experimental: Profile Frames */
-[data-exp-frames] .chat-row-avatar-wrapper {
+[data-exp-frames="true"] .chat-row-avatar-wrapper {
   position: relative;
 }
-[data-exp-frames] .group-member-avatar-wrap {
+[data-exp-frames="true"] .group-member-avatar-wrap {
   position: relative;
 }
 
@@ -586,18 +586,18 @@ img.pfp-frame {
 }
 
 /* Experimental: Compact Spacing */
-.experimental-compact-spacing .message-row {
+[data-compact-spacing] .message-row {
   margin-bottom: 2px !important;
 }
-.experimental-compact-spacing .message-bubble {
+[data-compact-spacing] .message-bubble {
   padding: 6px 10px !important;
   font-size: 13px !important;
 }
-.experimental-compact-spacing .chat-input-area {
+[data-compact-spacing] .chat-input-area {
   padding-top: 8px !important;
   padding-bottom: 32px !important;
 }
-.experimental-compact-spacing .list-row {
+[data-compact-spacing] .list-row {
   padding-top: 6px !important;
   padding-bottom: 6px !important;
 }
