@@ -27,7 +27,16 @@
 
 ### Commits in this release
 
-- `5f14127` v0.4.0-beta
+> Span: v0.2.7-beta (previous stable) → v0.3.2-beta (last dev release) → v0.4.0-beta
+
+**v0.2.7 hotfixes** — `116bd68`, `08da621`, `2c1dfcd` (post-tag hotfixes, already listed under v0.2.7)
+**Docs** — `7f11f52`, `1f556de`, `d92b948`, `6f53ee8`, `cd6ece7`, `0df2d76` (README updates)
+**v0.2.8** — `5013176`, `723c690`, `d4d1748` (merge), `58f7bdf`, `0c22c9c`
+**v0.2.9** — `36f299a`
+**v0.3.0** — `58387f7`, `e2c185c`, `3717fdf`, `6a623ed`, `63676a0`, `a602550`, `dd7317a`, `c291268`
+**v0.3.1** — `983c814`, `7601509`, `c5bc432`, `8c8327a`, `3baa3da`
+**v0.3.2** — `5fd8e02`, `30f7dd0`, `12b9c6d`, `fa030b3`, `06f0bb6`, `d9c059f`, `3393e80`, `cfbfccd`, `b5ac248`, `f3590a2`
+**v0.4.0** — `5f14127`, `70f3cab`
 
 ## v0.3.2-beta
 
