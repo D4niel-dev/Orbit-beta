@@ -27,7 +27,7 @@
 
 ### Commits in this release
 
-- `f1eaab1` v0.4.0-beta
+- `5f14127` v0.4.0-beta
 
 ## v0.3.2-beta
 
