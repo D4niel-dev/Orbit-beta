@@ -56,11 +56,12 @@ var OrbitHome = {
     displayFriends.forEach(function(friend) {
       var displayName = friend.name || friend.peerId || '?';
       var initial = displayName.charAt(0).toUpperCase();
-      var avatarHtml = friend.avatar 
-        ? '<img src="' + friend.avatar + '" alt="' + displayName + '" loading="lazy">'
-        : initial;
+      var safeAvatarSrc = OrbitHome._safeAvatarSrc(friend.avatar);
+      var avatarHtml = safeAvatarSrc
+        ? '<img src="' + safeAvatarSrc + '" alt="' + OrbitHome._escapeAttr(displayName) + '" loading="lazy">'
+        : OrbitHome._escape(initial);
       
-      html += '<div class="online-friend-item" data-peerid="' + (friend.peerId || friend.id || '') + '">';
+      html += '<div class="online-friend-item" data-peerid="' + OrbitHome._escapeAttr(friend.peerId || friend.id || '') + '">';
       var isDefOnline = friend.status === 'online' || (friend.lastSeen || 0) > Date.now() - 30000;
       html += '  <div class="online-friend-avatar">' + avatarHtml + '<span class="online-indicator' + (isDefOnline ? '' : ' idle') + '"></span></div>';
       html += '  <span class="online-friend-name">' + OrbitHome._escape(displayName) + '</span>';
@@ -138,6 +139,30 @@ var OrbitHome = {
     var div = document.createElement('div');
     div.appendChild(document.createTextNode(str));
     return div.innerHTML;
+  },
+
+  /** Escape for HTML attribute context (adds single-quote escaping on top of _escape) */
+  _escapeAttr: function(str) {
+    return this._escape(str).replace(/'/g, '&#39;');
+  },
+
+  /** Escape for a JS string literal embedded in a double-quoted HTML attribute (inline onclick/onerror) */
+  _escapeJs: function(str) {
+    if (str === undefined || str === null) return '';
+    return String(str)
+      .replace(/\\/g, '\\\\')
+      .replace(/'/g, "\\'")
+      .replace(/"/g, '\\"')
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\r')
+      .replace(/</g, '\\u003C');
+  },
+
+  /** Avatar src sanitizer — only allow data:image/* or http(s) URLs, else empty (falls back to initial) */
+  _safeAvatarSrc: function(url) {
+    if (!url) return '';
+    var s = String(url).trim();
+    return (/^data:image\//i.test(s) || /^https?:\/\//i.test(s)) ? s : '';
   },
 
   /** Highlight matching text in search results */
@@ -300,10 +325,11 @@ var OrbitHome = {
       var displayName = chat.name || chat.peerId || 'Unknown';
       var initial = displayName.charAt(0).toUpperCase();
       var avatarUrl = chat.avatar;
-      
-      var avatarHtml = (avatarUrl && avatarUrl.trim()) 
-        ? '<img src="' + avatarUrl + '" alt="' + initial + '" loading="lazy" onerror="var f=this;f.onerror=null;var i=f.getAttribute(\'data-init\')||\'' + initial + '\';f.style.display=\'none\';var d=document.createElement(\'div\');d.textContent=i;d.style.cssText=\'width:40px;height:40px;border-radius:50%;background:var(--accent-soft);color:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;\';f.parentNode.insertBefore(d,f);" data-init="' + initial + '">'
-        : initial;
+
+      var safeAvatarSrc = OrbitHome._safeAvatarSrc(avatarUrl);
+      var avatarHtml = safeAvatarSrc
+        ? '<img src="' + safeAvatarSrc + '" alt="' + OrbitHome._escapeAttr(initial) + '" loading="lazy" onerror="var f=this;f.onerror=null;var i=f.getAttribute(\'data-init\')||\'' + OrbitHome._escapeJs(initial) + '\';f.style.display=\'none\';var d=document.createElement(\'div\');d.textContent=i;d.style.cssText=\'width:40px;height:40px;border-radius:50%;background:var(--accent-soft);color:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;\';f.parentNode.insertBefore(d,f);" data-init="' + OrbitHome._escapeAttr(initial) + '">'
+        : OrbitHome._escape(initial);
       
       var preview = chat.lastMessage || '';
       // Strip markdown for preview
@@ -328,7 +354,7 @@ var OrbitHome = {
       var typing = chat.isTyping;
       var mentionCount = MStore.mentionCounts && MStore.mentionCounts[chatId] || 0;
       
-      html += '<div class="chat-row' + (unread > 0 ? ' unread' : '') + (mentionCount > 0 ? ' has-mention' : '') + '" data-chatid="' + chatId + '"' + (!isGroup ? ' data-user-id="' + OrbitHome._escape(chat.peerId || chat.id) + '"' : '') + ' onclick="OrbitHome._onChatClick(\'' + chatId + '\')">';
+      html += '<div class="chat-row' + (unread > 0 ? ' unread' : '') + (mentionCount > 0 ? ' has-mention' : '') + '" data-chatid="' + OrbitHome._escapeAttr(chatId) + '"' + (!isGroup ? ' data-user-id="' + OrbitHome._escape(chat.peerId || chat.id) + '"' : '') + ' onclick="OrbitHome._onChatClick(\'' + OrbitHome._escapeJs(chatId) + '\')">';
       html += '  <div class="chat-row-avatar">' + avatarHtml;
       // Presence dot is for DMs/users only — groups don't have online status
       if (!isGroup) {
@@ -344,7 +370,7 @@ var OrbitHome = {
       if (typing) {
         html += '    <div class="chat-row-typing">Typing\u2026</div>';
       } else {
-        html += '    <div class="chat-row-preview">' + (preview || 'No messages yet') + '</div>';
+        html += '    <div class="chat-row-preview">' + OrbitHome._escape(preview || 'No messages yet') + '</div>';
       }
       html += '  </div>';
       html += '  <div class="chat-row-meta">';
@@ -454,8 +480,8 @@ var OrbitHome = {
               : d.toLocaleDateString([], {month:'short', day:'numeric'});
           }
           
-          html += '<div class="search-result-item" onclick="OrbitHome._onChatClick(\'' + chatId + '\')">';
-          html += '  <div class="search-result-avatar">' + (chat.avatar ? '<img src="' + chat.avatar + '">' : OrbitHome._escape(initial)) + '</div>';
+          html += '<div class="search-result-item" onclick="OrbitHome._onChatClick(\'' + OrbitHome._escapeJs(chatId) + '\')">';
+          html += '  <div class="search-result-avatar">' + (OrbitHome._safeAvatarSrc(chat.avatar) ? '<img src="' + OrbitHome._safeAvatarSrc(chat.avatar) + '">' : OrbitHome._escape(initial)) + '</div>';
           html += '  <div class="search-result-body">';
           html += '    <div class="search-result-name">' + OrbitHome._highlightText(displayName, query) + '</div>';
           html += '    <div class="search-result-preview">' + OrbitHome._highlightText(preview, query) + '</div>';
@@ -473,11 +499,11 @@ var OrbitHome = {
           var statusColors = { online: 'var(--accent-success)', away: 'var(--accent-warning)', dnd: 'var(--accent-danger)', invisible: 'var(--text-muted)' };
           var statusDot = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + (statusColors[fStatus] || 'var(--text-muted)') + ';margin-right:4px;vertical-align:middle;"></span>';
           
-          html += '<div class="search-result-item" onclick="OrbitHome._onStartDM(\'' + (f.id || '') + '\')">';
-          html += '  <div class="search-result-avatar">' + (f.avatar ? '<img src="' + f.avatar + '">' : OrbitHome._escape(fInitial)) + '</div>';
+          html += '<div class="search-result-item" onclick="OrbitHome._onStartDM(\'' + OrbitHome._escapeJs(f.id || '') + '\')">';
+          html += '  <div class="search-result-avatar">' + (OrbitHome._safeAvatarSrc(f.avatar) ? '<img src="' + OrbitHome._safeAvatarSrc(f.avatar) + '">' : OrbitHome._escape(fInitial)) + '</div>';
           html += '  <div class="search-result-body">';
           html += '    <div class="search-result-name">' + OrbitHome._highlightText(fName, query) + '</div>';
-          html += '    <div class="search-result-preview">' + statusDot + fStatus.charAt(0).toUpperCase() + fStatus.slice(1) + '</div>';
+          html += '    <div class="search-result-preview">' + statusDot + OrbitHome._escape(fStatus.charAt(0).toUpperCase() + fStatus.slice(1)) + '</div>';
           html += '  </div>';
           html += '  <span class="search-result-tag">Friend</span>';
           html += '</div>';
@@ -490,7 +516,7 @@ var OrbitHome = {
           var msgText = m.message.text || '';
           msgText = msgText.length > 80 ? msgText.substring(0, 80) + '\u2026' : msgText;
           
-          html += '<div class="search-result-item" onclick="OrbitHome._onChatClick(\'' + (m.chat.id || m.chat.chatId) + '\')">';
+          html += '<div class="search-result-item" onclick="OrbitHome._onChatClick(\'' + OrbitHome._escapeJs(m.chat.id || m.chat.chatId) + '\')">';
           html += '  <div class="search-result-body">';
           html += '    <div class="search-result-name">' + OrbitHome._highlightText(chatName, query) + '</div>';
           html += '    <div class="search-result-preview">\u201c' + OrbitHome._highlightText(msgText, query) + '\u201d</div>';
@@ -539,13 +565,14 @@ var OrbitHome = {
     friends.forEach(function(friend) {
       var displayName = friend.name || friend.peerId || 'Unknown';
       var initial = displayName.charAt(0).toUpperCase();
-      var avatarHtml = friend.avatar 
-        ? '<img src="' + friend.avatar + '" alt="' + initial + '" loading="lazy" onerror="var f=this;f.onerror=null;var i=f.getAttribute(\'data-init\')||\'' + initial + '\';f.style.display=\'none\';var d=document.createElement(\'div\');d.textContent=i;d.style.cssText=\'width:40px;height:40px;border-radius:50%;background:var(--accent-soft);color:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;\';f.parentNode.insertBefore(d,f);" data-init="' + initial + '">'
-        : initial;
+      var safeAvatarSrc = OrbitHome._safeAvatarSrc(friend.avatar);
+      var avatarHtml = safeAvatarSrc
+        ? '<img src="' + safeAvatarSrc + '" alt="' + OrbitHome._escapeAttr(initial) + '" loading="lazy" onerror="var f=this;f.onerror=null;var i=f.getAttribute(\'data-init\')||\'' + OrbitHome._escapeJs(initial) + '\';f.style.display=\'none\';var d=document.createElement(\'div\');d.textContent=i;d.style.cssText=\'width:40px;height:40px;border-radius:50%;background:var(--accent-soft);color:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;\';f.parentNode.insertBefore(d,f);" data-init="' + OrbitHome._escapeAttr(initial) + '">'
+        : OrbitHome._escape(initial);
       var isOnline = friend.status === 'online' || friend.lastSeen > Date.now() - 45000;
       var statusColor = isOnline ? 'var(--accent-success)' : 'var(--text-muted)';
       
-      html += '<div class="friend-row" data-peerid="' + (friend.peerId || '') + '" data-user-id="' + (friend.id || friend.peerId || '') + '" onclick="OrbitHome._onFriendClick(\'' + (friend.peerId || '') + '\')">';
+      html += '<div class="friend-row" data-peerid="' + OrbitHome._escapeAttr(friend.peerId || '') + '" data-user-id="' + OrbitHome._escapeAttr(friend.id || friend.peerId || '') + '" onclick="OrbitHome._onFriendClick(\'' + OrbitHome._escapeJs(friend.peerId || '') + '\')">';
       html += '  <div class="chat-row-avatar">' + avatarHtml + '</div>';
       html += '  <div class="chat-row-info">';
       html += '    <div class="chat-row-name">' + OrbitHome._escape(displayName) + '</div>';

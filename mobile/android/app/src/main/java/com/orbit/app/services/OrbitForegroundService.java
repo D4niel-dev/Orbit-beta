@@ -266,12 +266,18 @@ public class OrbitForegroundService extends Service {
                         String beaconJson = buildBeaconJson();
                         if (beaconJson != null) {
                             byte[] beaconData = beaconJson.getBytes("UTF-8");
-                            DatagramPacket outPacket = new DatagramPacket(beaconData, beaconData.length, group, udpPort);
-                            try { ms.send(outPacket); } catch (Exception ignored) {}
+                            if (beaconData.length > 65507) {
+                                Log.w(TAG, "Beacon too large for UDP (" + beaconData.length + " bytes), skipping send");
+                            } else {
+                                DatagramPacket outPacket = new DatagramPacket(beaconData, beaconData.length, group, udpPort);
+                                try { ms.send(outPacket); } catch (Exception ignored) {}
+                            }
                         }
                         lastBeaconTime = now;
                     }
-                    byte[] buf = new byte[4096];
+                    // 64KB buffer — UDP max payload is 65507; avatar-bearing beacons were
+                    // truncated at 4096 (mobile-only friends-tab avatar bug fix)
+                    byte[] buf = new byte[65536];
                     DatagramPacket inPacket = new DatagramPacket(buf, buf.length);
                     ms.setSoTimeout(1000);
                     try {

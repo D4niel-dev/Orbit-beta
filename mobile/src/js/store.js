@@ -199,23 +199,37 @@ class Store {
     }
     var img = new Image();
     img.onload = function() {
-      var canvas = document.createElement('canvas');
-      var w = img.width;
-      var h = img.height;
-      if (w > maxWidth || h > maxHeight) {
-        if (w / h > maxWidth / maxHeight) {
-          h = Math.round(h * maxWidth / w);
-          w = maxWidth;
-        } else {
-          w = Math.round(w * maxHeight / h);
-          h = maxHeight;
+      try {
+        var canvas = document.createElement('canvas');
+        var w = img.width;
+        var h = img.height;
+        if (w > maxWidth || h > maxHeight) {
+          if (w / h > maxWidth / maxHeight) {
+            h = Math.round(h * maxWidth / w);
+            w = maxWidth;
+          } else {
+            w = Math.round(w * maxHeight / h);
+            h = maxHeight;
+          }
         }
+        canvas.width = w;
+        canvas.height = h;
+        var ctx = canvas.getContext('2d');
+        if (!ctx) { callback(dataUrl); return; }
+        // JPEG has no alpha channel: a transparent PNG would come out with
+        // black corners. Fill a neutral background first so transparency
+        // stays clean (v0.4.0-beta fix #7).
+        if (/^data:image\/png/i.test(dataUrl)) {
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, w, h);
+        }
+        ctx.drawImage(img, 0, 0, w, h);
+        var out = canvas.toDataURL('image/jpeg', quality);
+        callback(out && out.length > 0 ? out : dataUrl);
+      } catch (e) {
+        // Never hang the caller — fall back to the original image
+        callback(dataUrl);
       }
-      canvas.width = w;
-      canvas.height = h;
-      var ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, w, h);
-      callback(canvas.toDataURL('image/jpeg', quality));
     };
     img.onerror = function() { callback(dataUrl); };
     img.src = dataUrl;

@@ -417,9 +417,10 @@ document.addEventListener('DOMContentLoaded', function() {
       var chatFrameHtml = '';
       if (MStore.settings.showChatAvatars !== false) {
         var initial = c.name ? c.name.charAt(0).toUpperCase() : '?';
-        avatarHtml = c.avatar && c.avatar.trim()
-          ? '<img src="' + escapeHtml(c.avatar) + '" alt="">'
-          : initial;
+        var cAvatarSrc = safeAvatarSrc(c.avatar);
+        avatarHtml = cAvatarSrc
+          ? '<img src="' + cAvatarSrc + '" alt="">'
+          : escapeHtml(initial);
         if (isGroup) {
           var group = groupIds[c.id];
           var memberCount = group && group.members ? group.members.length : 0;
@@ -1359,9 +1360,10 @@ document.addEventListener('DOMContentLoaded', function() {
     var contactListHtml = '';
     allContacts.forEach(function(c) {
       var initial = c.name ? c.name.charAt(0).toUpperCase() : '?';
-      var avatarHtml = c.avatar
-        ? '<img src="' + escapeHtml(c.avatar) + '" style="width:44px;height:44px;border-radius:' + (c.type === 'group' ? '12px' : '50%') + ';object-fit:cover;">'
-        : '<div style="width:44px;height:44px;border-radius:' + (c.type === 'group' ? '12px' : '50%') + ';background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-weight:700;color:white;font-size:18px;">' + initial + '</div>';
+      var cAvatarSrc = safeAvatarSrc(c.avatar);
+      var avatarHtml = cAvatarSrc
+        ? '<img src="' + cAvatarSrc + '" style="width:44px;height:44px;border-radius:' + (c.type === 'group' ? '12px' : '50%') + ';object-fit:cover;">'
+        : '<div style="width:44px;height:44px;border-radius:' + (c.type === 'group' ? '12px' : '50%') + ';background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-weight:700;color:white;font-size:18px;">' + escapeHtml(initial) + '</div>';
       var typeLabel = c.type === 'group' ? 'Group' : 'Direct Message';
       contactListHtml += '<div class="forward-contact-row" data-contact-id="' + escapeHtml(c.id) + '" style="display:flex;align-items:center;gap:14px;padding:12px 16px;cursor:pointer;border-bottom:1px solid var(--border-subtle);">' +
         avatarHtml +
@@ -1811,7 +1813,7 @@ document.addEventListener('DOMContentLoaded', function() {
           var url = urlMatch[1];
           var domain = '';
           try { domain = new URL(url).hostname; } catch(e) { domain = url; }
-          linkPreviewHtml = '<div class="link-preview-mob' + (isMine ? ' mine' : '') + '" onclick="window.open(\'' + escapeHtml(url) + '\', \'_blank\')">' +
+          linkPreviewHtml = '<div class="link-preview-mob' + (isMine ? ' mine' : '') + '" onclick="window.open(\'' + escapeHtml(jsEscape(url)) + '\', \'_blank\')">' +
             '<div class="link-preview-mob-img"><i data-lucide="link-2" style="width:18px;height:18px;"></i></div>' +
             '<div class="link-preview-mob-body">' +
               '<div class="link-preview-mob-title">' + escapeHtml(domain) + '</div>' +
@@ -3478,11 +3480,12 @@ document.addEventListener('DOMContentLoaded', function() {
     filtered.forEach(function(f) {
       var color = statusColors[f.status] || 'var(--text-muted)';
       var initial = f.name ? f.name.charAt(0).toUpperCase() : '?';
+      var fAvatarSrc = safeAvatarSrc(f.avatar);
       var fPfNum = getProfileFrame(f);
       var fPfHtml = fPfNum > 0 ? '<img src="icons/frames/pfp_frame_' + fPfNum + '.png" class="pfp-frame" style="position:absolute;top:-16%;left:-16%;pointer-events:none;" draggable="false" alt="">' : '';
-      html += '<div class="list-row friend-row" data-friend="' + f.id + '" data-user-id="' + f.id + '">' +
+      html += '<div class="list-row friend-row" data-friend="' + escapeAttr(f.id) + '" data-user-id="' + escapeAttr(f.id) + '">' +
         '<div class="chat-row-avatar-wrapper" style="width:44px;height:44px;">' +
-          '<div class="chat-row-avatar" style="width:44px;height:44px;font-size:16px;">' + (f.avatar ? '<img src="' + escapeHtml(f.avatar) + '">' : initial) + '</div>' +
+          '<div class="chat-row-avatar" style="width:44px;height:44px;font-size:16px;">' + (fAvatarSrc ? '<img src="' + fAvatarSrc + '">' : escapeHtml(initial)) + '</div>' +
           fPfHtml +
           '<div class="friend-status-dot" style="background:' + color + ';position:absolute;bottom:0;right:0;width:12px;height:12px;border-radius:50%;border:2px solid var(--bg-surface);"></div>' +
         '</div>' +
@@ -3490,7 +3493,7 @@ document.addEventListener('DOMContentLoaded', function() {
           '<div style="font-size:16px;font-weight:700;color:var(--text-primary);margin-bottom:2px;">' + escapeHtml(f.name) + '</div>' +
           '<div style="font-size:13px;color:var(--text-muted);display:flex;align-items:center;gap:6px;">' +
             '<span style="width:8px;height:8px;border-radius:50%;background:' + color + ';display:inline-block;box-shadow:0 0 4px ' + color + ';"></span>' +
-            (f.status || 'offline') +
+            escapeHtml(f.status || 'offline') +
           '</div>' +
         '</div>' +
         '<div style="color:var(--text-muted);opacity:0.5;"><i data-lucide="chevron-right" style="width:16px;height:16px;"></i></div>' +
@@ -5370,6 +5373,10 @@ document.addEventListener('DOMContentLoaded', function() {
       renderChatList();
       // Re-render this profile with updated values
       renderProfile();
+      // Push updated profile into the UDP beacon (avatar thumbnail refresh)
+      repushUdpBeacon();
+      // Real-time broadcast to already-connected peers (fix #8)
+      broadcastProfileToPeers();
       showToast('Profile saved', 'info');
       
       newBtn.style.display = 'none';
@@ -5425,9 +5432,10 @@ document.addEventListener('DOMContentLoaded', function() {
       : 'background:linear-gradient(135deg,var(--accent-primary),#EC4899);';
 
     var frameHtml = frameNum > 0 ? '<img src="icons/frames/pfp_frame_' + frameNum + '.png" class="pfp-frame" style="position:absolute;top:-16%;left:-16%;pointer-events:none;" draggable="false" alt="">' : '';
-    var avatarEl = friend.avatar
-      ? '<img src="' + escapeHtml(friend.avatar) + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">'
-      : '<div class="avatar-placeholder">' + initial + '</div>';
+    var fAvatarSrc = safeAvatarSrc(friend.avatar);
+    var avatarEl = fAvatarSrc
+      ? '<img src="' + fAvatarSrc + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">'
+      : '<div class="avatar-placeholder">' + escapeHtml(initial) + '</div>';
 
     // Hero section (matching showProfileSheet style)
     var heroHtml =
@@ -5706,7 +5714,7 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button id="btn-profile-sheet-action" style="position:absolute;top:8px;right:12px;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,0.2);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;z-index:3;transition:all 0.2s;">✕</button>' +
         '<div class="profile-hero-content">' +
           '<div class="profile-avatar-wrapper" style="position:relative;">' +
-            (u.avatar ? '<img src="' + escapeHtml(u.avatar) + '">' : '<div class="avatar-placeholder">' + initial + '</div>') +
+            (safeAvatarSrc(u.avatar) ? '<img src="' + safeAvatarSrc(u.avatar) + '">' : '<div class="avatar-placeholder">' + escapeHtml(initial) + '</div>') +
             frameHtml +
           '</div>' +
           '<div class="profile-name">' + escapeHtml(u.name) + '</div>' +
@@ -5740,18 +5748,9 @@ document.addEventListener('DOMContentLoaded', function() {
       renderChatList();
       renderProfile();
       // Broadcast updated profile to all connected peers in real time
-      if (window.Orbit && window.Orbit.P2P && Orbit.P2P.isAvailable()) {
-        var beaconData = buildBeacon().payload;
-        var conns = Orbit.P2P.getConnections ? Orbit.P2P.getConnections() : [];
-        var myId = MStore.user ? MStore.user.id : '';
-        (conns || []).forEach(function(conn) {
-          var peerId = conn.peerId || conn.remotePeer || (typeof conn === 'string' ? conn : '');
-          if (peerId && peerId !== myId) {
-            var pkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.BEACON, myId, peerId, beaconData);
-            Orbit.P2P.send(peerId, pkt);
-          }
-        });
-      }
+      broadcastProfileToPeers();
+      // Push updated profile into the UDP beacon (avatar thumbnail refresh)
+      repushUdpBeacon();
       // Update stored originals and reset state
       _origName = username;
       _origBio = bio;
@@ -6619,9 +6618,10 @@ document.addEventListener('DOMContentLoaded', function() {
     var groupInitial = group.name.charAt(0).toUpperCase();
 
     // ── Avatar HTML ──
-    var avatarHtml = group.avatar
-      ? '<img src="' + escapeHtml(group.avatar) + '" alt="">'
-      : '<span>' + groupInitial + '</span>';
+    var gAvatarSrc = safeAvatarSrc(group.avatar);
+    var avatarHtml = gAvatarSrc
+      ? '<img src="' + gAvatarSrc + '" alt="">'
+      : '<span>' + escapeHtml(groupInitial) + '</span>';
     var editOverlay = isOwner
       ? '<div class="group-info-avatar-edit" id="btn-group-info-avatar">Edit</div>'
       : '';
@@ -6639,11 +6639,11 @@ document.addEventListener('DOMContentLoaded', function() {
       var initial = name.charAt(0).toUpperCase();
       var memberAvatar = m.avatar || '';
       var selfAvatar = mid === myId && MStore.user ? (MStore.user.avatar || null) : null;
-      var mAvatar = friend && friend.avatar
-        ? '<img src="' + escapeHtml(friend.avatar) + '" alt="">'
-        : (memberAvatar ? '<img src="' + escapeHtml(memberAvatar) + '" alt="">'
-        : (selfAvatar ? '<img src="' + escapeHtml(selfAvatar) + '" alt="">'
-        : initial));
+      var mAvatar = safeAvatarSrc(friend && friend.avatar)
+        ? '<img src="' + safeAvatarSrc(friend && friend.avatar) + '" alt="">'
+        : (safeAvatarSrc(memberAvatar) ? '<img src="' + safeAvatarSrc(memberAvatar) + '" alt="">'
+        : (safeAvatarSrc(selfAvatar) ? '<img src="' + safeAvatarSrc(selfAvatar) + '" alt="">'
+        : escapeHtml(initial)));
       var statusColor = friend
         ? ({ online: 'var(--accent-success)', away: 'var(--accent-warning)', busy: 'var(--accent-danger)', offline: 'var(--text-muted)' }[friend.status] || 'var(--text-muted)')
         : 'var(--text-muted)';
@@ -6918,30 +6918,34 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     function getAvatarHtml(userId, name) {
       var initial = (name ? name.charAt(0).toUpperCase() : '?');
-      if (userId === myId && state.user && state.user.avatar) {
-        return '<img class="activity-sender-avatar" src="' + escapeHtml(state.user.avatar) + '" loading="lazy" onerror="this.onerror=null;this.style.display=\'none\';var p=this.parentNode;if(p&&!p.querySelector(\'.act-fallback\')){var d=document.createElement(\'div\');d.className=\'act-fallback\';d.style.cssText=\'width:32px;height:32px;border-radius:50%;background:var(--accent-soft);color:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;\';d.textContent=\'' + initial + '\';p.insertBefore(d,this);}">';
+      var selfAvatarSrc = safeAvatarSrc(state.user && state.user.avatar);
+      if (userId === myId && selfAvatarSrc) {
+        return '<img class="activity-sender-avatar" src="' + selfAvatarSrc + '" loading="lazy" onerror="this.onerror=null;this.style.display=\'none\';var p=this.parentNode;if(p&&!p.querySelector(\'.act-fallback\')){var d=document.createElement(\'div\');d.className=\'act-fallback\';d.style.cssText=\'width:32px;height:32px;border-radius:50%;background:var(--accent-soft);color:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;\';d.textContent=\'' + jsEscape(initial) + '\';p.insertBefore(d,this);}">';
       }
       var f = getFriend(userId);
-      if (f && f.avatar) {
-        return '<img class="activity-sender-avatar" src="' + escapeHtml(f.avatar) + '" loading="lazy" onerror="this.onerror=null;this.style.display=\'none\';var p=this.parentNode;if(p&&!p.querySelector(\'.act-fallback\')){var d=document.createElement(\'div\');d.className=\'act-fallback\';d.style.cssText=\'width:32px;height:32px;border-radius:50%;background:var(--accent-soft);color:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;\';d.textContent=\'' + initial + '\';p.insertBefore(d,this);}">';
+      var fAvatarSrc = safeAvatarSrc(f && f.avatar);
+      if (f && fAvatarSrc) {
+        return '<img class="activity-sender-avatar" src="' + fAvatarSrc + '" loading="lazy" onerror="this.onerror=null;this.style.display=\'none\';var p=this.parentNode;if(p&&!p.querySelector(\'.act-fallback\')){var d=document.createElement(\'div\');d.className=\'act-fallback\';d.style.cssText=\'width:32px;height:32px;border-radius:50%;background:var(--accent-soft);color:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;\';d.textContent=\'' + jsEscape(initial) + '\';p.insertBefore(d,this);}">';
       }
-      return '<div class="activity-sender-placeholder">' + initial + '</div>';
+      return '<div class="activity-sender-placeholder">' + escapeHtml(initial) + '</div>';
     }
     function getChatAvatarHtml(chatId, chatName) {
       var initial = (chatName ? chatName.charAt(0).toUpperCase() : '?');
       var f = getFriend(chatId);
-      if (f && f.avatar) {
-        var src = f.avatar;
+      var fBadgeSrc = safeAvatarSrc(f && f.avatar);
+      if (f && fBadgeSrc) {
+        var src = fBadgeSrc;
         if (src.indexOf('blob:') !== 0 && src.indexOf('data:') !== 0 && src.indexOf('?') === -1) {
           src += '?t=' + Date.now();
         }
-        return '<img class="activity-chat-badge-avatar" src="' + escapeHtml(src) + '" loading="lazy" onerror="this.onerror=null;this.style.display=\'none\';var p=this.parentNode;if(p&&!p.querySelector(\'.act-cb-fallback\')){var d=document.createElement(\'div\');d.className=\'act-cb-fallback\';d.style.cssText=\'width:24px;height:24px;border-radius:50%;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:700;\';d.textContent=\'' + initial + '\';p.insertBefore(d,this);}">';
+        return '<img class="activity-chat-badge-avatar" src="' + escapeHtml(src) + '" loading="lazy" onerror="this.onerror=null;this.style.display=\'none\';var p=this.parentNode;if(p&&!p.querySelector(\'.act-cb-fallback\')){var d=document.createElement(\'div\');d.className=\'act-cb-fallback\';d.style.cssText=\'width:24px;height:24px;border-radius:50%;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:700;\';d.textContent=\'' + jsEscape(initial) + '\';p.insertBefore(d,this);}">';
       }
       var g = getGroup(chatId);
-      if (g && g.avatar) {
-        return '<img class="activity-chat-badge-avatar" style="border-radius:4px;" src="' + escapeHtml(g.avatar) + '" loading="lazy" onerror="this.onerror=null;this.style.display=\'none\';var p=this.parentNode;if(p&&!p.querySelector(\'.act-cb-fallback\')){var d=document.createElement(\'div\');d.className=\'act-cb-fallback\';d.style.cssText=\'width:24px;height:24px;border-radius:4px;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:700;\';d.textContent=\'' + initial + '\';p.insertBefore(d,this);}">';
+      var gBadgeSrc = safeAvatarSrc(g && g.avatar);
+      if (g && gBadgeSrc) {
+        return '<img class="activity-chat-badge-avatar" style="border-radius:4px;" src="' + gBadgeSrc + '" loading="lazy" onerror="this.onerror=null;this.style.display=\'none\';var p=this.parentNode;if(p&&!p.querySelector(\'.act-cb-fallback\')){var d=document.createElement(\'div\');d.className=\'act-cb-fallback\';d.style.cssText=\'width:24px;height:24px;border-radius:4px;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:700;\';d.textContent=\'' + jsEscape(initial) + '\';p.insertBefore(d,this);}">';
       }
-      return '<div class="activity-chat-badge-avatar" style="background:var(--accent-primary);display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:700;">' + initial + '</div>';
+      return '<div class="activity-chat-badge-avatar" style="background:var(--accent-primary);display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:700;">' + escapeHtml(initial) + '</div>';
     }
 
     // Build tabs HTML
@@ -7631,7 +7635,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var icons = { info: 'info', success: 'check-circle', error: 'alert-circle', warning: 'alert-triangle' };
     var iconName = icons[type] || 'info';
 
-    el.innerHTML = '<i data-lucide="' + iconName + '"></i><span class="toast-text">' + msg + '</span><div class="toast-bar"></div>';
+    el.innerHTML = '<i data-lucide="' + iconName + '"></i><span class="toast-text">' + escapeHtml(msg) + '</span><div class="toast-bar"></div>';
 
     container.appendChild(el);
     if (window.lucide) lucide.createIcons({ root: el });
@@ -7736,6 +7740,27 @@ document.addEventListener('DOMContentLoaded', function() {
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
+  function escapeAttr(str) {
+    return escapeHtml(str).replace(/'/g, '&#39;');
+  }
+
+  function jsEscape(str) {
+    if (str === undefined || str === null) return '';
+    return String(str)
+      .replace(/\\/g, '\\\\')
+      .replace(/'/g, "\\'")
+      .replace(/"/g, '\\"')
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\r')
+      .replace(/</g, '\\u003C');
+  }
+
+  function safeAvatarSrc(url) {
+    if (!url) return '';
+    var s = String(url).trim();
+    return (/^data:image\//i.test(s) || /^https?:\/\//i.test(s)) ? s : '';
+  }
+
   function linkifyText(text) {
     if (!text) return '';
     var html = escapeHtml(text);
@@ -7805,16 +7830,16 @@ document.addEventListener('DOMContentLoaded', function() {
     for (var i = 0; i < users.length; i++) {
       var u = users[i];
       var initial = (u.name || '?').charAt(0).toUpperCase();
-      var cleanAvatar = u.avatar && typeof u.avatar === 'string' && u.avatar.trim();
-      var avatarHtml = cleanAvatar
-        ? '<img src="' + u.avatar.trim() + '" alt="">'
-        : '<span class="mention-avatar-placeholder">' + initial + '</span>';
+      var mAvatarSrc = safeAvatarSrc(u.avatar);
+      var avatarHtml = mAvatarSrc
+        ? '<img src="' + mAvatarSrc + '" alt="">'
+        : '<span class="mention-avatar-placeholder">' + escapeHtml(initial) + '</span>';
       var isSelected = i === selectedIndex;
-      html += '<div class="mention-item' + (isSelected ? ' selected' : '') + '" data-index="' + i + '" data-userid="' + u.id + '" data-username="' + u.name + '" data-tag="' + (u.tag || '') + '">' +
+      html += '<div class="mention-item' + (isSelected ? ' selected' : '') + '" data-index="' + i + '" data-userid="' + escapeAttr(u.id) + '" data-username="' + escapeAttr(u.name) + '" data-tag="' + escapeAttr(u.tag || '') + '">' +
         '<div class="mention-item-avatar">' + avatarHtml + '</div>' +
         '<div class="mention-item-info">' +
-          '<span class="mention-item-name">' + u.name + '</span>' +
-          '<span class="mention-item-tag">@' + (u.tag || u.name) + '</span>' +
+          '<span class="mention-item-name">' + escapeHtml(u.name) + '</span>' +
+          '<span class="mention-item-tag">@' + escapeHtml(u.tag || u.name) + '</span>' +
         '</div>' +
       '</div>';
     }
@@ -7936,7 +7961,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (placeholders.length > 0) {
       placeholders.forEach(function(p) {
         var ph = '\x00MENTION_' + p.idx + '\x00';
-        var mentionHtml = '<span class="chat-mention mention-clickable" data-userid="' + p.userId + '" data-username="' + p.username + '" onclick="window._onMentionClick(\'' + p.userId + '\')">@' + p.username + '</span>';
+        var mentionHtml = '<span class="chat-mention mention-clickable" data-userid="' + escapeAttr(p.userId) + '" data-username="' + escapeAttr(p.username) + '" onclick="window._onMentionClick(\'' + escapeHtml(jsEscape(p.userId)) + '\')">@' + escapeHtml(p.username) + '</span>';
         html = html.split(ph).join(mentionHtml);
       });
     }
@@ -9501,9 +9526,67 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   /* -- Init P2P Networking -- */
-  function buildBeacon() {
+
+  // ── Beacon avatar thumbnail cache (v0.4.0-beta fix) ──
+  // UDP datagrams cap at ~64KB and the Android receive buffer is bounded, so a
+  // full PNG data-URL avatar (100-300KB) breaks discovery. Send a small compressed
+  // thumbnail instead, and only when it changes; full-res avatar still flows over
+  // the TCP handshake beacon.
+  var _beaconAvatarThumb = null;
+  var _beaconAvatarSource = null;
+  var _beaconThumbPending = false;
+  var _lastBeaconAvatarSent = null;
+
+  function refreshBeaconAvatarThumb() {
+    var u = MStore.user;
+    if (!u || !u.avatar) {
+      _beaconAvatarThumb = null;
+      _beaconAvatarSource = (u && u.avatar) || null;
+      _beaconThumbPending = false;
+      return;
+    }
+    if (_beaconAvatarSource === u.avatar && _beaconAvatarThumb) return; // cached
+    if (_beaconThumbPending) return; // already computing
+    _beaconThumbPending = true;
+    _beaconAvatarSource = u.avatar;
+    MStore.compressImage(u.avatar, 128, 128, 0.7, function(thumb) {
+      _beaconThumbPending = false;
+      // Only cache if the avatar didn't change mid-compress
+      if (MStore.user && MStore.user.avatar !== _beaconAvatarSource) return;
+      // Oversized safety net (fix #7): if the JPEG is still too large for a
+      // UDP datagram (or compressImage fell back to the original PNG), retry
+      // smaller; if that fails too, drop the avatar from the beacon entirely
+      // rather than break discovery — full-res avatar flows over the TCP
+      // handshake anyway.
+      if (thumb && thumb.length > 50000) {
+        _beaconThumbPending = true;
+        MStore.compressImage(u.avatar, 96, 96, 0.5, function(thumb2) {
+          _beaconThumbPending = false;
+          if (MStore.user && MStore.user.avatar !== _beaconAvatarSource) return;
+          _beaconAvatarThumb = (thumb2 && thumb2.length <= 50000) ? thumb2 : null;
+          repushUdpBeacon();
+          broadcastProfileToPeers();
+        });
+        return;
+      }
+      _beaconAvatarThumb = thumb || u.avatar;
+      // Thumbnail now ready — push it into the native beacon store so the
+      // 10s UDP broadcast actually carries the avatar, and notify peers we
+      // are already connected to over TCP (v0.4.0-beta fixes #1/#8)
+      repushUdpBeacon();
+      broadcastProfileToPeers();
+    });
+  }
+
+  function buildBeacon(forceAvatar) {
     var u = MStore.user;
     if (!u) return {};
+    refreshBeaconAvatarThumb();
+    var avatarForBeacon = _beaconAvatarThumb;
+    // forceAvatar = unconditional avatar (re-push after async thumb cache/profile
+    // save) so a stale undefined never wipes the native beacon store.
+    var avatarChanged = forceAvatar ? !!avatarForBeacon : (avatarForBeacon !== _lastBeaconAvatarSent);
+    if (avatarChanged) _lastBeaconAvatarSent = avatarForBeacon;
     return {
       type: Orbit.Protocol.Types.BEACON,
       from: u.id,
@@ -9514,7 +9597,7 @@ document.addEventListener('DOMContentLoaded', function() {
         username: u.name,
         usertag: u.tag,
         avatarHash: u.avatar ? 'has_avatar' : null,
-        avatar: u.avatar || null,
+        avatar: avatarChanged ? avatarForBeacon : undefined,
         status: u.status || 'online',
         bio: u.bio || '',
         publicKey: u.publicKey || null,
@@ -9524,6 +9607,36 @@ document.addEventListener('DOMContentLoaded', function() {
         device: 'android'
       }
     };
+  }
+
+  // Re-push the current beacon to native so Java's 10s UDP re-broadcast carries
+  // the latest avatar/profile. Safe to call repeatedly (native update is
+  // idempotent). Always uses the ORIGINAL udpPort to avoid multicast port drift.
+  function repushUdpBeacon() {
+    if (!window.Orbit || !window.Orbit.P2P) return;
+    if (MStore.settings.networkMode === 'Custom IP') return; // UDP discovery off
+    var udpPort = MStore.settings.udpPort || 45678;
+    var beacon = buildBeacon(true);
+    Orbit.P2P.startDiscovery(beacon, udpPort).catch(function() {});
+  }
+
+  // Broadcast the current profile/avatar to already-connected TCP peers in
+  // real time (v0.4.0-beta fix #8). New peers get it from the UDP beacon;
+  // this closes the gap for peers we are already connected to. forceAvatar
+  // in buildBeacon keeps the avatar field present so a stale value never
+  // wipes a peer's stored avatar.
+  function broadcastProfileToPeers() {
+    if (!window.Orbit || !window.Orbit.P2P || !Orbit.P2P.isAvailable || !Orbit.P2P.isAvailable()) return;
+    var beaconData = buildBeacon(true).payload;
+    var conns = Orbit.P2P.getConnections ? Orbit.P2P.getConnections() : [];
+    var myId = MStore.user ? MStore.user.id : '';
+    (conns || []).forEach(function(conn) {
+      var peerId = conn.peerId || conn.remotePeer || (typeof conn === 'string' ? conn : '');
+      if (peerId && peerId !== myId && Orbit.Protocol && Orbit.Protocol.createPacket && Orbit.P2P.send) {
+        var pkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.BEACON, myId, peerId, beaconData);
+        Orbit.P2P.send(peerId, pkt);
+      }
+    });
   }
 
   function getProfileFrame(source) {
@@ -9816,8 +9929,18 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!chatExists) {
           MStore.chats.push({ id: peerId, name: peerName, lastMessage: '', lastTime: '', unread: 0 });
         } else {
-          // Clean up any orphan chats
-          var ipChat = MStore.chats.find(function(c) { return c.id !== peerId && c.name === peerName; });
+          // Clean up any orphan chats (Bug #2) — match the OLD host:port chat id for
+          // THIS peer endpoint only; never match by display name (two peers can share
+          // a name, and name-matching deletes the wrong chat + message history).
+          var connIp = data.connectionId ? data.connectionId.split(':')[0] : null;
+          var ipChat = null;
+          if (connIp) {
+            ipChat = MStore.chats.find(function(c) {
+              return c.id !== peerId &&
+                     (c.id === data.connectionId || c.id.indexOf(connIp + ':') === 0) &&
+                     !(MStore.groups || []).some(function(g) { return (g.id || g.groupId) === c.id; });
+            });
+          }
           if (ipChat) {
             MStore.chats = MStore.chats.filter(function(c) { return c.id !== ipChat.id; });
             delete MStore.messages[ipChat.id];
@@ -10722,8 +10845,16 @@ document.addEventListener('DOMContentLoaded', function() {
         MStore.save();
         renderChatList();
       } else {
-        // Clean up any orphan chats from host:port ID (Bug #2)
-        var ipChat = MStore.chats.find(function(c) { return c.id !== peerId && c.name === peerName; });
+        // Clean up any orphan chats from host:port ID (Bug #2) — match by endpoint,
+        // never by name (name-matching can delete another peer's chat + history).
+        var ipChat = null;
+        if (data.host) {
+          ipChat = MStore.chats.find(function(c) {
+            return c.id !== peerId &&
+                   c.id.indexOf(data.host + ':') === 0 &&
+                   !(MStore.groups || []).some(function(g) { return (g.id || g.groupId) === c.id; });
+          });
+        }
         if (ipChat) {
           debugLog('P2P', 'Removing orphan chat: ' + ipChat.id);
           MStore.chats = MStore.chats.filter(function(c) { return c.id !== ipChat.id; });
