@@ -1,5 +1,24 @@
 # Orbit Changelog
 
+## v0.4.1-beta — **Bug Fixes**
+
+> **Note:** Bug-fix release for Android mobile.
+
+### Bug Fixes
+
+- **Friend / Peer Avatars Not Loading on Mobile Fixed** — Discovered avatars could fail to display on Android because the UDP discovery beacon carried a full PNG data-URI (100-300KB) that overflowed the fixed 4096-byte Android receive buffer, truncating the JSON so the avatar was never stored. The Android UDP receive buffer is now 65536 bytes with an oversized-send guard, and the beacon now sends a small 128x128 JPEG thumbnail instead (refreshed only when the avatar changes, with a re-push so the native 10s re-broadcast actually carries it).
+- **Other-User Avatar in DM Tab Fixed** — DM chat records created from beacons had no `avatar`, so the DMs tab rendered a single-letter initial even when the other user's avatar was known. DM chats now seed `avatar` on creation, a new `syncFriendAvatar()` helper mirrors the friend's avatar onto the chat record when beacons arrive, and `renderChatList` falls back to the friend record.
+- **Orbit Echo Bot Avatar Restored** — The Echo bot's relative asset avatar (`icons/app/orbit_1024.png`) was stripped by the avatar-src sanitizer (which only allowed `data:`/`http(s):`). The sanitizer now also allows relative app-asset paths while still blocking scheme-based vectors (`javascript:` and similar).
+- **Image Compression Transparency + Hang Fixed** — `compressImage` now fills a white background before rendering to JPEG so transparent PNG avatars no longer turn black, and wraps canvas work in a try/catch so any encode/decode failure falls back to the original image instead of hanging the caller indefinitely.
+- **Beacon Thumbnail Oversize Safety** — If a thumbnail is still too large for a UDP datagram, it is retried at a smaller size; if still too large, the avatar is omitted from the beacon rather than breaking discovery (the full-res avatar flows over the TCP handshake).
+- **Profile Save Broadcasts to Connected Peers** — Saving the profile via the header button (and when the avatar thumbnail finishes) now sends an updated BEACON to already-connected peers in real time, so peers you are already chatting with see name/avatar changes immediately.
+- **Chat Cleanup No Longer Matches by Name** — Stale peer chat cleanup matched display name, which could delete the wrong peer's chat and message history when two peers shared a name. It now matches by connection id / peer endpoint.
+- **Stored XSS Paths Escaped** — Peer-controlled values flowing into rendered HTML (attributes, avatars, message previews, members, mentions, toasts) now pass through attribute/JS/avatar-safe escaping so names and values cannot inject markup.
+
+### Technical
+
+- **Version:** Bumped to v0.4.1-beta (`package.json`, `src/js/version.js`).
+
 ## v0.4.0-beta — **Stable Release**
 
 ### Bug Fixes

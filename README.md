@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v040-beta--stable-release">v0.4.0-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v040-beta--stable-release">v0.4.1-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@
 
 | Channel | Version | Status |
 |---------|---------|--------|
-| **Stable** | v0.4.0-beta | Latest stable release |
+| **Stable** | v0.4.1-beta | Latest stable release |
 | Previous **Stable** | v0.2.7-beta | Stable release |
 | Previous **Stable** | v0.1.1-beta | Legacy stable release |
 
