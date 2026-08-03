@@ -7758,7 +7758,12 @@ document.addEventListener('DOMContentLoaded', function() {
   function safeAvatarSrc(url) {
     if (!url) return '';
     var s = String(url).trim();
-    return (/^data:image\//i.test(s) || /^https?:\/\//i.test(s)) ? s : '';
+    if (/^data:image\//i.test(s) || /^https?:\/\//i.test(s)) return s;
+    // Allow relative app-asset paths (e.g. the Echo bot's icons/... avatar)
+    // only when there is no scheme prefix, so javascript:/vbscript:/data:text
+    // URLs stay blocked (v0.4.1-beta fix).
+    if (!/^[a-z][a-z0-9+.\-]*:/i.test(s)) return s;
+    return '';
   }
 
   function linkifyText(text) {

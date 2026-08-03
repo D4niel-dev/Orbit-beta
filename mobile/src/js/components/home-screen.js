@@ -158,11 +158,15 @@ var OrbitHome = {
       .replace(/</g, '\\u003C');
   },
 
-  /** Avatar src sanitizer — only allow data:image/* or http(s) URLs, else empty (falls back to initial) */
+  /** Avatar src sanitizer — allow data:image/*, http(s), or relative app-asset paths; block scheme-based vectors (javascript: etc.) */
   _safeAvatarSrc: function(url) {
     if (!url) return '';
     var s = String(url).trim();
-    return (/^data:image\//i.test(s) || /^https?:\/\//i.test(s)) ? s : '';
+    if (/^data:image\//i.test(s) || /^https?:\/\//i.test(s)) return s;
+    // Relative app-asset paths (e.g. the Echo bot's icons/... avatar) are
+    // allowed only when no scheme prefix exists — v0.4.1-beta fix.
+    if (!/^[a-z][a-z0-9+.\-]*:/i.test(s)) return s;
+    return '';
   },
 
   /** Highlight matching text in search results */
