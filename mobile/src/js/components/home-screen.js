@@ -325,6 +325,13 @@ var OrbitHome = {
       var displayName = chat.name || chat.peerId || 'Unknown';
       var initial = displayName.charAt(0).toUpperCase();
       var avatarUrl = chat.avatar;
+      // Fall back to the friend record so a known avatar still shows even if
+      // the chat record hasn't been seeded yet (previously the DMs tab showed
+      // the single-letter initial instead — v0.4.1-beta fix).
+      if (!avatarUrl && !isGroup) {
+        var avF = MStore.friends.find(function(f) { return f.id === (chat.peerId || chat.id); });
+        avatarUrl = avF ? avF.avatar : null;
+      }
 
       var safeAvatarSrc = OrbitHome._safeAvatarSrc(avatarUrl);
       var avatarHtml = safeAvatarSrc

@@ -9639,6 +9639,22 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  // Mirror a peer's avatar onto their DM chat record so the DMs tab (which
+  // renders chat.avatar) shows the other user's avatar instead of the
+  // single-letter fallback (v0.4.1-beta fix). Returns true only when the
+  // chat's avatar actually changed, so callers save/render only then instead
+  // of spamming writes on the 10s beacon cycle.
+  function syncFriendAvatar(friendId) {
+    if (!friendId || (MStore.user && friendId === MStore.user.id)) return false;
+    var f = MStore.friends.find(function(x) { return x.id === friendId; });
+    if (!f || !f.avatar) return false;
+    var c = MStore.chats.find(function(x) { return (x.id || x.chatId) === friendId; });
+    if (!c) return false;
+    var target = f.avatar || null;
+    if (c.avatar !== target) { c.avatar = target; return true; }
+    return false;
+  }
+
   function getProfileFrame(source) {
     if (MStore.settings.profileFrames !== true) return 0;
     var val = (source && source.profileFrame != null) ? source.profileFrame : 0;
@@ -9927,7 +9943,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Ensure chat exists (avoid duplicates from host:port→UUID merge)
         var chatExists = MStore.chats.find(function(c) { return c.id === peerId; });
         if (!chatExists) {
-          MStore.chats.push({ id: peerId, name: peerName, lastMessage: '', lastTime: '', unread: 0 });
+          MStore.chats.push({ id: peerId, name: peerName, lastMessage: '', lastTime: '', unread: 0, avatar: bp.avatar || null });
         } else {
           // Clean up any orphan chats (Bug #2) — match the OLD host:port chat id for
           // THIS peer endpoint only; never match by display name (two peers can share
@@ -9947,6 +9963,7 @@ document.addEventListener('DOMContentLoaded', function() {
             localStorage.removeItem('orbit_msg_' + ipChat.id);
           }
         }
+        if (syncFriendAvatar(peerId)) { MStore.save(); }
         MStore.save();
         renderFriends();
         renderChatList();
@@ -10841,7 +10858,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var chatExists = MStore.chats.find(function(c) { return c.id === peerId; });
       if (!chatExists) {
         debugLog('P2P', 'Creating chat for new peer', { name: peerName, id: peerId });
-        MStore.chats.push({ id: peerId, name: peerName, lastMessage: '', lastTime: '', unread: 0 });
+        MStore.chats.push({ id: peerId, name: peerName, lastMessage: '', lastTime: '', unread: 0, avatar: pPayload.avatar || null });
         MStore.save();
         renderChatList();
       } else {
@@ -10864,6 +10881,9 @@ document.addEventListener('DOMContentLoaded', function() {
           renderChatList();
         }
       }
+
+      // Mirror the peer's avatar onto their DM record so the DMs tab shows it
+      if (syncFriendAvatar(peerId)) { MStore.save(); renderChatList(); }
 
       // Auto-connect to peer (skip if already connected) (Bug #2)
       window._p2pConnecting = window._p2pConnecting || {};
