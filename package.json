@@ -1,6 +1,6 @@
 {
   "name": "orbit-workspace",
-  "version": "0.4.1-beta",
+  "version": "0.4.2-beta",
   "private": true,
   "description": "Orbit P2P Chat — Workspace Root",
   "scripts": {
@@ -9,7 +9,7 @@
     "desktop:build:win": "cd desktop && electron-builder --win",
     "desktop:build:mac": "cd desktop && electron-builder --mac",
     "desktop:build:linux": "cd desktop && electron-builder --linux",
-    "mobile:sync": "cd mobile && npm run shared:sync && npx cap sync android",
+    "mobile:sync": "cd mobile && npm run shared:sync && npm run version:sync && npx cap sync android",
     "mobile:build": "cd mobile && powershell -File build-android.ps1",
     "mobile:open": "cd mobile && npx cap open android"
   }

@@ -6,10 +6,12 @@ window.SidebarMiddle = {
     
     // Subscribe to store
     this.unsubscribe = window.store.subscribe((state, changedState) => {
-      var relevant = ['messages', 'friends', 'groups', 'activeChatId', 'activeTab', 'activeView', 'currentUser', 'unreadCounts', 'closedDMs', 'pinnedDMs'];
+      var relevant = ['messages', 'friends', 'groups', 'activeChatId', 'activeTab', 'activeView', 'currentUser', 'unreadCounts', 'closedDMs', 'pinnedDMs', 'settings', 'activeFolder'];
       if (!changedState || relevant.some(function(k) { return k in changedState; })) {
         if (state.activeView === 'groups') {
           this.renderGroups();
+        } else if (state.activeView === 'folders') {
+          this.renderFolders();
         } else {
           this.renderList(state);
         }
@@ -17,6 +19,7 @@ window.SidebarMiddle = {
     });
 
     this.render();
+    this._initPickerOutsideClickDismiss();
     this._initStatsOverlay();
   },
 
@@ -65,6 +68,8 @@ window.SidebarMiddle = {
     var state = window.store.getState();
     if (state.activeView === 'groups') {
       this.renderGroups();
+    } else if (state.activeView === 'folders') {
+      this.renderFolders();
     } else {
       this.renderList(state);
     }
@@ -109,6 +114,8 @@ window.SidebarMiddle = {
     var self = this;
     var listContainer = document.getElementById('friends-list-container');
     if (!listContainer) return;
+    var tabsEl = this.container.querySelector('.tabs-container');
+    if (tabsEl) tabsEl.style.display = 'flex';
     var state = window.store.getState();
     var uid = state.currentUser && state.currentUser.userId;
     var groups = (state.groups || []).filter(function(g) {
@@ -136,76 +143,7 @@ window.SidebarMiddle = {
       '</div>';
     } else {
       groups.forEach(function(group) {
-        var isActive = activeChatId === group.groupId;
-        var members = group.members || [];
-        var onlineCount = members.filter(function(m) { return m.status === 'online'; }).length;
-        var subtitle = onlineCount > 0 ? onlineCount + ' online, ' + members.length + ' member' + (members.length !== 1 ? 's' : '') : members.length + ' member' + (members.length !== 1 ? 's' : '');
-        var groupMsgs = messages[group.groupId] || [];
-        if (groupMsgs.length > 0) {
-          var lastMsg = groupMsgs[groupMsgs.length - 1];
-          var senderName = '';
-          var isMe = lastMsg.sender === state.currentUser.userId;
-          if (isMe) {
-            senderName = 'You: ';
-          } else {
-            var sender = members.find(function(m) { return m.userId === lastMsg.sender; });
-            if (sender) senderName = sender.username + ': ';
-          }
-          var escapedSender = window.Sanitize.escapeHtml(senderName);
-          if (lastMsg.text) {
-            subtitle = escapedSender + window.Sanitize.escapeHtml(self._formatLastMessage(lastMsg.text));
-          } else {
-            subtitle = escapedSender + '<span style="display:inline-flex;align-items:center;gap:4px;"><i data-lucide="paperclip" style="width:12px;height:12px;"></i> Attachment</span>';
-          }
-        } else {
-          subtitle = window.Sanitize.escapeHtml(subtitle);
-        }
-
-        // Group avatar or overlapping member circles
-        var avatarHtml = '';
-        var displayMembers = [];
-        if (group.avatarPath) {
-          avatarHtml = '<img src="orbit-avatar://' + window.Sanitize.escapeHtml(group.groupId) + '?t=' + (group.avatarUpdatedAt || 0) + '" style="width:40px;height:40px;border-radius:12px;object-fit:cover;">';
-        } else if (group.avatarDataUrl) {
-          avatarHtml = '<img src="' + window.Sanitize.escapeHtml(group.avatarDataUrl) + '" style="width:40px;height:40px;border-radius:12px;object-fit:cover;">';
-        } else {
-          displayMembers = members.slice(0, 3);
-          displayMembers.forEach(function(m, idx) {
-            var offset = idx * 14;
-            var memberAvatar = m.avatar
-              ? '<img src="' + window.Sanitize.escapeHtml(m.avatar) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:2px solid var(--bg-base);position:absolute;left:' + offset + 'px;top:0;">'
-              : '<div style="width:28px;height:28px;border-radius:50%;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:10px;color:white;border:2px solid var(--bg-base);position:absolute;left:' + offset + 'px;top:0;font-weight:600;">' + m.username.charAt(0).toUpperCase() + '</div>';
-            avatarHtml += memberAvatar;
-          });
-        }
-        var avatarWidth = (group.avatarPath || group.avatarDataUrl) ? 40 : Math.min(displayMembers.length, 3) * 14 + 28;
-
-        var pinIcon = group.pinned ? '<i data-lucide="pin" style="width:12px;height:12px;color:var(--accent-primary);margin-left:4px;"></i>' : '';
-
-        var isGroupOwner = group.ownerId === state.currentUser.userId;
-
-        var unreadCount = state.unreadCounts[group.groupId] || 0;
-        var mentionCount = state.mentionCounts[group.groupId] || 0;
-        var badgeHtml = '';
-        if (mentionCount > 0) {
-          badgeHtml = '<div class="unread-badge mention-badge">@' + mentionCount + '</div>';
-        } else if (unreadCount > 0) {
-          badgeHtml = '<div class="unread-badge">' + (unreadCount > 99 ? '99+' : unreadCount) + '</div>';
-        }
-
-        var isMuted = state.mutedChats && state.mutedChats[group.groupId];
-        var mutedHtml = isMuted ? '<i data-lucide="bell-off" style="width:14px;height:14px;color:var(--text-muted);flex-shrink:0;"></i>' : '';
-
-        html += '<div class="list-row ' + (isActive ? 'active' : '') + '" data-id="' + window.Sanitize.escapeHtml(group.groupId) + '" data-type="group" data-debug="Group: ' + window.Sanitize.escapeHtml(group.groupName) + ' ID: ' + window.Sanitize.escapeHtml(group.groupId) + '">' +
-          '<div class="avatar avatar-md list-row-avatar" style="position:relative;width:' + avatarWidth + 'px;min-width:' + avatarWidth + 'px;height:40px;display:flex;align-items:center;justify-content:center;">' +
-            avatarHtml +
-          '</div>' +
-          '<div class="list-row-info">' +
-            '<div class="list-row-title">' + window.Sanitize.escapeHtml(group.groupName || 'Unnamed Group') + pinIcon + '</div>' +
-            '<div class="list-row-subtitle">' + subtitle + '</div>' +
-          '</div>' +
-          (badgeHtml || mutedHtml ? '<div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">' + mutedHtml + badgeHtml + '</div>' : '') +
-        '</div>';
+        html += self._buildGroupRowHtml(group, state);
       });
     }
 
@@ -217,6 +155,80 @@ window.SidebarMiddle = {
       self.showCreateGroupModal();
     });
 
+  },
+
+  _buildGroupRowHtml(group, state) {
+    var self = this;
+    var activeChatId = state.activeChatId;
+    var messages = state.messages;
+    var isActive = activeChatId === group.groupId;
+    var members = group.members || [];
+    var onlineCount = members.filter(function(m) { return m.status === 'online'; }).length;
+    var subtitle = onlineCount > 0 ? onlineCount + ' online, ' + members.length + ' member' + (members.length !== 1 ? 's' : '') : members.length + ' member' + (members.length !== 1 ? 's' : '');
+    var groupMsgs = messages[group.groupId] || [];
+    if (groupMsgs.length > 0) {
+      var lastMsg = groupMsgs[groupMsgs.length - 1];
+      var senderName = '';
+      var isMe = lastMsg.sender === state.currentUser.userId;
+      if (isMe) {
+        senderName = 'You: ';
+      } else {
+        var sender = members.find(function(m) { return m.userId === lastMsg.sender; });
+        if (sender) senderName = sender.username + ': ';
+      }
+      var escapedSender = window.Sanitize.escapeHtml(senderName);
+      if (lastMsg.text) {
+        subtitle = escapedSender + window.Sanitize.escapeHtml(self._formatLastMessage(lastMsg.text));
+      } else {
+        subtitle = escapedSender + '<span style="display:inline-flex;align-items:center;gap:4px;"><i data-lucide="paperclip" style="width:12px;height:12px;"></i> Attachment</span>';
+      }
+    } else {
+      subtitle = window.Sanitize.escapeHtml(subtitle);
+    }
+
+    // Group avatar or overlapping member circles
+    var avatarHtml = '';
+    var displayMembers = [];
+    if (group.avatarPath) {
+      avatarHtml = '<img src="orbit-avatar://' + window.Sanitize.escapeHtml(group.groupId) + '?t=' + (group.avatarUpdatedAt || 0) + '" style="width:40px;height:40px;border-radius:12px;object-fit:cover;">';
+    } else if (group.avatarDataUrl) {
+      avatarHtml = '<img src="' + window.Sanitize.escapeHtml(group.avatarDataUrl) + '" style="width:40px;height:40px;border-radius:12px;object-fit:cover;">';
+    } else {
+      displayMembers = members.slice(0, 3);
+      displayMembers.forEach(function(m, idx) {
+        var offset = idx * 14;
+        var memberAvatar = m.avatar
+          ? '<img src="' + window.Sanitize.escapeHtml(m.avatar) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:2px solid var(--bg-base);position:absolute;left:' + offset + 'px;top:0;">'
+          : '<div style="width:28px;height:28px;border-radius:50%;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:10px;color:white;border:2px solid var(--bg-base);position:absolute;left:' + offset + 'px;top:0;font-weight:600;">' + m.username.charAt(0).toUpperCase() + '</div>';
+        avatarHtml += memberAvatar;
+      });
+    }
+    var avatarWidth = (group.avatarPath || group.avatarDataUrl) ? 40 : Math.min(displayMembers.length, 3) * 14 + 28;
+
+    var pinIcon = group.pinned ? '<i data-lucide="pin" style="width:12px;height:12px;color:var(--accent-primary);margin-left:4px;"></i>' : '';
+
+    var unreadCount = state.unreadCounts[group.groupId] || 0;
+    var mentionCount = state.mentionCounts[group.groupId] || 0;
+    var badgeHtml = '';
+    if (mentionCount > 0) {
+      badgeHtml = '<div class="unread-badge mention-badge">@' + mentionCount + '</div>';
+    } else if (unreadCount > 0) {
+      badgeHtml = '<div class="unread-badge">' + (unreadCount > 99 ? '99+' : unreadCount) + '</div>';
+    }
+
+    var isMuted = state.mutedChats && state.mutedChats[group.groupId];
+    var mutedHtml = isMuted ? '<i data-lucide="bell-off" style="width:14px;height:14px;color:var(--text-muted);flex-shrink:0;"></i>' : '';
+
+    return '<div class="list-row ' + (isActive ? 'active' : '') + '" data-id="' + window.Sanitize.escapeHtml(group.groupId) + '" data-type="group" data-debug="Group: ' + window.Sanitize.escapeHtml(group.groupName) + ' ID: ' + window.Sanitize.escapeHtml(group.groupId) + '">' +
+      '<div class="avatar avatar-md list-row-avatar" style="position:relative;width:' + avatarWidth + 'px;min-width:' + avatarWidth + 'px;height:40px;display:flex;align-items:center;justify-content:center;">' +
+        avatarHtml +
+      '</div>' +
+      '<div class="list-row-info">' +
+        '<div class="list-row-title">' + window.Sanitize.escapeHtml(group.groupName || 'Unnamed Group') + pinIcon + '</div>' +
+        '<div class="list-row-subtitle">' + subtitle + '</div>' +
+      '</div>' +
+      (badgeHtml || mutedHtml ? '<div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">' + mutedHtml + badgeHtml + '</div>' : '') +
+    '</div>';
   },
 
   showCreateGroupModal(prefilledCode) {
@@ -448,6 +460,15 @@ window.SidebarMiddle = {
     var listContainer = document.getElementById('friends-list-container');
     if (!listContainer) return;
 
+    // Show/hide the Friends/Groups tabs: hidden while browsing inside a folder
+    var tabsEl = this.container.querySelector('.tabs-container');
+    if (tabsEl) tabsEl.style.display = state.activeFolder ? 'none' : 'flex';
+
+    if (state.activeFolder) {
+      this._renderFolderList(state, listContainer);
+      return;
+    }
+
     if (!friends || friends.length === 0) {
       listContainer.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;padding:40px 20px;text-align:center;color:var(--text-muted);gap:12px;">' +
         '<i data-lucide="wifi-off" style="width:40px;height:40px;opacity:0.3;"></i>' +
@@ -465,51 +486,7 @@ window.SidebarMiddle = {
     '</div>';
 
     friends.forEach(function(friend) {
-      var isActive = activeChatId === friend.userId;
-      
-      var userMsgs = messages[friend.userId] || [];
-      var subtitleHtml = window.Sanitize.escapeHtml('#' + (friend.usertag || '0000'));
-      if (userMsgs.length > 0) {
-        var lastMsg = userMsgs[userMsgs.length - 1];
-        if (lastMsg.text) {
-          subtitleHtml = window.Sanitize.escapeHtml(self._formatLastMessage(lastMsg.text));
-        } else {
-          subtitleHtml = '<span style="display:inline-flex;align-items:center;gap:4px;color:var(--accent-primary);"><i data-lucide="paperclip" style="width:12px;height:12px;"></i> Attachment</span>';
-        }
-      }
-
-      var frame = window.Frames.getFrameForUser(friend.userId);
-      var avatarImg = friend.avatar
-        ? '<img src="' + window.Sanitize.escapeHtml(friend.avatar) + '" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">'
-        : '<i data-lucide="user"></i>';
-      var avatarContainer = '<div style="position:relative;display:flex;align-items:center;justify-content:center;width:100%;height:100%;">' + avatarImg + (frame ? '<img src="icons/frames/pfp_frame_' + frame + '.png" style="position:absolute;top:-14%;left:-14%;width:122%;height:122%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '') + '</div>';
-
-      var unreadCount = unreadCounts[friend.userId] || 0;
-      var mentionCount = mentionCounts[friend.userId] || 0;
-      var badgeHtml = '';
-      if (mentionCount > 0) {
-        badgeHtml = '<div class="unread-badge mention-badge">@' + mentionCount + '</div>';
-      } else if (unreadCount > 0) {
-        badgeHtml = '<div class="unread-badge">' + (unreadCount > 99 ? '99+' : unreadCount) + '</div>';
-      }
-
-      var mutedChats = state.mutedChats || {};
-      var isMuted = mutedChats[friend.userId];
-      var mutedHtml = isMuted ? '<i data-lucide="bell-off" style="width:14px;height:14px;color:var(--text-muted);flex-shrink:0;"></i>' : '';
-      var isPinned = pinnedDMs[friend.userId];
-      var pinnedHtml = isPinned ? '<i data-lucide="pin" style="width:14px;height:14px;color:var(--accent-primary);flex-shrink:0;"></i>' : '';
-
-      html += '<div class="list-row ' + (isActive ? 'active' : '') + '" data-id="' + window.Sanitize.escapeHtml(friend.userId) + '" data-debug="User: ' + window.Sanitize.escapeHtml(friend.username) + ' ID: ' + window.Sanitize.escapeHtml(friend.userId) + ' Status: ' + window.Sanitize.escapeHtml(friend.status || 'offline') + '">' +
-        '<div class="avatar avatar-md list-row-avatar" style="position:relative;">' +
-          avatarContainer +
-          '<div class="status-indicator ' + window.Sanitize.escapeHtml(friend.status || 'offline') + '"></div>' +
-        '</div>' +
-        '<div class="list-row-info">' +
-          '<div class="list-row-title">' + window.Sanitize.escapeHtml(friend.username) + '</div>' +
-          '<div class="list-row-subtitle">' + subtitleHtml + '</div>' +
-        '</div>' +
-        (pinnedHtml || badgeHtml || mutedHtml ? '<div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">' + pinnedHtml + mutedHtml + badgeHtml + '</div>' : '') +
-      '</div>';
+      html += self._buildFriendRowHtml(friend, state);
     });
 
     listContainer.innerHTML = html;
@@ -523,7 +500,509 @@ window.SidebarMiddle = {
     }
   },
 
-  showAddFriendModal() {
+  _buildFriendRowHtml(friend, state) {
+    var self = this;
+    var activeChatId = state.activeChatId;
+    var messages = state.messages;
+    var unreadCounts = state.unreadCounts || {};
+    var mentionCounts = state.mentionCounts || {};
+    var pinnedDMs = state.pinnedDMs || {};
+    var isActive = activeChatId === friend.userId;
+    
+    var userMsgs = messages[friend.userId] || [];
+    var subtitleHtml = window.Sanitize.escapeHtml('#' + (friend.usertag || '0000'));
+    if (userMsgs.length > 0) {
+      var lastMsg = userMsgs[userMsgs.length - 1];
+      if (lastMsg.text) {
+        subtitleHtml = window.Sanitize.escapeHtml(self._formatLastMessage(lastMsg.text));
+      } else {
+        subtitleHtml = '<span style="display:inline-flex;align-items:center;gap:4px;color:var(--accent-primary);"><i data-lucide="paperclip" style="width:12px;height:12px;"></i> Attachment</span>';
+      }
+    }
+
+    var frame = window.Frames.getFrameForUser(friend.userId);
+    var avatarImg = friend.avatar
+      ? '<img src="' + window.Sanitize.escapeHtml(friend.avatar) + '" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">'
+      : '<i data-lucide="user"></i>';
+    var avatarContainer = '<div style="position:relative;display:flex;align-items:center;justify-content:center;width:100%;height:100%;">' + avatarImg + (frame ? '<img src="icons/frames/pfp_frame_' + frame + '.png" style="position:absolute;top:-14%;left:-14%;width:122%;height:122%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '') + '</div>';
+
+    var unreadCount = unreadCounts[friend.userId] || 0;
+    var mentionCount = mentionCounts[friend.userId] || 0;
+    var badgeHtml = '';
+    if (mentionCount > 0) {
+      badgeHtml = '<div class="unread-badge mention-badge">@' + mentionCount + '</div>';
+    } else if (unreadCount > 0) {
+      badgeHtml = '<div class="unread-badge">' + (unreadCount > 99 ? '99+' : unreadCount) + '</div>';
+    }
+
+    var mutedChats = state.mutedChats || {};
+    var isMuted = mutedChats[friend.userId];
+    var mutedHtml = isMuted ? '<i data-lucide="bell-off" style="width:14px;height:14px;color:var(--text-muted);flex-shrink:0;"></i>' : '';
+    var isPinned = pinnedDMs[friend.userId];
+    var pinnedHtml = isPinned ? '<i data-lucide="pin" style="width:14px;height:14px;color:var(--accent-primary);flex-shrink:0;"></i>' : '';
+
+    return '<div class="list-row ' + (isActive ? 'active' : '') + '" data-id="' + window.Sanitize.escapeHtml(friend.userId) + '" data-debug="User: ' + window.Sanitize.escapeHtml(friend.username) + ' ID: ' + window.Sanitize.escapeHtml(friend.userId) + ' Status: ' + window.Sanitize.escapeHtml(friend.status || 'offline') + '">' +
+      '<div class="avatar avatar-md list-row-avatar" style="position:relative;">' +
+        avatarContainer +
+        '<div class="status-indicator ' + window.Sanitize.escapeHtml(friend.status || 'offline') + '"></div>' +
+      '</div>' +
+      '<div class="list-row-info">' +
+        '<div class="list-row-title">' + window.Sanitize.escapeHtml(friend.username) + '</div>' +
+        '<div class="list-row-subtitle">' + subtitleHtml + '</div>' +
+      '</div>' +
+      (pinnedHtml || badgeHtml || mutedHtml ? '<div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">' + pinnedHtml + mutedHtml + badgeHtml + '</div>' : '') +
+    '</div>';
+  },
+
+  // Renders a single folder's chats (friends + groups) as one combined list,
+  // in the order the chats were added to the folder.
+  _renderFolderList(state, listContainer) {
+    var self = this;
+    var folder = null;
+    if (state.settings && state.settings.chatFolders) {
+      folder = state.settings.chatFolders.find(function(f) { return f.id === state.activeFolder; }) || null;
+    }
+    var rows = [];
+    if (folder) {
+      (folder.chatIds || []).forEach(function(k) {
+        if (k && typeof k === 'object' && k.kind !== undefined) {
+          if (k.kind === 'group') {
+            var g = state.groups.find(function(gg) { return gg.groupId === k.id; });
+            if (g) rows.push(self._buildGroupRowHtml(g, state));
+          } else {
+            var f = state.friends.find(function(ff) { return ff.userId === k.id; });
+            if (f) rows.push(self._buildFriendRowHtml(f, state));
+          }
+        } else {
+          // Legacy raw-string entry: treat as friend id, fall back to group
+          var f2 = state.friends.find(function(ff) { return ff.userId === k; });
+          if (f2) rows.push(self._buildFriendRowHtml(f2, state));
+          else {
+            var g2 = state.groups.find(function(gg) { return gg.groupId === k; });
+            if (g2) rows.push(self._buildGroupRowHtml(g2, state));
+          }
+        }
+      });
+    }
+    var folderName = folder ? folder.name : 'Folder';
+    var html = '<div style="padding: 0 var(--spacing-md) var(--spacing-sm) var(--spacing-md); display:flex; align-items:center; gap:8px;">' +
+      '<button id="btn-folder-back" title="Back to Folders" style="color:var(--text-secondary); cursor:pointer; background:transparent; border:none; padding:2px; flex-shrink:0;"><i data-lucide="arrow-left" style="width:16px;height:16px;"></i></button>' +
+      '<span style="font-size:12px; font-weight:bold; color:var(--text-primary); text-transform:uppercase; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;" title="' + window.Sanitize.escapeHtml(folderName) + '">' + window.Sanitize.escapeHtml(folderName) + '</span>' +
+      '<span style="font-size:11px; color:var(--text-muted); flex-shrink:0;">' + rows.length + ' chat' + (rows.length !== 1 ? 's' : '') + '</span>' +
+    '</div>';
+    if (rows.length === 0) {
+      html += '<div style="display:flex;flex-direction:column;align-items:center;padding:40px 20px;text-align:center;color:var(--text-muted);gap:12px;">' +
+        '<i data-lucide="folder-open" style="width:40px;height:40px;opacity:0.3;"></i>' +
+        '<div style="font-size:14px;font-weight:500;">No chats in this folder yet</div>' +
+        '<div style="font-size:12px;">Use the "+ Add" action on the folder row to add chats.</div>' +
+      '</div>';
+    } else {
+      html += rows.join('');
+    }
+    listContainer.innerHTML = html;
+    lucide.createIcons({ root: listContainer });
+    var backBtn = listContainer.querySelector('#btn-folder-back');
+    if (backBtn) {
+      backBtn.addEventListener('click', function() {
+        window.store.setState({ activeView: 'folders', activeFolder: null });
+      });
+    }
+  },
+
+  // --- Chat Folders (experimental, local-only) ---
+
+  // Build the picker section listing every assignable chat for a folder.
+  _buildFolderPickerHtml(folder) {
+    var state = window.store.getState();
+    var uid = state.currentUser && state.currentUser.userId;
+    var folderId = folder.id;
+    var self = this;
+
+    function chatRowHtml(key, label, sub, avatarHtml) {
+      var isIn = window.store.isChatInFolder(folderId, key);
+      return '<div class="folder-picker-row" data-kind="' + key.kind + '" data-chat-id="' + window.Sanitize.escapeHtml(key.id) + '" style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:6px;cursor:pointer;">' +
+        avatarHtml +
+        '<div style="flex:1;min-width:0;font-size:13px;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window.Sanitize.escapeHtml(label) + '</div>' +
+        '<div style="font-size:11px;color:var(--text-muted);flex-shrink:0;">' + window.Sanitize.escapeHtml(sub) + '</div>' +
+        '<i data-lucide="' + (isIn ? 'check-circle' : 'circle') + '" style="width:16px;height:16px;color:' + (isIn ? 'var(--accent-primary)' : 'var(--text-muted)') + ';flex-shrink:0;"></i>' +
+      '</div>';
+    }
+
+    function friendAvatarHtml(f) {
+      var favatar = f.avatar
+        ? '<img src="' + window.Sanitize.escapeHtml(f.avatar) + '" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;">'
+        : '<div style="width:24px;height:24px;border-radius:50%;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:10px;color:white;font-weight:600;flex-shrink:0;">' + (f.username ? f.username.charAt(0).toUpperCase() : '?') + '</div>';
+      return favatar;
+    }
+
+    function groupAvatarHtml(g) {
+      if (g.avatarDataUrl) {
+        return '<img src="' + window.Sanitize.escapeHtml(g.avatarDataUrl) + '" style="width:24px;height:24px;border-radius:8px;object-fit:cover;flex-shrink:0;">';
+      }
+      return '<div style="width:24px;height:24px;border-radius:8px;background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:10px;color:white;font-weight:600;flex-shrink:0;">' + (g.groupName ? g.groupName.charAt(0).toUpperCase() : 'G') + '</div>';
+    }
+
+    var html = '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;font-weight:600;">Add chats to ' + window.Sanitize.escapeHtml(folder.name) + '</div>';
+
+    var friends = state.friends || [];
+    html += '<div style="font-size:10px;color:var(--text-muted);margin:6px 0 4px;font-weight:600;">Friends</div>';
+    if (friends.length === 0) {
+      html += '<div style="font-size:12px;color:var(--text-muted);padding:4px 0;">No friends yet</div>';
+    } else {
+      friends.forEach(function(f) {
+        html += chatRowHtml({ kind: 'friend', id: f.userId }, f.username, '@' + (f.usertag || '0000'), friendAvatarHtml(f));
+      });
+    }
+
+    var groups = (state.groups || []).filter(function(g) {
+      return g.members && g.members.some(function(m) { return m.userId === uid; });
+    });
+    html += '<div style="font-size:10px;color:var(--text-muted);margin:6px 0 4px;font-weight:600;">Groups</div>';
+    if (groups.length === 0) {
+      html += '<div style="font-size:12px;color:var(--text-muted);padding:4px 0;">No groups yet</div>';
+    } else {
+      groups.forEach(function(g) {
+        html += chatRowHtml({ kind: 'group', id: g.groupId }, g.groupName || 'Unnamed Group', (g.members || []).length + ' members', groupAvatarHtml(g));
+      });
+    }
+    return html;
+  },
+
+  // Show (or rebuild) the add-chats picker under a folder row.
+  _openFolderPicker(folderId) {
+    var state = window.store.getState();
+    var folder = state.settings && state.settings.chatFolders ? state.settings.chatFolders.find(function(f) { return f.id === folderId; }) : null;
+    var row = document.querySelector('.folder-row[data-folder-id="' + folderId + '"]');
+    if (!folder || !row) return;
+    var picker = row.querySelector('.folder-picker');
+    if (!picker) return;
+    picker.style.display = 'block';
+    picker.innerHTML = this._buildFolderPickerHtml(folder);
+    if (window.lucide) window.lucide.createIcons({ root: picker });
+    this._openFolderPickerId = folderId;
+  },
+
+  _closeFolderPicker(folderId) {
+    var row = document.querySelector('.folder-row[data-folder-id="' + folderId + '"]');
+    if (row) {
+      var picker = row.querySelector('.folder-picker');
+      if (picker) picker.style.display = 'none';
+    }
+    if (this._openFolderPickerId === folderId) this._openFolderPickerId = null;
+  },
+
+  // Close the open "+ Add chats" picker when the user clicks anywhere outside
+  // it (or outside the add button that toggles it). Registered once in init();
+  // the open-picker state is checked inside the handler, so it is a no-op
+  // whenever no picker is open (and therefore never interferes with context
+  // menus, modals, or chat navigation).
+  _initPickerOutsideClickDismiss() {
+    var self = this;
+    document.addEventListener('pointerdown', function(e) {
+      if (!self._openFolderPickerId) return;
+      var target = e.target;
+      if (!target || !target.closest) return;
+      // The add button toggles the picker on its click handler — let it.
+      if (target.closest('.folder-action[data-action="add"]')) return;
+      // Clicks inside the open picker (rows, scrollbar, toggling chats) keep it open.
+      var picker = target.closest('.folder-picker');
+      if (picker && picker.style.display === 'block') return;
+      self._closeFolderPicker(self._openFolderPickerId);
+    });
+  },
+
+  renderFolders() {
+    var self = this;
+    var listContainer = document.getElementById('friends-list-container');
+    if (!listContainer) return;
+    var tabsEl = this.container.querySelector('.tabs-container');
+    if (tabsEl) tabsEl.style.display = 'none';
+    var state = window.store.getState();
+    var settings = state.settings || {};
+    var folders = settings.chatFolders || [];
+
+    // Gate: the feature toggle lives in Settings → Advanced → Experimental
+    if (!settings.experimentalFolders) {
+      listContainer.innerHTML =
+        '<div style="display:flex;flex-direction:column;align-items:center;padding:40px 20px;text-align:center;color:var(--text-muted);gap:12px;">' +
+          '<i data-lucide="folder" style="width:40px;height:40px;opacity:0.3;"></i>' +
+          '<div style="font-size:14px;font-weight:500;">Chat Folders is disabled</div>' +
+          '<div style="font-size:12px;line-height:1.5;">Enable it in Settings &rarr; Advanced &rarr; Experimental Features.</div>' +
+        '</div>';
+      return;
+    }
+
+    var html = '<div style="padding: 0 var(--spacing-md) var(--spacing-sm) var(--spacing-md); display:flex; justify-content:space-between; align-items:center;">' +
+      '<span style="font-size: 12px; font-weight:bold; color:var(--text-muted); text-transform:uppercase;">Folders (' + folders.length + ')</span>' +
+      '<button id="btn-new-folder" title="New Folder" style="color:var(--text-secondary); cursor:pointer;"><i data-lucide="plus" style="width:16px;height:16px;"></i></button>' +
+    '</div>';
+
+    // Inline "New Folder" input row (revealed on + click)
+    html += '<div id="new-folder-row" style="display:none;padding: 0 var(--spacing-md) var(--spacing-sm) var(--spacing-md);">' +
+      '<input id="new-folder-input" type="text" maxlength="32" placeholder="Folder name... (Enter to create)" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--accent-primary);background:var(--bg-surface);color:var(--text-primary);font-size:13px;outline:none;box-sizing:border-box;">' +
+    '</div>';
+
+    if (folders.length === 0) {
+      html += '<div style="padding: var(--spacing-lg); text-align:center; color: var(--text-muted); font-size: 13px;">' +
+        'No folders yet — create one to organize chats.' +
+      '</div>';
+    } else {
+      folders.forEach(function(folder) {
+        var chatCount = (folder.chatIds || []).length;
+        html += '<div class="folder-row" data-folder-id="' + window.Sanitize.escapeHtml(folder.id) + '" style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:10px var(--spacing-md);cursor:pointer;">' +
+          '<div style="width:40px;height:40px;border-radius:12px;background:var(--bg-hover);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i data-lucide="folder" style="width:18px;height:18px;color:var(--text-muted);"></i></div>' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div class="folder-row-name" style="font-size:14px;font-weight:500;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window.Sanitize.escapeHtml(folder.name) + '</div>' +
+            '<div style="font-size:12px;color:var(--text-muted);">' + chatCount + ' chat' + (chatCount !== 1 ? 's' : '') + '</div>' +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:2px;flex-shrink:0;">' +
+            '<button class="folder-action" data-action="add" title="Add chats" style="background:transparent;border:none;color:var(--text-secondary);cursor:pointer;padding:4px;border-radius:6px;"><i data-lucide="plus" style="width:15px;height:15px;"></i></button>' +
+            '<button class="folder-action" data-action="rename" title="Rename" style="background:transparent;border:none;color:var(--text-secondary);cursor:pointer;padding:4px;border-radius:6px;"><i data-lucide="pencil" style="width:15px;height:15px;"></i></button>' +
+            '<button class="folder-action" data-action="delete" title="Delete" style="background:transparent;border:none;color:var(--accent-danger);cursor:pointer;padding:4px;border-radius:6px;"><i data-lucide="trash-2" style="width:15px;height:15px;"></i></button>' +
+          '</div>' +
+          '<div class="folder-picker" style="display:none;flex-basis:100%;padding:10px 12px;background:var(--bg-base);border-radius:8px;margin-top:8px;max-height:220px;overflow-y:auto;"></div>' +
+        '</div>';
+      });
+    }
+
+    listContainer.innerHTML = html;
+    if (window.lucide) window.lucide.createIcons({ root: listContainer });
+    this._wireFolderEvents(listContainer);
+
+    // Re-open the picker that was open before a re-render (each folder mutation
+    // triggers a re-render through the store subscription).
+    if (this._openFolderPickerId) {
+      this._openFolderPicker(this._openFolderPickerId);
+    }
+  },
+
+  _startFolderRename(folderId) {
+    var state = window.store.getState();
+    var folder = state.settings && state.settings.chatFolders ? state.settings.chatFolders.find(function(f) { return f.id === folderId; }) : null;
+    var row = document.querySelector('.folder-row[data-folder-id="' + folderId + '"]');
+    if (!folder || !row) return;
+    var nameEl = row.querySelector('.folder-row-name');
+    if (!nameEl) return;
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.maxLength = 32;
+    input.value = folder.name;
+    input.style.cssText = 'width:100%;padding:4px 8px;border-radius:6px;border:1px solid var(--accent-primary);background:var(--bg-surface);color:var(--text-primary);font-size:13px;outline:none;box-sizing:border-box;';
+    nameEl.replaceWith(input);
+    input.focus();
+    input.select();
+    var cancelled = false;
+    function finish() {
+      if (cancelled) return;
+      var val = input.value.trim();
+      if (val && val !== folder.name) window.store.renameFolder(folderId, val);
+    }
+    function restore() {
+      var span = document.createElement('span');
+      span.className = 'folder-row-name';
+      span.style.cssText = 'font-size:14px;font-weight:500;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+      span.textContent = folder.name;
+      if (input.parentNode) input.replaceWith(span);
+    }
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); finish(); if (input.isConnected) input.blur(); }
+      else if (e.key === 'Escape') { e.preventDefault(); cancelled = true; restore(); }
+    });
+    input.addEventListener('blur', function() {
+      if (input._done) return;
+      input._done = true;
+      finish();
+    });
+  },
+
+  _wireFolderEvents(listContainer) {
+    var self = this;
+
+    // New Folder button → reveal inline input row
+    var newBtn = listContainer.querySelector('#btn-new-folder');
+    if (newBtn) {
+      newBtn.addEventListener('click', function() {
+        var row = listContainer.querySelector('#new-folder-row');
+        var input = listContainer.querySelector('#new-folder-input');
+        if (!row || !input) return;
+        row.style.display = 'block';
+        input.focus();
+      });
+    }
+    var newInput = listContainer.querySelector('#new-folder-input');
+    if (newInput) {
+      newInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          var name = this.value.trim();
+          if (name) window.store.createFolder(name);
+          var row = listContainer.querySelector('#new-folder-row');
+          if (row) row.style.display = 'none';
+          this.value = '';
+        } else if (e.key === 'Escape') {
+          var row2 = listContainer.querySelector('#new-folder-row');
+          if (row2) row2.style.display = 'none';
+          this.value = '';
+        }
+      });
+      newInput.addEventListener('blur', function() {
+        var row = listContainer.querySelector('#new-folder-row');
+        if (row) row.style.display = 'none';
+        this.value = '';
+      });
+    }
+
+    // Delegated row/action clicks — #friends-list-container persists across
+    // re-renders, so register this listener only ONCE. Re-registering on
+    // every renderFolders() stacks duplicate listeners; on a delete click
+    // every stacked listener would open its own ConfirmModal.
+    if (listContainer._folderClickWired) return;
+    listContainer._folderClickWired = true;
+
+    listContainer.addEventListener('click', function(e) {
+      var actionBtn = e.target.closest('.folder-action');
+      if (actionBtn) {
+        e.stopPropagation();
+        var rowEl = actionBtn.closest('.folder-row');
+        if (!rowEl) return;
+        var folderId = rowEl.getAttribute('data-folder-id');
+        var action = actionBtn.getAttribute('data-action');
+        // Fresh lookup from the store — this one-time listener must not rely
+        // on a stale closure snapshot of the folders array.
+        var folder = window.store.getFolderById(folderId);
+        if (!folder) return;
+        if (action === 'add') {
+          var picker = rowEl.querySelector('.folder-picker');
+          if (!picker) return;
+          if (picker.style.display === 'block') {
+            self._closeFolderPicker(folderId);
+          } else {
+            self._openFolderPicker(folderId);
+          }
+          return;
+        }
+        if (action === 'rename') {
+          self._startFolderRename(folderId);
+          return;
+        }
+        if (action === 'delete') {
+          if (window.ConfirmModal) {
+            window.ConfirmModal.show({
+              title: 'Delete Folder',
+              message: 'Delete folder "' + folder.name + '"? Chats inside it will not be deleted.',
+              confirmText: 'Delete',
+              danger: true,
+              onConfirm: function() {
+                window.store.deleteFolder(folderId);
+                if (self._openFolderPickerId === folderId) self._openFolderPickerId = null;
+              }
+            });
+          }
+          return;
+        }
+        return;
+      }
+
+      var pickerRow = e.target.closest('.folder-picker-row');
+      if (pickerRow) {
+        e.stopPropagation();
+        var pickerEl = pickerRow.closest('.folder-picker');
+        var folderRow = pickerEl ? pickerEl.closest('.folder-row') : null;
+        if (!folderRow) return;
+        var fid = folderRow.getAttribute('data-folder-id');
+        var key = { kind: pickerRow.getAttribute('data-kind'), id: pickerRow.getAttribute('data-chat-id') };
+        if (window.store.isChatInFolder(fid, key)) {
+          window.store.removeChatFromFolder(fid, key);
+        } else {
+          window.store.addChatToFolder(fid, key);
+        }
+        return;
+      }
+
+      // Clicks on an OPEN picker's own non-row area (header, padding,
+      // scrollbar) must not navigate into the folder — the pointerdown
+      // dismiss handler already treats the picker interior as "keep open".
+      var openPicker = e.target.closest('.folder-picker');
+      if (openPicker && openPicker.style.display === 'block') return;
+
+      var folderRow = e.target.closest('.folder-row');
+      if (folderRow) {
+        var fId = folderRow.getAttribute('data-folder-id');
+        window.store.setState({ activeView: 'friends', activeFolder: fId });
+        self._openFolderPickerId = null;
+      }
+    });
+  },
+
+  // Small modal used from the chat-row context menu ("New Folder…") — Electron
+  // has no window.prompt(), so this is an overlay with an input instead.
+  _showNewFolderModal() {
+    var self = this;
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    overlay.innerHTML =
+      '<div style="width:380px;background:var(--bg-surface);border-radius:16px;overflow:hidden;box-shadow:var(--shadow-xl);border:1px solid var(--border-subtle);display:flex;flex-direction:column;">' +
+        '<div style="flex:1;padding:40px 32px 24px;display:flex;flex-direction:column;gap:20px;">' +
+          '<div style="display:flex;align-items:flex-start;gap:16px;">' +
+            '<i data-lucide="folder" style="width:28px;height:28px;color:var(--accent-primary);flex-shrink:0;margin-top:2px;"></i>' +
+            '<div><div style="font-weight:600;color:var(--text-primary);font-size:16px;">New Folder</div>' +
+            '<div style="font-size:13px;color:var(--text-secondary);margin-top:6px;line-height:1.5;">Give your folder a name to organize chats.</div></div>' +
+          '</div>' +
+          '<input id="new-folder-modal-input" type="text" maxlength="32" placeholder="Folder name..." style="width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);font-size:14px;outline:none;box-sizing:border-box;">' +
+        '</div>' +
+        '<div style="padding:16px 32px 24px;border-top:1px solid var(--border-subtle);display:flex;gap:12px;justify-content:flex-end;background:var(--bg-surface);">' +
+          '<button id="btn-cancel-folder" style="padding:9px 20px;border-radius:10px;border:1px solid var(--border-subtle);background:transparent;color:var(--text-secondary);cursor:pointer;font-weight:500;">Cancel</button>' +
+          '<button id="btn-confirm-folder" style="padding:9px 24px;border-radius:10px;background:var(--accent-primary);color:white;border:none;cursor:pointer;font-weight:600;">Create</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    if (window.lucide) window.lucide.createIcons({ root: overlay });
+
+    function close() { if (overlay.parentNode) document.body.removeChild(overlay); }
+    overlay.querySelector('#btn-cancel-folder').addEventListener('click', close);
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) close(); });
+    function onKey(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); } }
+    document.addEventListener('keydown', onKey);
+    var input = overlay.querySelector('#new-folder-modal-input');
+    overlay.querySelector('#btn-confirm-folder').addEventListener('click', function() {
+      var name = input.value.trim();
+      if (!name) { if (window.Toast) window.Toast.show('Error', 'Please enter a folder name'); return; }
+      window.store.createFolder(name);
+      close();
+    });
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') overlay.querySelector('#btn-confirm-folder').click();
+    });
+    input.focus();
+  },
+
+  // Extend a context-menu items array with folder toggle entries and a
+    // "New Folder…" entry. No-op unless the experimental folders toggle is on.
+    _appendFolderMenuItems(items, chatKey) {
+      var state = window.store.getState();
+      var settings = state.settings || {};
+      if (!settings.enableExperimental || !settings.experimentalFolders) return;
+      var folders = settings.chatFolders || [];
+      var self = this;
+      items.push('separator');
+      if (folders.length > 0) {
+        folders.forEach(function(folder) {
+          var isIn = window.store.isChatInFolder(folder.id, chatKey);
+          items.push({
+            label: (isIn ? 'Remove from ' : 'Add to ') + '"' + folder.name + '"',
+            icon: isIn ? 'folder-minus' : 'folder-plus',
+            onClick: function() {
+              if (isIn) window.store.removeChatFromFolder(folder.id, chatKey);
+              else window.store.addChatToFolder(folder.id, chatKey);
+            }
+          });
+        });
+        items.push('separator');
+      }
+      items.push({ label: 'New Folder…', icon: 'folder-plus', onClick: function() { self._showNewFolderModal(); } });
+    },
+
+    showAddFriendModal() {
     var overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:9999;display:flex;align-items:center;justify-content:center;';
     overlay.innerHTML =
@@ -634,7 +1113,7 @@ window.SidebarMiddle = {
         e.target.style.fontWeight = '500';
         
         var view = e.target.innerText.toLowerCase();
-        window.store.setState({ activeView: view });
+        window.store.setState({ activeView: view, activeFolder: null });
       });
     });
 
@@ -813,6 +1292,7 @@ window.SidebarMiddle = {
               }
             }});
           }
+          self._appendFolderMenuItems(items, { kind: 'group', id: id });
           window.ContextMenu.show(e.clientX, e.clientY, items);
         } else {
           var friend = state.friends.find(function(f) { return f.userId === id; });
@@ -837,6 +1317,7 @@ window.SidebarMiddle = {
               window.store.closeDM(id);
             }}
           ];
+          self._appendFolderMenuItems(items, { kind: 'friend', id: id });
           window.ContextMenu.show(e.clientX, e.clientY, items);
         }
       });

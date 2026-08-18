@@ -1,6 +1,25 @@
 # Orbit Changelog
 
-## v0.4.1-beta — **Bug Fixes**
+## v0.4.2-beta
+
+> **Note:** Feature release — experimental Chat Folders on desktop, folder tab polish on mobile.
+
+### Features
+
+- **Chat Folders (Desktop, Experimental)** — New Folders rail in the sidebar, gated behind Settings → Advanced → Enable Experimental plus the new "Chat Folders" toggle. Create/rename/delete folders, add/remove friends and groups via the chat context menu, browse a folder's chats in a dedicated view, and bulk-assign chats with the "Add Chats" picker. Folders persist per-device (local only; no sync yet).
+- **Folder Tabs Polish (Mobile)** — Home-screen folder tabs redesigned: uniform tab width, centered Friends/Groups/folder trio when you have a single folder, and a dedicated scrollable sub-rail when you have several. Folders no longer draw opaque backgrounds over the panel; the active-tab underline is centered and new folders auto-scroll into view.
+
+### Bug Fixes
+
+- **Deleting a Folder No Longer Crashes the App (Desktop)** — Settings notifications are now isolated per listener, the confirm dialog always closes (try/finally), and reply-quote sender names resolve safely in group chats — the three stacked failure points behind the crash.
+- **Sidebar Rail Buttons Work Again After a Settings Change (Desktop)** — The Folders, DMs, Settings, and Profile buttons were losing their listeners when the sidebar re-rendered after a settings change; they are now re-attached.
+- **Folder Picker Fixed (Desktop)** — Clicking outside now dismisses it, and clicking inside the picker no longer navigates into the folder.
+
+### Technical
+
+- **Version:** Bumped to v0.4.2-beta across all three `package.json` files; `version.js` and the Android bundle regenerated.
+
+## v0.4.1-beta
 
 > **Note:** Bug-fix release for Android mobile.
 

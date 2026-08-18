@@ -1,20 +1,9 @@
-node_modules/
-dist/
-release/
-build/
-plans/
-.agent/
-.opencode/
+# Data
 .env
 *.sqlite
 *.db
 *.log
 .DS_Store
-graphify/
-graphify-out/
-*.AGENTS.md
-.mimocode/
-docs/
 
 # Android
 mobile/.android/
@@ -25,3 +14,22 @@ mobile/android/capacitor-cordova-android-plugins/
 mobile/android/.idea/
 *.apk
 *.aab
+
+# Other assets
+node_modules/
+dist/
+release/
+build/
+plans/
+.agent/
+.agents/
+.opencode/
+.impeccable/
+.claude/
+graphify/
+graphify-out/
+*AGENTS.md
+*PRODUCT.md
+*skills-lock.json
+.mimocode/
+docs/

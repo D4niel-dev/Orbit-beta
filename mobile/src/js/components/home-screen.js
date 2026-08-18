@@ -735,14 +735,40 @@ var OrbitHome = {
   renderFolderTabs: function() {
     var tabsContainer = document.getElementById('home-tabs');
     if (!tabsContainer) return;
-    // Remove existing folder tabs (but keep Friends and Groups)
-    var existingFolderTabs = tabsContainer.querySelectorAll('.home-tab-folder');
+    // Folder tabs live in their own scrollable rail appended after Friends/Groups
+    var rail = tabsContainer.querySelector('.folder-rail');
+    if (!rail) {
+      rail = document.createElement('div');
+      rail.className = 'folder-rail';
+      tabsContainer.appendChild(rail);
+    }
+    // Remove old folder tabs from the rail (keep Friends and Groups)
+    var existingFolderTabs = rail.querySelectorAll('.home-tab-folder');
     existingFolderTabs.forEach(function(t) { t.remove(); });
     // Folders are experimental — when disabled, cleanup only (no tabs rendered)
-    if (!(MStore.settings && MStore.settings.experimentalFolders)) return;
+    if (!(MStore.settings && MStore.settings.experimentalFolders)) {
+      tabsContainer.classList.remove('has-folders');
+      tabsContainer.classList.remove('single-folder');
+      tabsContainer.classList.remove('many-folders');
+      if (rail.parentNode) rail.parentNode.removeChild(rail);
+      return;
+    }
     var folders = MStore.getChatFolders();
     var refNode = tabsContainer.querySelector('.home-tab[data-tab="groups"]');
-    if (!refNode) return;
+    if (!refNode) {
+      tabsContainer.classList.remove('has-folders');
+      tabsContainer.classList.remove('single-folder');
+      tabsContainer.classList.remove('many-folders');
+      if (rail.parentNode) rail.parentNode.removeChild(rail);
+      return;
+    }
+    tabsContainer.classList.toggle('has-folders', folders.length > 0);
+    tabsContainer.classList.toggle('single-folder', folders.length === 1);
+    tabsContainer.classList.toggle('many-folders', folders.length > 1);
+    if (folders.length === 0) {
+      if (rail.parentNode) rail.parentNode.removeChild(rail);
+      return;
+    }
     for (var i = 0; i < folders.length; i++) {
       var f = folders[i];
       var btn = document.createElement('button');
@@ -750,11 +776,31 @@ var OrbitHome = {
       btn.setAttribute('data-tab', f.id);
       btn.setAttribute('data-folder-id', f.id);
       btn.innerHTML = OrbitHome._escape(f.name);
-      // Insert after the refNode (Groups tab)
-      refNode.parentNode.insertBefore(btn, refNode.nextSibling);
-      refNode = btn; // next folder goes after this one
+      rail.appendChild(btn);
+    }
+    // Keep the active folder tab reachable after re-renders
+    if (window._activeHomeTab && window._activeHomeTab.indexOf('folder_') === 0) {
+      OrbitHome.scrollFolderTabIntoView(window._activeHomeTab);
     }
     if (window.lucide) lucide.createIcons();
+  },
+
+  /** Scroll a folder tab into view if it sits beyond the visible edge */
+  scrollFolderTabIntoView: function(folderId) {
+    var tabsContainer = document.getElementById('home-tabs');
+    if (!tabsContainer) return;
+    var rail = tabsContainer.querySelector('.folder-rail');
+    if (!rail) return;
+    var el = rail.querySelector('.home-tab-folder[data-folder-id="' + folderId + '"]');
+    if (!el) return;
+    // offsetLeft is relative to the nearest positioned ancestor (#app-layout);
+    // subtract rail.offsetLeft (same ancestor) to get the rail-relative offset
+    var left = el.offsetLeft - rail.offsetLeft;
+    var target = left - (rail.clientWidth - el.offsetWidth);
+    if (target > rail.scrollLeft) {
+      try { rail.scrollTo({ left: target, behavior: 'smooth' }); }
+      catch (e) { rail.scrollLeft = target; }
+    }
   },
 
   /** Show context menu for a chat row (long-press) */
@@ -909,6 +955,7 @@ var OrbitHome = {
       MStore.addChatToFolder(newId, chatId);
       OrbitSheet.hide();
       OrbitHome.renderFolderTabs();
+      OrbitHome.scrollFolderTabIntoView(newId);
       if (window.renderChatList) window.renderChatList(window._activeHomeTab);
       showToast('Folder "' + name + '" created', 'info');
       // Re-open the context sheet so the new folder shows (checked) — the overlay

@@ -8,7 +8,19 @@ window.SidebarLeft = {
     this.attachEvents();
     
     this.unsubscribe = window.store.subscribe((state, changedState) => {
-      if (!changedState || 'currentUser' in changedState) {
+      if (!changedState) {
+        this.render();
+        this.attachEvents(); // render() replaces innerHTML → re-wire click handlers
+        this.renderAvatar(state.currentUser);
+        return;
+      }
+      if ('settings' in changedState) {
+        // Folders rail button is gated on enableExperimental — re-render so it
+        // appears/disappears when the experimental toggle flips.
+        this.render();
+        this.attachEvents(); // render() replaces innerHTML → re-wire click handlers
+        this.renderAvatar(state.currentUser);
+      } else if ('currentUser' in changedState) {
         this.renderAvatar(state.currentUser);
       }
     });
@@ -31,14 +43,17 @@ window.SidebarLeft = {
     var showActivity = s.activity !== false;
     var showGallery = s.gallery !== false;
     var showStorage = s.storage !== false;
+    var showFolders = (window.store.getState().settings || {}).enableExperimental === true;
+    var activeView = window.store.getState().activeView;
 
     this.container.innerHTML = `
       <div class="sidebar-top">
         <!-- Logo -->
-        <button class="icon-btn active" id="btn-nav-dms" title="Direct Messages">
+        <button class="icon-btn ${activeView === 'folders' ? '' : 'active'}" id="btn-nav-dms" title="Direct Messages">
           <i data-lucide="message-circle"></i>
         </button>
         <div class="sidebar-separator" style="width:24px;height:1px;background:var(--border-subtle);margin-top:8px;margin-bottom:8px;margin-left:auto;margin-right:12px;"></div>
+        ${showFolders ? '<button class="icon-btn' + (activeView === 'folders' ? ' active' : '') + '" id="btn-nav-folders" title="Folders"><i data-lucide="folder"></i></button>' : ''}
         ${showActivity ? '<button class="icon-btn" id="btn-nav-activity" title="Activity Center"><i data-lucide="bell"></i></button>' : ''}
         ${showGallery ? '<button class="icon-btn" id="btn-nav-gallery" title="Gallery"><i data-lucide="archive"></i></button>' : ''}
         ${showStorage ? '<button class="icon-btn" id="btn-nav-storage" title="Storage"><i data-lucide="hard-drive"></i></button>' : ''}
@@ -71,6 +86,12 @@ window.SidebarLeft = {
           if (window.ActivityCenter) window.ActivityCenter.show();
           return;
         }
+        if (btn.id === 'btn-nav-folders') {
+          btns.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          window.store.setState({ activeView: 'folders', activeFolder: null });
+          return;
+        }
         if (btn.id === 'btn-nav-storage') {
           if (window.SettingsModal) window.SettingsModal.open('data');
           return;
@@ -82,7 +103,13 @@ window.SidebarLeft = {
           if (btn.id === 'btn-nav-gallery') {
             window.store.setState({ activeTab: 'gallery' });
           } else {
-            window.store.setState({ activeTab: 'dms' });
+            // DM button: escape hatch out of the folders view
+            var st = window.store.getState();
+            if (st.activeView === 'folders') {
+              window.store.setState({ activeTab: 'dms', activeView: 'friends', activeFolder: null });
+            } else {
+              window.store.setState({ activeTab: 'dms' });
+            }
           }
         }
       });

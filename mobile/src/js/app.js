@@ -4284,6 +4284,18 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button id="changelog-close-mobile" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;font-size:20px;">✕</button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
+        vBlock('0.4.2-beta', 'Latest Stable', [
+          ['Features', [
+            'Chat Folders (Desktop, experimental) — New Folders rail in the sidebar: create/rename/delete folders, add chats via the context menu, and bulk-assign with the "Add Chats" picker. Folders persist per-device (no sync yet).',
+            'Folder Tabs Polish (Mobile) — Uniform tab width, centered Friends/Groups/folder trio with one folder, scrollable sub-rail with several; no opaque backgrounds, centered underline, auto-scroll on new folders.'
+          ]],
+          ['Bug Fixes', [
+            'Desktop fixes — Deleting a folder no longer crashes; sidebar rail buttons work after a settings change; folder picker dismisses on outside click.'
+          ]],
+          ['Technical', [
+            'Version bumped to v0.4.2-beta across all manifests.'
+          ]]
+        ]) +
         vBlock('0.4.0-beta', 'Latest Stable', [
           ['Bug Fixes', [
             'Message Long-Press Menu Fixed — Press-and-hold on a message bubble now opens the reactions + actions sheet (Copy/Reply/Translate/Forward/Delete). Previously the wiring only ran through a secondary code path the app no longer uses, so the menu never initialized.',
@@ -9238,7 +9250,16 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  function showMessageContextMenu(msg, chatId, x, y) {
+  function showMessageContextSheet(msgId) {
+    var chatId = activeChatId;
+    if (!chatId || !msgId) return;
+    var ctxMsgs = MStore.getMessages(chatId);
+    var msg = null;
+    for (var i = 0; i < ctxMsgs.length; i++) {
+      if (String(ctxMsgs[i].id) === String(msgId)) { msg = ctxMsgs[i]; break; }
+    }
+    if (!msg) return;
+
     var previewText = msg.text ? msg.text.substring(0, 80) + (msg.text.length > 80 ? '...' : '') : 'Message';
 
     var html = '<div class="context-msg-preview"><span class="context-msg-text">' + escapeHtml(previewText) + '</span></div>';
@@ -9298,9 +9319,7 @@ document.addEventListener('DOMContentLoaded', function() {
               if (!container) return;
               var picker = container.querySelector('emoji-picker');
               if (!picker) return;
-              // Set reaction mode so emoji-click adds a reaction instead of inserting into input
               window._emojiPickerReactMode = { chatId: chatId, msgId: mId };
-              // Show the picker with proper theme
               var theme = document.documentElement.getAttribute('data-theme') || 'dark';
               picker.classList.remove('light', 'dark');
               picker.classList.add(theme);
@@ -9334,6 +9353,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (window.lucide) lucide.createIcons();
     }, 50);
   }
+  window.showMessageContextSheet = showMessageContextSheet;
 
   function showChatContextMenu(chat, x, y) {
     var backdrop = document.createElement('div');

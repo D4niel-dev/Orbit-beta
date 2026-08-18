@@ -679,7 +679,17 @@ window.ChatPanel = {
           } else if (!replyPreview) {
             replyPreview = '(Attachment)';
           }
-          const replyUser = origMsg.sender === myId ? 'You' : window.Sanitize.escapeHtml(activeFriend.username);
+          // activeFriend is undefined for group chats — resolve the reply
+          // sender via the group roster instead of throwing on .username.
+          let replyUser = 'Unknown';
+          if (origMsg.sender === myId) {
+            replyUser = 'You';
+          } else if (activeFriend) {
+            replyUser = window.Sanitize.escapeHtml(activeFriend.username);
+          } else if (isGroup && activeGroup && activeGroup.members) {
+            var senderMem = activeGroup.members.find(function(m) { return m.userId === origMsg.sender; });
+            replyUser = senderMem && senderMem.username ? window.Sanitize.escapeHtml(senderMem.username) : 'Unknown';
+          }
           replyHtml = '<div data-reply-msg-id="' + origMsg.id + '" style="font-size:12px;padding:6px 10px;margin-bottom:6px;border-left:3px solid rgba(255,255,255,0.3);border-radius:4px;background:rgba(0,0,0,0.1);color:rgba(255,255,255,0.7);cursor:pointer;">' +
             '<span style="font-weight:600;">' + replyUser + '</span> ' + window.Sanitize.escapeHtml(replyPreview) +
           '</div>';

@@ -1585,6 +1585,8 @@ window.SettingsModal = {
                     gatedToggleRow('adv-dev-overlay', 'Developer Overlay' + experimentalBadge, 'Show connection stats and debug info overlay.', s.experimentalDevOverlay, true) +
                     '<div style="border-top:1px solid var(--border-subtle);"></div>' +
                     gatedToggleRow('adv-perf-mode', 'Performance Mode' + experimentalBadge, 'Kill animations, disable link previews, reduce background CPU.', s.experimentalPerformanceMode, true) +
+                    '<div style="border-top:1px solid var(--border-subtle);"></div>' +
+                    gatedToggleRow('adv-folders', 'Chat Folders' + experimentalBadge, 'Organize chats into custom folders.', s.experimentalFolders, true) +
                   '</div>'
                 : '') +
             '</div>' +
@@ -1652,6 +1654,7 @@ window.SettingsModal = {
           s.experimentalFpsMonitor = false;
           s.experimentalDevOverlay = false;
           s.experimentalPerformanceMode = false;
+          s.experimentalFolders = false;
           s.debugDisplay = false;
           s.showMessageIds = false;
           s.logNetworkPackets = false;
@@ -1721,6 +1724,7 @@ window.SettingsModal = {
       expToggle('adv-message-fx', 'experimentalMessageFx');
       expToggle('adv-fps-monitor', 'experimentalFpsMonitor');
       expToggle('adv-dev-overlay', 'experimentalDevOverlay');
+      expToggle('adv-folders', 'experimentalFolders');
       // Performance Mode — two-step confirmation on enable
       (function() {
         var el = content.querySelector('#adv-perf-mode');

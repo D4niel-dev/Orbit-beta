@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v040-beta--stable-release">v0.4.1-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v042-beta--chat-folders--folder-tabs">v0.4.2-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@
 
 | Channel | Version | Status |
 |---------|---------|--------|
-| **Stable** | v0.4.1-beta | Latest stable release |
+| **Stable** | v0.4.2-beta | Latest stable release |
 | Previous **Stable** | v0.2.7-beta | Stable release |
 | Previous **Stable** | v0.1.1-beta | Legacy stable release |
 
@@ -67,8 +67,8 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
 ## Mobile Preview
 
 <p align="center">
-  <img src="desktop/src/icons/screenshots/preview-chat-dark-M.png" alt="Mobile chat screen" width="200">
-  <img src="desktop/src/icons/screenshots/preview-friends-dark-M.png" alt="Mobile friends screen" width="200">
+  <img src="desktop/src/icons/screenshots/preview-friends-dark-M.png" alt="Mobile friends chat screen" width="200">
+  <img src="desktop/src/icons/screenshots/preview-groups-dark-M.png" alt="Mobile groups chat screen" width="200">
   <img src="desktop/src/icons/screenshots/preview-settings-dark-M.png" alt="Mobile settings screen" width="200">
   <img src="desktop/src/icons/screenshots/preview-group-info-dark-M.png" alt="Mobile group info panel" width="200"><br>
   <em>Android app — chat, friends, settings, group info</em>
@@ -89,6 +89,11 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 | **Open & approachable** | MIT-licensed, readable stack (Electron + SQLite), built for transparency. |
 
 Orbit is a **beta-stage desktop app** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
+
+## Highlights (v0.4.2-beta)
+
+- **Chat Folders (Experimental, Desktop)** — New Folders rail in the sidebar, gated behind Settings → Advanced → Enable Experimental + the new "Chat Folders" toggle: create/rename/delete folders, add friends and groups via the chat context menu, browse a folder's chats in a dedicated view, and bulk-assign chats with the "Add Chats" picker. Folders persist per-device (local only; no sync yet).
+- **Folder Tabs Polish (Mobile)** — Home-screen folder tabs redesigned: uniform tab width, centered Friends/Groups/folder trio when you have a single folder, and a dedicated scrollable sub-rail when you have several — no more opaque backgrounds over the panel, centered active-tab underline, and new folders auto-scroll into view.
 
 ## Highlights (v0.4.0-beta)
 
@@ -472,6 +477,24 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Experimental Toggle Audit** — Value-based selectors fix Avatars/Frames/Perf Mode off-states; Compact Spacing attribute selector restored; FPS Monitor & Dev Overlay resume on reload.
 - **Profile Frame Icon Removed (Desktop)** — Account settings header shows title only.
 </details>
+<details>
+<summary>v0.4.1-beta</summary>
+
+- **Friend / Peer Avatars Not Loading Fixed** — UDP beacon now sends a 128×128 JPEG thumbnail and the Android receive buffer grew to 64KB, so discovery no longer truncates avatars.
+- **Other-User Avatar in DM Tab Fixed** — DM records seed `avatar` on creation and sync it from the friend record when beacons arrive.
+- **Orbit Echo Bot Avatar Restored** — Avatar sanitizer now allows relative app-asset paths while still blocking scheme-based vectors.
+- **Image Compression Transparency + Hang Fixed** — JPEG compression fills a white background (no more black PNG avatars) and falls back gracefully on encode failure.
+- **Stored XSS Paths Escaped** — All peer-controlled values rendered into HTML (avatars, previews, members, mentions, toasts) are escaped.
+</details>
+<details>
+<summary>v0.4.2-beta</summary>
+
+- **Chat Folders (Desktop, Experimental)** — New Folders rail in the sidebar: create/rename/delete folders, add/remove chats via context menu, dedicated folder view with an "Add Chats" picker. Per-device persistence (no sync yet).
+- **Folder Tabs Polish (Mobile)** — Uniform tab width, centered Friends/Groups/folder trio with one folder, scrollable sub-rail with several; active-tab underline centered.
+- **Delete Folder Crash Fixed (Desktop)** — Notification isolation, confirm-dialog close hardening, and safe reply-quote sender resolution eliminate the crash.
+- **Sidebar Rail Buttons Fixed (Desktop)** — Folders/DMs/Settings/Profile buttons re-attach after settings re-renders.
+- **Folder Picker Fixed (Desktop)** — Outside-click dismisses; interior clicks no longer navigate into the folder.
+</details>
 
 See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
@@ -709,13 +732,12 @@ Transparency matters in beta. Current constraints include:
 
 ## Roadmap
 
-### Shipped (v0.4.0-beta)
+### Shipped (v0.4.2-beta)
 
-- **Message Long-Press Menu Fixed** — Reactions/actions sheet restored on message bubbles
-- **Message Effects & Profile Frames Graduated** — Both moved from Experimental to stable settings with migration
-- **Profile Frame Leak Fixed** — No more frames when the setting is off
-- **Folders Gated Behind Experimental** — New toggle, clean text-only folder tabs
-- **Experimental Toggle Audit** — Off-states, Compact Spacing, FPS/DevOverlay resume fixed
+- **Chat Folders (Desktop)** — Experimental folders rail, view, context-menu assignment, and Add Chats picker
+- **Folder Tabs Polish (Mobile)** — Centered trio / scrollable sub-rail layout, fixed underline
+- **Desktop Stability Fixes** — Delete-folder crash eliminated, sidebar rail buttons re-wired, folder picker dismiss fixed
+- **Mobile Avatar Reliability (v0.4.1)** — UDP beacon thumbnails, DM avatar seeding, Echo bot avatar restored
 
 ### In Progress / Planned
 

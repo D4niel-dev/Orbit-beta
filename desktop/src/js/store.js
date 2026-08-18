@@ -87,6 +87,8 @@ class Store {
         logNetworkPackets: false,
         showConnectionStats: false,
         enableExperimental: false,
+        experimentalFolders: false,
+        chatFolders: [],
         profileFrames: true,
         experimentalMessageTranslate: true,
         messageTranslate: true,
@@ -125,6 +127,7 @@ class Store {
       friends: dbFriends,
       groups: dbGroups,
       activeView: 'friends',
+      activeFolder: null,
       activeTab: uiState.activeTab || 'dms',
       activeChatId: uiState.activeChatId || 'local-echo',
       sidebarMiddleVisible: true,
@@ -1040,6 +1043,95 @@ class Store {
     this.setState({ mutedChats });
   }
 
+  // --- Chat Folders (experimental, local-only) ---
+  // Persist folders inside the settings JSON, the same way settings persist:
+  // dual-write to the electron-store JSON (Storage) AND the SQLite settings
+  // table (which is what dbGetAllStartupData() reads at startup).
+  _persistSettings() {
+    var settings = this.state.settings;
+    if (window.Storage) window.Storage.set('settings', settings);
+    if (window.orbitAPI && window.orbitAPI.dbSetSetting) window.orbitAPI.dbSetSetting('settings', settings);
+  }
+
+  _setFolders(folders) {
+    var settings = { ...this.state.settings, chatFolders: folders };
+    this.setState({ settings: settings });
+    this._persistSettings();
+  }
+
+  getFolders() {
+    return (this.state.settings && this.state.settings.chatFolders) || [];
+  }
+
+  getFolderById(id) {
+    return this.getFolders().find(function(f) { return f.id === id; }) || null;
+  }
+
+  createFolder(name) {
+    name = String(name || '').trim();
+    if (!name) return null;
+    if (name.length > 32) name = name.substring(0, 32);
+    var id = 'folder_' + Date.now();
+    var folders = this.getFolders().concat([{ id: id, name: name, chatIds: [] }]);
+    this._setFolders(folders);
+    if (window.Toast) window.Toast.show('Folder Created', '"' + name + '" created');
+    return id;
+  }
+
+  renameFolder(id, name) {
+    name = String(name || '').trim();
+    if (!name) return;
+    if (name.length > 32) name = name.substring(0, 32);
+    var folders = this.getFolders().map(function(f) {
+      if (f.id === id) return { ...f, name: name };
+      return f;
+    });
+    this._setFolders(folders);
+  }
+
+  deleteFolder(id) {
+    var folders = this.getFolders().filter(function(f) { return f.id !== id; });
+    var settings = { ...this.state.settings, chatFolders: folders };
+    var patch = { settings: settings };
+    if (this.state.activeFolder === id) patch.activeFolder = null;
+    // Single atomic setState: subscribers see the folder removed AND the
+    // activeFolder reset in one pass — no intermediate render can reference
+    // the deleted folder, and the persist always runs after the state change.
+    this.setState(patch);
+    this._persistSettings();
+  }
+
+  addChatToFolder(folderId, chatKey) {
+    var key = { kind: chatKey.kind, id: chatKey.id };
+    var folders = this.getFolders().map(function(f) {
+      if (f.id !== folderId) return f;
+      if (f.chatIds.some(function(k) { return k && k.kind === key.kind && String(k.id) === String(key.id); })) return f;
+      return { ...f, chatIds: f.chatIds.concat([key]) };
+    });
+    this._setFolders(folders);
+  }
+
+  removeChatFromFolder(folderId, chatKey) {
+    var folders = this.getFolders().map(function(f) {
+      if (f.id !== folderId) return f;
+      return { ...f, chatIds: f.chatIds.filter(function(k) {
+        if (k && typeof k === 'object' && k.kind !== undefined) return !(k.kind === chatKey.kind && String(k.id) === String(chatKey.id));
+        // Legacy raw-string entries are treated as friend ids
+        return String(k) !== String(chatKey.id);
+      }) };
+    });
+    this._setFolders(folders);
+  }
+
+  isChatInFolder(folderId, chatKey) {
+    var folder = this.getFolderById(folderId);
+    if (!folder || !folder.chatIds) return false;
+    return folder.chatIds.some(function(k) {
+      if (k && typeof k === 'object' && k.kind !== undefined) return k.kind === chatKey.kind && String(k.id) === String(chatKey.id);
+      return String(k) === String(chatKey.id);
+    });
+  }
+
   editMessage(chatId, msgId, newText) {
     const msgs = { ...this.state.messages };
     if (msgs[chatId]) {
@@ -1371,7 +1463,17 @@ class Store {
   }
 
   notify(changedState) {
-    this.listeners.forEach(listener => listener(this.state, changedState));
+    // A throwing subscriber must never break the rest of the app: an exception
+    // here would escape through setState -> every mutating method -> the
+    // caller (e.g. ConfirmModal's onConfirm), leaving full-screen overlays
+    // stuck and the whole GUI unresponsive. Isolate each listener.
+    this.listeners.forEach(listener => {
+      try {
+        listener(this.state, changedState);
+      } catch (e) {
+        if (typeof console !== 'undefined' && console.error) console.error('[Store] subscriber error:', e);
+      }
+    });
   }
 }
 

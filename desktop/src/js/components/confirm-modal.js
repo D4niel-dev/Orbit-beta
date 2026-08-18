@@ -47,13 +47,22 @@ window.ConfirmModal = {
     };
 
     btnCancel.onclick = () => {
-      if (onCancel) onCancel();
-      close();
+      try {
+        if (onCancel) onCancel();
+      } finally {
+        close();
+      }
     };
 
     btnConfirm.onclick = () => {
-      if (onConfirm) onConfirm();
-      close();
+      // The overlay MUST always be removed, even if onConfirm throws —
+      // otherwise a stuck full-screen modal (z-index 10000) blocks the
+      // entire app UI.
+      try {
+        if (onConfirm) onConfirm();
+      } finally {
+        close();
+      }
     };
 
     footer.appendChild(btnCancel);

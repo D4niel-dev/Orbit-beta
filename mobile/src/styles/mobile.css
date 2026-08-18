@@ -2009,11 +2009,54 @@ textarea#chat-input {
   font-size: 13px;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
 }
+/* Folder-tab underline: keep the ::after bar (centered on the tab padding box)
+   under the label, and keep it inside the padding box so overflow:hidden
+   does not clip the base rule's bottom:-1px overhang. */
+.home-tab.home-tab-folder::after {
+  bottom: 0;
+}
+.home-tab.home-tab-folder.active::after {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 24px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--accent-primary);
+  transform: translateX(-50%) scaleX(1);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+/* Uniform fixed-width tabs (Friends | Groups | folders) when folders exist */
+#home-tabs.has-folders .home-tab {
+  flex: 0 0 auto;
+  width: 104px;
+  min-width: 0;
+  max-width: none;
+  font-size: 14px;
+  padding: 12px 8px 10px;
+}
+/* Mode 1 — exactly one folder: spread the three tabs edge-to-edge (Groups centered) */
+#home-tabs.has-folders.single-folder {
+  justify-content: space-between;
+}
+/* Mode 2 — 2+ folders: folder tabs scroll inside their own rail;
+   Friends/Groups stay transparent (no sticky/opaque backgrounds) */
+#home-tabs .folder-rail {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+#home-tabs .folder-rail::-webkit-scrollbar { display: none; }
+#home-tabs.has-folders.single-folder .folder-rail { flex: 0 0 auto; }
 /* ─── Folder Management Settings ─── */
 .settings-folder-row {
   display: flex;
