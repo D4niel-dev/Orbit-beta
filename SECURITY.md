@@ -11,7 +11,7 @@
 
 If you discover a security vulnerability in Orbit, please report it privately.
 
-**Do not** open a public GitHub issue. Instead, email: orbit.official.real@gmail
+**Do not** open a public GitHub issue. Instead, email: ```orbit.official.real@gmail```
 
 You can expect an acknowledgement within 48 hours and a detailed response within 5 business days.
 
