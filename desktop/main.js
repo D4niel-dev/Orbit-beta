@@ -504,6 +504,11 @@ app.whenReady().then(() => {
 
   // Periodic temp dir cleanup for orphaned files (every hour)
   setInterval(() => {
+    // Resumable-transfer TTL: drop transfer_state rows + partial files older
+    // than 24h (updatedAt). Runs regardless of privacy mode.
+    if (transferInstance && transferInstance.sweepStaleTransfers) {
+      transferInstance.sweepStaleTransfers(24 * 60 * 60 * 1000);
+    }
     if (globalDb && tempDirPath && fs.existsSync(tempDirPath)) {
       const settings = globalDb.getSetting('settings', {});
       if (settings.privacyMode === true) {
@@ -517,6 +522,13 @@ app.whenReady().then(() => {
             const stat = fs.statSync(filePath);
             if (now - stat.mtimeMs > maxAge) {
               fs.unlinkSync(filePath);
+              // L2: drop the matching transfer_state row too — the partial it
+              // references is gone, so keep the DB consistent (rows are keyed
+              // by fileId; temp files are named orbit_<fileId>).
+              if (transferInstance && transferInstance._deleteTransferRow) {
+                const rowFileId = f.indexOf('orbit_') === 0 ? f.slice(6) : f;
+                transferInstance._deleteTransferRow(rowFileId);
+              }
             }
           });
         } catch(e) { /* ignore cleanup errors */ }
@@ -930,7 +942,7 @@ app.whenReady().then(() => {
   function setupNetworkInstances() {
     if (socketInstance) return;
     socketInstance = new SocketManager(() => currentIdentity);
-    transferInstance = new TransferManager(socketInstance);
+    transferInstance = new TransferManager(socketInstance, { tempDir: tempDirPath, db: globalDb });
 
     transferInstance.onProgress = (fileId, progressData) => {
       if (mainWindow) {
@@ -950,8 +962,8 @@ app.whenReady().then(() => {
       } else if (packet.type === Protocol.Types.FILE_CHUNK) {
         transferInstance.handleChunk(packet);
       } else if (packet.type === Protocol.Types.FILE_TRANSFER_END) {
-        transferInstance.handleEnd(packet, (savedPath, fileName, fileId, fileSize) => {
-           mainWindow.webContents.send('file-received', { path: savedPath, name: fileName, sender: packet.from, fileId: fileId, size: fileSize });
+        transferInstance.handleEnd(packet, (savedPath, fileName, fileId, fileSize, type, mimeType) => {
+           mainWindow.webContents.send('file-received', { path: savedPath, name: fileName, sender: packet.from, fileId: fileId, size: fileSize, type: type || undefined, mimeType: mimeType || undefined });
         }, (errorMsg, fileId) => {
            console.error('File Transfer Error:', errorMsg);
            if (mainWindow) {
@@ -961,7 +973,18 @@ app.whenReady().then(() => {
       } else if (packet.type === Protocol.Types.FILE_TRANSFER_CANCEL) {
         transferInstance.handleCancel(packet);
         if (mainWindow) {
+          // Mirror the FILE_TRANSFER_RESUME forward (M4): the renderer chat
+          // path may own a send session for this fileId, so tell it to abort.
+          mainWindow.webContents.send('transfer-cancel', { fileId: packet.payload.fileId, senderId: packet.from });
           mainWindow.webContents.send('transfer-error', { fileId: packet.payload.fileId, error: 'Sender cancelled the transfer' });
+        }
+      } else if (packet.type === Protocol.Types.FILE_TRANSFER_RESUME) {
+        // Receiver → sender: the peer asks us to continue a partial transfer.
+        // If a main-process send session owns this fileId, resume internally;
+        // otherwise the renderer chat path may own it, so forward the packet.
+        const handled = transferInstance.handleResume(packet);
+        if (!handled && mainWindow) {
+          mainWindow.webContents.send('network-message', packet);
         }
       } else if (packet.type === Protocol.Types.FILE_TRANSFER_REJECT) {
         if (mainWindow) {
@@ -977,6 +1000,14 @@ app.whenReady().then(() => {
         }
       } else {
         mainWindow.webContents.send('network-message', packet);
+      }
+    });
+
+    // Reconnect hook: after the socket re-establishes with a peer, ask them to
+    // resume any partial chunked transfers they sent us (persisted or in-flight).
+    socketInstance.on('peer-connected', (peerId) => {
+      if (transferInstance) {
+        transferInstance.resumeIncompleteForPeer(peerId);
       }
     });
 

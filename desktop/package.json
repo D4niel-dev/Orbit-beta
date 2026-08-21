@@ -1,6 +1,6 @@
 {
   "name": "orbit-beta",
-  "version": "0.4.2-beta",
+  "version": "0.5.0-beta",
   "description": "Orbit P2P Chat Application",
   "author": "Orbit Team <hello@orbit.chat>",
   "repository": {
@@ -14,7 +14,7 @@
     "build:mac": "electron-builder --mac --publish never",
     "build:linux": "electron-builder --linux --publish never",
     "build:all": "electron-builder --win --mac --linux --publish never",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "playwright test"
   },
   "keywords": [],
   "license": "MIT",
@@ -35,6 +35,7 @@
   },
   "devDependencies": {
     "@capacitor/cli": "^8.3.4",
+    "@playwright/test": "^1.62.1",
     "electron": "^32.3.3",
     "electron-builder": "^26.8.1"
   }

@@ -215,6 +215,7 @@
   padding: 8px 16px;
   border: 1px solid transparent;
   transition: var(--transition);
+  position: relative; /* containing block for the voice recording bar */
 }
 
 .chat-input-wrapper:focus-within {
@@ -275,6 +276,106 @@ textarea.chat-input-field {
 }
 textarea.chat-input-field::-webkit-scrollbar {
   width: 4px;
+}
+
+/* ── Voice Recording Bar (floats above the chat input while recording) ── */
+.voice-rec-bar {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: none;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 8px 0 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  animation: voiceBarIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes voiceBarIn {
+  from { opacity: 0; transform: translateY(6px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.voice-rec-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ef4444;
+  flex-shrink: 0;
+  animation: voicePulse 1s ease-in-out infinite;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
+}
+@keyframes voicePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.85); }
+}
+
+#voice-rec-timer {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  min-width: 32px;
+  flex-shrink: 0;
+}
+
+.voice-rec-meter {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  justify-content: space-between;
+  flex: 1;
+  height: 28px;
+  min-width: 40px;
+}
+.voice-rec-meter-bar {
+  width: 4px;
+  height: 4%;
+  border-radius: 2px;
+  background: var(--border-subtle);
+  transition: height 70ms ease, background-color 70ms ease;
+}
+.voice-rec-meter-bar.active {
+  background: var(--accent-primary);
+}
+
+/* Bar buttons live inside .chat-input-wrapper — beat its generic button rules */
+.chat-input-wrapper .voice-rec-btn {
+  width: auto;
+  height: 28px;
+  border-radius: 10px;
+  padding: 0 8px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text-muted);
+  background: transparent;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  transition: var(--transition);
+}
+.chat-input-wrapper .voice-rec-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+.chat-input-wrapper .voice-rec-btn-cancel:hover {
+  color: var(--accent-danger);
+}
+.chat-input-wrapper .voice-rec-btn-stop {
+  color: #fff;
+  background: var(--accent-danger);
+  font-weight: 600;
+}
+.chat-input-wrapper .voice-rec-btn-stop:hover {
+  color: #fff;
+  background: var(--accent-danger);
+  filter: brightness(1.12);
 }
 
 /* Enhanced Hover & Transition Feedback */
@@ -451,7 +552,9 @@ button:active,
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 2px 12px;
+  padding: 2px 12px 6px;
+  position: relative;
+  z-index: 1;
 }
 
 .oap-btn {
@@ -498,7 +601,7 @@ button:active,
 .oap-seek {
   position: relative;
   height: 20px;
-  padding: 0 14px;
+  padding: 0 12px;
   cursor: pointer;
 }
 
@@ -518,21 +621,16 @@ button:active,
   right: 0;
   height: 4px;
   border-radius: 2px;
-  background: var(--bg-hover, rgba(128,128,128,0.55));
-  /* 1px ring instead of border: keeps the 4px groove height (no layout shift) */
-  box-shadow: 0 0 0 1px rgba(255,255,255,0.10);
+  background: rgba(128, 128, 128, 0.35);
   pointer-events: none;
 }
 
 .oap-seek-fill {
   position: absolute;
   left: 0;
-  top: 50%;
   height: 4px;
-  min-width: 2px; /* accent nub at 0% progress so the seek bar is always visible */
-  transform: translateY(-50%);
   border-radius: 2px;
-  background: var(--accent-primary, #0A84FF);
+  background: var(--accent-primary);
   pointer-events: none;
   transition: width 0.1s linear;
 }
@@ -555,7 +653,7 @@ button:active,
   bottom: 100%;
   left: 0;
   transform: translateY(-4px);
-  background: var(--bg-hover);
+  background: var(--bg-surface);
   color: var(--text-primary);
   font-size: 11px;
   font-family: var(--font-mono);
@@ -1550,4 +1648,55 @@ button:active,
   text-overflow: ellipsis;
   pointer-events: none;
   z-index: 2;
+}
+
+/* === Message threading (reply chains) === */
+
+/* Threaded reply: subtle left indent + vertical chain connector (mirrored for own messages) */
+.msg-threaded {
+  margin-left: 14px;
+  padding-left: 12px;
+  border-left: 2px solid var(--border-subtle);
+}
+.message-own .msg-threaded {
+  margin-left: 0;
+  margin-right: 14px;
+  padding-left: 0;
+  padding-right: 12px;
+  border-left: none;
+  border-right: 2px solid var(--border-subtle);
+}
+
+/* "N replies" chip below a message that has replies */
+.msg-thread-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-hover);
+  color: var(--accent-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.msg-thread-chip:hover {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: #fff;
+}
+.msg-thread-chip svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* Thread panel rows */
+.thread-row {
+  transition: background 0.15s ease;
+}
+.thread-row:hover {
+  background: var(--bg-hover);
 }

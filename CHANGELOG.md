@@ -1,5 +1,36 @@
 # Orbit Changelog
 
+## v0.5.0-beta — **Stable Release**
+
+### Features
+
+- **Resumable P2P File Transfers (Desktop)** — New `FILE_TRANSFER_RESUME` protocol (receiver → sender, with partial-file hash verification) lets an interrupted chunked transfer continue from the last contiguous 64KB chunk instead of restarting. Migration v13 persists `transfer_state` rows (partial chunk counts + 24h TTL sweep); partial transfers auto-resume when the peer reconnects, and mid-stream resume rewinds the sender's chunk generator in place.
+- **Voice-Note Type Stamps** — Senders now stamp `type`/`mimeType` in `FILE_TRANSFER_START`; receivers honor explicit image/video/audio stamps over extension inference, so voice clips (named `*.webm`) stay classified as audio end-to-end.
+- **Voice Recorder Level Meter (Desktop)** — Recording now shows a live 32-bar level meter (AnalyserNode, 0–6kHz voice range) in a floating bar above the chat input, with timer, cancel, and stop-and-send controls.
+- **Android Mic Permissions** — `RECORD_AUDIO` + `MODIFY_AUDIO_SETTINGS` added to the manifest so WebView `getUserMedia` works for voice memos and the QR camera.
+- **Playwright E2E Suite + CI** — New `desktop/tests/e2e/` suite (echo chat, folders, theme, settings, persistence, navigation) with `playwright.config.js`, wired into the `tests.yml` GitHub Actions workflow on pull requests.
+- **Network Topology Visualizer (Desktop)** — Live canvas map in Settings → Network: your node sits at center with peers orbiting by hash angle, RTT color-coded edges (green <150ms / yellow / red via new `_rtts` PING/PONG tracking), transfer pulse badges, and activity flashes. Redraws every 250ms, DPR-scaled; also fixed the dead `_p2pSentCount` counter feeding the stats.
+- **Network Topology Visualizer (Mobile)** — Same canvas map in the Settings → Network section, redrawn on a 1s interval gated to overlay visibility, distinguishing connected vs known peers, with transfer pulses driven by `activeTransfers`/`activeSends`.
+- **Message Threading (Desktop)** — Migration v14 adds a `messages.replyTo` column so replies persist across restart. Thread chains render indented with a connector line (`.msg-threaded`), parents show an "N replies" chip, and right-click → View thread opens a panel with the root message plus the full chain and click-to-jump navigation.
+- **Message Threading (Mobile)** — Same thread UI adapted for touch: `.msg-threaded` indent + connector, reply chips on parents, and a View thread slide-in overlay (`panel-thread-overlay`) with tap-to-jump.
+- **Local Vault (Mobile)** — New Settings → Connection → Local Vault exports ALL `orbit_*` localStorage keys plus IndexedDB `OrbitBlobStore` blobs/partials to `vault/OrbitVault-*.json` in `Directory.Data`. Optional PBKDF2 (100k iterations) + AES-GCM encryption, restore picker with decrypt prompt, and auto-backup hooked to app-background events.
+- **Group Slash Commands (Both Platforms, Group-Only)** — 19 commands: `/help`, `/poll` (`/pool` alias), `/me`, `/shrug`, `/tableflip`, `/unflip`, `/lenny`, `/roll`, `/flip`, `/spoiler`, `/clear`, `/invite`, `/members` (`/list`), `/topic`, `/leave`, `/shout`, `/countdown`, `/nick`, `/kick` (`/remove`). All gated to group chats only ("Slash commands only work in group chats" toast in DMs). `/poll` opens a UX-friendly poll builder modal/sheet (question + 2–6 options, add/remove rows) or accepts instant quoted syntax `/poll "Q?" "O1" "O2"`. `/invite` shows a code sheet with Copy + Share buttons. `/members` renders a roster with roles and online dots. `/topic` updates the group description (owner/admin only). `/leave` confirms, then broadcasts GROUP_LEAVE. `/nick` sets a per-group nickname. `/kick` removes a member (owner/admin only).
+
+### Bug Fixes
+
+- **/help Not Working in Mobile Groups Fixed** — Bare `OrbitSheet` reference hardened to `window.OrbitSheet` with a fallback, HTML output escaped, and the stale WebView cache busted.
+- **Desktop Slash Commands Missing Entirely** — Full parity implementation added, matching the mobile command set.
+- **Poll Builder Not Centered in Mobile Bottom Sheet** — `margin: 0 auto` fix, also applied to the invite and members sheets.
+- **Duplicate Cancel Button in Poll Sheet Removed** — The bottom sheet already provides a cancel pill.
+- **Invite Share Button Misbehaving (Mobile Slash Commands + Group Info, Both Platforms)** — The Share button sent the invite as a chat message into whatever chat was open, or refused when viewing the group itself. It now opens the system share sheet (`navigator.share`) with a clipboard fallback ("Invite text copied — share it anywhere").
+- **Music Visualizer Duration Line Mismatched Video Player (Desktop)** — Harmonized audio-player seek bar with the video player: `.oap-seek` padding 14→12px, flat track groove `rgba(128,128,128,0.35)` without ring, simplified fill, `bg-surface` thumb tip, and ctrl padding `2px 12px 6px`.
+- **Vault Relocated in Mobile Settings** — Moved next to Network in the Connection category (was under System).
+
+### Technical
+
+- **Version:** Bumped to v0.5.0-beta across all three `package.json` files.
+- **Mobile Sync:** `npm run mobile:sync` regenerated `version.js` and the Android web-asset bundle.
+
 ## v0.4.2-beta
 
 > **Note:** Feature release — experimental Chat Folders on desktop, folder tab polish on mobile.

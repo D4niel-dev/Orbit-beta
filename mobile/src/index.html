@@ -24,7 +24,7 @@
   <link rel="stylesheet" href="styles/base.css">
   <link rel="stylesheet" href="styles/components.css?v=20260801">
   <link rel="stylesheet" href="styles/animations.css?v=20260801">
-  <link rel="stylesheet" href="styles/mobile.css?v=20260804">
+  <link rel="stylesheet" href="styles/mobile.css?v=20260820">
 
   <!-- Syntax Highlighting (Prism) -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
@@ -231,6 +231,16 @@
       <div id="gallery-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
     </aside>
 
+    <!-- Thread Panel (slide-in overlay) -->
+    <div id="thread-overlay-backdrop" class="overlay-backdrop" style="display:none;"></div>
+    <aside id="panel-thread-overlay" class="overlay-panel">
+      <div class="overlay-panel-header">
+        <button id="btn-close-thread"><i data-lucide="x"></i></button>
+        <h3 id="thread-overlay-title">Thread</h3>
+      </div>
+      <div id="thread-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
+    </aside>
+
     <!-- Group Members Panel (slide-in overlay) -->
     <div id="members-overlay-backdrop" class="overlay-backdrop" style="display:none;"></div>
     <div id="image-preview-overlay">
@@ -325,10 +335,10 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
 
   <!-- Data Store -->
-  <script src="js/version.js?v=20260801"></script>
+  <script src="js/version.js?v=20260819"></script>
   <script src="js/store.js?v=20260804"></script>
 
-  <script src="js/components/bottom-sheet.js?v=20260801"></script>
+  <script src="js/components/bottom-sheet.js?v=20260821"></script>
 
   <!-- Lazy-load image cropper (defined early so app.js can use it; loads async after startup) -->
   <script>
@@ -352,7 +362,7 @@
   setTimeout(function() { window._loadImageCropper(); }, 1500);
   </script>
 
-  <script src="js/app.js?v=20260818"></script>
+  <script src="js/app.js?v=20260827"></script>
 
   <!-- v0.2.8 Components -->
   <script src="js/components/navigation.js"></script>

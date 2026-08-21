@@ -48,7 +48,7 @@ class OrbitDatabase {
       // Messages
       getMessages: this.db.prepare('SELECT * FROM messages WHERE chatId = ? ORDER BY timestamp ASC'),
       getAllMessagesRaw: this.db.prepare('SELECT * FROM messages'),
-      addMessage: this.db.prepare('INSERT INTO messages (id, chatId, sender, text, timestamp) VALUES (@id, @chatId, @sender, @text, @timestamp)'),
+      addMessage: this.db.prepare('INSERT INTO messages (id, chatId, sender, text, timestamp, replyTo) VALUES (@id, @chatId, @sender, @text, @timestamp, @replyTo)'),
       editMessage: this.db.prepare('UPDATE messages SET text = ? WHERE id = ? AND chatId = ?'),
       deleteMessage: this.db.prepare('DELETE FROM messages WHERE id = ? AND chatId = ?'),
       
@@ -332,6 +332,7 @@ class OrbitDatabase {
         sender: m.sender,
         text: m.text,
         timestamp: m.timestamp,
+        replyTo: m.replyTo != null ? m.replyTo : undefined,
         attachments: attachments.length > 0 ? attachments : undefined
       };
     });
@@ -356,6 +357,7 @@ class OrbitDatabase {
         sender: m.sender,
         text: m.text,
         timestamp: m.timestamp,
+        replyTo: m.replyTo != null ? m.replyTo : undefined,
         attachments: attachments.length > 0 ? attachments : undefined
       });
     });
@@ -383,6 +385,7 @@ class OrbitDatabase {
         sender: m.sender,
         text: m.text,
         timestamp: m.timestamp,
+        replyTo: m.replyTo != null ? m.replyTo : undefined,
         attachments: attachments.length > 0 ? attachments : undefined
       });
     });
@@ -399,7 +402,8 @@ class OrbitDatabase {
           chatId: chatId,
           sender: msg.sender,
           text: msg.text || '',
-          timestamp: msg.timestamp || new Date().toISOString()
+          timestamp: msg.timestamp || new Date().toISOString(),
+          replyTo: msg.replyTo != null ? String(msg.replyTo) : null
         });
       } catch (e) {
         if (e.code !== 'SQLITE_CONSTRAINT_PRIMARYKEY') throw e;
@@ -725,7 +729,8 @@ class OrbitDatabase {
                 chatId: chatId,
                 sender: m.sender,
                 text: m.text || '',
-                timestamp: m.timestamp
+                timestamp: m.timestamp,
+                replyTo: m.replyTo != null ? String(m.replyTo) : null
               });
               
               if (m.attachments && Array.isArray(m.attachments)) {
@@ -1067,8 +1072,15 @@ class OrbitDatabase {
 
         // Restore messages
         if (data.messages) {
-          const stmt = this.db.prepare('INSERT OR REPLACE INTO messages (id, chatId, sender, text, timestamp) VALUES (@id, @chatId, @sender, @text, @timestamp)');
-          data.messages.forEach(m => stmt.run(m));
+          const stmt = this.db.prepare('INSERT OR REPLACE INTO messages (id, chatId, sender, text, timestamp, replyTo) VALUES (@id, @chatId, @sender, @text, @timestamp, @replyTo)');
+          data.messages.forEach(m => stmt.run({
+            id: m.id,
+            chatId: m.chatId,
+            sender: m.sender,
+            text: m.text,
+            timestamp: m.timestamp,
+            replyTo: m.replyTo != null ? String(m.replyTo) : null
+          }));
         }
 
         // Restore attachments

@@ -1,11 +1,79 @@
 // src/js/views/chat-panel.js
 
+/* ---- Slash Command Registry (mirrors mobile/src/js/app.js:14-26) ---- */
+var CHAT_COMMANDS = [
+  { name: '/help', desc: 'Show all available commands', usage: '/help', handler: 'help' },
+  { name: '/poll', desc: 'Create a poll in the group', usage: '/poll "Question?" "Option1" "Option2" ...', handler: 'poll' },
+  { name: '/me', desc: 'Write in third person', usage: '/me waves', handler: 'me' },
+  { name: '/shrug', desc: 'Add a shrug', usage: '/shrug', handler: 'shrug' },
+  { name: '/tableflip', desc: 'Flipping tables', usage: '/tableflip', handler: 'tableflip' },
+  { name: '/unflip', desc: 'Unflip the table', usage: '/unflip', handler: 'unflip' },
+  { name: '/lenny', desc: '( ͡° ͜ʖ ͡°)', usage: '/lenny', handler: 'lenny' },
+  { name: '/roll', desc: 'Roll a die', usage: '/roll 6', handler: 'roll' },
+  { name: '/flip', desc: 'Flip a coin', usage: '/flip', handler: 'flip' },
+  { name: '/spoiler', desc: 'Send text as spoiler', usage: '/spoiler secret text', handler: 'spoiler' },
+  { name: '/clear', desc: 'Clear chat messages (local)', usage: '/clear', handler: 'clear' },
+  { name: '/invite', desc: 'Show group invite code', usage: '/invite', handler: 'invite' },
+  { name: '/members', desc: 'List group members', usage: '/members', handler: 'members' },
+  { name: '/topic', desc: 'Set group description (owner/admin)', usage: '/topic New description', handler: 'topic' },
+  { name: '/leave', desc: 'Leave current group', usage: '/leave', handler: 'leave' },
+  { name: '/shout', desc: 'Send announcement', usage: '/shout <message>', handler: 'shout' },
+  { name: '/countdown', desc: 'Countdown then send message', usage: '/countdown 5 Go!', handler: 'countdown' },
+  { name: '/nick', desc: 'Set your nickname in this group', usage: '/nick <new name>', handler: 'nick' },
+  { name: '/kick', desc: 'Remove member from group (owner/admin)', usage: '/kick <username>', handler: 'kick' }
+];
+
 window.ChatPanel = {
   init() {
     this.container = document.getElementById('chat-container');
     this.stagedFiles = [];
     this.replyingTo = null; // { id, sender, text }
     this.editingMsg = null; // { id, chatId, text }
+    // Resumable file transfer state (renderer sender path):
+    // _sendSessions: fileId → pinned { data, name, type, mimeType, size, totalChunks,
+    //   hash, recipients, isGroup, chatId, startPayload, _sending } kept for the app
+    //   session so a FILE_TRANSFER_RESUME can re-send from an offset.
+    // _resumeRequests: fileId → receivedCount requested mid-loop (rewind flag).
+    this._sendSessions = {};
+    this._resumeRequests = {};
+
+    // M4: main → renderer — the peer cancelled a transfer. Mark every
+    // matching send session cancelled (keys may be per-recipient prefixed,
+    // so match by "starts with fileId"); the chunk loop observes the flag
+    // and aborts, mirroring the mobile activeSends handling.
+    if (window.orbitAPI && window.orbitAPI.on) {
+      var selfCancel = this;
+      window.orbitAPI.on('transfer-cancel', function(data) {
+        if (!data || !data.fileId) return;
+        var fid = String(data.fileId);
+        Object.keys(selfCancel._sendSessions).forEach(function(key) {
+          if (key.indexOf(fid) === 0) selfCancel._sendSessions[key].cancelled = true;
+        });
+        console.log('[ChatPanel] Incoming FILE_TRANSFER_CANCEL for ' + fid + ' (sender ' + (data.senderId || '?') + ') — aborting matching send session(s)');
+      });
+    }
+
+    // Voice memo recorder state — lives on the panel object so it survives
+    // chat re-renders (renderChat rebuilds the input DOM each store change).
+    this._voiceState = {
+      isRecording: false,   // MediaRecorder actively capturing
+      pendingStart: false,  // getUserMedia in flight
+      holding: false,       // pointer currently down on the mic button
+      pressStart: 0,        // pointerdown timestamp (hold detection)
+      stageOnRelease: false,// hold release happened before stream ready — stage once started
+      suppressClick: true,  // swallow the click that follows a pointer interaction
+      cancelPending: false, // next onstop should discard chunks
+      stream: null,         // active getUserMedia stream
+      mediaRecorder: null,  // active MediaRecorder
+      srcNode: null,        // MediaStreamAudioSourceNode (disconnected on stop)
+      audioChunks: [],      // collected dataavailable chunks
+      analyser: null,       // AnalyserNode for the live level meter
+      audioCtx: null,       // shared AudioContext (created lazily)
+      _meterData: null,     // reusable Uint8Array for analyser reads
+      startTime: null,      // recording start (ms epoch)
+      timerInterval: null,  // mm:ss timer updater
+      meterInterval: null   // level-meter updater
+    };
     
     // Delegated click handler — attached ONCE in init
 
@@ -376,6 +444,17 @@ window.ChatPanel = {
         return;
       }
       
+      // Thread chip click — open the thread panel
+      var threadChip = e.target.closest('.msg-thread-chip');
+      if (threadChip) {
+        var threadMsgId = threadChip.getAttribute('data-thread-msg-id');
+        if (threadMsgId) {
+          var st = window.store.getState();
+          self.showThreadPanel(st.activeChatId, threadMsgId);
+        }
+        return;
+      }
+      
       // Image attachment click — open in viewer
       var imageDiv = e.target.closest('[data-open-image]');
       if (!imageDiv) {
@@ -498,6 +577,12 @@ window.ChatPanel = {
           self.showForwardModal(msg.id);
         } },
       ];
+      var hasReplies = msgs.some(function(m) { return m.replyTo != null && String(m.replyTo) === String(msg.id); });
+      if (msg.replyTo || hasReplies) {
+        items.push({ label: 'View thread', action: 'thread', icon: 'list-tree', onClick: function() {
+          self.showThreadPanel(state.activeChatId, msg.id);
+        } });
+      }
       var pinnedMsgs = window.store.getPinnedMessages(state.activeChatId);
       var isPinned = pinnedMsgs.some(function(p) { return String(p.msgId) === String(msg.id); });
       if (isPinned) {
@@ -583,6 +668,34 @@ window.ChatPanel = {
 
     const messages = state.messages[state.activeChatId] || [];
     const myId = state.currentUser.userId;
+
+    // Thread map for this render pass: msgById (String keys) + replyMap (parentId -> direct replies),
+    // plus threadCounts (rootId -> total messages in the chain, incl. nested replies).
+    // Keys are always String() since own message ids are strings and incoming ones are numeric.
+    var msgById = {};
+    var replyMap = {};
+    for (var _im = 0; _im < messages.length; _im++) {
+      msgById[String(messages[_im].id)] = messages[_im];
+      if (messages[_im].replyTo != null) {
+        var _pid = String(messages[_im].replyTo);
+        if (!replyMap[_pid]) replyMap[_pid] = [];
+        replyMap[_pid].push(messages[_im]);
+      }
+    }
+    var threadCounts = {};
+    for (var _cm = 0; _cm < messages.length; _cm++) {
+      if (messages[_cm].replyTo == null) continue;
+      var _cur = messages[_cm];
+      var _seen = {};
+      while (_cur && _cur.replyTo != null && !_seen[String(_cur.id)]) {
+        _seen[String(_cur.id)] = true;
+        _cur = msgById[String(_cur.replyTo)] || null;
+      }
+      if (_cur && _cur.replyTo == null) {
+        var _rootId = String(_cur.id);
+        threadCounts[_rootId] = (threadCounts[_rootId] || 0) + 1;
+      }
+    }
 
     this.container.style.display = 'flex';
     this.container.style.flexDirection = 'column';
@@ -695,6 +808,14 @@ window.ChatPanel = {
           '</div>';
         }
       }
+
+      // Thread chip — shown below messages that have replies in their chain
+      var threadCount = threadCounts[String(msg.id)] || 0;
+      var threadChipHtml = threadCount > 0
+        ? '<button class="msg-thread-chip" data-thread-msg-id="' + msg.id + '" title="View thread (' + threadCount + ' repl' + (threadCount > 1 ? 'ies' : 'y') + ')">' +
+            '<i data-lucide="list-tree" style="width:13px;height:13px;"></i> ' + threadCount + ' repl' + (threadCount > 1 ? 'ies' : 'y') +
+          '</button>'
+        : '';
 
       let attachmentsHtml = '';
       if (msg.attachments && msg.attachments.length > 0) {
@@ -813,13 +934,14 @@ window.ChatPanel = {
           '<div style="padding-bottom: 10px; display:' + (showAvatars ? 'flex' : 'none') + ';">' +
             '<div class="avatar avatar-sm msg-avatar" data-user-id="' + state.currentUser.userId + '" style="margin-left: var(--spacing-sm); flex-shrink: 0; cursor:pointer;">' + myAvatarContainer + '</div>' +
           '</div>' +
-          '<div style="max-width: 65%; display:flex; flex-direction:column; align-items:flex-end;">' +
+          '<div class="' + (msg.replyTo ? 'msg-threaded ' : '') + '" style="max-width: 65%; display:flex; flex-direction:column; align-items:flex-end;">' +
             senderName +
             '<div class="message-bubble" data-msg-id="' + msg.id + '" data-debug="Bubble: ' + msg.id + '" style="position:relative;' + bubbleBgMine + ' ' + bubblePadding + ' border-radius: 16px 16px 0 16px; line-height: 1.4; font-size: 14px; cursor:context-menu; max-width: 100%;">' +
               '<div class="message-id" style="display:none;font-size:9px;font-family:monospace;color:rgba(255,255,255,0.4);margin-bottom:2px;">#' + String(msg.id).substring(0, 8) + '</div>' +
             actionsBar + replyHtml + attachmentsHtml + '<div class="msg-text">' + sanitizedText + '</div>' + linkPreviewHtml + editedBadge +
             (reactionsHtml ? '<div style="border-top:1px solid rgba(255,255,255,0.15);margin-top:8px;padding-top:6px;">' + reactionsHtml + '</div>' : '') +
           '</div>' +
+          threadChipHtml +
           '<div style="font-size: 12px; color: var(--text-muted); margin-top: 4px; align-self: flex-start; margin-left: 4px;">' + timeStr + readHtml + '</div>' +
           '</div>' +
         '</div>';
@@ -851,13 +973,14 @@ window.ChatPanel = {
         var otherAvatarContainer = '<div style="position:relative;display:inline-block;">' + avatarImg + (senderFrame ? '<img src="icons/frames/pfp_frame_' + senderFrame + '.png" style="position:absolute;top:-14%;left:-14%;width:122%;height:122%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '') + '</div>';
         messagesHtml += '<div class="message-row" data-msg-id="' + msg.id + '"' + _animAttr + ' data-debug="MsgID: ' + msg.id + ' Sender: ' + window.Sanitize.escapeHtml(msg.sender) + ' TS: ' + msg.timestamp + '" style="display:flex; margin-bottom: var(--spacing-md);">' +
           '<div class="avatar avatar-sm msg-avatar" data-user-id="' + msg.sender + '" style="margin-right: var(--spacing-sm); margin-top: 4px; flex-shrink: 0; cursor:pointer;' + (showAvatars ? '' : 'display:none;') + '">' + otherAvatarContainer + '</div>' +
-          '<div style="max-width: 65%; display:flex; flex-direction:column; align-items:flex-start;">' +
+          '<div class="' + (msg.replyTo ? 'msg-threaded ' : '') + '" style="max-width: 65%; display:flex; flex-direction:column; align-items:flex-start;">' +
             '<div style="font-size: 11px; color: var(--text-secondary); font-weight: 500; margin-bottom: 2px; margin-left: 4px;">' + senderName + '</div>' +
             '<div class="message-bubble" data-msg-id="' + msg.id + '" data-debug="Bubble: ' + msg.id + '" style="position:relative;' + bubbleBgOther + ' ' + bubblePadding + ' border-radius: 0 16px 16px 16px; line-height: 1.4; font-size: 14px; cursor:context-menu; max-width: 100%;">' +
               '<div class="message-id" style="display:none;font-size:9px;font-family:monospace;color:var(--text-muted);margin-bottom:2px;">#' + String(msg.id).substring(0, 8) + '</div>' +
               actionsBar + replyHtml + attachmentsHtml + '<div class="msg-text">' + sanitizedText + '</div>' + linkPreviewHtml + editedBadgeOther +
               (reactionsHtml ? '<div style="border-top:1px solid var(--border-subtle);margin-top:8px;padding-top:6px;">' + reactionsHtml + '</div>' : '') +
             '</div>' +
+            threadChipHtml +
             '<div style="font-size: 12px; color: var(--text-muted); margin-top: 4px; align-self: flex-end; margin-right: 4px;">' + timeStr + '</div>' +
           '</div>' +
         '</div>';
@@ -1355,6 +1478,13 @@ window.ChatPanel = {
       input.addEventListener('input', function() {
         this.style.height = 'auto';
         this.style.height = Math.min(this.scrollHeight, 200) + 'px';
+        // ---- Slash command suggestion tooltip (parity with mobile 9035-9039) ----
+        var iv = this.value;
+        if (iv.indexOf('/') === 0 && !iv.includes(' ')) {
+          self.showSlashTooltip(iv);
+        } else {
+          self.hideSlashTooltip();
+        }
         // Debounced draft save
         if (self._draftTimer) clearTimeout(self._draftTimer);
         self._draftTimer = setTimeout(function() {
@@ -1391,49 +1521,54 @@ window.ChatPanel = {
 
     var btnMic = document.getElementById('btn-mic');
     if (btnMic) {
-      btnMic.addEventListener('click', function() {
-        if (self.mediaRecorder && self.mediaRecorder.state === 'recording') {
-          self.mediaRecorder.stop();
-          btnMic.style.color = '';
-          btnMic.innerHTML = '<i data-lucide="mic"></i>';
-          if (window.lucide) window.lucide.createIcons({ root: btnMic });
-        } else {
-          navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
-            self.mediaRecorder = new MediaRecorder(stream);
-            self.audioChunks = [];
-            self.mediaRecorder.ondataavailable = function(e) {
-              if (e.data.size > 0) self.audioChunks.push(e.data);
-            };
-            self.mediaRecorder.onstop = function() {
-              stream.getTracks().forEach(track => track.stop());
-              var blob = new Blob(self.audioChunks, { type: 'audio/webm' });
-              if (blob.size > 0) {
-                var file = new File([blob], 'VoiceMemo_' + Date.now() + '.webm', { type: 'audio/webm' });
-                var entry = {
-                  file: file,
-                  path: file.name,
-                  name: file.name,
-                  size: file.size,
-                  mimeType: file.type,
-                  type: 'audio',
-                  url: URL.createObjectURL(file),
-                  width: 0,
-                  height: 0
-                };
-                self.stagedFiles.push(entry);
-                self.renderPreviewArea();
-              }
-            };
-            self.mediaRecorder.start();
-            btnMic.style.color = 'var(--accent-danger)';
-            btnMic.innerHTML = '<i data-lucide="square" style="fill:var(--accent-danger);"></i>';
-            if (window.lucide) window.lucide.createIcons({ root: btnMic });
-          }).catch(function(err) {
-            console.error('Microphone access denied or error:', err);
-            if (window.Toast) window.Toast.show('Microphone Error', 'Could not access microphone: ' + err.message, 'error', 3000);
-          });
-        }
+      btnMic.title = 'Voice memo — hold to record, release to send. Quick click for Stop/Cancel controls.';
+
+      // Press = start recording (hold-to-record primary; quick click = toggle mode).
+      btnMic.addEventListener('pointerdown', function(e) {
+        e.preventDefault();
+        var vs = self._voiceState;
+        if (vs.isRecording || vs.pendingStart) return; // guard double-start
+        vs.pressStart = Date.now();
+        vs.holding = true;
+        vs.suppressClick = true;
+        try { btnMic.setPointerCapture(e.pointerId); } catch (err) {}
+        self._startVoiceRecording();
       });
+
+      // Release = stop + stage (hold >= 300ms) OR keep recording with the
+      // control bar (quick click < 300ms → click-toggle mode).
+      var releaseVoice = function() {
+        var vs = self._voiceState;
+        if (!vs.holding) return;
+        vs.holding = false;
+        var held = Date.now() - vs.pressStart;
+        if (held < 300) {
+          // Quick click — recording continues; show the bar with Stop/Cancel
+          self._showVoiceBar();
+        } else {
+          // Hold-to-record — stop and stage the clip on release
+          if (vs.isRecording) {
+            self._stopVoiceRecording(false);
+          } else {
+            vs.stageOnRelease = true; // stream still pending — stage once it starts
+          }
+        }
+      };
+      btnMic.addEventListener('pointerup', releaseVoice);
+      btnMic.addEventListener('pointercancel', releaseVoice);
+      btnMic.addEventListener('pointerleave', releaseVoice);
+
+      // Keyboard activation only (pointer paths set suppressClick and are
+      // handled above) — starts recording in click-toggle mode.
+      btnMic.addEventListener('click', function() {
+        var vs = self._voiceState;
+        if (vs.suppressClick) { vs.suppressClick = false; return; }
+        if (vs.isRecording || vs.pendingStart) return;
+        self._startVoiceRecording();
+      });
+
+      // Re-apply recording UI after a chat re-render (renderChat rebuilds the input DOM)
+      self._syncVoiceBar();
     }
 
     var btnPlus = document.getElementById('btn-plus');
@@ -1639,6 +1774,246 @@ window.ChatPanel = {
       text: 'file-text'
     };
     return map[fileType] || 'file';
+  },
+
+  /* ── Voice memo recording (parity with mobile _voiceRecorder) ── */
+
+  _getVoiceMimeType() {
+    if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported) {
+      if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) return 'audio/webm;codecs=opus';
+      if (MediaRecorder.isTypeSupported('audio/webm')) return 'audio/webm';
+      if (MediaRecorder.isTypeSupported('audio/mp4')) return 'audio/mp4';
+    }
+    return 'audio/webm';
+  },
+
+  _startVoiceRecording() {
+    var self = this;
+    var vs = this._voiceState;
+    if (vs.isRecording || vs.pendingStart) return; // guard double-start
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      if (window.Toast) window.Toast.show('Microphone Error', 'Microphone recording is not supported in this browser', 'error', 3000);
+      return;
+    }
+    vs.pendingStart = true;
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
+      vs.pendingStart = false;
+      vs.stream = stream;
+      vs.audioChunks = [];
+      vs.startTime = Date.now();
+      vs.cancelPending = false;
+
+      var mimeType = self._getVoiceMimeType();
+      var recorder;
+      try {
+        recorder = new MediaRecorder(stream, { mimeType: mimeType });
+      } catch (e) {
+        recorder = new MediaRecorder(stream); // fallback: browser default
+      }
+      vs.mediaRecorder = recorder;
+
+      recorder.ondataavailable = function(e) {
+        if (e.data && e.data.size > 0) vs.audioChunks.push(e.data);
+      };
+
+      recorder.onstop = function() {
+        // Stop all mic tracks — idempotent with _stopVoiceRecording's backstop
+        stream.getTracks().forEach(function(t) { try { t.stop(); } catch (e) {} });
+        vs.stream = null;
+        vs.mediaRecorder = null;
+        // Release the MediaStreamAudioSourceNode — it would otherwise stay
+        // connected to the analyser forever (one leak per recording).
+        if (vs.srcNode) { try { vs.srcNode.disconnect(); } catch (e) {} vs.srcNode = null; }
+        if (vs.cancelPending) { vs.cancelPending = false; vs.audioChunks = []; return; }
+        if (vs.audioChunks.length === 0) return;
+        var blob = new Blob(vs.audioChunks, { type: mimeType });
+        vs.audioChunks = [];
+        if (blob.size > 0) {
+          // Derive the extension from the actual blob type (mp4-capable
+          // Chromium builds record audio/mp4) — mirrors mobile app.js.
+          var ext = blob.type.indexOf('mp4') !== -1 ? '.mp4' : '.webm';
+          var file = new File([blob], 'VoiceMemo_' + Date.now() + ext, { type: blob.type });
+          self.stagedFiles.push({
+            file: file,
+            path: file.name,
+            name: file.name,
+            size: file.size,
+            mimeType: file.type,
+            type: 'audio',
+            url: URL.createObjectURL(file),
+            width: 0,
+            height: 0
+          });
+          self.renderPreviewArea();
+          if (window.Toast) window.Toast.show('Voice Memo', 'Voice message recorded', 'success', 2500);
+        }
+      };
+
+      recorder.onerror = function() {
+        self._stopVoiceRecording(true);
+        if (window.Toast) window.Toast.show('Voice Memo', 'Recording failed', 'error', 3000);
+      };
+
+      // Live level meter — same AnalyserNode pattern as shared/ui/audio-player.js
+      try {
+        if (!vs.audioCtx) vs.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (vs.audioCtx.state === 'suspended') vs.audioCtx.resume().catch(function() {});
+        vs.srcNode = vs.audioCtx.createMediaStreamSource(stream);
+        vs.analyser = vs.audioCtx.createAnalyser();
+        vs.analyser.fftSize = 128;
+        vs.srcNode.connect(vs.analyser);
+        // deliberately NOT connected to audioCtx.destination — no mic monitoring
+      } catch (e) {
+        vs.analyser = null;
+      }
+
+      recorder.start(250); // collect every 250ms for low-latency staging
+      vs.isRecording = true;
+
+      self._setMicRecordingUI(true);
+      self._showVoiceBar();
+
+      // Hold-release happened while the stream was still pending — stop after a
+      // short grace so the clip has a usable minimum length.
+      if (vs.stageOnRelease) {
+        vs.stageOnRelease = false;
+        setTimeout(function() { self._stopVoiceRecording(false); }, 300);
+      }
+
+      vs.timerInterval = setInterval(function() { self._updateVoiceTimer(); }, 250);
+      vs.meterInterval = setInterval(function() { self._updateVoiceMeter(); }, 66);
+    }).catch(function(err) {
+      vs.pendingStart = false;
+      vs.stageOnRelease = false;
+      vs.holding = false;
+      vs.suppressClick = false;
+      self._hideVoiceBar();
+      self._setMicRecordingUI(false);
+      console.error('Microphone access denied or error:', err);
+      if (window.Toast) window.Toast.show('Microphone Error', 'Could not access microphone: ' + err.message, 'error', 3000);
+    });
+  },
+
+  _stopVoiceRecording(cancel) {
+    var self = this;
+    var vs = this._voiceState;
+    if (!vs.isRecording && !vs.mediaRecorder) return;
+    vs.cancelPending = !!cancel;
+    vs.stageOnRelease = false;
+    vs.holding = false;
+    if (vs.mediaRecorder && vs.mediaRecorder.state !== 'inactive') {
+      try { vs.mediaRecorder.stop(); } catch (e) {}
+    }
+    // Backstop: stop tracks even if onstop never fires (idempotent with onstop)
+    if (vs.stream) {
+      var tracks = vs.stream.getTracks();
+      tracks.forEach(function(t) { try { t.stop(); } catch (e) {} });
+      vs.stream = null;
+    }
+    this._clearVoiceTimers();
+    vs.isRecording = false;
+    this._setMicRecordingUI(false);
+    this._hideVoiceBar();
+  },
+
+  _clearVoiceTimers() {
+    var vs = this._voiceState;
+    if (vs.timerInterval) { clearInterval(vs.timerInterval); vs.timerInterval = null; }
+    if (vs.meterInterval) { clearInterval(vs.meterInterval); vs.meterInterval = null; }
+  },
+
+  _updateVoiceTimer() {
+    var vs = this._voiceState;
+    if (!vs.startTime) return;
+    var elapsed = Math.floor((Date.now() - vs.startTime) / 1000);
+    var maxDuration = 300; // 5 minutes — same cap as mobile (_voiceRecorder)
+    if (elapsed >= maxDuration) {
+      this._stopVoiceRecording(false);
+      if (window.Toast) window.Toast.show('Voice Memo', 'Max recording length reached (5:00)', 'info', 3000);
+      return;
+    }
+    var timerEl = document.getElementById('voice-rec-timer');
+    if (timerEl) {
+      timerEl.textContent = Math.floor(elapsed / 60) + ':' + (elapsed % 60 < 10 ? '0' : '') + (elapsed % 60);
+    }
+  },
+
+  _updateVoiceMeter() {
+    var vs = this._voiceState;
+    var analyser = vs.analyser;
+    var meterEl = document.getElementById('voice-rec-meter');
+    if (!analyser || !meterEl || !meterEl.children || meterEl.children.length === 0) return;
+    if (!vs._meterData) vs._meterData = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(vs._meterData);
+    var bars = meterEl.children;
+    var n = bars.length;
+    var usable = Math.min(vs._meterData.length, 64); // 0–6kHz — human voice range
+    var binsPerBar = Math.max(1, Math.floor(usable / n));
+    for (var i = 0; i < n; i++) {
+      var sum = 0;
+      var start = i * binsPerBar;
+      for (var b = 0; b < binsPerBar && start + b < usable; b++) sum += vs._meterData[start + b];
+      var level = sum / binsPerBar / 255; // 0..1
+      bars[i].style.height = (4 + Math.round(level * 92)) + '%';
+      bars[i].className = level > 0.02 ? 'voice-rec-meter-bar active' : 'voice-rec-meter-bar';
+    }
+  },
+
+  _setMicRecordingUI(recording) {
+    var btnMic = document.getElementById('btn-mic');
+    if (!btnMic) return;
+    btnMic.style.color = recording ? 'var(--accent-danger)' : '';
+    btnMic.innerHTML = recording ? '<i data-lucide="square" style="fill:var(--accent-danger);"></i>' : '<i data-lucide="mic"></i>';
+    if (window.lucide) window.lucide.createIcons({ root: btnMic });
+  },
+
+  _showVoiceBar() {
+    var self = this;
+    var wrapper = this.container ? this.container.querySelector('.chat-input-wrapper') : null;
+    if (!wrapper) return;
+    var bar = document.getElementById('voice-rec-bar');
+    if (!bar) {
+      var meterHtml = '';
+      for (var i = 0; i < 32; i++) meterHtml += '<span class="voice-rec-meter-bar"></span>';
+      wrapper.insertAdjacentHTML('afterbegin',
+        '<div id="voice-rec-bar" class="voice-rec-bar">' +
+          '<span class="voice-rec-dot"></span>' +
+          '<span id="voice-rec-timer">0:00</span>' +
+          '<div id="voice-rec-meter" class="voice-rec-meter">' + meterHtml + '</div>' +
+          '<button id="btn-voice-cancel" class="voice-rec-btn voice-rec-btn-cancel" title="Cancel recording">' +
+            '<i data-lucide="x" style="width:14px;height:14px;"></i>' +
+          '</button>' +
+          '<button id="btn-voice-stop" class="voice-rec-btn voice-rec-btn-stop" title="Stop and send">Stop</button>' +
+        '</div>');
+      bar = document.getElementById('voice-rec-bar');
+      var cancelBtn = document.getElementById('btn-voice-cancel');
+      if (cancelBtn) {
+        cancelBtn.addEventListener('click', function() {
+          self._stopVoiceRecording(true);
+          if (window.Toast) window.Toast.show('Voice Memo', 'Recording cancelled', 'info', 2500);
+        });
+      }
+      var stopBtn = document.getElementById('btn-voice-stop');
+      if (stopBtn) {
+        stopBtn.addEventListener('click', function() { self._stopVoiceRecording(false); });
+      }
+      if (window.lucide) window.lucide.createIcons({ root: bar });
+    }
+    bar.style.display = 'flex';
+  },
+
+  _hideVoiceBar() {
+    var bar = document.getElementById('voice-rec-bar');
+    if (bar) bar.style.display = 'none';
+  },
+
+  // Re-render safety: renderChat rebuilds the input DOM — restore the recording
+  // indicator and mic state if we were mid-recording.
+  _syncVoiceBar() {
+    if (this._voiceState.isRecording) {
+      this._setMicRecordingUI(true);
+      this._showVoiceBar();
+    }
   },
 
   renderPreviewArea() {
@@ -2089,12 +2464,14 @@ window.ChatPanel = {
         (g.members || []).forEach(function(m) {
           if (m.userId !== s.currentUser.userId) {
             window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.MESSAGE, payload);
+            if (window._p2pSentCount !== undefined) window._p2pSentCount++;
           }
         });
       } else {
         var friend = s.friends.find(function(f) { return f.userId === targetId; });
         if (friend) {
           window.orbitAPI.networkSend(targetId, friend.ip || '', window.Protocol.Types.MESSAGE, payload);
+          if (window._p2pSentCount !== undefined) window._p2pSentCount++;
         }
       }
 
@@ -2232,6 +2609,7 @@ window.ChatPanel = {
         }
         recipients.forEach(function(r) {
           window.orbitAPI.networkSend(r.userId, r.ip, type, payload);
+          if (type === window.Protocol.Types.MESSAGE && window._p2pSentCount !== undefined) window._p2pSentCount++;
         });
       } else if (activeChatId === 'local-echo') {
         var echoPayload = payload.text ? { text: 'Echo: ' + payload.text, msgId: Date.now() + 1, replyTo: payload.replyTo } : null;
@@ -2263,6 +2641,28 @@ window.ChatPanel = {
       window.store.notify();
       this._sending = false;
       return;
+    }
+
+    // ---- Slash command handling (parity with mobile/src/js/app.js:3077) ----
+    // GROUP-ONLY — all slash commands are group utilities (Orbit is local-first P2P, no AI).
+    // isGroup already resolved above; _handleSlashCommand also enforces the guard and shows Toast for DMs.
+    if (text && text.trim().startsWith('/')) {
+      var slashResult = this._handleSlashCommand(text, activeChatId);
+      if (slashResult) {
+        if (slashResult.cancel) {
+          this._sending = false;
+          var _slashInput = document.getElementById('chat-input');
+          if (_slashInput) { _slashInput.value = ''; _slashInput.style.height = 'auto'; }
+          this.hideSlashTooltip();
+          return;
+        }
+        if (slashResult.handled) {
+          if (slashResult.text !== undefined) text = slashResult.text;
+          // stash poll/spoiler for payload building below
+          this._pendingSlashPoll = slashResult.poll || null;
+          this._pendingSlashSpoiler = !!slashResult.isSpoiler;
+        }
+      }
     }
 
     // Limit: files over this size use chunked FILE_TRANSFER instead of inline base64
@@ -2419,6 +2819,13 @@ window.ChatPanel = {
       largeFiles.forEach(function(lf) {
         payload.attachments.push({ _fileId: lf._fileId, name: lf.staged.name, type: lf.staged.type, _poster: lf.staged._poster || undefined, _pending: true });
       });
+      // Attach slash-command extras (poll/spoiler) if any — mirrors mobile payload
+      if (this._pendingSlashPoll) {
+        payload.poll = this._pendingSlashPoll;
+      }
+      if (this._pendingSlashSpoiler) {
+        payload.isSpoiler = true;
+      }
 
       // E2EE: encrypt text for each recipient
       var settings = window.store.getState().settings;
@@ -2436,7 +2843,7 @@ window.ChatPanel = {
       sendToAll(window.Protocol.Types.MESSAGE, payload);
     }
 
-    // ---- Send large files via chunked FILE_TRANSFER protocol ----
+    // ---- Send large files via chunked FILE_TRANSFER protocol (resumable) ----
     var sentFileIds = [];
     for (var li = 0; li < largeFiles.length; li++) {
       var lf = largeFiles[li];
@@ -2464,54 +2871,53 @@ window.ChatPanel = {
         hash = '';
       }
 
+      // Build the send session: pinned file data + recipients, so a
+      // FILE_TRANSFER_RESUME from the receiver can re-send from an offset
+      // (file is fully in memory; resume = skip i < receivedCount).
+      var mimeType = lf.staged.mimeType || (lf.staged.file ? lf.staged.file.type : '');
+      var session = {
+        fileId: fileId,
+        data: fileData,
+        name: lf.staged.name,
+        type: lf.staged.type,
+        mimeType: mimeType,
+        size: fileData.byteLength,
+        totalChunks: totalChunks,
+        hash: hash,
+        recipients: recipients,
+        isGroup: isGroup,
+        chatId: activeChatId,
+        _sending: false
+      };
       // Send FILE_TRANSFER_START (only include chatId for groups — DM uses msgFrom routing)
-      var ftStartPayload = {
+      // Type/mimeType stamps let receivers (incl. mobile) honor the sender's
+      // classification instead of guessing from the file extension.
+      session.startPayload = {
         fileId: fileId,
         fileName: lf.staged.name,
         fileSize: fileData.byteLength,
         totalChunks: totalChunks,
-        hash: hash
+        hash: hash,
+        type: lf.staged.type,
+        mimeType: mimeType
       };
-      if (isGroup) ftStartPayload.chatId = activeChatId;
-      sendToAll(window.Protocol.Types.FILE_TRANSFER_START, ftStartPayload);
+      if (isGroup) session.startPayload.chatId = activeChatId;
+      this._sendSessions[fileId] = session;
 
-      for (var ci = 0; ci < totalChunks; ci++) {
-        var start = ci * CHUNK_SIZE;
-        var end = Math.min(start + CHUNK_SIZE, fileData.byteLength);
-        var chunkBytes = new Uint8Array(fileData.slice(start, end));
-        var chunkBinary = '';
-        for (var cb = 0; cb < chunkBytes.byteLength; cb++) {
-          chunkBinary += String.fromCharCode(chunkBytes[cb]);
-        }
-        var chunkBase64 = btoa(chunkBinary);
-
-        sendToAll(window.Protocol.Types.FILE_CHUNK, {
-          fileId: fileId,
-          chunkIndex: ci,
-          data: chunkBase64
-        });
-
-        // Report progress
-        if (window.store) {
-          var cp = window.store.getState().transferProgress || {};
-          var updated = {};
-          updated[fileId] = { received: ci + 1, total: totalChunks, name: lf.staged.name, isSending: true };
-          window.store.setState({
-            transferProgress: Object.assign({}, cp, updated)
-          });
-        }
-
-        // Yield to event loop between chunks
-        await new Promise(function(r) { setTimeout(r, 0); });
+      session._sending = true;
+      try {
+        await this._sendFileChunks(session, 0);
+      } finally {
+        session._sending = false;
+        // Release the pinned full-file buffer as soon as the loop finishes
+        // (F3: it was held for the whole app session) and mark the session
+        // for sweeping; also clear any RESUME that landed between the last
+        // chunk and END so it cannot rewind a later pass (F5).
+        session.doneAt = Date.now();
+        session.data = null;
+        delete this._resumeRequests[fileId];
+        setTimeout(() => this._sweepSendSessions(), 60000);
       }
-
-      // Send FILE_TRANSFER_END (only include chatId for groups)
-      var ftEndPayload = {
-        fileId: fileId,
-        hash: hash
-      };
-      if (isGroup) ftEndPayload.chatId = activeChatId;
-      sendToAll(window.Protocol.Types.FILE_TRANSFER_END, ftEndPayload);
     }
 
     // Clean up transfer progress for sent files
@@ -2535,11 +2941,22 @@ window.ChatPanel = {
     if (this.replyingTo) {
       localMsg.replyTo = this.replyingTo.id;
     }
+    // Mirror poll/spoiler slash extras into local echo — parity with mobile newMsg.poll / isSpoiler
+    if (this._pendingSlashPoll) {
+      localMsg.poll = this._pendingSlashPoll;
+    }
+    if (this._pendingSlashSpoiler) {
+      localMsg.isSpoiler = true;
+    }
+    // Clear pending slash state for next send
+    this._pendingSlashPoll = null;
+    this._pendingSlashSpoiler = false;
     window.store.addMessage(activeChatId, localMsg);
 
     this.stagedFiles = [];
     this.renderPreviewArea();
     this.replyingTo = null;
+    this.hideSlashTooltip();
 
     // Clear UI state
     var input = document.getElementById('chat-input');
@@ -2547,6 +2964,183 @@ window.ChatPanel = {
     localStorage.removeItem('orbit_draft_' + activeChatId);
     window.store.notify();
     this._sending = false;
+  },
+
+  // Send a packet to the given recipients via the main-process socket layer.
+  // (sendToAll is a closure inside sendMessage; file chunks need the same
+  // routing from the resume handler, which runs outside that closure.)
+  _sendToRecipients(recipients, type, payload) {
+    if (!window.orbitAPI) return;
+    recipients.forEach(function(r) {
+      window.orbitAPI.networkSend(r.userId, r.ip, type, payload);
+    });
+  },
+
+  // Stream a session's chunks starting at `resumeFrom`. The file lives fully
+  // in memory (session.data), so resuming just means starting the loop at a
+  // different index. Mid-stream FILE_TRANSFER_RESUME requests rewind the loop
+  // (this._resumeRequests) instead of starting a second, interleaved stream.
+  async _sendFileChunks(session, resumeFrom) {
+    var totalChunks = session.totalChunks;
+    var fileData = session.data;
+    var fileId = session.fileId;
+
+    // (Re-)send FILE_TRANSFER_START with the same fileId — the receiver's
+    // CRIT-4 merge depends on _fileId stability, and a persisted receiver
+    // resumes its write cursor when hash + fileId match.
+    this._sendToRecipients(session.recipients, window.Protocol.Types.FILE_TRANSFER_START, session.startPayload);
+
+    var ci = Math.max(0, resumeFrom) || 0;
+    while (ci < totalChunks) {
+      // Peer aborted the transfer (incoming FILE_TRANSFER_CANCEL): stop
+      // streaming — no more chunks and no FILE_TRANSFER_END.
+      if (session.cancelled) {
+        this._sendToRecipients(session.recipients, window.Protocol.Types.FILE_TRANSFER_CANCEL, { fileId: fileId });
+        console.log('[ChatPanel] Send cancelled for ' + fileId + ' — aborting chunk stream');
+        return;
+      }
+      // Mid-stream resume request from the receiver: rewind to the requested
+      // contiguous count (chunks in [requested, ci) were lost on the wire).
+      var req = this._resumeRequests[fileId];
+      if (req !== undefined) {
+        delete this._resumeRequests[fileId];
+        if (req >= 0 && req < ci) {
+          ci = req;
+          this._sendToRecipients(session.recipients, window.Protocol.Types.FILE_TRANSFER_START, session.startPayload);
+          continue;
+        }
+        // req >= ci: receiver is not behind enough to rewind — continue
+      }
+
+      var start = ci * CHUNK_SIZE;
+      var end = Math.min(start + CHUNK_SIZE, fileData.byteLength);
+      var chunkBytes = new Uint8Array(fileData.slice(start, end));
+      var chunkBinary = '';
+      for (var cb = 0; cb < chunkBytes.byteLength; cb++) {
+        chunkBinary += String.fromCharCode(chunkBytes[cb]);
+      }
+      var chunkBase64 = btoa(chunkBinary);
+
+      this._sendToRecipients(session.recipients, window.Protocol.Types.FILE_CHUNK, {
+        fileId: fileId,
+        chunkIndex: ci,
+        data: chunkBase64
+      });
+
+      // Report progress
+      if (window.store) {
+        var cp = window.store.getState().transferProgress || {};
+        var updated = {};
+        updated[fileId] = { received: ci + 1, total: totalChunks, name: session.name, isSending: true };
+        window.store.setState({
+          transferProgress: Object.assign({}, cp, updated)
+        });
+      }
+
+      // Yield to event loop between chunks
+      await new Promise(function(r) { setTimeout(r, 0); });
+      ci++;
+    }
+
+    // Send FILE_TRANSFER_END (only include chatId for groups)
+    var ftEndPayload = { fileId: fileId, hash: session.hash };
+    if (session.isGroup) ftEndPayload.chatId = session.chatId;
+    this._sendToRecipients(session.recipients, window.Protocol.Types.FILE_TRANSFER_END, ftEndPayload);
+  },
+
+  // Receiver → sender: the peer asks us to resume a partial chunked transfer.
+  // Reaches the renderer only when the main process has no send session for
+  // this fileId (i.e. the file was sent through this chat path).
+  async handleFileTransferResume(packet) {
+    var payload = packet && packet.payload;
+    if (!payload || !payload.fileId) return;
+    var session = this._sendSessions && this._sendSessions[payload.fileId];
+    if (!session) {
+      console.log('[ChatPanel] RESUME for unknown fileId ' + payload.fileId + ' — send session gone (app restart?), ignoring');
+      return;
+    }
+
+    // F4: validate the offset before trusting it (mirrors
+    // TransferManager._resumeSessionSend) — garbage n must not rewind the loop.
+    var n = Number(payload.receivedCount);
+    if (!isFinite(n) || n < 0 || n > session.totalChunks) {
+      console.warn('[ChatPanel] RESUME invalid receivedCount ' + payload.receivedCount + ' for ' + payload.fileId + ' — cancelling transfer');
+      this._sendToRecipients(session.recipients, window.Protocol.Types.FILE_TRANSFER_CANCEL, { fileId: payload.fileId, error: 'Invalid resume offset' });
+      return;
+    }
+
+    // F4: when the receiver's partial can still be verified (session.data
+    // present), hash the claimed contiguous prefix and compare. A mismatch —
+    // or a missing hash for a non-empty partial — means the receiver's file
+    // is corrupt or unrelated: cancel instead of silently re-sending.
+    if (session.data) {
+      var prefixBytes = Math.min(n * 65536, session.data.byteLength);
+      var hex = '';
+      try {
+        var hashBuffer = await window.crypto.subtle.digest('SHA-256', session.data.slice(0, prefixBytes));
+        var hashView = new Uint8Array(hashBuffer);
+        var hashParts = [];
+        for (var hi = 0; hi < hashView.length; hi++) {
+          var h = hashView[hi].toString(16);
+          if (h.length < 2) h = '0' + h;
+          hashParts.push(h);
+        }
+        hex = hashParts.join('').toLowerCase();
+      } catch (e) {
+        hex = '';
+      }
+      var receiverHash = payload.hash ? String(payload.hash).toLowerCase() : '';
+      if ((receiverHash && hex !== receiverHash) || (n > 0 && !receiverHash)) {
+        console.warn('[ChatPanel] RESUME partial hash mismatch for ' + payload.fileId + ' (received ' + n + ' chunks) — cancelling transfer');
+        this._sendToRecipients(session.recipients, window.Protocol.Types.FILE_TRANSFER_CANCEL, { fileId: payload.fileId, error: 'Receiver partial does not match sender file' });
+        session.cancelled = true;
+        return;
+      }
+    } else if (n < session.totalChunks) {
+      // F3: the full-file buffer was released after the send loop finished —
+      // a partial resume can no longer be verified, so ignore the request.
+      console.log('[ChatPanel] RESUME for ' + payload.fileId + ' at chunk ' + n + ' ignored — send session buffer released (cannot verify partial)');
+      return;
+    }
+
+    if (n >= session.totalChunks) {
+      // Receiver has every chunk; it only missed FILE_TRANSFER_END. Re-send
+      // END and drop the session (DM: single receiver, transfer is complete).
+      var ftEndPayload = { fileId: session.fileId, hash: session.hash };
+      if (session.isGroup) ftEndPayload.chatId = session.chatId;
+      this._sendToRecipients(session.recipients, window.Protocol.Types.FILE_TRANSFER_END, ftEndPayload);
+      if (!session.isGroup) delete this._sendSessions[session.fileId];
+      return;
+    }
+
+    if (session._sending) {
+      // A chunk loop is currently streaming this file — rewind it in place
+      // rather than starting a second, interleaved stream.
+      this._resumeRequests[payload.fileId] = n;
+      console.log('[ChatPanel] RESUME mid-send: rewinding ' + payload.fileId + ' to chunk ' + n);
+    } else {
+      // First pass already finished — run a fresh pass from the offset.
+      console.log('[ChatPanel] RESUME re-send: streaming ' + payload.fileId + ' from chunk ' + n);
+      var self = this;
+      session._sending = true;
+      this._sendFileChunks(session, n).catch(function(err) {
+        console.warn('[ChatPanel] Resume re-send failed:', err && err.message);
+      }).finally(function() {
+        session._sending = false;
+        session.doneAt = Date.now();
+      });
+    }
+  },
+
+  // F3: drop send sessions that finished >60s ago (their data buffer was
+  // already released in sendMessage's finally). In-flight sessions are kept.
+  _sweepSendSessions() {
+    var cutoff = Date.now() - 60000;
+    var self = this;
+    Object.keys(this._sendSessions).forEach(function(fid) {
+      var s = self._sendSessions[fid];
+      if (s && s.doneAt && s.doneAt < cutoff && !s._sending) delete self._sendSessions[fid];
+    });
   },
 
   _injectMessageParticles() {
@@ -2809,6 +3403,986 @@ window.ChatPanel = {
     });
 
     this._swipeInitialized = true;
+  },
+
+  // Thread panel: shows the root message (walked up via replyTo chain) and every
+  // message whose chain resolves to that root, newest last. Clicking a row
+  // closes the panel and scrolls the chat feed to that message.
+  // Handles both string ids (own messages) and numeric ids (incoming).
+  showThreadPanel(chatId, msgId) {
+    var existing = document.querySelector('.thread-panel-overlay');
+    if (existing) { existing.remove(); }
+
+    var self = this;
+    var state = window.store.getState();
+    var msgList = state.messages[chatId] || [];
+    var msgById = {};
+    msgList.forEach(function(m) { msgById[String(m.id)] = m; });
+
+    var rootMsg = msgById[String(msgId)];
+    if (!rootMsg) return;
+
+    // Walk up the replyTo chain to the top parent (thread root)
+    var seen = {};
+    while (rootMsg.replyTo != null && !seen[String(rootMsg.id)]) {
+      seen[String(rootMsg.id)] = true;
+      var parent = msgById[String(rootMsg.replyTo)];
+      if (!parent) break;
+      rootMsg = parent;
+    }
+
+    // Collect every message whose chain resolves to the root
+    var rootId = String(rootMsg.id);
+    var chain = [rootMsg];
+    msgList.forEach(function(m) {
+      if (String(m.id) === rootId) return;
+      var cur = m;
+      var visited = {};
+      while (cur && cur.replyTo != null && !visited[String(cur.id)]) {
+        visited[String(cur.id)] = true;
+        if (String(cur.replyTo) === rootId) { chain.push(m); return; }
+        cur = msgById[String(cur.replyTo)];
+      }
+    });
+    chain.sort(function(a, b) {
+      var ta = a.timestamp || '', tb = b.timestamp || '';
+      return ta < tb ? -1 : (ta > tb ? 1 : 0);
+    });
+
+    function senderName(m) {
+      if (m.sender === state.currentUser.userId) return 'You';
+      var friend = state.friends.find(function(f) { return f.userId === m.sender; });
+      if (friend) return friend.username;
+      var group = state.groups.find(function(g) { return g.groupId === chatId; });
+      if (group) {
+        var member = (group.members || []).find(function(mm) { return mm.userId === m.sender; });
+        if (member) return member.username;
+      }
+      return 'Unknown';
+    }
+
+    var rowsHtml = chain.map(function(m, idx) {
+      var isRoot = idx === 0;
+      var text = (m.text || '').substring(0, 140) + ((m.text || '').length > 140 ? '...' : '');
+      if (!text && m.attachments && m.attachments.length > 0) text = '(' + m.attachments[0].name + ')';
+      if (!text) text = '(Attachment)';
+      var timeStr = (window.Format && window.Format.absoluteTime) ? window.Format.absoluteTime(m.timestamp).split(' · ')[0] : (m.timestamp || '');
+      return '<div class="thread-row' + (isRoot ? ' thread-row-root' : '') + '" data-thread-msg-id="' + m.id + '" style="display:flex;flex-direction:column;gap:3px;padding:10px 16px;cursor:pointer;border-radius:8px;' + (isRoot ? 'background:var(--bg-hover);' : '') + '">' +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+          '<span style="font-size:13px;font-weight:600;color:' + (isRoot ? 'var(--accent-primary)' : 'var(--text-secondary)') + ';">' + window.Sanitize.escapeHtml(senderName(m)) + '</span>' +
+          (isRoot ? '<span style="font-size:10px;font-weight:700;color:var(--accent-primary);border:1px solid var(--accent-primary);border-radius:4px;padding:0 5px;">ROOT</span>' : '') +
+          '<span style="font-size:11px;color:var(--text-muted);margin-left:auto;flex-shrink:0;">' + window.Sanitize.escapeHtml(timeStr) + '</span>' +
+        '</div>' +
+        '<div style="font-size:13px;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window.Sanitize.escapeHtml(text) + '</div>' +
+      '</div>';
+    }).join('');
+
+    var overlay = document.createElement('div');
+    overlay.className = 'thread-panel-overlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding-top:80px;';
+
+    var panel = document.createElement('div');
+    panel.className = 'thread-panel';
+    panel.style.cssText = 'width:460px;max-height:75vh;background:var(--bg-surface);border-radius:16px;border:1px solid var(--border-subtle);box-shadow:var(--shadow-xl);display:flex;flex-direction:column;overflow:hidden;';
+
+    panel.innerHTML =
+      '<div style="padding:16px 20px;border-bottom:1px solid var(--border-subtle);">' +
+        '<div style="display:flex;align-items:center;gap:12px;">' +
+          '<span style="font-weight:600;font-size:16px;flex:1;">Thread</span>' +
+          '<span style="font-size:12px;color:var(--text-muted);">' + chain.length + ' message' + (chain.length > 1 ? 's' : '') + '</span>' +
+          '<button id="thread-panel-close" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:18px;height:18px;"></i></button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="thread-panel-list" style="flex:1;overflow-y:auto;padding:8px;">' + rowsHtml + '</div>';
+
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+    if (window.lucide) window.lucide.createIcons({ root: overlay });
+
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    function close() {
+      document.removeEventListener('keydown', onKey);
+      if (overlay.parentNode) overlay.remove();
+    }
+    document.addEventListener('keydown', onKey);
+    document.getElementById('thread-panel-close').addEventListener('click', close);
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) close(); });
+
+    panel.querySelectorAll('.thread-row').forEach(function(row) {
+      row.addEventListener('click', function() {
+        var targetId = String(this.getAttribute('data-thread-msg-id') || '');
+        close();
+        var el = document.querySelector('[data-msg-id="' + targetId.replace(/"/g, '') + '"].message-row');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    });
+  },
+
+  /* ---- Slash Commands (parity with mobile/src/js/app.js:14-26 + 3058,3077,3167,3184) ---- */
+
+  _parsePollArgs(str) {
+    var args = [];
+    var current = '';
+    var inQuotes = false;
+    for (var i = 6; i < str.length; i++) {
+      var c = str[i];
+      if (c === '"') {
+        inQuotes = !inQuotes;
+        if (!inQuotes && current) { args.push(current); current = ''; }
+      } else if (c === ' ' && !inQuotes) {
+        if (current) { args.push(current); current = ''; }
+      } else {
+        current += c;
+      }
+    }
+    if (current) args.push(current);
+    return args;
+  },
+
+  _handleSlashCommand(text, chatId) {
+    if (!text || !text.startsWith('/')) return null;
+    // GROUP-ONLY guard — Orbit is local-first P2P; all 11 slash commands are group utilities (no AI). Even /help is group-only.
+    var _targetId = chatId || (window.store && window.store.getState().activeChatId);
+    var _groups = (window.store && window.store.getState().groups) || [];
+    var _isGroup = !!_groups.find(function(g) { return g.groupId === _targetId || g.id === _targetId; });
+    if (!_isGroup) {
+      if (window.Toast) window.Toast.show('Slash Commands', 'Slash commands only work in group chats', 'info', 3000);
+      return { cancel: true };
+    }
+    var parts = text.split(' ');
+    var cmd = parts[0].toLowerCase();
+    var args = parts.slice(1).join(' ');
+    var self = this;
+
+    switch(cmd) {
+      case '/help':
+        self.showHelpModal();
+        return { cancel: true };
+
+      case '/pool':
+      case '/poll':
+        var pollArgs = self._parsePollArgs(text);
+        if (pollArgs.length >= 3) {
+          return {
+            handled: true,
+            text: '',
+            poll: {
+              question: pollArgs[0],
+              options: pollArgs.slice(1).map(function(opt) { return { text: opt, votes: [] }; }),
+              multiSelect: false,
+              expiresAt: null
+            }
+          };
+        }
+        // UX friendly: open poll builder modal for bare / incomplete /poll
+        var _tidPoll = chatId || (window.store && window.store.getState().activeChatId);
+        var _initQ = '';
+        if (pollArgs.length === 1) _initQ = pollArgs[0];
+        else if (pollArgs.length === 2) _initQ = pollArgs[0];
+        else {
+          var _raw = text.slice(cmd.length).trim();
+          if (_raw && _raw.indexOf('"') !== 0) {
+            // strip surrounding quotes if user typed single quoted question without options
+            _initQ = _raw.replace(/^"+|"+$/g, '');
+          }
+        }
+        self._showPollBuilder(_tidPoll, _initQ);
+        return { cancel: true };
+
+      case '/me':
+        return { handled: true, text: '*_' + args.trim() + '_*' };
+
+      case '/shrug':
+        return { handled: true, text: '¯\\_(ツ)_/¯' };
+
+      case '/tableflip':
+        return { handled: true, text: '(╯°□°）╯︵ ┻━┻' };
+
+      case '/unflip':
+        return { handled: true, text: '┬─┬ ノ( ゜-゜ノ)' };
+
+      case '/lenny':
+        return { handled: true, text: '( ͡° ͜ʖ ͡°)' };
+
+      case '/roll':
+        var max = parseInt(args, 10) || 6;
+        if (max < 1) max = 6;
+        if (max > 1000) max = 1000;
+        var result = Math.floor(Math.random() * max) + 1;
+        return { handled: true, text: '🎲 Rolled ' + result + ' (1-' + max + ')' };
+
+      case '/flip':
+        var outcomes = ['Heads', 'Tails'];
+        return { handled: true, text: '🪙 ' + outcomes[Math.floor(Math.random() * 2)] };
+
+      case '/spoiler':
+        var spoilerText = args.trim();
+        if (!spoilerText) {
+          if (window.Toast) window.Toast.show('Slash Command', 'Usage: /spoiler hidden text', 'info', 3000);
+          return { cancel: true };
+        }
+        return { handled: true, text: spoilerText, isSpoiler: true };
+
+      case '/clear':
+        // Local clear — mirrors mobile /clear (no network send). Works for DM and group chats.
+        (function() {
+          var targetId = chatId || (window.store && window.store.getState().activeChatId);
+          if (!targetId) return;
+          var msgs = window.store.getState().messages || {};
+          if (!msgs[targetId] || msgs[targetId].length === 0) {
+            if (window.Toast) window.Toast.show('Slash Command', 'No messages to clear', 'info', 2500);
+            return;
+          }
+          var doClear = function() {
+            var updated = Object.assign({}, window.store.getState().messages);
+            updated[targetId] = [];
+            window.store.setState({ messages: updated });
+            if (window.orbitAPI && window.orbitAPI.dbSaveMessages) {
+              window.orbitAPI.dbSaveMessages(targetId, []);
+            }
+            // Also clear any draft
+            try { localStorage.removeItem('orbit_draft_' + targetId); } catch(e) {}
+            window.store.notify();
+            if (window.Toast) window.Toast.show('Chat Cleared', 'Messages cleared locally', 'success', 2500);
+          };
+          if (window.ConfirmModal) {
+            window.ConfirmModal.show({
+              title: 'Clear Chat',
+              message: 'Clear all messages in this chat? This cannot be undone (local only).',
+              confirmText: 'Clear',
+              danger: true,
+              onConfirm: doClear
+            });
+          } else if (confirm('Clear all messages in this chat? This cannot be undone.')) {
+            doClear();
+          }
+        })();
+        return { cancel: true };
+
+      case '/invite': {
+        var _tidInvite = chatId || (window.store && window.store.getState().activeChatId);
+        var _stInvite = window.store ? window.store.getState() : { groups: [] };
+        var _grpInvite = _stInvite.groups.find(function(g) { return g.groupId === _tidInvite || g.id === _tidInvite; });
+        if (!_grpInvite) {
+          if (window.Toast) window.Toast.show('Slash Command', 'No group found for this chat', 'error', 3000);
+          return { cancel: true };
+        }
+        var _codeInvite = _grpInvite.inviteCode || '';
+        var _nameInvite = _grpInvite.groupName || 'Group';
+        (function() {
+          var existingIv = document.querySelector('.slash-invite-overlay');
+          if (existingIv) existingIv.remove();
+          var overlay = document.createElement('div');
+          overlay.className = 'slash-invite-overlay';
+          overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
+          var panel = document.createElement('div');
+          panel.style.cssText = 'width:360px;max-width:90vw;background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:16px;box-shadow:var(--shadow-xl);padding:20px;';
+          var safeCode = window.Sanitize ? window.Sanitize.escapeHtml(_codeInvite) : _codeInvite;
+          var safeName = window.Sanitize ? window.Sanitize.escapeHtml(_nameInvite) : _nameInvite;
+          panel.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">' +
+            '<h3 style="margin:0;font-size:16px;font-weight:700;color:var(--text-primary);">Invite — ' + safeName + '</h3>' +
+            '<button id="slash-invite-close" style="background:none;border:none;cursor:pointer;color:var(--text-muted);padding:4px;"><i data-lucide="x" style="width:18px;height:18px;"></i></button>' +
+            '</div>' +
+            '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Share this code to invite others:</div>' +
+            '<div style="display:flex;align-items:center;gap:8px;background:var(--bg-hover);border:1px solid var(--border-subtle);border-radius:10px;padding:10px 12px;">' +
+              '<span style="flex:1;font-family:var(--font-mono,monospace);font-size:15px;font-weight:600;letter-spacing:0.5px;color:var(--accent-primary);word-break:break-all;">' + (safeCode || '(no code)') + '</span>' +
+              '<button id="slash-invite-copy" style="flex-shrink:0;background:var(--accent-primary);color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;">Copy</button>' +
+            '</div>';
+          overlay.appendChild(panel);
+          document.body.appendChild(overlay);
+          if (window.lucide) window.lucide.createIcons({ root: overlay });
+          function closeIv() {
+            document.removeEventListener('keydown', onKeyIv);
+            if (overlay.parentNode) overlay.remove();
+          }
+          function onKeyIv(e) { if (e.key === 'Escape') closeIv(); }
+          document.addEventListener('keydown', onKeyIv);
+          var closeBtn = document.getElementById('slash-invite-close');
+          if (closeBtn) closeBtn.addEventListener('click', closeIv);
+          overlay.addEventListener('click', function(e) { if (e.target === overlay) closeIv(); });
+          var copyBtn = document.getElementById('slash-invite-copy');
+          if (copyBtn) copyBtn.addEventListener('click', function() {
+            var doToast = function(ok) {
+              if (window.Toast) window.Toast.show(ok ? 'Copied' : 'Copy Failed', ok ? 'Invite code copied' : 'Could not copy', ok ? 'success' : 'error', 2000);
+            };
+            if (window.orbitAPI && window.orbitAPI.writeClipboard) {
+              try { window.orbitAPI.writeClipboard(_codeInvite); doToast(true); } catch(err) { doToast(false); }
+            } else if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(_codeInvite).then(function(){ doToast(true); }, function(){ doToast(false); });
+            } else {
+              doToast(false);
+            }
+          });
+        })();
+        return { cancel: true };
+      }
+
+      case '/members':
+      case '/list': {
+        var _tidMem = chatId || (window.store && window.store.getState().activeChatId);
+        var _stMem = window.store ? window.store.getState() : { groups: [], friends: [] };
+        var _grpMem = _stMem.groups.find(function(g) { return g.groupId === _tidMem || g.id === _tidMem; });
+        if (!_grpMem) {
+          if (window.Toast) window.Toast.show('Slash Command', 'No group found for this chat', 'error', 3000);
+          return { cancel: true };
+        }
+        (function() {
+          var existingMem = document.querySelector('.slash-members-overlay');
+          if (existingMem) existingMem.remove();
+          var overlay = document.createElement('div');
+          overlay.className = 'slash-members-overlay';
+          overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
+          var panel = document.createElement('div');
+          panel.style.cssText = 'width:380px;max-width:90vw;max-height:75vh;overflow-y:auto;background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:16px;box-shadow:var(--shadow-xl);padding:20px;';
+          var members = _grpMem.members || [];
+          var safeGroupName = window.Sanitize ? window.Sanitize.escapeHtml(_grpMem.groupName || 'Group') : (_grpMem.groupName || 'Group');
+          var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">' +
+            '<h3 style="margin:0;font-size:16px;font-weight:700;color:var(--text-primary);">' + safeGroupName + ' — Members (' + members.length + ')</h3>' +
+            '<button id="slash-members-close" style="background:none;border:none;cursor:pointer;color:var(--text-muted);padding:4px;"><i data-lucide="x" style="width:18px;height:18px;"></i></button>' +
+            '</div>';
+          if (members.length === 0) {
+            html += '<div style="font-size:13px;color:var(--text-muted);padding:12px 0;">No members found.</div>';
+          } else {
+            for (var mi = 0; mi < members.length; mi++) {
+              var m = members[mi];
+              var role = m.role || (m.userId === _grpMem.ownerId ? 'owner' : 'member');
+              var roleBadge = role === 'owner' ? '<span style="font-size:10px;font-weight:700;color:#fff;background:var(--accent-primary);border-radius:4px;padding:1px 6px;">OWNER</span>' : (role === 'admin' ? '<span style="font-size:10px;font-weight:700;color:#fff;background:var(--accent-success);border-radius:4px;padding:1px 6px;">ADMIN</span>' : '<span style="font-size:10px;color:var(--text-muted);border:1px solid var(--border-subtle);border-radius:4px;padding:1px 6px;">MEMBER</span>');
+              var isSelf = window.store && window.store.getState().currentUser && m.userId === window.store.getState().currentUser.userId;
+              var friend = (_stMem.friends || []).find(function(f) { return f.userId === m.userId; });
+              var onlineDot = friend && friend.status === 'online' ? '<span style="width:8px;height:8px;border-radius:50%;background:var(--accent-success);display:inline-block;" title="Online"></span>' : (friend ? '<span style="width:8px;height:8px;border-radius:50%;background:var(--text-muted);display:inline-block;opacity:0.4;" title="Offline"></span>' : '');
+              var nameEsc = window.Sanitize ? window.Sanitize.escapeHtml(m.username || m.userId || 'Unknown') : (m.username || m.userId);
+              var tagEsc = m.usertag ? (window.Sanitize ? window.Sanitize.escapeHtml(m.usertag) : m.usertag) : '';
+              html += '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border-subtle);">' +
+                '<div style="width:32px;height:32px;border-radius:50%;background:var(--bg-hover);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;">' + (m.avatar ? '<img src="' + (window.Sanitize ? window.Sanitize.escapeHtml(m.avatar) : m.avatar) + '" style="width:100%;height:100%;object-fit:cover;">' : '<i data-lucide="user" style="width:16px;height:16px;color:var(--text-muted);"></i>') + '</div>' +
+                '<div style="flex:1;min-width:0;">' +
+                  '<div style="display:flex;align-items:center;gap:6px;"><span style="font-size:13px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + nameEsc + (isSelf ? ' (you)' : '') + '</span>' + onlineDot + '</div>' +
+                  (tagEsc ? '<div style="font-size:11px;color:var(--text-muted);">@' + tagEsc + '</div>' : '') +
+                '</div>' +
+                roleBadge +
+              '</div>';
+            }
+          }
+          panel.innerHTML = html;
+          overlay.appendChild(panel);
+          document.body.appendChild(overlay);
+          if (window.lucide) window.lucide.createIcons({ root: overlay });
+          function closeMem() {
+            document.removeEventListener('keydown', onKeyMem);
+            if (overlay.parentNode) overlay.remove();
+          }
+          function onKeyMem(e) { if (e.key === 'Escape') closeMem(); }
+          document.addEventListener('keydown', onKeyMem);
+          var closeBtnMem = document.getElementById('slash-members-close');
+          if (closeBtnMem) closeBtnMem.addEventListener('click', closeMem);
+          overlay.addEventListener('click', function(e) { if (e.target === overlay) closeMem(); });
+        })();
+        return { cancel: true };
+      }
+
+      case '/topic': {
+        var topicArgs = args.trim();
+        if (!topicArgs) {
+          if (window.Toast) window.Toast.show('Slash Command', 'Usage: /topic New description', 'info', 3000);
+          return { cancel: true };
+        }
+        var _tidTopic = chatId || (window.store && window.store.getState().activeChatId);
+        var _stTopic = window.store ? window.store.getState() : { groups: [], currentUser: {} };
+        var _grpTopic = _stTopic.groups.find(function(g) { return g.groupId === _tidTopic || g.id === _tidTopic; });
+        if (!_grpTopic) {
+          if (window.Toast) window.Toast.show('Slash Command', 'No group found for this chat', 'error', 3000);
+          return { cancel: true };
+        }
+        var _selfId = _stTopic.currentUser && _stTopic.currentUser.userId;
+        var _selfMem = (_grpTopic.members || []).find(function(m) { return m.userId === _selfId; });
+        var _role = _selfMem ? (_selfMem.role || (_grpTopic.ownerId === _selfId ? 'owner' : 'member')) : 'member';
+        var _isPriv = _role === 'owner' || _role === 'admin' || _grpTopic.ownerId === _selfId;
+        if (!_isPriv) {
+          if (window.Toast) window.Toast.show('Slash Command', 'Only owner/admin can change the group description', 'error', 3000);
+          return { cancel: true };
+        }
+        if (window.store.updateGroupField) {
+          window.store.updateGroupField(_grpTopic.groupId, 'description', topicArgs);
+        } else {
+          _grpTopic.description = topicArgs;
+          if (window.store.save) window.store.save();
+          else if (window.store.setState) window.store.setState({ groups: _stTopic.groups });
+        }
+        // Broadcast GROUP_UPDATE if protocol supports it, else try generic SYSTEM update
+        try {
+          var _payload = { groupId: _grpTopic.groupId, field: 'description', value: topicArgs, description: topicArgs };
+          var _type = (window.Protocol && window.Protocol.Types && window.Protocol.Types.GROUP_UPDATE) ? window.Protocol.Types.GROUP_UPDATE : (window.Protocol && window.Protocol.Types && window.Protocol.Types.SYSTEM ? window.Protocol.Types.SYSTEM : null);
+          if (_type && window.orbitAPI && window.orbitAPI.networkSend) {
+            (_grpTopic.members || []).forEach(function(m) {
+              if (m.userId !== _selfId) window.orbitAPI.networkSend(m.userId, m.ip || '', _type, _payload);
+            });
+          }
+        } catch(e) {}
+        if (window.Toast) window.Toast.show('Group Updated', 'Description updated', 'success', 2500);
+        return { cancel: true };
+      }
+
+      case '/leave': {
+        var _tidLeave = chatId || (window.store && window.store.getState().activeChatId);
+        var _stLeave = window.store ? window.store.getState() : { groups: [] };
+        var _grpLeave = _stLeave.groups.find(function(g) { return g.groupId === _tidLeave || g.id === _tidLeave; });
+        if (!_grpLeave) {
+          if (window.Toast) window.Toast.show('Slash Command', 'No group found for this chat', 'error', 3000);
+          return { cancel: true };
+        }
+        (function() {
+          var doLeave = function() {
+            var gid = _grpLeave.groupId;
+            var selfId = window.store.getState().currentUser && window.store.getState().currentUser.userId;
+            // Broadcast leave to peers before local removal
+            try {
+              if (window.orbitAPI && window.orbitAPI.networkSend) {
+                (_grpLeave.members || []).forEach(function(m) {
+                  if (m.userId !== selfId) window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.GROUP_LEAVE, { groupId: gid, userId: selfId });
+                });
+              }
+            } catch(e) {}
+            if (window.store.leaveGroup) {
+              window.store.leaveGroup(gid);
+            } else if (window.store.removeGroup) {
+              window.store.removeGroup(gid);
+              if (window.store.getState().activeChatId === gid) window.store.setState({ activeChatId: null });
+            } else {
+              var s = window.store.getState();
+              var filtered = (s.groups || []).filter(function(g) { return (g.groupId || g.id) !== gid; });
+              var msgs = Object.assign({}, s.messages); delete msgs[gid];
+              window.store.setState({ groups: filtered, messages: msgs, activeChatId: s.activeChatId === gid ? null : s.activeChatId });
+            }
+            if (window.Toast) window.Toast.show('Left Group', 'Left ' + (_grpLeave.groupName || 'group'), 'success', 2500);
+          };
+          if (window.ConfirmModal) {
+            window.ConfirmModal.show({
+              title: 'Leave Group?',
+              message: 'Are you sure you want to leave "' + (_grpLeave.groupName || 'this group') + '"? You will need an invite to rejoin.',
+              confirmText: 'Leave',
+              danger: true,
+              onConfirm: doLeave
+            });
+          } else if (confirm('Leave Group? Are you sure?')) {
+            doLeave();
+          }
+        })();
+        return { cancel: true };
+      }
+
+      case '/shout': {
+        var shoutText = args.trim();
+        if (!shoutText) {
+          if (window.Toast) window.Toast.show('Slash Command', 'Usage: /shout <message>', 'info', 3000);
+          return { cancel: true };
+        }
+        return { handled: true, text: '\uD83D\uDD0A ' + shoutText.toUpperCase() + ' \uD83D\uDD0A' };
+      }
+
+      case '/countdown': {
+        var cdRaw = args.trim();
+        if (!cdRaw) {
+          if (window.Toast) window.Toast.show('Slash Command', 'Usage: /countdown 5 Go!', 'info', 3000);
+          return { cancel: true };
+        }
+        var cdParts = cdRaw.split(/\s+/);
+        var cdSec = parseInt(cdParts[0], 10);
+        if (isNaN(cdSec) || cdSec < 1 || cdSec > 10) {
+          if (window.Toast) window.Toast.show('Slash Command', 'Usage: /countdown 5 Go!  (seconds 1-10)', 'info', 3000);
+          return { cancel: true };
+        }
+        var cdMsg = cdParts.slice(1).join(' ').trim();
+        var cdText = '\u23F3 Countdown ' + cdSec + 's' + (cdMsg ? ': ' + cdMsg : '') + ' \u2014 starting now!';
+        return { handled: true, text: cdText };
+      }
+
+      case '/nick': {
+        var nickRaw = text.slice(5).trim();
+        if (!nickRaw) {
+          if (window.Toast) window.Toast.show('Slash Command', 'Usage: /nick <new name>', 'info', 3000);
+          return { cancel: true };
+        }
+        if (nickRaw.length < 1 || nickRaw.length > 20) {
+          if (window.Toast) window.Toast.show('Slash Command', 'Nickname must be 1-20 characters', 'error', 3000);
+          return { cancel: true };
+        }
+        var _tidNick = chatId || (window.store && window.store.getState().activeChatId);
+        var _stNick = window.store ? window.store.getState() : { groups: [], currentUser: {} };
+        var _grpNick = _stNick.groups.find(function(g) { return g.groupId === _tidNick || g.id === _tidNick; });
+        if (!_grpNick) {
+          if (window.Toast) window.Toast.show('Slash Command', 'No group found for this chat', 'error', 3000);
+          return { cancel: true };
+        }
+        var _myIdNick = _stNick.currentUser && _stNick.currentUser.userId;
+        var _selfMemNick = (_grpNick.members || []).find(function(m) { return m.userId === _myIdNick; });
+        var safeNick = window.Sanitize ? window.Sanitize.escapeHtml(nickRaw) : nickRaw;
+        // rawNick stored; safeNick used for display
+        var rawNick = nickRaw;
+        if (_selfMemNick) {
+          _selfMemNick.username = rawNick;
+          if (_selfMemNick.name !== undefined) _selfMemNick.name = rawNick;
+        }
+        // Also update currentUser for local display
+        if (_stNick.currentUser) {
+          _stNick.currentUser.username = rawNick;
+          if (_stNick.currentUser.name !== undefined) _stNick.currentUser.name = rawNick;
+        }
+        // Persist via store
+        try {
+          if (window.store) {
+            // Prefer dedicated member update if available
+            if (window.store.updateGroupField) {
+              // Trigger persistence by rewriting groups array via setState
+              window.store.setState({ groups: _stNick.groups, currentUser: _stNick.currentUser });
+              if (window.store.save) window.store.save();
+              else if (window.orbitAPI && window.orbitAPI.dbSaveGroup) window.orbitAPI.dbSaveGroup(_grpNick);
+              else if (window.orbitAPI && window.orbitAPI.dbUpdateGroupField) window.orbitAPI.dbUpdateGroupField(_grpNick.groupId, 'members', _grpNick.members);
+            } else {
+              window.store.setState({ groups: _stNick.groups, currentUser: _stNick.currentUser });
+            }
+          }
+        } catch(e) {}
+        // Broadcast nickname change if protocol supports GROUP_UPDATE / GROUP_MEMBER_UPDATE
+        try {
+          var _nickPayload = { groupId: _grpNick.groupId, userId: _myIdNick, username: rawNick, field: 'nickname', value: rawNick };
+          var _nickType = null;
+          if (window.Protocol && window.Protocol.Types) {
+            _nickType = window.Protocol.Types.GROUP_MEMBER_UPDATE || window.Protocol.Types.GROUP_UPDATE || window.Protocol.Types.GROUP_MEMBER_ADDED || null;
+          }
+          if (_nickType && window.orbitAPI && window.orbitAPI.networkSend) {
+            (_grpNick.members || []).forEach(function(m) {
+              if (m.userId !== _myIdNick) window.orbitAPI.networkSend(m.userId, m.ip || '', _nickType, _nickPayload);
+            });
+          }
+        } catch(e) {}
+        if (window.Toast) window.Toast.show('Nickname Updated', 'Nickname changed to ' + safeNick + ' in ' + (window.Sanitize ? window.Sanitize.escapeHtml(_grpNick.groupName || 'group') : (_grpNick.groupName || 'group')), 'success', 2500);
+        return { cancel: true };
+      }
+
+      case '/kick':
+      case '/remove': {
+        var kickRaw = args.trim().replace(/^@/, '');
+        if (!kickRaw) {
+          if (window.Toast) window.Toast.show('Slash Command', 'Usage: /kick <username>', 'info', 3000);
+          return { cancel: true };
+        }
+        var _tidKick = chatId || (window.store && window.store.getState().activeChatId);
+        var _stKick = window.store ? window.store.getState() : { groups: [], currentUser: {} };
+        var _grpKick = _stKick.groups.find(function(g) { return g.groupId === _tidKick || g.id === _tidKick; });
+        if (!_grpKick) {
+          if (window.Toast) window.Toast.show('Slash Command', 'No group found for this chat', 'error', 3000);
+          return { cancel: true };
+        }
+        var _myIdKick = _stKick.currentUser && _stKick.currentUser.userId;
+        var _selfMemKick = (_grpKick.members || []).find(function(m) { return m.userId === _myIdKick; });
+        var _roleKick = _selfMemKick ? (_selfMemKick.role || (_grpKick.ownerId === _myIdKick ? 'owner' : 'member')) : 'member';
+        var _isPrivKick = _roleKick === 'owner' || _roleKick === 'admin' || _grpKick.ownerId === _myIdKick;
+        if (!_isPrivKick) {
+          if (window.Toast) window.Toast.show('Slash Command', 'Only owner/admin can kick members', 'error', 3000);
+          return { cancel: true };
+        }
+        var _targetKick = (_grpKick.members || []).find(function(m) {
+          var uname = (m.username || m.name || '').toLowerCase();
+          return uname === kickRaw.toLowerCase() || String(m.userId).toLowerCase() === kickRaw.toLowerCase();
+        });
+        if (!_targetKick) {
+          if (window.Toast) window.Toast.show('Slash Command', 'Member not found: ' + (window.Sanitize ? window.Sanitize.escapeHtml(kickRaw) : kickRaw), 'error', 3000);
+          return { cancel: true };
+        }
+        if (String(_targetKick.userId) === String(_myIdKick)) {
+          if (window.Toast) window.Toast.show('Slash Command', 'You cannot kick yourself. Use /leave instead.', 'error', 3000);
+          return { cancel: true };
+        }
+        if (_grpKick.ownerId && String(_targetKick.userId) === String(_grpKick.ownerId)) {
+          if (window.Toast) window.Toast.show('Slash Command', 'Cannot kick the group owner', 'error', 3000);
+          return { cancel: true };
+        }
+        (function() {
+          var targetId = _targetKick.userId;
+          var targetName = _targetKick.username || _targetKick.name || targetId;
+          var safeTarget = window.Sanitize ? window.Sanitize.escapeHtml(targetName) : targetName;
+          var doKick = function() {
+            // Persist removal
+            try {
+              if (window.store && window.store.removeGroupMember) {
+                window.store.removeGroupMember(_grpKick.groupId, targetId);
+              } else if (window.store) {
+                var s = window.store.getState();
+                var filtered = (s.groups || []).map(function(g) {
+                  if ((g.groupId || g.id) === (_grpKick.groupId || _grpKick.id)) {
+                    return { ...g, members: (g.members || []).filter(function(m) { return String(m.userId) !== String(targetId); }) };
+                  }
+                  return g;
+                });
+                window.store.setState({ groups: filtered });
+                if (window.orbitAPI && window.orbitAPI.dbRemoveGroupMember) window.orbitAPI.dbRemoveGroupMember(_grpKick.groupId, targetId);
+              }
+            } catch(e) {}
+            // Broadcast GROUP_LEAVE for the kicked user — peers handleIncomingPacket will remove member / group
+            try {
+              var kickType = (window.Protocol && window.Protocol.Types && window.Protocol.Types.GROUP_LEAVE) ? window.Protocol.Types.GROUP_LEAVE : null;
+              // Fallbacks: GROUP_MEMBER_REMOVE / GROUP_KICK if defined
+              if (!kickType && window.Protocol && window.Protocol.Types) {
+                kickType = window.Protocol.Types.GROUP_MEMBER_REMOVE || window.Protocol.Types.GROUP_KICK || window.Protocol.Types.GROUP_LEAVE || null;
+              }
+              if (kickType && window.orbitAPI && window.orbitAPI.networkSend) {
+                var payload = { groupId: _grpKick.groupId, userId: targetId, kickedBy: _myIdKick, reason: 'kicked' };
+                // Send to all members (including the kicked user) except self
+                (_grpKick.members || []).forEach(function(m) {
+                  if (String(m.userId) !== String(_myIdKick)) {
+                    try { window.orbitAPI.networkSend(m.userId, m.ip || '', kickType, payload); } catch(e) {}
+                  }
+                });
+              }
+            } catch(e) {}
+            if (window.Toast) window.Toast.show('Member Kicked', safeTarget + ' was removed from the group', 'success', 2500);
+          };
+          if (window.ConfirmModal) {
+            window.ConfirmModal.show({
+              title: 'Kick Member?',
+              message: 'Remove "' + safeTarget + '" from this group? They will need an invite to rejoin.',
+              confirmText: 'Kick',
+              danger: true,
+              onConfirm: doKick
+            });
+          } else if (confirm('Kick "' + targetName + '" from this group?')) {
+            doKick();
+          }
+        })();
+        return { cancel: true };
+      }
+
+      default:
+        if (window.Toast) window.Toast.show('Slash Command', 'Unknown command. Type /help to see all commands.', 'info', 3000);
+        return { cancel: true };
+    }
+  },
+
+  showHelpModal() {
+    // Remove existing help overlay if any
+    var existing = document.querySelector('.slash-help-overlay');
+    if (existing) existing.remove();
+
+    var overlay = document.createElement('div');
+    overlay.className = 'slash-help-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
+
+    var panel = document.createElement('div');
+    panel.style.cssText = 'width:380px;max-width:90vw;max-height:75vh;overflow-y:auto;background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:16px;box-shadow:var(--shadow-xl);padding:20px;';
+
+    var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">' +
+      '<h3 style="margin:0;font-size:17px;font-weight:700;color:var(--text-primary);">Slash Commands</h3>' +
+      '<button id="slash-help-close" style="background:none;border:none;cursor:pointer;color:var(--text-muted);padding:4px;"><i data-lucide="x" style="width:18px;height:18px;"></i></button>' +
+      '</div>';
+    for (var i = 0; i < CHAT_COMMANDS.length; i++) {
+      var c = CHAT_COMMANDS[i];
+      html += '<div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border-subtle);">' +
+        '<div style="flex:1;min-width:0;">' +
+          '<div style="font-size:14px;font-weight:600;color:var(--accent-primary);font-family:var(--font-mono,monospace);">' + window.Sanitize.escapeHtml(c.name) + '</div>' +
+          '<div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">' + window.Sanitize.escapeHtml(c.desc) + '</div>' +
+          '<div style="font-size:11px;color:var(--text-muted);margin-top:1px;font-family:var(--font-mono,monospace);">' + window.Sanitize.escapeHtml(c.usage) + '</div>' +
+        '</div>' +
+      '</div>';
+    }
+    panel.innerHTML = html;
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+    if (window.lucide) window.lucide.createIcons({ root: overlay });
+
+    function close() {
+      document.removeEventListener('keydown', onKey);
+      if (overlay.parentNode) overlay.remove();
+    }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    document.addEventListener('keydown', onKey);
+    var closeBtn = document.getElementById('slash-help-close');
+    if (closeBtn) closeBtn.addEventListener('click', close);
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) close(); });
+  },
+
+  _sendPollMessage(chatId, poll) {
+    var state = window.store ? window.store.getState() : null;
+    if (!state) return;
+    var targetId = chatId || state.activeChatId;
+    if (!targetId) {
+      if (window.Toast) window.Toast.show('Poll', 'No chat selected', 'error', 2500);
+      return;
+    }
+    var groups = state.groups || [];
+    var group = groups.find(function(g) { return g.groupId === targetId || g.id === targetId; });
+    if (!group) {
+      if (window.Toast) window.Toast.show('Poll', 'Polls only work in group chats', 'info', 3000);
+      return;
+    }
+    var myId = state.currentUser && state.currentUser.userId;
+    var recipients = [];
+    (group.members || []).forEach(function(m) {
+      if (String(m.userId) !== String(myId)) recipients.push({ userId: m.userId, ip: m.ip || '' });
+    });
+    var msgId = Date.now() + Math.floor(Math.random() * 1000);
+    var payload = {
+      text: '',
+      msgId: msgId,
+      poll: poll,
+      chatId: targetId
+    };
+    if (state.currentUser) payload.fromName = state.currentUser.username || state.currentUser.name || '';
+    // Broadcast to peers
+    if (window.orbitAPI && window.orbitAPI.networkSend && targetId !== 'local-echo') {
+      recipients.forEach(function(r) {
+        try { window.orbitAPI.networkSend(r.userId, r.ip, window.Protocol.Types.MESSAGE, payload); } catch(e) {}
+        if (window._p2pSentCount !== undefined) window._p2pSentCount++;
+      });
+    }
+    // Local echo
+    var localMsg = {
+      id: msgId,
+      sender: myId,
+      text: '',
+      timestamp: new Date().toISOString(),
+      poll: poll
+    };
+    if (window.store && window.store.addMessage) {
+      window.store.addMessage(targetId, localMsg);
+    }
+    if (window.Toast) window.Toast.show('Poll Created', poll.question, 'success', 2500);
+    // Clear draft and input
+    try { localStorage.removeItem('orbit_draft_' + targetId); } catch(e) {}
+    var inp = document.getElementById('chat-input');
+    if (inp) { inp.value = ''; inp.style.height = 'auto'; }
+    if (this.hideSlashTooltip) this.hideSlashTooltip();
+  },
+
+  _showPollBuilder(chatId, initialQuestion) {
+    var self = this;
+    var existing = document.querySelector('.poll-builder-overlay');
+    if (existing) existing.remove();
+
+    var overlay = document.createElement('div');
+    overlay.className = 'poll-builder-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
+
+    var panel = document.createElement('div');
+    panel.style.cssText = 'width:420px;max-width:90vw;max-height:85vh;overflow-y:auto;background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:16px;box-shadow:var(--shadow-xl);padding:20px;display:flex;flex-direction:column;gap:16px;';
+    // Build inner HTML: title, question, options container, add btn, footer
+    panel.innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:space-between;">' +
+        '<h3 style="margin:0;font-size:16px;font-weight:700;color:var(--text-primary);">Create Poll</h3>' +
+        '<button id="poll-builder-close" style="background:none;border:none;cursor:pointer;color:var(--text-muted);padding:4px;border-radius:6px;"><i data-lucide="x" style="width:18px;height:18px;"></i></button>' +
+      '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:6px;">' +
+        '<label style="font-size:12px;font-weight:600;color:var(--text-secondary);">Question</label>' +
+        '<input id="poll-builder-question" type="text" placeholder="Question?" maxlength="200" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);font-size:13px;outline:none;box-sizing:border-box;">' +
+      '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:6px;">' +
+        '<label style="font-size:12px;font-weight:600;color:var(--text-secondary);">Options (2-6)</label>' +
+        '<div id="poll-builder-options" style="display:flex;flex-direction:column;gap:8px;"></div>' +
+        '<button id="poll-builder-add" style="align-self:flex-start;background:transparent;border:1px dashed var(--border-subtle);color:var(--accent-primary);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;"><i data-lucide="plus" style="width:14px;height:14px;"></i> Add option</button>' +
+      '</div>' +
+      '<div style="display:flex;justify-content:flex-end;gap:8px;padding-top:4px;border-top:1px solid var(--border-subtle);margin-top:4px;">' +
+        '<button id="poll-builder-cancel" style="background:transparent;border:1px solid var(--border-subtle);color:var(--text-secondary);border-radius:8px;padding:8px 16px;font-size:13px;font-weight:500;cursor:pointer;">Cancel</button>' +
+        '<button id="poll-builder-create" style="background:var(--accent-primary);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">Create Poll</button>' +
+      '</div>' +
+      '<div style="font-size:11px;color:var(--text-muted);">Tip: power users can still use <span style="font-family:var(--font-mono,monospace);background:var(--bg-hover);padding:1px 4px;border-radius:4px;">/poll "Question?" "Option1" "Option2"</span></div>';
+
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+    if (window.lucide) window.lucide.createIcons({ root: overlay });
+
+    var qInput = document.getElementById('poll-builder-question');
+    var optsContainer = document.getElementById('poll-builder-options');
+    var addBtn = document.getElementById('poll-builder-add');
+    var createBtn = document.getElementById('poll-builder-create');
+
+    if (qInput && initialQuestion) qInput.value = initialQuestion;
+
+    function createOptionRow(value, placeholder) {
+      var row = document.createElement('div');
+      row.className = 'poll-option-row';
+      row.style.cssText = 'display:flex;gap:8px;align-items:center;';
+      var input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'poll-option-input';
+      input.placeholder = placeholder || 'Option';
+      input.maxLength = 80;
+      input.value = value || '';
+      input.style.cssText = 'flex:1;padding:10px 12px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);font-size:13px;outline:none;box-sizing:border-box;';
+      var rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'poll-option-remove';
+      rm.title = 'Remove option';
+      rm.innerHTML = '<i data-lucide="x" style="width:14px;height:14px;"></i>';
+      rm.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--text-muted);padding:6px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;';
+      rm.addEventListener('click', function() {
+        row.remove();
+        refreshOptionState();
+      });
+      row.appendChild(input);
+      row.appendChild(rm);
+      return row;
+    }
+
+    function refreshOptionState() {
+      var rows = optsContainer.querySelectorAll('.poll-option-row');
+      var count = rows.length;
+      // Show remove only if >2
+      rows.forEach(function(r) {
+        var btn = r.querySelector('.poll-option-remove');
+        if (btn) btn.style.display = count > 2 ? 'flex' : 'none';
+      });
+      // Update placeholders sequentially
+      rows.forEach(function(r, idx) {
+        var inp = r.querySelector('.poll-option-input');
+        if (inp) inp.placeholder = 'Option ' + (idx + 1);
+      });
+      if (addBtn) {
+        addBtn.style.display = count >= 6 ? 'none' : 'flex';
+        addBtn.disabled = count >= 6;
+      }
+    }
+
+    // Init with 2 empty rows
+    optsContainer.appendChild(createOptionRow('', 'Option 1'));
+    optsContainer.appendChild(createOptionRow('', 'Option 2'));
+    // If initialQuestion was pollArgs[0] and we have a hint for first option? keep empty
+    refreshOptionState();
+    if (window.lucide) window.lucide.createIcons({ root: optsContainer });
+
+    function close() {
+      document.removeEventListener('keydown', onKey);
+      if (overlay.parentNode) overlay.remove();
+    }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    document.addEventListener('keydown', onKey);
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) close(); });
+    var closeBtn = document.getElementById('poll-builder-close');
+    if (closeBtn) closeBtn.addEventListener('click', close);
+    var cancelBtn = document.getElementById('poll-builder-cancel');
+    if (cancelBtn) cancelBtn.addEventListener('click', close);
+
+    if (addBtn) {
+      addBtn.addEventListener('click', function() {
+        var rows = optsContainer.querySelectorAll('.poll-option-row');
+        if (rows.length >= 6) return;
+        var row = createOptionRow('', 'Option ' + (rows.length + 1));
+        optsContainer.appendChild(row);
+        refreshOptionState();
+        if (window.lucide) window.lucide.createIcons({ root: row });
+        var inp = row.querySelector('.poll-option-input');
+        if (inp) inp.focus();
+      });
+    }
+
+    if (createBtn) {
+      createBtn.addEventListener('click', function() {
+        var question = qInput ? qInput.value.trim() : '';
+        if (!question) {
+          if (window.Toast) window.Toast.show('Poll', 'Question is required', 'error', 2500);
+          if (qInput) { qInput.focus(); qInput.style.borderColor = 'var(--accent-danger)'; setTimeout(function(){ qInput.style.borderColor=''; }, 1500); }
+          return;
+        }
+        var inputs = optsContainer.querySelectorAll('.poll-option-input');
+        var filtered = [];
+        inputs.forEach(function(inp) {
+          var v = inp.value.trim();
+          if (v) filtered.push(v);
+        });
+        if (filtered.length < 2) {
+          if (window.Toast) window.Toast.show('Poll', 'At least 2 options required', 'error', 2500);
+          return;
+        }
+        if (filtered.length > 6) filtered = filtered.slice(0, 6);
+        var poll = {
+          question: question,
+          options: filtered.map(function(t) { return { text: t, votes: [] }; }),
+          multiSelect: false,
+          expiresAt: null
+        };
+        close();
+        self._sendPollMessage(chatId, poll);
+      });
+    }
+
+    // Focus question input
+    setTimeout(function() { if (qInput) qInput.focus(); }, 50);
+    // Enter handling: Enter on question moves to first option; Enter on last option creates if valid
+    if (qInput) {
+      qInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          var firstOpt = optsContainer.querySelector('.poll-option-input');
+          if (firstOpt) firstOpt.focus();
+        }
+      });
+    }
+  },
+
+  showSlashTooltip(val) {
+    // GROUP-ONLY — suppress slash autocomplete in DMs (parity with mobile group-only intent)
+    var _cid = window.store && window.store.getState().activeChatId;
+    var _grps = (window.store && window.store.getState().groups) || [];
+    var _isGrp = !!_grps.find(function(g) { return g.groupId === _cid || g.id === _cid; });
+    if (!_isGrp) {
+      var _tip = document.getElementById('slash-tooltip');
+      if (_tip) _tip.style.display = 'none';
+      return;
+    }
+    var inputArea = document.querySelector('.chat-input-area');
+    if (!inputArea) return;
+    var tooltip = document.getElementById('slash-tooltip');
+    if (!tooltip) {
+      tooltip = document.createElement('div');
+      tooltip.id = 'slash-tooltip';
+      tooltip.style.cssText = 'position:absolute;bottom:100%;left:12px;right:12px;margin-bottom:8px;background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:12px;box-shadow:var(--shadow-lg);overflow:hidden;z-index:20;display:none;max-height:180px;overflow-y:auto;';
+      // Ensure inputArea is positioning context
+      inputArea.style.position = 'relative';
+      inputArea.appendChild(tooltip);
+      // Inject tooltip item styles once
+      if (!document.getElementById('slash-tooltip-style')) {
+        var style = document.createElement('style');
+        style.id = 'slash-tooltip-style';
+        style.textContent = '.slash-tooltip-item{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border-subtle);} .slash-tooltip-item:last-child{border-bottom:none;} .slash-tooltip-item:hover{background:var(--bg-hover);} .slash-tooltip-name{font-family:var(--font-mono,monospace);font-size:13px;font-weight:600;color:var(--accent-primary);} .slash-tooltip-desc{font-size:11px;color:var(--text-muted);margin-left:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}';
+        document.head.appendChild(style);
+      }
+    }
+    var q = val.toLowerCase().substring(1);
+    var matches = CHAT_COMMANDS.filter(function(c) {
+      return c.name.indexOf(q) !== -1 || c.desc.toLowerCase().indexOf(q) !== -1;
+    });
+    if (matches.length === 0) {
+      tooltip.style.display = 'none';
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < Math.min(matches.length, 5); i++) {
+      var m = matches[i];
+      html += '<div class="slash-tooltip-item" data-cmd="' + window.Sanitize.escapeHtml(m.name) + '">' +
+        '<span class="slash-tooltip-name">' + window.Sanitize.escapeHtml(m.name) + '</span>' +
+        '<span class="slash-tooltip-desc">' + window.Sanitize.escapeHtml(m.desc) + '</span>' +
+      '</div>';
+    }
+    tooltip.innerHTML = html;
+    tooltip.style.display = 'block';
+
+    var self = this;
+    tooltip.querySelectorAll('.slash-tooltip-item').forEach(function(item) {
+      item.addEventListener('click', function() {
+        var cmd = this.getAttribute('data-cmd');
+        var input = document.getElementById('chat-input');
+        if (input) {
+          input.value = cmd + ' ';
+          input.selectionStart = input.selectionEnd = cmd.length + 1;
+          input.focus();
+          var evt = new Event('input', { bubbles: true });
+          input.dispatchEvent(evt);
+        }
+        self.hideSlashTooltip();
+      });
+    });
+  },
+
+  hideSlashTooltip() {
+    var tooltip = document.getElementById('slash-tooltip');
+    if (tooltip) tooltip.style.display = 'none';
   }
 };
 

@@ -26,6 +26,11 @@ class SocketManager extends EventEmitter {
     this._heartbeatIntervals = new Map();
     this._lastDataTime = new Map();
     this._pongPending = new Map();
+    // Round-trip times: peerId -> ms (updated on each PONG). Exposed for the
+    // network-map visualizer via window.SocketManager._rtts.
+    this._rtts = new Map();
+    // When each PING was sent (peerId -> ms) so PONG can derive RTT
+    this._pingSentAt = new Map();
     // Adaptive heartbeat: tracks consecutive missed PONGs per peer
     // Higher count → network degraded → more tolerant thresholds
     this._heartbeatQuality = new Map();
@@ -83,12 +88,14 @@ class SocketManager extends EventEmitter {
           // Don't close immediately — send another PING and be more tolerant
           this._pongPending.set(peerId, false);
           var pingPacket = Protocol.createPacket(Protocol.Types.PING, 'system', peerId, { ts: Date.now() });
+          this._pingSentAt.set(peerId, Date.now());
           try { this._enqueueWrite(socket, Protocol.serialize(pingPacket)); } catch(e) {}
           this._lastDataTime.set(peerId, Date.now());
           return;
         }
         this._pongPending.set(peerId, true);
         var pingPacket = Protocol.createPacket(Protocol.Types.PING, 'system', peerId, { ts: Date.now() });
+        this._pingSentAt.set(peerId, Date.now());
         try { this._enqueueWrite(socket, Protocol.serialize(pingPacket)); } catch(e) {}
       }
     }, checkInterval);
@@ -102,6 +109,8 @@ class SocketManager extends EventEmitter {
     }
     this._lastDataTime.delete(peerId);
     this._pongPending.delete(peerId);
+    this._pingSentAt.delete(peerId);
+    this._rtts.delete(peerId);
     this._heartbeatQuality.delete(peerId);
   }
 
@@ -293,6 +302,8 @@ class SocketManager extends EventEmitter {
 
         // Flush any messages queued while connecting
         this._flushPending(peerId, socket);
+        // Reconnect hook: lets the transfer layer ask peers to resume partials
+        this.emit('peer-connected', peerId);
         resolve(socket);
       });
 
@@ -361,6 +372,8 @@ class SocketManager extends EventEmitter {
               this.sendBeacon(socket);
               // Start heartbeat now that we know the peerId
               this._startHeartbeat(currentPeerId, socket);
+              // Reconnect hook (inbound reconnects too)
+              this.emit('peer-connected', currentPeerId);
             }
 
             // Store peer's TCP port from beacon for reconnect
@@ -392,6 +405,12 @@ class SocketManager extends EventEmitter {
             if (packet.type === Protocol.Types.PONG) {
               if (currentPeerId) {
                 this._pongPending.delete(currentPeerId);
+                // RTT = now - when our PING went out; if no PING is in flight
+                // (e.g. first PONG), fall back to the PONG's own send timestamp.
+                var sentAt = this._pingSentAt.get(currentPeerId);
+                var pongTs = packet.payload && typeof packet.payload.ts === 'number' ? packet.payload.ts : null;
+                var rtt = Date.now() - (typeof sentAt === 'number' ? sentAt : (pongTs || Date.now()));
+                this._rtts.set(currentPeerId, Math.max(0, rtt));
                 // PONG received successfully — improve quality score
                 var quality = this._heartbeatQuality.get(currentPeerId);
                 if (quality) {
@@ -543,6 +562,8 @@ class SocketManager extends EventEmitter {
     this._reconnectTimers.clear();
     this._reconnectAttempts.clear();
     this._heartbeatQuality.clear();
+    this._rtts.clear();
+    this._pingSentAt.clear();
     this._peerIps.clear();
     this._peerPorts.clear();
   }

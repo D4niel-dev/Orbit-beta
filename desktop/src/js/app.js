@@ -651,6 +651,15 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       window.orbitAPI.on('network-message', (packet) => {
+        if (packet.type === window.Protocol.Types.FILE_TRANSFER_RESUME) {
+          // Receiver asked the sender to resume a partial chunked transfer.
+          // The main process only forwards this when no main-process send
+          // session owns the fileId — the renderer chat path handles it.
+          if (window.ChatPanel && window.ChatPanel.handleFileTransferResume) {
+            window.ChatPanel.handleFileTransferResume(packet);
+          }
+          return;
+        }
         if (packet.type === window.Protocol.Types.TYPING) {
           var chatId = (packet.payload && packet.payload.groupId) || packet.from;
           var isTyping = packet.payload && packet.payload.isTyping;

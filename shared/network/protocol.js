@@ -32,6 +32,15 @@ Orbit.Protocol = {
     FILE_TRANSFER_START: 'FILE_TRANSFER_START',
     FILE_CHUNK: 'FILE_CHUNK',
     FILE_TRANSFER_END: 'FILE_TRANSFER_END',
+    // FILE_TRANSFER_RESUME payload contract (receiver → sender):
+    //   { fileId, receivedCount, hash }
+    //   - receivedCount: number of contiguous 64KB chunks the receiver has
+    //     already stored (== the next expected chunkIndex)
+    //   - hash: SHA-256 (hex) of the partial file as received, i.e. of the
+    //     first receivedCount chunks. The sender compares it against a hash
+    //     of its own file's prefix to confirm the partial belongs to the same
+    //     file before re-sending chunks from receivedCount..totalChunks-1.
+    FILE_TRANSFER_RESUME: 'FILE_TRANSFER_RESUME',
     // File transfer (mobile offer-based)
     FILE_TRANSFER_OFFER: 'FILE_TRANSFER_OFFER',
     FILE_TRANSFER_ACCEPT: 'FILE_TRANSFER_ACCEPT',

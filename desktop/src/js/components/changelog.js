@@ -14,7 +14,26 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.4.2-beta', 'Latest Stable', [
+        versionBlock('0.5.0-beta', 'Latest Stable', [
+          ['Features', [
+            'Resumable P2P File Transfers (Desktop) — Interrupted chunked transfers resume from the last contiguous chunk via FILE_TRANSFER_RESUME and auto-resume when peers reconnect.',
+            'Network Topology Visualizer (Desktop + Mobile) — Live canvas map in Settings → Network: you at the center, peers orbiting, RTT color-coded links, transfer pulses, activity flashes.',
+            'Message Threading (Desktop + Mobile) — Replies persist across restarts, render as indented chains with an "N replies" chip, and open in a View thread panel.',
+            'Local Vault (Mobile) — Encrypted local backup of all your data (settings, chats, messages, files) with restore picker and optional auto-backup on background.',
+            'Group Slash Commands (19) — /help /poll /me /shrug /tableflip /unflip /lenny /roll /flip /spoiler /clear /invite /members /topic /leave /shout /countdown /nick /kick — group chats only. /poll opens a visual builder; quoted syntax still works.'
+          ]],
+          ['Bug Fixes', [
+            '/help Now Works on Mobile — Hardened sheet access plus a cache-bust fixed the dead command in group chats.',
+            'Slash Commands Come to Desktop — Full parity with mobile, gated to groups.',
+            'Poll Builder Centered — The create-poll sheet (plus invite/members sheets) is now properly centered.',
+            'Invite Share Fixed — Group Info Share now uses the system share sheet (or copies invite text) instead of posting into whatever chat was open.',
+            'Music Visualizer Duration Line Matches Video Player — Seek bar, groove, fill, and tooltip styles harmonized.'
+          ]],
+          ['Technical', [
+            'Version bumped to v0.5.0-beta across all manifests; Android bundle resynced.'
+          ]]
+        ]) +
+        versionBlock('0.4.2-beta', 'Stable', [
           ['Features', [
             'Chat Folders (Desktop, Experimental) — New Folders rail in the sidebar, gated behind Settings → Advanced → Enable Experimental + the new "Chat Folders" toggle. Create/rename/delete folders, add friends and groups via the chat context menu, browse a folder\'s chats in a dedicated view, and bulk-assign chats with the "Add Chats" picker. Folders persist per-device (local only; no sync yet).',
             'Folder Tabs Polish (Mobile) — Home-screen folder tabs redesigned: uniform tab width, centered Friends/Groups/folder trio when you have a single folder, and a dedicated scrollable sub-rail when you have several. Folders no longer draw opaque backgrounds over the panel; the active-tab underline is centered and new folders auto-scroll into view.'
@@ -28,7 +47,7 @@ window.Changelog = {
             'Version bumped to v0.4.2-beta across all three package.json files; version.js and the Android bundle regenerated.'
           ]]
         ]) +
-        versionBlock('0.4.0-beta', 'Latest Stable', [
+        versionBlock('0.4.0-beta', 'Stable', [
           ['Bug Fixes', [
             'Message Long-Press Menu Fixed — Press-and-hold on a message bubble now opens the reactions + actions sheet (Copy/Reply/Translate/Forward/Delete). Previously the wiring only ran through a secondary code path the app no longer uses, so the menu never initialized.',
             'Profile Frame Leak Fixed (4 renderers) — Avatar frames were still rendering when the Profile Frames setting was off. Gated _addAvatarFrames, renderProfilePill, and both chat-header renderers.',

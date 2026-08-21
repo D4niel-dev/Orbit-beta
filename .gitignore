@@ -5,6 +5,10 @@
 *.log
 .DS_Store
 
+# Playwright E2E artifacts (desktop/)
+desktop/test-results/
+desktop/playwright-report/
+
 # Android
 mobile/.android/
 mobile/android/.gradle/

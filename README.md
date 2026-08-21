@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v042-beta--chat-folders--folder-tabs">v0.4.2-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v050-beta">v0.5.0-beta</a>
 </p>
 
 <p align="center">
@@ -28,9 +28,9 @@
 
 | Channel | Version | Status |
 |---------|---------|--------|
-| **Stable** | v0.4.2-beta | Latest stable release |
-| Previous **Stable** | v0.2.7-beta | Stable release |
-| Previous **Stable** | v0.1.1-beta | Legacy stable release |
+| **Stable** | v0.5.0-beta | Latest stable release |
+| Earlier **Stable** | v0.4.0-beta | Stable release |
+| Legacy **Stable** | v0.1.1-beta | Legacy stable release |
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
 
@@ -90,19 +90,16 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage desktop app** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
-## Highlights (v0.4.2-beta)
+## Highlights (v0.5.0-beta)
 
-- **Chat Folders (Experimental, Desktop)** — New Folders rail in the sidebar, gated behind Settings → Advanced → Enable Experimental + the new "Chat Folders" toggle: create/rename/delete folders, add friends and groups via the chat context menu, browse a folder's chats in a dedicated view, and bulk-assign chats with the "Add Chats" picker. Folders persist per-device (local only; no sync yet).
-- **Folder Tabs Polish (Mobile)** — Home-screen folder tabs redesigned: uniform tab width, centered Friends/Groups/folder trio when you have a single folder, and a dedicated scrollable sub-rail when you have several — no more opaque backgrounds over the panel, centered active-tab underline, and new folders auto-scroll into view.
-
-## Highlights (v0.4.0-beta)
-
-- **Message Long-Press Menu Fixed** — Press-and-hold on message bubbles opens the reactions/actions sheet again.
-- **Message Effects Graduated** — Moved from Experimental to Chat settings, with automatic migration.
-- **Profile Frames Graduated** — Moved from Experimental to stable settings on both platforms (on by default).
-- **Profile Frame Leak Fixed** — Frames no longer render when the setting is off (4 renderers gated).
-- **Folders Now Experimental** — Folder tabs hidden behind a new Experimental toggle (off by default); folder tab icons removed.
-- **Experimental Toggle Audit** — Off-state bugs fixed for Avatars/Frames/Perf Mode toggles; Compact Spacing works again; FPS Monitor & Dev Overlay resume on reload.
+- **Resumable File Transfers (Desktop)** — Interrupted chunked transfers resume from the last stored chunk via the new `FILE_TRANSFER_RESUME` protocol (migration v13 + partial-transfer persistence), auto-resuming when peers reconnect.
+- **Network Topology Visualizer (Desktop + Mobile)** — Live canvas map in Settings → Network: your node at center, peers orbiting by hash angle, RTT color-coded connection lines, transfer pulses, and activity flashes.
+- **Message Threading (Desktop + Mobile)** — Replies persist across restart (migration v14); thread chains render indented with connector lines, "N replies" chips, and a View thread panel with jump-to-message.
+- **Local Vault (Mobile)** — One-tap export of all app data (localStorage + IndexedDB blobs) to a JSON vault file — optionally encrypted (PBKDF2 + AES-GCM) — with a restore picker and auto-backup on background.
+- **Group Slash Commands (19, Group-Only)** — `/help`, `/poll` with a visual poll builder, `/me`, `/roll`, `/spoiler`, `/invite`, `/members`, `/topic`, `/leave`, `/nick`, `/kick`, and more.
+- **Voice Recorder Level Meter (Desktop)** — Live 32-bar level meter (AnalyserNode, 0–6kHz voice range) with timer, cancel, and stop-and-send in a floating bar above the chat input.
+- **Android Mic Permissions** — `RECORD_AUDIO`/`MODIFY_AUDIO_SETTINGS` added for WebView `getUserMedia` (voice memos, QR camera).
+- **Playwright E2E Suite + CI** — First automated E2E tests (echo chat, folders, theme, settings, persistence, navigation) run on pull requests.
 
 ## Version History
 <details>
@@ -466,7 +463,7 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Search CSS** — New `.search-results-*` and `.recent-search-*` styles in mobile.css.
 - **Mobile Gallery Bug Fixes (7 bugs)** — Null guards on gallery button/close bindings; null checks in show/hide gallery; blob URL memory leak fixed (video/audio now revoked properly); filter index mismatch fixed; date-group visual order mismatch fixed (clicking media now opens correct item regardless of date sorting); missing scaleIn animation defined; lightbox close button respects safe-area-top.
 </details>
-<details>
+<details open>
 <summary>v0.4.0-beta (Stable)</summary>
 
 - **Message Long-Press Menu Fixed** — Press-and-hold on message bubbles opens the reactions + actions sheet again (wired into the live chat render path).
@@ -494,6 +491,26 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Delete Folder Crash Fixed (Desktop)** — Notification isolation, confirm-dialog close hardening, and safe reply-quote sender resolution eliminate the crash.
 - **Sidebar Rail Buttons Fixed (Desktop)** — Folders/DMs/Settings/Profile buttons re-attach after settings re-renders.
 - **Folder Picker Fixed (Desktop)** — Outside-click dismisses; interior clicks no longer navigate into the folder.
+</details>
+<details open>
+<summary>v0.5.0-beta (Stable)</summary>
+
+- **Resumable File Transfers (Desktop)** — `FILE_TRANSFER_RESUME` protocol resumes partial chunked transfers from the last stored chunk (migration v13, partial-hash verification, auto-resume on reconnect, 24h stale-partial sweep).
+- **Network Topology Visualizer (Desktop + Mobile)** — Live canvas map in Settings → Network: self node centered, peers orbiting by hash angle, RTT color-coded edges (green <150ms / yellow / red), transfer pulse badges, and activity flashes.
+- **Message Threading (Desktop + Mobile)** — Replies persist across restart (migration v14 `messages.replyTo`); threaded chains render indented with connector lines, "N replies" chips on parents, and a View thread panel with click/tap-to-jump.
+- **Local Vault (Mobile)** — Settings → Connection → Local Vault exports all `orbit_*` localStorage keys + IndexedDB blobs/partials to `OrbitVault-*.json`, with optional PBKDF2 + AES-GCM encryption, restore picker with decrypt prompt, and auto-backup on background.
+- **Group Slash Commands (19, Group-Only)** — `/help`, `/poll` (+ builder), `/me`, `/shrug`, `/tableflip`, `/unflip`, `/lenny`, `/roll`, `/flip`, `/spoiler`, `/clear`, `/invite`, `/members`, `/topic`, `/leave`, `/shout`, `/countdown`, `/nick`, `/kick` — DMs show a "group chats only" toast.
+- **Voice-Note Type Stamps** — `type`/`mimeType` stamped in `FILE_TRANSFER_START`; receivers honor explicit stamps so voice clips (`*.webm`) stay audio.
+- **Voice Recorder Level Meter (Desktop)** — Live 32-bar AnalyserNode level meter (0–6kHz) in a floating bar above the chat input.
+- **Android Mic Permissions** — `RECORD_AUDIO` + `MODIFY_AUDIO_SETTINGS` for WebView `getUserMedia`.
+- **Playwright E2E Suite + CI** — `desktop/tests/e2e/` (echo chat, folders, theme, settings, persistence, navigation) run on pull requests.
+- **Mobile /help Fixed** — Hardened `window.OrbitSheet` reference + cache-bust restored slash help in mobile groups.
+- **Desktop Slash Commands Added** — Full parity implementation matching the mobile command set.
+- **Poll Builder & Sheets Centering Fixed (Mobile)** — Poll/invite/members sheets centered; duplicate Cancel pill removed.
+- **Invite Share Button Fixed (Both Platforms)** — Uses the system share sheet with clipboard fallback instead of posting the invite into whatever chat was open.
+- **Music Player Seek Bar Harmonized (Desktop)** — Audio player duration line now matches video player styling.
+- **Group-Create Friend Picker Fixed (Desktop)** — Capped height with internal scroll; footer pinned to the bottom.
+- **Group E2EE Design Doc** — Shared-group-key scheme documented for group end-to-end encryption.
 </details>
 
 See [CHANGELOG.md](CHANGELOG.md) for the full version history.
@@ -732,8 +749,13 @@ Transparency matters in beta. Current constraints include:
 
 ## Roadmap
 
-### Shipped (v0.4.2-beta)
+### Shipped (v0.5.0-beta)
 
+- **Resumable File Transfers (Desktop)** — Interrupted transfers resume from the last chunk; auto-resume on reconnect
+- **Network Topology Visualizer (Desktop + Mobile)** — Live peer map with RTT-colored links and transfer pulses
+- **Message Threading (Desktop + Mobile)** — Persistent reply chains with thread panels
+- **Local Vault (Mobile)** — Full-data export/restore with optional encryption and auto-backup
+- **Group Slash Commands (19)** — Polls, invites, member/topic management, and more (group chats only)
 - **Chat Folders (Desktop)** — Experimental folders rail, view, context-menu assignment, and Add Chats picker
 - **Folder Tabs Polish (Mobile)** — Centered trio / scrollable sub-rail layout, fixed underline
 - **Desktop Stability Fixes** — Delete-folder crash eliminated, sidebar rail buttons re-wired, folder picker dismiss fixed
@@ -745,11 +767,7 @@ Transparency matters in beta. Current constraints include:
 - **E2EE cross-platform unification** — Align key derivation (SHA-256 vs HKDF) so desktop and mobile can exchange encrypted DMs and group messages
 - **Group E2EE** — Extend end-to-end encryption to group chats (currently DM-only)
 - **Large file transfer stability** — Cross-platform transfer hardening
-- **Resumable file transfers** — Pause and resume across sessions
-- **Voice messages** — Record and send voice clips
-- **Message threads** — Reply chains and threaded conversations
 - **Custom notification sounds** — Per-chat and per-contact sound profiles
-- **Message effects & rich embeds** — Link previews, inline media, text formatting toolbar
 
 ### Experimental
 

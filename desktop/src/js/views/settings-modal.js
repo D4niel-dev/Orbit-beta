@@ -9,6 +9,10 @@ window.SettingsModal = {
     this.container.style.cssText = 'display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:9999;align-items:center;justify-content:center;';
     document.body.appendChild(this.container);
     this.render();
+    // Live network-map refresh (Settings → Network tab). Skips itself while
+    // the modal is closed or the canvas is hidden, so it's idle-cheap.
+    var self = this;
+    setInterval(function() { self._drawNetworkMap(); }, 250);
     // Keyboard accessibility for collapsible sections
     this.container.addEventListener('keydown', function(e) {
       var header = e.target.closest('.collapsible-header');
@@ -1138,44 +1142,12 @@ window.SettingsModal = {
           if (entries[0].contentRect.width > 0) {
             var canvas = content.querySelector('#network-map-canvas');
             if (!canvas) return;
-            canvas.width = entries[0].contentRect.width;
-            canvas.height = entries[0].contentRect.height;
-            var ctx = canvas.getContext('2d');
-            var cx = canvas.width / 2;
-            var cy = canvas.height / 2;
-            var peers = state.friends ? state.friends.filter(function(f) { return f.status === 'online'; }) : [];
-            var radius = Math.min(cx, cy) * 0.6;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Draw edges
-            ctx.strokeStyle = 'rgba(10, 132, 255, 0.3)';
-            ctx.lineWidth = 1.5;
-            peers.forEach(function(p, i) {
-              var angle = (i / peers.length) * Math.PI * 2;
-              var px = cx + Math.cos(angle) * radius;
-              var py = cy + Math.sin(angle) * radius;
-              ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(px, py); ctx.stroke();
-            });
-            
-            // Draw Local User
-            ctx.fillStyle = '#0A84FF';
-            ctx.beginPath(); ctx.arc(cx, cy, 14, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = '500 11px var(--font-body, sans-serif)';
-            ctx.textAlign = 'center';
-            ctx.fillText('You', cx, cy + 28);
-            
-            // Draw Peers
-            ctx.fillStyle = '#30D158';
-            peers.forEach(function(p, i) {
-              var angle = (i / peers.length) * Math.PI * 2;
-              var px = cx + Math.cos(angle) * radius;
-              var py = cy + Math.sin(angle) * radius;
-              ctx.beginPath(); ctx.arc(px, py, 8, 0, Math.PI * 2); ctx.fill();
-              ctx.fillStyle = '#AEAEB6';
-              ctx.fillText(p.username.substring(0, 10), px, py + 22);
-              ctx.fillStyle = '#30D158';
-            });
+            // Backing store sized at devicePixelRatio; draw in CSS px via setTransform
+            var dpr = window.devicePixelRatio || 1;
+            canvas.width = Math.round(entries[0].contentRect.width * dpr);
+            canvas.height = Math.round(entries[0].contentRect.height * dpr);
+            window.SettingsModal._mapDpr = dpr;
+            window.SettingsModal._drawNetworkMap();
           }
         });
         ro.observe(canvasContainer);
@@ -2401,6 +2373,185 @@ window.SettingsModal = {
     } else {
       content.innerHTML = '<h3 style="font-family:var(--font-display);font-size:24px;margin-bottom:24px;">' + tabName + '</h3><p style="color:var(--text-muted);">Coming soon...</p>';
     }
+  },
+
+  // Stable per-string hash → deterministic node placement across redraws
+  _hashString(str) {
+    var h = 0;
+    for (var i = 0; i < str.length; i++) {
+      h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+    }
+    return Math.abs(h);
+  },
+
+  // Live network topology renderer for #network-map-canvas (Settings → Network).
+  // Self node at center; peer nodes placed on stable per-peerId angles; edges
+  // only to connected peers, colored by RTT (_rtts, green<150 / yellow 150-400 /
+  // red>400-or-unknown). Active transfers pulse edges + show a name/percent
+  // badge; incoming-message bursts (_p2pRecvCount deltas) briefly brighten edges.
+  _drawNetworkMap() {
+    var recvNow = window._p2pRecvCount || 0;
+    if (this._lastRecvCount !== undefined && recvNow > this._lastRecvCount) this._activityAt = Date.now();
+    this._lastRecvCount = recvNow;
+
+    if (!this.isOpen) return;
+    var canvas = document.getElementById('network-map-canvas');
+    if (!canvas || canvas.offsetParent === null) return;
+
+    var dpr = this._mapDpr || window.devicePixelRatio || 1;
+    var w = canvas.width / dpr;
+    var h = canvas.height / dpr;
+    if (w < 10 || h < 10) return;
+
+    var ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+
+    var state = window.store ? window.store.getState() : null;
+    if (!state) return;
+    var friends = state.friends || [];
+    var online = friends.filter(function(f) { return f.status === 'online'; });
+
+    // Connected set: SocketManager.connections when the socket layer is exposed
+    // to the renderer; otherwise fall back to beacon-implied online friends.
+    var sm = window.SocketManager;
+    var connectedIds = {};
+    var rtts = null;
+    if (sm && sm.connections) {
+      sm.connections.forEach(function(sock, peerId) { connectedIds[peerId] = true; });
+      rtts = (sm._rtts && sm._rtts.get) ? sm._rtts : null;
+    } else {
+      online.forEach(function(f) { connectedIds[f.userId] = true; });
+    }
+
+    // Node set: online friends + any connected peer not among them
+    var nodes = [];
+    var seen = {};
+    online.forEach(function(f) {
+      if (!seen[f.userId]) {
+        seen[f.userId] = true;
+        nodes.push({ id: f.userId, name: f.username || 'Peer', connected: !!connectedIds[f.userId] });
+      }
+    });
+    if (sm && sm.connections) {
+      sm.connections.forEach(function(sock, peerId) {
+        if (!seen[peerId]) {
+          seen[peerId] = true;
+          nodes.push({ id: peerId, name: String(peerId).substring(0, 8), connected: true });
+        }
+      });
+    }
+
+    var transfers = state.transferProgress || {};
+    var transferIds = Object.keys(transfers);
+    var anyTransfer = transferIds.length > 0;
+
+    // Incoming-activity pulse (fades over ~500ms after _p2pRecvCount jumps)
+    var activity = this._activityAt ? Math.max(0, 1 - (Date.now() - this._activityAt) / 500) : 0;
+
+    var cx = w / 2;
+    var cy = h / 2;
+    var radius = Math.min(cx, cy) * 0.6;
+
+    // Deterministic angles from peerId hash (stable across ticks, unlike index order)
+    var pos = {};
+    nodes.forEach(function(node) {
+      var angle = nodes.length === 1 ? 0 : (this._hashString(node.id) % 1000) / 1000 * Math.PI * 2;
+      pos[node.id] = { x: cx + Math.cos(angle) * radius, y: cy + Math.sin(angle) * radius };
+    }, this);
+
+    function edgeStyle(id) {
+      var rtt = rtts ? rtts.get(id) : undefined;
+      if (rtt === undefined || rtt === null) return { color: '255, 69, 58' }; // unknown → red
+      if (rtt < 150) return { color: '48, 209, 88' }; // green
+      if (rtt <= 400) return { color: '255, 204, 0' }; // yellow
+      return { color: '255, 69, 58' }; // red
+    }
+
+    var pulseT = (Date.now() % 1200) / 1200; // 0..1 traveling pulse
+
+    // Edges: self → each connected peer
+    nodes.forEach(function(node) {
+      if (!node.connected) return;
+      var p = pos[node.id];
+      var st = edgeStyle(node.id);
+      var alpha = 0.35 + activity * 0.55;
+      if (anyTransfer) alpha = 0.45 + 0.4 * Math.abs(Math.sin(pulseT * Math.PI * 2));
+      ctx.strokeStyle = 'rgba(' + st.color + ', ' + alpha.toFixed(2) + ')';
+      ctx.lineWidth = anyTransfer ? 2.5 : 1.5;
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(p.x, p.y); ctx.stroke();
+      if (anyTransfer) {
+        // Traveling dot along the edge while a transfer is active
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+        ctx.beginPath();
+        ctx.arc(cx + (p.x - cx) * pulseT, cy + (p.y - cy) * pulseT, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    });
+
+    // Active transfer badge (name + percent)
+    if (anyTransfer) {
+      var t = transfers[transferIds[0]];
+      if (t && t.name) {
+        var pct = t.total > 0 ? Math.round((t.received / t.total) * 100) : 0;
+        var badge = (t.isSending ? 'Sending ' : 'Receiving ') + t.name + ' — ' + pct + '%';
+        ctx.font = '600 11px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        var bw = ctx.measureText(badge).width + 16;
+        ctx.fillStyle = 'rgba(10, 132, 255, 0.15)';
+        ctx.strokeStyle = 'rgba(10, 132, 255, 0.5)';
+        ctx.beginPath();
+        ctx.roundRect ? ctx.roundRect((w - bw) / 2, 6, bw, 18, 9) : ctx.rect((w - bw) / 2, 6, bw, 18);
+        ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillText(badge, w / 2, 18);
+      }
+    }
+
+    // Self node
+    ctx.fillStyle = '#0A84FF';
+    ctx.beginPath(); ctx.arc(cx, cy, 14, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = '600 10px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('You', cx, cy + 28);
+
+    // Peer nodes: initial letter, RTT-colored when connected
+    nodes.forEach(function(node) {
+      var p = pos[node.id];
+      var label = node.name.length > 8 ? node.name.substring(0, 8) + '…' : node.name;
+      if (node.connected) {
+        var st = edgeStyle(node.id);
+        ctx.fillStyle = 'rgb(' + st.color + ')';
+      } else {
+        ctx.fillStyle = '#8E8E93';
+      }
+      ctx.beginPath(); ctx.arc(p.x, p.y, 10, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = '600 10px system-ui, sans-serif';
+      ctx.fillText(node.name.charAt(0).toUpperCase(), p.x, p.y + 3.5);
+      ctx.fillStyle = 'rgba(174, 174, 182, 0.95)';
+      ctx.font = '500 10px system-ui, sans-serif';
+      ctx.fillText(label, p.x, p.y + 24);
+    });
+
+    // Legend (top-left): RTT thresholds
+    ctx.textAlign = 'left';
+    var legend = [
+      { c: '48, 209, 88', t: '<150ms' },
+      { c: '255, 204, 0', t: '150-400ms' },
+      { c: '255, 69, 58', t: '>400ms / unknown' }
+    ];
+    var lx = 8;
+    var ly = h - 10;
+    legend.forEach(function(l) {
+      ctx.fillStyle = 'rgb(' + l.c + ')';
+      ctx.beginPath(); ctx.arc(lx + 3, ly - 2, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(174, 174, 182, 0.9)';
+      ctx.font = '500 9px system-ui, sans-serif';
+      ctx.fillText(l.t, lx + 9, ly);
+      lx += ctx.measureText(l.t).width + 20;
+    });
   },
 
   open(tab) {

@@ -6545,3 +6545,240 @@ textarea#chat-input {
   color: inherit;
   user-select: text;
 }
+
+/* ─── Message Threads ─── */
+/* Threaded replies: subtle indent + 2px chain connector line */
+.message-row.msg-threaded.other {
+  padding-left: 16px;
+}
+.message-row.msg-threaded.mine {
+  padding-right: 16px;
+}
+.message-row.msg-threaded.other::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  left: 5px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--border-subtle);
+  pointer-events: none;
+}
+.message-row.msg-threaded.mine::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  right: 5px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--border-subtle);
+  pointer-events: none;
+}
+
+/* Thread replies chip — pill button below the parent bubble */
+.msg-thread-chip {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 6px;
+  margin-bottom: 2px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--accent-primary);
+  background: var(--accent-soft);
+  color: var(--accent-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+.msg-thread-chip:active {
+  transform: scale(0.94);
+  background: var(--bg-hover);
+  opacity: 0.85;
+}
+
+/* Thread panel rows (#thread-content) */
+#thread-content {
+  padding: 8px 14px;
+}
+.thread-msg-item,
+.thread-root-msg {
+  position: relative;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  border-radius: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.thread-msg-item:hover,
+.thread-root-msg:hover {
+  background: var(--bg-hover);
+}
+.thread-msg-item:active,
+.thread-root-msg:active {
+  background: var(--bg-hover);
+  opacity: 0.8;
+}
+.thread-msg-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding-right: 64px;
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.thread-msg-text {
+  font-size: 14px;
+  color: var(--text-primary);
+  word-wrap: break-word;
+}
+.thread-msg-time {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.thread-root-msg {
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent-primary);
+  font-weight: 500;
+}
+.thread-root-msg .thread-msg-name {
+  color: var(--accent-primary);
+}
+.thread-root-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  background: var(--accent-primary);
+  color: #fff;
+}
+
+/* ─── Network Map (Settings → Network) ─── */
+.network-map-block {
+  padding: 4px 0 10px;
+}
+
+#network-map-canvas-mobile {
+  display: block;
+  width: 100%;
+  height: 220px;
+  border-radius: 12px;
+  background: var(--bg-hover);
+  border: 1px solid var(--accent-primary-alpha, rgba(10,132,255,0.2));
+}
+
+.network-map-status {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* ─── Local Vault (Settings → Local Vault) ─── */
+.vault-block {
+  padding: 4px 0 10px;
+}
+
+.vault-status {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: center;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-subtle);
+}
+
+.vault-status-sub {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.4;
+}
+
+.vault-pass-input {
+  padding: 6px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.vault-pass-input:focus {
+  border-color: var(--accent-primary);
+}
+
+.vault-picker-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  padding: 16px 20px 8px;
+}
+
+.vault-file-list {
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.vault-file-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 20px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vault-file-item:active {
+  background: var(--bg-hover);
+}
+
+.vault-file-item i {
+  width: 18px;
+  height: 18px;
+  color: var(--accent-primary);
+  flex-shrink: 0;
+}
+
+.vault-file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.vault-file-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}

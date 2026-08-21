@@ -258,8 +258,12 @@ window.SidebarMiddle = {
         '</label>';
       });
 
-      var createContent = activeTab === 'create' ? 'style="display:block;"' : 'style="display:none;"';
-      var joinContent = activeTab === 'join' ? 'style="display:block;"' : 'style="display:none;"';
+      // F3: single style attribute per tab div — the static flex props come
+      // first and the dynamic display state LAST so it wins the cascade (the
+      // old two-attribute form dropped the second attribute entirely per
+      // HTML5 first-wins, killing the flex layout + footer pinning).
+      var createContent = 'style="flex:1;flex-direction:column;overflow:hidden;display:' + (activeTab === 'create' ? 'flex' : 'none') + ';"';
+      var joinContent = 'style="flex:1;flex-direction:column;overflow:hidden;display:' + (activeTab === 'join' ? 'flex' : 'none') + ';"';
 
       overlay.innerHTML =
         '<div style="width:420px;max-height:620px;background:var(--bg-surface);border-radius:16px;display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--shadow-xl);border:1px solid var(--border-subtle);">' +
@@ -269,7 +273,7 @@ window.SidebarMiddle = {
               '<button class="gcm-tab" data-tab="join" style="flex:1;padding:7px 12px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:' + (activeTab === 'join' ? '600' : '500') + ';background:' + (activeTab === 'join' ? 'var(--accent-primary)' : 'transparent') + ';color:' + (activeTab === 'join' ? 'white' : 'var(--text-secondary)') + ';transition:all 0.15s;">Join</button>' +
             '</div>' +
           '</div>' +
-          '<div ' + createContent + ' style="flex:1;display:flex;flex-direction:column;overflow:hidden;">' +
+          '<div ' + createContent + '>' +
             '<div style="padding:32px 40px 20px;display:flex;flex-direction:column;gap:18px;">' +
               '<div style="display:flex;align-items:flex-start;gap:16px;">' +
                 '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>' +
@@ -278,17 +282,17 @@ window.SidebarMiddle = {
               '</div>' +
               '<input id="group-name-input" type="text" placeholder="Group name..." style="width:100%;padding:14px 16px;border-radius:10px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);font-size:14px;outline:none;box-sizing:border-box;">' +
             '</div>' +
-            '<div style="flex:1;overflow-y:auto;padding:0 40px 16px;">' +
+            '<div style="flex:1;overflow-y:auto;max-height:224px;padding:0 40px 16px;">' +
               '<div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;padding:8px 0 12px;letter-spacing:0.5px;">Select Members</div>' +
               friendOptions +
               (friends.length === 0 ? '<div style="display:flex;flex-direction:column;align-items:center;padding:24px 0;color:var(--text-muted);gap:8px;"><i data-lucide="user-x" style="width:28px;height:28px;opacity:0.3;"></i><div style="font-size:13px;">No friends available.</div></div>' : '') +
             '</div>' +
-            '<div style="padding:20px 40px 28px;border-top:1px solid var(--border-subtle);display:flex;gap:12px;justify-content:flex-end;background:var(--bg-surface);">' +
+            '<div style="margin-top:auto;padding:20px 40px 28px;border-top:1px solid var(--border-subtle);display:flex;gap:12px;justify-content:flex-end;background:var(--bg-surface);">' +
               '<button id="btn-cancel-group" style="padding:11px 24px;border-radius:10px;border:1px solid var(--border-subtle);background:transparent;color:var(--text-secondary);cursor:pointer;font-weight:500;flex-shrink:0;">Cancel</button>' +
               '<button id="btn-confirm-group" style="padding:11px 28px;border-radius:10px;background:var(--accent-primary);color:white;border:none;cursor:pointer;font-weight:600;flex-shrink:0;">Create</button>' +
             '</div>' +
           '</div>' +
-          '<div ' + joinContent + ' style="flex:1;display:flex;flex-direction:column;overflow:hidden;">' +
+          '<div ' + joinContent + '>' +
             '<div style="flex:1;padding:56px 40px 32px;display:flex;flex-direction:column;gap:28px;">' +
               '<div style="display:flex;align-items:flex-start;gap:16px;">' +
                 '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>' +
@@ -320,7 +324,13 @@ window.SidebarMiddle = {
 
       overlay.querySelector('#btn-cancel-group').addEventListener('click', function() { document.body.removeChild(overlay); });
       overlay.querySelector('#btn-cancel-join').addEventListener('click', function() { document.body.removeChild(overlay); });
-      overlay.addEventListener('click', function(e) { if (e.target === overlay) document.body.removeChild(overlay); });
+      // F4: guard registration — renderModal() re-runs attachEvents() on every
+      // tab switch; an unguarded listener would accumulate and later fire on a
+      // removed overlay (NotFoundError in console).
+      if (!overlay._clickBound) {
+        overlay._clickBound = true;
+        overlay.addEventListener('click', function(e) { if (e.target === overlay) document.body.removeChild(overlay); });
+      }
 
       overlay.querySelector('#btn-confirm-group').addEventListener('click', function() {
         var groupName = overlay.querySelector('#group-name-input').value.trim();
@@ -1721,7 +1731,11 @@ window.SidebarMiddle = {
 
     // Copy invite code
     document.getElementById('group-info-copy-invite').addEventListener('click', function() {
+      var hadCodeCopy = !!group.inviteCode;
       group.inviteCode = group.inviteCode || Array.from(window.crypto.getRandomValues(new Uint8Array(4)), function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+      if (!hadCodeCopy && group.inviteCode && window.store && window.store.updateGroupField) {
+        try { window.store.updateGroupField(group.groupId, 'inviteCode', group.inviteCode); } catch(e) {}
+      }
       if (window.orbitAPI && window.orbitAPI.writeClipboard) {
         window.orbitAPI.writeClipboard(group.inviteCode);
       } else {
@@ -1730,33 +1744,45 @@ window.SidebarMiddle = {
       if (window.Toast) window.Toast.show('Copied', 'Invite code copied');
     });
 
-    // Share invite in current chat
+    // Share invite via system share sheet
     var shareInviteBtn = document.getElementById('group-info-share-invite');
     if (shareInviteBtn) {
       shareInviteBtn.addEventListener('click', function() {
+        var hadCode = !!group.inviteCode;
         group.inviteCode = group.inviteCode || (function() { var b=new Uint8Array(4); window.crypto.getRandomValues(b); return Array.from(b).map(function(x){return x.toString(16).padStart(2,'0')}).join(''); })();
-        var state2 = window.store.getState();
-        var chatId = state2.activeChatId;
-        if (chatId && chatId !== 'local-echo') {
-          var text = 'Join my group "' + group.groupName + '" on Orbit! Use invite code: ' + group.inviteCode;
-          var msg = { id: Date.now() + 2, sender: state2.currentUser.userId, text: text, timestamp: new Date().toISOString() };
-          window.store.addMessage(chatId, msg);
-          var friend = state2.friends.find(function(f) { return f.userId === chatId; });
-          if (friend && window.orbitAPI) {
-            window.orbitAPI.networkSend(friend.userId, friend.ip || '', window.Protocol.Types.MESSAGE, { text: text, msgId: msg.id });
+        if (!hadCode && group.inviteCode && window.store && window.store.updateGroupField) {
+          try { window.store.updateGroupField(group.groupId, 'inviteCode', group.inviteCode); } catch(e) {}
+        }
+        var inviteText = 'Join "' + group.groupName + '" on Orbit! Code: ' + group.inviteCode;
+        try {
+          if (navigator.share) {
+            var canShareOk = true;
+            try { if (navigator.canShare && !navigator.canShare({ text: inviteText })) canShareOk = false; } catch(e) { canShareOk = true; }
+            if (canShareOk) {
+              navigator.share({ title: 'Orbit invite', text: inviteText }).then(function(){
+                if (window.Toast) window.Toast.show('Shared', 'Shared!');
+              }).catch(function(err){
+                if (err && err.name === 'AbortError') return;
+                if (window.orbitAPI && window.orbitAPI.writeClipboard) {
+                  try { window.orbitAPI.writeClipboard(inviteText); if (window.Toast) window.Toast.show('Copied', 'Invite text copied - share it anywhere'); } catch(e2) { if (window.Toast) window.Toast.show('Error', 'Copy failed', 'error'); }
+                } else if (navigator.clipboard && navigator.clipboard.writeText) {
+                  navigator.clipboard.writeText(inviteText).then(function(){ if (window.Toast) window.Toast.show('Copied', 'Invite text copied - share it anywhere'); }).catch(function(){ if (window.Toast) window.Toast.show('Error', 'Copy failed', 'error'); });
+                } else {
+                  if (window.Toast) window.Toast.show('Error', 'Copy failed', 'error');
+                }
+              });
+              return;
+            }
           }
-          var activeGroup = state2.groups.find(function(g) { return g.groupId === chatId; });
-          if (activeGroup && activeGroup.members && window.orbitAPI) {
-            activeGroup.members.forEach(function(m) {
-              if (m.userId !== state2.currentUser.userId) {
-                window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.MESSAGE, { text: text, msgId: msg.id, chatId: chatId });
-              }
-            });
-          }
-          if (window.Toast) window.Toast.show('Sent', 'Invite code shared in chat');
-          overlay.remove();
+        } catch(e) {}
+        if (window.orbitAPI && window.orbitAPI.writeClipboard) {
+          try { window.orbitAPI.writeClipboard(inviteText); if (window.Toast) window.Toast.show('Copied', 'Invite text copied - share it anywhere'); } catch(e) { if (window.Toast) window.Toast.show('Error', 'Copy failed', 'error'); }
+        } else if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(inviteText).then(function(){ if (window.Toast) window.Toast.show('Copied', 'Invite text copied - share it anywhere'); }).catch(function(){
+            try { var ta2=document.createElement('textarea'); ta2.value=inviteText; document.body.appendChild(ta2); ta2.select(); document.execCommand('copy'); ta2.remove(); if (window.Toast) window.Toast.show('Copied', 'Invite text copied - share it anywhere'); } catch(e){ if (window.Toast) window.Toast.show('Error', 'Copy failed', 'error'); }
+          });
         } else {
-          if (window.Toast) window.Toast.show('Info', 'Open a chat first to share the invite');
+          try { var ta=document.createElement('textarea'); ta.value=inviteText; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); if (window.Toast) window.Toast.show('Copied', 'Invite text copied - share it anywhere'); } catch(e){ if (window.Toast) window.Toast.show('Error', 'Copy failed', 'error'); }
         }
       });
     }

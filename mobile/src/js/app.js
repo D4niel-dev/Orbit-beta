@@ -13,7 +13,7 @@ window._disappearTimers = {};
 /* ---- Slash Command Registry ---- */
 var COMMANDS = [
   { name: '/help', desc: 'Show all available commands', usage: '/help', handler: 'help' },
-  { name: '/poll', desc: 'Create a poll in the group', usage: '/poll "Question?" "Option1" "Option2" ...', handler: 'poll' },
+  { name: '/poll', desc: 'Create a poll in the group', usage: '/poll — opens poll builder (or /poll "Question?" "Option1" "Option2" ...)', handler: 'poll' },
   { name: '/me', desc: 'Write in third person', usage: '/me waves', handler: 'me' },
   { name: '/shrug', desc: 'Add a shrug', usage: '/shrug', handler: 'shrug' },
   { name: '/tableflip', desc: 'Flipping tables', usage: '/tableflip', handler: 'tableflip' },
@@ -22,7 +22,15 @@ var COMMANDS = [
   { name: '/roll', desc: 'Roll a die', usage: '/roll 6', handler: 'roll' },
   { name: '/flip', desc: 'Flip a coin', usage: '/flip', handler: 'flip' },
   { name: '/spoiler', desc: 'Send text as spoiler', usage: '/spoiler secret text', handler: 'spoiler' },
-  { name: '/clear', desc: 'Clear chat messages (local)', usage: '/clear', handler: 'clear' }
+  { name: '/clear', desc: 'Clear chat messages (local)', usage: '/clear', handler: 'clear' },
+  { name: '/invite', desc: 'Show group invite code', usage: '/invite', handler: 'invite' },
+  { name: '/members', desc: 'List group members', usage: '/members', handler: 'members' },
+  { name: '/topic', desc: 'Set group description (owner/admin)', usage: '/topic New description', handler: 'topic' },
+  { name: '/leave', desc: 'Leave current group', usage: '/leave', handler: 'leave' },
+  { name: '/shout', desc: 'Send announcement', usage: '/shout <message>', handler: 'shout' },
+  { name: '/countdown', desc: 'Countdown then send message', usage: '/countdown 5 Go!', handler: 'countdown' },
+  { name: '/nick', desc: 'Set your nickname in this group', usage: '/nick <new name>', handler: 'nick' },
+  { name: '/kick', desc: 'Remove member from group (owner/admin)', usage: '/kick <username>', handler: 'kick' }
 ];
 
 /* ---- Mention Autocomplete State ---- */
@@ -127,11 +135,14 @@ document.addEventListener('DOMContentLoaded', function() {
       var self = this;
       this._ready = new Promise(function(resolve, reject) {
         try {
-          var req = indexedDB.open('OrbitBlobStore', 1);
+          var req = indexedDB.open('OrbitBlobStore', 2);
           req.onupgradeneeded = function(e) {
             var db = e.target.result;
             if (!db.objectStoreNames.contains('blobs')) {
               db.createObjectStore('blobs');
+            }
+            if (!db.objectStoreNames.contains('partials')) {
+              db.createObjectStore('partials');
             }
           };
           req.onsuccess = function(e) {
@@ -183,6 +194,48 @@ document.addEventListener('DOMContentLoaded', function() {
           try {
             var tx = self._db.transaction('blobs', 'readwrite');
             tx.objectStore('blobs')['delete'](key);
+            tx.oncomplete = function() { resolve(); };
+            tx.onerror = function(e) { reject(e.target.error); };
+          } catch(e) { reject(e); }
+        });
+      });
+    },
+    // CROSS-RESTART: checkpoint in-progress receives into the 'partials' store
+    // so an app kill mid-transfer can be resumed after restart (v2 upgrade adds
+    // the store; the 'blobs' store and its API stay untouched).
+    partialPut: function(fileId, record) {
+      var self = this;
+      return this._open().then(function() {
+        return new Promise(function(resolve, reject) {
+          try {
+            var tx = self._db.transaction('partials', 'readwrite');
+            tx.objectStore('partials').put(record, fileId);
+            tx.oncomplete = function() { resolve(); };
+            tx.onerror = function(e) { reject(e.target.error); };
+          } catch(e) { reject(e); }
+        });
+      });
+    },
+    partialGetAll: function() {
+      var self = this;
+      return this._open().then(function() {
+        return new Promise(function(resolve, reject) {
+          try {
+            var tx = self._db.transaction('partials', 'readonly');
+            var req = tx.objectStore('partials').getAll();
+            req.onsuccess = function(e) { resolve(e.target.result || []); };
+            req.onerror = function(e) { reject(e.target.error); };
+          } catch(e) { reject(e); }
+        });
+      });
+    },
+    partialDelete: function(fileId) {
+      var self = this;
+      return this._open().then(function() {
+        return new Promise(function(resolve, reject) {
+          try {
+            var tx = self._db.transaction('partials', 'readwrite');
+            tx.objectStore('partials')['delete'](fileId);
             tx.oncomplete = function() { resolve(); };
             tx.onerror = function(e) { reject(e.target.error); };
           } catch(e) { reject(e); }
@@ -262,6 +315,62 @@ document.addEventListener('DOMContentLoaded', function() {
   window._restoreAllBlobAttachments().then(function() {
     console.log('[BlobStore] All blob attachments restored');
     if (activeChatId) renderMessages(activeChatId);
+  });
+
+  // CROSS-RESTART: rehydrate in-progress file receives from the IndexedDB
+  // 'partials' store. A re-sent START after restart then hits the duplicate-
+  // START guard (same hash → keep partial → _maybeRequestResume), so the
+  // sender skips ahead instead of starting from zero.
+  window.BlobStoreDB.partialGetAll().then(function(partials) {
+    if (!partials || !partials.length) return;
+    var _restoredCount = 0;
+    var _purgedCount = 0;
+    var _now = Date.now();
+    var _maxAge = 24 * 60 * 60 * 1000;
+    partials.forEach(function(rec) {
+      if (!rec || !rec.fileId) return;
+      // Stale partial (older than 24h) — purge, do not resurrect
+      if (!rec.savedAt || (_now - rec.savedAt) > _maxAge) {
+        window.BlobStoreDB.partialDelete(rec.fileId).catch(function(err) {
+          console.warn('[P2P] Partial purge failed for', rec.fileId, err);
+        });
+        _purgedCount++;
+        return;
+      }
+      window.activeTransfers = window.activeTransfers || {};
+      if (window.activeTransfers[rec.fileId]) return; // already live — keep it
+      var _chunksArr = new Array(rec.total || 0);
+      var _recvCount = 0;
+      if (rec.chunks && typeof rec.chunks === 'object') {
+        for (var _ckKey in rec.chunks) {
+          var _ckIdx = parseInt(_ckKey, 10);
+          if (!isNaN(_ckIdx) && _ckIdx >= 0 && _ckIdx < _chunksArr.length) {
+            _chunksArr[_ckIdx] = rec.chunks[_ckKey];
+            _recvCount++;
+          }
+        }
+      }
+      window.activeTransfers[rec.fileId] = {
+        chunks: _chunksArr,
+        fileName: rec.fileName || 'unknown',
+        total: rec.total || 0,
+        received: _recvCount,
+        senderId: rec.senderId || '',
+        type: rec.type || '',
+        mimeType: rec.mimeType || '',
+        hash: rec.hash || '',
+        chatId: rec.chatId || '',
+        _startTime: rec.savedAt,
+        _lastChunkTime: rec.savedAt,
+        _rehydrated: true,
+        _lastCheckpoint: rec.received || _recvCount
+      };
+      _restoredCount++;
+    });
+    console.log('[P2P] Restored ' + _restoredCount + ' partial transfer(s) from IndexedDB' +
+      (_purgedCount ? ' (purged ' + _purgedCount + ' stale)' : ''));
+  }).catch(function(err) {
+    console.warn('[P2P] Partial rehydration failed:', err);
   });
 
   var activeChatId = null;
@@ -1676,6 +1785,16 @@ document.addEventListener('DOMContentLoaded', function() {
       // Everything else (file://, orbit-db://, http://, etc.)
       return u;
     }
+    // Thread map: parentId (String key) -> replies[] — built over the full chat array
+    var threadMap = {};
+    for (var _tmk = 0; _tmk < msgs.length; _tmk++) {
+      var _tmi = msgs[_tmk];
+      if (_tmi.replyTo != null) {
+        var _tkey = String(_tmi.replyTo);
+        if (!threadMap[_tkey]) threadMap[_tkey] = [];
+        threadMap[_tkey].push(_tmi);
+      }
+    }
     if (chatSearchFilter) {
       var cl = chatSearchFilter.toLowerCase();
       msgs = msgs.filter(function(m) { return (m.text || '').toLowerCase().indexOf(cl) !== -1; });
@@ -1847,6 +1966,13 @@ document.addEventListener('DOMContentLoaded', function() {
         pollHtml = renderPoll(m, chatId);
       }
 
+      // Thread replies chip (shown when this message has replies in the chain)
+      var threadChipHtml = '';
+      var _threadReplies = threadMap[String(m.id)];
+      if (_threadReplies && _threadReplies.length > 0) {
+        threadChipHtml = '<button class="msg-thread-chip" data-thread-msg-id="' + m.id + '">' + _threadReplies.length + (_threadReplies.length === 1 ? ' reply' : ' replies') + '</button>';
+      }
+
       // Only set data-msg-anim on genuinely new messages to prevent re-animation on re-render
       var _animType = MStore.settings.messageAnim || 'slide';
       var _animAttr = existingMsgIds[m.id] ? '' : ' data-msg-anim="' + _animType + '"';
@@ -1854,7 +1980,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (m.isSpoiler) {
         _renderedText = '<span class="spoiler-text" onclick="this.classList.toggle(\'revealed\')">' + _renderedText + '</span>';
       }
-      html += '<div class="message-row ' + (isMine ? 'mine' : 'other') + (isGrouped ? ' grouped' : '') + '" data-msg-id="' + m.id + '"' + _animAttr + '>' +
+      html += '<div class="message-row ' + (isMine ? 'mine' : 'other') + (isGrouped ? ' grouped' : '') + (m.replyTo != null ? ' msg-threaded' : '') + '" data-msg-id="' + m.id + '"' + _animAttr + '>' +
         '<div class="message-bubble">' +
           senderLabel +
           replyHtml +
@@ -1863,6 +1989,7 @@ document.addEventListener('DOMContentLoaded', function() {
           linkPreviewHtml +
           pollHtml +
           reactionsHtml +
+          threadChipHtml +
           '<div class="message-time">' + (_getDisappearTimer(chatId) !== 'off' ? '<span class="msg-disappear-indicator" title="Auto-deletes after ' + _getDisappearTimer(chatId) + '">⏱</span>' : '') + formatTime(m.time) + '</div>' +
           (MStore.settings.showMessageIds ? '<div style="font-size:9px;color:var(--text-muted);opacity:0.5;margin-top:2px;">' + m.id + '</div>' : '') +
         '</div>' +
@@ -1929,6 +2056,13 @@ document.addEventListener('DOMContentLoaded', function() {
     requestAnimationFrame(function() { feed.removeAttribute('data-refreshing'); });
     feed.querySelectorAll('.reaction-pill').forEach(function(pill) {
       pill.addEventListener('click', function(e) { e.stopPropagation(); var rm = this.parentElement.getAttribute('data-msg-id') || (this.closest('[data-msg-id]') || {}).getAttribute('data-msg-id'); if (rm) toggleReaction(rm, this); });
+    });
+    feed.querySelectorAll('.msg-thread-chip').forEach(function(chip) {
+      chip.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var tId = this.getAttribute('data-thread-msg-id');
+        if (tId && window.openThreadPanel) window.openThreadPanel(activeChatId, tId);
+      });
     });
     feed.querySelectorAll('.msg-pin-btn').forEach(function(btn) {
       btn.addEventListener('click', function(e) {
@@ -2764,11 +2898,13 @@ document.addEventListener('DOMContentLoaded', function() {
         return btoa(bin);
       }
 
-      // Compute file hash (SHA-256 of the full ArrayBuffer, truncated if >50MB)
+      // Compute file hash — SHA-256 of the FULL file (lowercase hex). This must
+      // match desktop's full-file hash: the receiver's FILE_TRANSFER_END
+      // verification compares against this exact value. Do NOT truncate — a
+      // prefix hash would break the cross-platform contract for >50MB files.
       function _computeFileHash(callback) {
         try {
-          var _hashBuf = fileSize > 50 * 1024 * 1024 ? _u8.subarray(0, 50 * 1024 * 1024) : _u8;
-          crypto.subtle.digest('SHA-256', _hashBuf.buffer).then(function(hashBuf) {
+          crypto.subtle.digest('SHA-256', _u8.buffer).then(function(hashBuf) {
             var _hashArr = Array.from(new Uint8Array(hashBuf));
             var _hex = _hashArr.map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
             callback(_hex);
@@ -2793,31 +2929,81 @@ document.addEventListener('DOMContentLoaded', function() {
           ftStartPayload
         ));
 
-        var ci = 0;
-        function sendNextChunk() {
-          if (ci >= totalChunks) {
+        // CROSS-4: send-session map so an incoming FILE_TRANSFER_RESUME can
+        // rewind/advance progress. Keyed fileId + '::' + peerId — a group
+        // fan-out sends the SAME attachment.id to several members, and each
+        // member needs its own cursor (mirrors the per-peer closure `ci` the
+        // pre-resume code used). The dispatcher also falls back to a plain
+        // fileId key.
+        window.activeSends = window.activeSends || {};
+        var sendKey = fileId + '::' + peerId;
+        window.activeSends[sendKey] = {
+          att: att,
+          peerId: peerId,
+          isGroup: isGroup,
+          total: totalChunks,
+          hash: fileHash,
+          ci: 0,
+          done: false,
+          cancelled: false,
+          // F5: the START payload as sent, stored so a RESUME rewind can
+          // re-send it (a receiver whose in-memory receive was reaped can
+          // re-open its persisted transfer from a fresh START)
+          startPayload: ftStartPayload
+        };
+
+        // Driver loop: reads session.ci fresh each iteration so a mid-stream
+        // RESUME (which mutates session.ci) is picked up on the next tick.
+        function sendNext() {
+          var session = window.activeSends[sendKey];
+          if (!session) return;
+          if (session.cancelled) {
+            if (window.activeSends && window.activeSends[sendKey]) delete window.activeSends[sendKey];
+            return;
+          }
+          if (session.done) return; // F5: grace period — kept 60s for a late RESUME (END re-send)
+          if (session.ci >= session.total) {
             var ftEndPayload = { fileId: fileId, hash: fileHash };
             if (isGroup) ftEndPayload.chatId = activeChatId;
             Orbit.P2P.send(peerId, Orbit.Protocol.createPacket(
               Orbit.Protocol.Types.FILE_TRANSFER_END, myId, peerId,
               ftEndPayload
             ));
+            // F5: don't delete right away — the receiver may have missed END
+            // and re-request it via RESUME; keep the session for a 60s grace
+            // window and let the sweep below reclaim it.
+            session.done = true;
+            session.doneAt = Date.now();
+            session.endPayload = ftEndPayload;
+            setTimeout(function() {
+              var _sweep = window.activeSends && window.activeSends[sendKey];
+              if (_sweep && (_sweep.cancelled || (_sweep.done && _sweep.doneAt && Date.now() - _sweep.doneAt > 60000))) {
+                delete window.activeSends[sendKey];
+              }
+            }, 65000);
             return;
           }
-          var chunkData = _getChunk(ci);
+          var idx = session.ci;
+          var chunkData = _getChunk(idx);
           Orbit.P2P.send(peerId, Orbit.Protocol.createPacket(
             Orbit.Protocol.Types.FILE_CHUNK, myId, peerId,
-            { fileId: fileId, chunkIndex: ci, data: chunkData }
+            { fileId: fileId, chunkIndex: idx, data: chunkData }
           )).then(function() {
-            ci++;
-            setTimeout(sendNextChunk, 0);
+            // Advance only when the cursor is untouched since this chunk began
+            // (ci === idx). A RESUME may have rewound the cursor to n < idx;
+            // advancing would destroy that rewind, so chunks n..idx-1 would
+            // never be re-sent and the transfer would stall.
+            if (window.activeSends && window.activeSends[sendKey] && window.activeSends[sendKey].ci === idx) {
+              window.activeSends[sendKey].ci = idx + 1;
+            }
+            setTimeout(sendNext, 0);
           }).catch(function(e) {
-            console.error('Failed to send chunk ' + ci, e);
+            console.error('Failed to send chunk ' + idx, e);
             // Retry once on failure before giving up
-            setTimeout(sendNextChunk, 1000);
+            setTimeout(sendNext, 1000);
           });
         }
-        sendNextChunk();
+        sendNext();
       });
     }
 
@@ -2900,6 +3086,25 @@ document.addEventListener('DOMContentLoaded', function() {
   function _handleSlashCommand(text, newMsg) {
     if (!text || !text.startsWith('/')) return null;
 
+    // Group-only guard: all slash commands are group utilities (no AI, per README/plans).
+    // Handles both storage shapes: g.id (created locally) and g.groupId (synced via addGroup).
+    var isGroupChat = false;
+    try {
+      isGroupChat = MStore.groups.some(function(g) { return g.id === activeChatId || g.groupId === activeChatId; });
+    } catch(e) { isGroupChat = false; }
+    if (!isGroupChat) {
+      showToast('Slash commands only work in group chats', 'info');
+      // Clear the slash input so it does not look stuck
+      var _slashInput = document.getElementById('chat-input');
+      if (_slashInput && _slashInput.value.trim().indexOf('/') === 0) {
+        _slashInput.value = '';
+        _slashInput.style.height = 'auto';
+        updateSendButton();
+        hideCommandTooltip();
+      }
+      return { cancel: true };
+    }
+
     var parts = text.split(' ');
     var cmd = parts[0].toLowerCase();
     var args = parts.slice(1).join(' ');
@@ -2909,20 +3114,170 @@ document.addEventListener('DOMContentLoaded', function() {
         showHelpModal();
         return { cancel: true };
 
-      case '/poll':
+      case '/pool':
+      case '/poll': {
         var pollArgs = parsePollArgs(text);
-        if (pollArgs.length < 3) {
+        if (pollArgs.length >= 3) {
+          newMsg.poll = {
+            question: pollArgs[0],
+            options: pollArgs.slice(1).map(function(opt) { return { text: opt, votes: [] }; }),
+            multiSelect: false,
+            expiresAt: null
+          };
+          newMsg.text = '';
+          return { handled: true, msg: newMsg };
+        }
+        // UX-friendly builder: open modal sheet when args insufficient
+        var pollChatId = activeChatId;
+        var sheet = (typeof window !== 'undefined' && window.OrbitSheet) ? window.OrbitSheet : (typeof OrbitSheet !== 'undefined' ? OrbitSheet : null);
+        if (!sheet || !sheet.showCustom) {
           showToast('Usage: /poll "Question?" "Option1" "Option2" ...', 'info');
           return { cancel: true };
         }
-        newMsg.poll = {
-          question: pollArgs[0],
-          options: pollArgs.slice(1).map(function(opt) { return { text: opt, votes: [] }; }),
-          multiSelect: false,
-          expiresAt: null
-        };
-        newMsg.text = '';
-        return { handled: true, msg: newMsg };
+        var _pollEsc = (typeof escapeHtml === 'function' ? escapeHtml : function(s){ return String(s||''); });
+        var pollHtml =
+          '<div style="padding:20px;max-width:360px;margin:0 auto;width:100%;box-sizing:border-box;">' +
+            '<h3 style="margin:0 0 4px;font-size:17px;font-weight:700;color:var(--text-primary);">Create Poll</h3>' +
+            '<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">Ask a question and add up to 6 options</div>' +
+            '<input id="poll-question" class="bs-input" placeholder="Question?" autocomplete="off" style="width:100%;box-sizing:border-box;">' +
+            '<div id="poll-options" style="display:flex;flex-direction:column;gap:8px;margin-top:10px;">' +
+              '<div class="poll-opt-row" style="display:flex;gap:8px;align-items:center;">' +
+                '<input class="bs-input poll-opt-input" placeholder="Option 1" autocomplete="off" style="flex:1;min-width:0;">' +
+                '<button type="button" class="poll-opt-remove" style="width:30px;height:36px;border:none;background:var(--bg-hover);border-radius:8px;color:var(--text-muted);font-size:18px;cursor:pointer;flex-shrink:0;display:none;">&times;</button>' +
+              '</div>' +
+              '<div class="poll-opt-row" style="display:flex;gap:8px;align-items:center;">' +
+                '<input class="bs-input poll-opt-input" placeholder="Option 2" autocomplete="off" style="flex:1;min-width:0;">' +
+                '<button type="button" class="poll-opt-remove" style="width:30px;height:36px;border:none;background:var(--bg-hover);border-radius:8px;color:var(--text-muted);font-size:18px;cursor:pointer;flex-shrink:0;display:none;">&times;</button>' +
+              '</div>' +
+            '</div>' +
+            '<button id="poll-add-option" type="button" style="margin-top:10px;width:100%;padding:8px;border:1px dashed var(--border-subtle);border-radius:10px;background:transparent;color:var(--accent-primary);font-size:13px;font-weight:600;cursor:pointer;">+ Add option</button>' +
+            '<div style="font-size:11px;color:var(--text-muted);margin-top:8px;text-align:center;">Tip: you can also type <span style="font-family:monospace;">/poll "Q?" "O1" "O2"</span> for instant poll</div>' +
+            '<div style="margin-top:16px;">' +
+              '<button id="poll-create" type="button" style="width:100%;padding:10px;border-radius:10px;border:none;background:var(--accent-primary);color:#fff;font-size:14px;font-weight:700;cursor:pointer;">Create Poll</button>' +
+            '</div>' +
+          '</div>';
+        sheet.showCustom(pollHtml);
+        // Clear slash input so it does not linger behind sheet
+        var _pollInputEl = document.getElementById('chat-input');
+        if (_pollInputEl) { _pollInputEl.value = ''; _pollInputEl.style.height='auto'; try{updateSendButton();}catch(e){} try{hideCommandTooltip();}catch(e){} }
+        setTimeout(function() {
+          var qInput = document.getElementById('poll-question');
+          if (qInput) qInput.focus();
+          var addBtn = document.getElementById('poll-add-option');
+          var optsContainer = document.getElementById('poll-options');
+          var createBtn = document.getElementById('poll-create');
+          function refreshPollRows() {
+            var rows = optsContainer ? optsContainer.querySelectorAll('.poll-opt-row') : [];
+            var canRemove = rows.length > 2;
+            for (var ri = 0; ri < rows.length; ri++) {
+              var rm = rows[ri].querySelector('.poll-opt-remove');
+              if (rm) rm.style.display = canRemove ? 'inline-flex' : 'none';
+            }
+            if (addBtn) addBtn.style.display = rows.length >= 6 ? 'none' : 'block';
+            // refresh placeholders
+            for (var pi = 0; pi < rows.length; pi++) {
+              var inp = rows[pi].querySelector('.poll-opt-input');
+              if (inp) inp.placeholder = 'Option ' + (pi + 1);
+            }
+          }
+          function addPollOptionRow(value) {
+            if (!optsContainer) return;
+            var rows = optsContainer.querySelectorAll('.poll-opt-row');
+            if (rows.length >= 6) { showToast('Max 6 options', 'info'); return; }
+            var row = document.createElement('div');
+            row.className = 'poll-opt-row';
+            row.style.cssText = 'display:flex;gap:8px;align-items:center;';
+            var inp = document.createElement('input');
+            inp.className = 'bs-input poll-opt-input';
+            inp.placeholder = 'Option ' + (rows.length + 1);
+            inp.autocomplete = 'off';
+            inp.style.cssText = 'flex:1;min-width:0;';
+            if (value) inp.value = value;
+            var rm = document.createElement('button');
+            rm.type = 'button';
+            rm.className = 'poll-opt-remove';
+            rm.textContent = '\u00D7';
+            rm.style.cssText = 'width:30px;height:36px;border:none;background:var(--bg-hover);border-radius:8px;color:var(--text-muted);font-size:18px;cursor:pointer;flex-shrink:0;';
+            rm.addEventListener('click', function() {
+              row.remove();
+              refreshPollRows();
+            });
+            row.appendChild(inp);
+            row.appendChild(rm);
+            optsContainer.appendChild(row);
+            refreshPollRows();
+            inp.focus();
+          }
+          // wire existing remove buttons
+          if (optsContainer) {
+            var existingRemoves = optsContainer.querySelectorAll('.poll-opt-remove');
+            for (var ei = 0; ei < existingRemoves.length; ei++) {
+              (function(btn){ btn.addEventListener('click', function(){ var r = btn.closest('.poll-opt-row'); if(r) r.remove(); refreshPollRows(); }); })(existingRemoves[ei]);
+            }
+          }
+          refreshPollRows();
+          if (addBtn) addBtn.addEventListener('click', function(){ addPollOptionRow(''); });
+          if (createBtn) createBtn.addEventListener('click', function(){
+            var qEl = document.getElementById('poll-question');
+            var question = qEl ? qEl.value.trim() : '';
+            if (!question) { showToast('Enter a question', 'info'); if(qEl) qEl.focus(); return; }
+            var optInputs = optsContainer ? optsContainer.querySelectorAll('.poll-opt-input') : [];
+            var opts = [];
+            for (var oi = 0; oi < optInputs.length; oi++) {
+              var v = optInputs[oi].value.trim();
+              if (v) opts.push(v);
+            }
+            if (opts.length < 2) { showToast('Add at least 2 options', 'info'); return; }
+            if (opts.length > 6) opts = opts.slice(0,6);
+            var poll = { question: question, options: opts.map(function(t){ return { text: t, votes: [] }; }), multiSelect: false, expiresAt: null };
+            var pollMsgId = 'm' + Date.now() + Math.random().toString(36).slice(2,6);
+            var pollMsg = { id: pollMsgId, from: 'me', text: '', time: new Date().toISOString(), poll: poll };
+            if (MStore.user) pollMsg.fromName = MStore.user.name;
+            // Persist locally
+            MStore.addMessage(pollChatId, pollMsg);
+            try { _startDisappearTimer(pollChatId, pollMsg.id); } catch(e) {}
+            // Render if still on same chat, otherwise still update list
+            if (pollChatId) {
+              try { if (activeChatId === pollChatId) renderMessages(pollChatId); } catch(e) {}
+              try { renderChatList(); } catch(e) {}
+            }
+            // P2P broadcast to group members (mirrors sendMessage group path, includes poll)
+            try {
+              if (window.Orbit && window.Orbit.P2P && window.Orbit.P2P.isAvailable()) {
+                var myId = MStore.user ? MStore.user.id : 'mobile';
+                var grp = MStore.groups.find(function(g){ return g.id === pollChatId || g.groupId === pollChatId; });
+                if (grp) {
+                  var useE2EE = MStore.settings && MStore.settings.e2eeEnabled && window.Orbit.E2EE;
+                  (grp.members || []).forEach(function(m){
+                    var memberId = typeof m === 'string' ? m : m.userId;
+                    if (!memberId || memberId === myId) return;
+                    var memberFriend = MStore.friends.find(function(f){ return f.id === memberId; });
+                    var memberKey = memberFriend ? memberFriend.publicKey : (typeof m !== 'string' ? m.publicKey : null);
+                    var payload = { text: '', groupId: pollChatId, msgId: pollMsg.id, fromName: pollMsg.fromName, poll: poll };
+                    if (useE2EE && memberKey) {
+                      try {
+                        window.Orbit.E2EE.encrypt('', memberKey).then(function(enc){
+                          if (enc) { payload.e2ee = true; payload.ciphertext = enc.ciphertext; payload.nonce = enc.nonce; try{ window.Orbit.P2P.send(memberId, window.Orbit.Protocol.createPacket(window.Orbit.Protocol.Types.MESSAGE, myId, memberId, payload)); }catch(e){} }
+                        });
+                      } catch(e) { try{ window.Orbit.P2P.send(memberId, window.Orbit.Protocol.createPacket(window.Orbit.Protocol.Types.MESSAGE, myId, memberId, payload)); }catch(e2){} }
+                    } else {
+                      try{ window.Orbit.P2P.send(memberId, window.Orbit.Protocol.createPacket(window.Orbit.Protocol.Types.MESSAGE, myId, memberId, payload)); }catch(e){}
+                    }
+                  });
+                } else {
+                  // Not a group? No broadcast (guarded already, but fallback to DM-style if needed)
+                  var myId2 = MStore.user ? MStore.user.id : 'mobile';
+                  var payload2 = { text: '', msgId: pollMsg.id, fromName: pollMsg.fromName, poll: poll };
+                  try{ window.Orbit.P2P.send(pollChatId, window.Orbit.Protocol.createPacket(window.Orbit.Protocol.Types.MESSAGE, myId2, pollChatId, payload2)); }catch(e){}
+                }
+              }
+            } catch(e) {}
+            sheet.hide();
+            showToast('Poll created', 'info');
+          });
+        }, 80);
+        return { cancel: true };
+      }
 
       case '/me':
         newMsg.text = '*_' + args.trim() + '_*';
@@ -2980,6 +3335,313 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         return { cancel: true };
 
+      case '/invite': {
+        var group = MStore.groups.find(function(g) { return g.id === activeChatId || g.groupId === activeChatId; });
+        if (!group) { showToast('Not in a group chat', 'info'); return { cancel: true }; }
+        var code = group.inviteCode || '—';
+        if (!code || code === '—') {
+          try {
+            var _icb = new Uint8Array(4);
+            window.crypto.getRandomValues(_icb);
+            code = Array.from(_icb).map(function(b){ return b.toString(16).padStart(2,'0'); }).join('');
+            group.inviteCode = code;
+            try { MStore.save(); } catch(e) {}
+          } catch(e) { code = '—'; }
+        }
+        if (!code || code === '—') { showToast('No invite code available','error'); return { cancel: true }; }
+        var escCode = (typeof escapeHtml === 'function' ? escapeHtml : function(s){ return String(s); })(code);
+        var grpName = (typeof escapeHtml === 'function' ? escapeHtml : function(s){ return String(s); })(group.name || group.groupName || 'Group');
+        var inviteHtml = '<div style="padding:20px;max-width:360px;margin:0 auto;width:100%;box-sizing:border-box;">' +
+          '<h3 style="margin:0 0 4px;font-size:17px;font-weight:700;color:var(--text-primary);">Invite — ' + grpName + '</h3>' +
+          '<div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">Share this code with others to let them join</div>' +
+          '<div style="display:flex;align-items:center;gap:10px;background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:12px;padding:12px 14px;">' +
+            '<code id="invite-code-val" style="flex:1;font-size:15px;font-weight:700;letter-spacing:0.08em;color:var(--accent-primary);word-break:break-all;">' + escCode + '</code>' +
+            '<button id="btn-copy-invite" style="flex-shrink:0;padding:8px 14px;border-radius:8px;border:none;background:var(--accent-primary);color:#fff;font-size:13px;font-weight:600;cursor:pointer;">Copy</button>' +
+            '<button id="btn-share-invite" style="flex-shrink:0;padding:8px 14px;border-radius:8px;border:1px solid var(--border-subtle);background:transparent;color:var(--text-primary);font-size:13px;font-weight:600;cursor:pointer;">Share</button>' +
+          '</div>' +
+          '<div style="margin-top:12px;font-size:11px;color:var(--text-muted);text-align:center;font-family:monospace;">/invite · /members /topic /leave /shout /countdown also available</div>' +
+        '</div>';
+        var sheet = (typeof window !== 'undefined' && window.OrbitSheet) ? window.OrbitSheet : (typeof OrbitSheet !== 'undefined' ? OrbitSheet : null);
+        if (sheet && sheet.showCustom) sheet.showCustom(inviteHtml);
+        else showToast('Invite code: ' + code, 'info');
+        setTimeout(function() {
+          var btn = document.getElementById('btn-copy-invite');
+          if (btn) btn.addEventListener('click', function() {
+            try {
+              if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(code).then(function() { showToast('Invite code copied', 'info'); }).catch(function() { showToast('Copy failed', 'error'); });
+              } else {
+                var ta = document.createElement('textarea'); ta.value = code; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); showToast('Invite code copied', 'info');
+              }
+            } catch(e) { showToast('Copy failed', 'error'); }
+          });
+          var shareBtn = document.getElementById('btn-share-invite');
+          if (shareBtn) shareBtn.addEventListener('click', function() {
+            if (!code || code === '—') { showToast('No invite code available','error'); return; }
+            var rawName = group.name || group.groupName || 'Group';
+            var inviteText = 'Join "' + rawName + '" on Orbit! Code: ' + code;
+            try {
+              if (navigator.share) {
+                var canShareOk = true;
+                try { if (navigator.canShare && !navigator.canShare({ text: inviteText })) canShareOk = false; } catch(e) { canShareOk = true; }
+                if (canShareOk) {
+                  navigator.share({ title: 'Orbit invite', text: inviteText }).then(function(){ showToast('Shared!','info'); }).catch(function(err){
+                    if (err && err.name === 'AbortError') return;
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                      navigator.clipboard.writeText(inviteText).then(function(){ showToast('Invite text copied','info'); }).catch(function(){ showToast('Copy failed','error'); });
+                    } else {
+                      var ta2 = document.createElement('textarea'); ta2.value = inviteText; document.body.appendChild(ta2); ta2.select(); document.execCommand('copy'); ta2.remove(); showToast('Invite text copied','info');
+                    }
+                  });
+                  return;
+                }
+              }
+            } catch(e) {}
+            try {
+              if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(inviteText).then(function(){ showToast('Invite text copied','info'); }).catch(function(){ showToast('Copy failed','error'); });
+              } else {
+                var ta = document.createElement('textarea'); ta.value = inviteText; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); showToast('Invite text copied','info');
+              }
+            } catch(e) { showToast('Copy failed','error'); }
+          });
+        }, 80);
+        var _invInput = document.getElementById('chat-input');
+        if (_invInput) { _invInput.value = ''; _invInput.style.height = 'auto'; updateSendButton(); hideCommandTooltip(); }
+        return { cancel: true };
+      }
+
+      case '/members':
+      case '/list': {
+        var group2 = MStore.groups.find(function(g) { return g.id === activeChatId || g.groupId === activeChatId; });
+        if (!group2) { showToast('Not in a group chat', 'info'); return { cancel: true }; }
+        var members = group2.members || [];
+        var esc2 = (typeof escapeHtml === 'function' ? escapeHtml : function(s){ return String(s); });
+        var escAttr2 = (typeof escapeAttr === 'function' ? escapeAttr : esc2);
+        var grpName2 = esc2(group2.name || group2.groupName || 'Group');
+        var listHtml = '<div style="padding:20px;max-width:380px;margin:0 auto;width:100%;box-sizing:border-box;">' +
+          '<h3 style="margin:0 0 4px;font-size:17px;font-weight:700;color:var(--text-primary);">' + grpName2 + '</h3>' +
+          '<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">' + members.length + ' member' + (members.length !== 1 ? 's' : '') + '</div>';
+        if (members.length === 0) {
+          listHtml += '<div style="font-size:13px;color:var(--text-muted);text-align:center;padding:12px;">No members</div>';
+        } else {
+          listHtml += '<div style="display:flex;flex-direction:column;gap:8px;max-height:320px;overflow-y:auto;-webkit-overflow-scrolling:touch;">';
+          for (var mi = 0; mi < members.length; mi++) {
+            var m = members[mi];
+            var uid = typeof m === 'string' ? m : (m.userId || m.id || '');
+            var mName = typeof m === 'string' ? m : (m.name || m.username || uid);
+            var role = typeof m === 'string' ? 'member' : (m.role || 'member');
+            var friend = MStore.friends.find(function(f) { return f.id === uid || f.peerId === uid; });
+            var displayName = friend ? friend.name : mName;
+            var isOnline = friend && (friend.status === 'online' || friend.online);
+            if (!isOnline && friend && friend.lastSeen) { try { isOnline = (Date.now() - friend.lastSeen) < 45000; } catch(e) {} }
+            var initial = (displayName || '?').charAt(0).toUpperCase();
+            var roleBadge = role === 'owner' ? '<span style="font-size:10px;font-weight:700;color:#fff;background:var(--accent-primary);padding:2px 6px;border-radius:999px;letter-spacing:0.04em;">OWNER</span>' : (role === 'admin' ? '<span style="font-size:10px;font-weight:700;color:#fff;background:#f59e0b;padding:2px 6px;border-radius:999px;letter-spacing:0.04em;">ADMIN</span>' : '');
+            listHtml += '<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:10px;">' +
+              '<div style="width:36px;height:36px;border-radius:50%;background:var(--accent-soft);color:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0;position:relative;">' + esc2(initial) +
+                '<span style="position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;border-radius:50%;border:2px solid var(--bg-surface);background:' + (isOnline ? 'var(--accent-success)' : 'var(--text-muted)') + ';display:inline-block;"></span>' +
+              '</div>' +
+              '<div style="flex:1;min-width:0;">' +
+                '<div style="font-size:13px;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc2(displayName) + ' ' + roleBadge + '</div>' +
+                '<div style="font-size:11px;color:var(--text-muted);font-family:monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc2(uid) + '</div>' +
+              '</div>' +
+              '<span style="width:8px;height:8px;border-radius:50%;background:' + (isOnline ? '#22c55e' : '#94a3b8') + ';flex-shrink:0;display:inline-block;" title="' + (isOnline ? 'online' : 'offline') + '"></span>' +
+            '</div>';
+          }
+          listHtml += '</div>';
+        }
+        listHtml += '</div>';
+        var sheet2 = (typeof window !== 'undefined' && window.OrbitSheet) ? window.OrbitSheet : (typeof OrbitSheet !== 'undefined' ? OrbitSheet : null);
+        if (sheet2 && sheet2.showCustom) sheet2.showCustom(listHtml);
+        else showToast(members.length + ' member(s)', 'info');
+        var _memInput = document.getElementById('chat-input');
+        if (_memInput) { _memInput.value = ''; _memInput.style.height = 'auto'; updateSendButton(); hideCommandTooltip(); }
+        return { cancel: true };
+      }
+
+      case '/topic': {
+        var topicArgs = text.slice(6).trim();
+        if (!topicArgs) { showToast('Usage: /topic New description', 'info'); return { cancel: true }; }
+        var grp3 = MStore.groups.find(function(g) { return g.id === activeChatId || g.groupId === activeChatId; });
+        if (!grp3) { showToast('Not in a group chat', 'info'); return { cancel: true }; }
+        var myId = MStore.user ? MStore.user.id : '';
+        var selfMember = (grp3.members || []).find(function(mm) { var u = typeof mm === 'string' ? mm : mm.userId; return u === myId; });
+        var selfRole = selfMember ? (selfMember.role || 'member') : (grp3.ownerId === myId ? 'owner' : 'member');
+        if (selfRole !== 'owner' && selfRole !== 'admin') { showToast('Only owner/admin can set topic', 'info'); return { cancel: true }; }
+        grp3.description = topicArgs;
+        // Persist to MStore — handle both g.id and g.groupId shapes
+        try { MStore.save(); } catch(e) {}
+        // Broadcast to members if protocol available (best-effort)
+        try {
+          if (window.Orbit && window.Orbit.P2P && Orbit.P2P.isAvailable()) {
+            var pktType = (Orbit.Protocol && Orbit.Protocol.Types) ? (Orbit.Protocol.Types.GROUP_UPDATE || Orbit.Protocol.Types.GROUP_CREATE || null) : null;
+            if (pktType) {
+              (grp3.members || []).forEach(function(mm) {
+                var mid = typeof mm === 'string' ? mm : mm.userId;
+                if (!mid || mid === myId) return;
+                var pkt = Orbit.Protocol.createPacket(pktType, myId, mid, { groupId: grp3.id || grp3.groupId, description: topicArgs });
+                Orbit.P2P.send(mid, pkt);
+              });
+            }
+          }
+        } catch(e) {}
+        showToast('Topic updated', 'info');
+        if (typeof renderChatList === 'function') try { renderChatList(); } catch(e) {}
+        var _topInput = document.getElementById('chat-input');
+        if (_topInput) { _topInput.value = ''; _topInput.style.height = 'auto'; updateSendButton(); hideCommandTooltip(); }
+        return { cancel: true };
+      }
+
+      case '/leave': {
+        var grp4 = MStore.groups.find(function(g) { return g.id === activeChatId || g.groupId === activeChatId; });
+        if (!grp4) { showToast('Not in a group chat', 'info'); return { cancel: true }; }
+        if (!confirm('Leave group "' + (grp4.name || grp4.groupName || activeChatId) + '"?')) return { cancel: true };
+        var gid = grp4.id || grp4.groupId;
+        var myId2 = MStore.user ? MStore.user.id : '';
+        try {
+          if (window.Orbit && window.Orbit.P2P && Orbit.P2P.isAvailable() && Orbit.Protocol && Orbit.Protocol.Types.GROUP_LEAVE) {
+            (grp4.members || []).forEach(function(mm) {
+              var mid = typeof mm === 'string' ? mm : mm.userId;
+              if (!mid || mid === myId2) return;
+              var pkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.GROUP_LEAVE, myId2, mid, { groupId: gid, userId: myId2 });
+              Orbit.P2P.send(mid, pkt);
+            });
+          }
+        } catch(e) {}
+        // Prefer existing helper if present (handles messages/chats cleanup + UI)
+        if (typeof leaveGroupById === 'function') { try { leaveGroupById(gid); } catch(e) { /* fallback below */ } }
+        else {
+          MStore.groups = MStore.groups.filter(function(g) { return (g.id || g.groupId) !== gid; });
+          MStore.chats = MStore.chats.filter(function(c) { return c.id !== gid; });
+          delete MStore.messages[gid];
+          try { localStorage.removeItem('orbit_msg_' + gid); } catch(e) {}
+          MStore.save();
+          if (typeof renderChatList === 'function') try { renderChatList(); } catch(e) {}
+          showToast('Left group', 'info');
+          if (activeChatId === gid && typeof closeChat === 'function') try { closeChat(); } catch(e) {}
+        }
+        var _lvInput = document.getElementById('chat-input');
+        if (_lvInput) { _lvInput.value = ''; _lvInput.style.height = 'auto'; updateSendButton(); hideCommandTooltip(); }
+        return { cancel: true };
+      }
+
+      case '/shout': {
+        var shoutArgs = args.trim();
+        if (!shoutArgs) { showToast('Usage: /shout <message>', 'info'); return { cancel: true }; }
+        newMsg.text = '🔊 ' + shoutArgs.toUpperCase() + ' 🔊';
+        return { handled: true, msg: newMsg };
+      }
+
+      case '/countdown': {
+        var cParts = text.split(' ');
+        var seconds = parseInt(cParts[1], 10);
+        if (isNaN(seconds)) seconds = 5;
+        if (seconds < 1) seconds = 1;
+        if (seconds > 10) seconds = 10;
+        var message = cParts.slice(2).join(' ').trim() || 'Go!';
+        // Schedule toast ticks for live feedback (non-blocking)
+        for (var ci = seconds; ci >= 1; ci--) {
+          (function(tick) {
+            setTimeout(function() { showToast('\u23F3 ' + tick + '...', 'info'); }, (seconds - tick) * 1000);
+          })(ci);
+        }
+        newMsg.text = '\u23F3 Countdown ' + seconds + 's: ' + message;
+        // Replace text after countdown elapsed with final shout (best-effort local update)
+        // The sent message stays as the countdown line; ticks are toasts only — keeps protocol simple.
+        return { handled: true, msg: newMsg };
+      }
+
+      case '/nick': {
+        var nickArgs = text.slice(5).trim();
+        if (!nickArgs) { showToast('Usage: /nick <new name>', 'info'); return { cancel: true }; }
+        var group = MStore.groups.find(function(g) { return g.id === activeChatId || g.groupId === activeChatId; });
+        if (!group) { showToast('Not in a group chat', 'info'); return { cancel: true }; }
+        var myId = MStore.user ? MStore.user.id : '';
+        var selfMember = (group.members || []).find(function(mm) { var u = typeof mm === 'string' ? mm : (mm.userId || mm.id); return u === myId; });
+        if (!selfMember) { showToast('Could not find your member entry', 'info'); return { cancel: true }; }
+        if (typeof selfMember === 'string') {
+          // legacy string member — replace entry
+          for (var ni = 0; ni < group.members.length; ni++) {
+            if (group.members[ni] === selfMember) {
+              group.members[ni] = { userId: myId, role: 'member', joinedAt: new Date().toISOString(), name: nickArgs };
+              break;
+            }
+          }
+        } else {
+          selfMember.name = nickArgs;
+          if (selfMember.username !== undefined) selfMember.username = nickArgs;
+        }
+        if (MStore.user) MStore.user.name = nickArgs;
+        try { MStore.save(); } catch(e) {}
+        try {
+          if (window.Orbit && window.Orbit.P2P && Orbit.P2P.isAvailable()) {
+            var pktType = (Orbit.Protocol && Orbit.Protocol.Types) ? (Orbit.Protocol.Types.GROUP_UPDATE || Orbit.Protocol.Types.GROUP_CREATE || null) : null;
+            if (pktType) {
+              (group.members || []).forEach(function(mm) {
+                var mid = typeof mm === 'string' ? mm : mm.userId;
+                if (!mid || mid === myId) return;
+                var pkt = Orbit.Protocol.createPacket(pktType, myId, mid, { groupId: group.id || group.groupId, members: group.members, updatedMember: { userId: myId, name: nickArgs } });
+                Orbit.P2P.send(mid, pkt);
+              });
+            }
+          }
+        } catch(e) {}
+        showToast('Nickname updated to "' + nickArgs + '"', 'info');
+        if (typeof renderChatList === 'function') try { renderChatList(); } catch(e) {}
+        var _nickInput = document.getElementById('chat-input');
+        if (_nickInput) { _nickInput.value = ''; _nickInput.style.height = 'auto'; updateSendButton(); hideCommandTooltip(); }
+        return { cancel: true };
+      }
+
+      case '/kick':
+      case '/remove': {
+        var kickRaw = args.trim();
+        if (kickRaw.charAt(0) === '@') kickRaw = kickRaw.slice(1).trim();
+        if (!kickRaw) { showToast('Usage: /kick <username>', 'info'); return { cancel: true }; }
+        var g = MStore.groups.find(function(x) { return x.id === activeChatId || x.groupId === activeChatId; });
+        if (!g) { showToast('Not in a group chat', 'info'); return { cancel: true }; }
+        var meId = MStore.user ? MStore.user.id : '';
+        var meEntry = (g.members || []).find(function(m) { var u = typeof m === 'string' ? m : (m.userId || m.id); return u === meId; });
+        var meRole = meEntry ? (meEntry.role || 'member') : (g.ownerId === meId ? 'owner' : 'member');
+        if (meRole !== 'owner' && meRole !== 'admin') { showToast('Only owner/admin can kick members', 'info'); return { cancel: true }; }
+        var targetIdx = -1;
+        var targetMember = null;
+        for (var ti = 0; ti < (g.members || []).length; ti++) {
+          var mm = g.members[ti];
+          var mName = typeof mm === 'string' ? mm : (mm.name || mm.username || '');
+          var mId = typeof mm === 'string' ? mm : (mm.userId || mm.id || '');
+          if (mName.toLowerCase() === kickRaw.toLowerCase() || mId.toLowerCase() === kickRaw.toLowerCase()) {
+            targetIdx = ti; targetMember = mm; break;
+          }
+        }
+        if (targetIdx === -1) { showToast('User "' + kickRaw + '" not found in group', 'info'); return { cancel: true }; }
+        var targetUid = typeof targetMember === 'string' ? targetMember : (targetMember.userId || targetMember.id || '');
+        if (targetUid === meId) { showToast('You cannot kick yourself', 'info'); return { cancel: true }; }
+        var displayKickName = typeof targetMember === 'string' ? targetMember : (targetMember.name || targetMember.username || targetUid);
+        if (!confirm('Remove "' + displayKickName + '" from group?')) return { cancel: true };
+        g.members.splice(targetIdx, 1);
+        try { MStore.save(); } catch(e) {}
+        try {
+          if (window.Orbit && window.Orbit.P2P && Orbit.P2P.isAvailable() && Orbit.Protocol && Orbit.Protocol.Types) {
+            var pktType2 = Orbit.Protocol.Types.GROUP_MEMBER_REMOVE || Orbit.Protocol.Types.GROUP_LEAVE || null;
+            if (pktType2) {
+              var payload = { groupId: g.id || g.groupId, userId: targetUid, removedUserId: targetUid };
+              try { var pktToTarget = Orbit.Protocol.createPacket(pktType2, meId, targetUid, payload); Orbit.P2P.send(targetUid, pktToTarget); } catch(e) {}
+              (g.members || []).forEach(function(rm) {
+                var rid = typeof rm === 'string' ? rm : rm.userId;
+                if (!rid || rid === meId || rid === targetUid) return;
+                try { var p = Orbit.Protocol.createPacket(pktType2, meId, rid, payload); Orbit.P2P.send(rid, p); } catch(e2) {}
+              });
+            }
+          }
+        } catch(e) {}
+        if (typeof renderChatList === 'function') try { renderChatList(); } catch(e) {}
+        showToast('"' + displayKickName + '" removed from group', 'info');
+        var _kickInput = document.getElementById('chat-input');
+        if (_kickInput) { _kickInput.value = ''; _kickInput.style.height = 'auto'; updateSendButton(); hideCommandTooltip(); }
+        return { cancel: true };
+      }
+
       default:
         showToast('Unknown command. Type /help to see all commands.', 'info');
         return { cancel: true };
@@ -2987,24 +3649,48 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function showHelpModal() {
+    var sheet = (typeof window !== 'undefined' && window.OrbitSheet) ? window.OrbitSheet : (typeof OrbitSheet !== 'undefined' ? OrbitSheet : null);
+    if (!sheet || typeof sheet.showCustom !== 'function') {
+      showToast('Help unavailable — sheet not loaded', 'error');
+      return;
+    }
+    var esc = (typeof escapeHtml === 'function') ? escapeHtml : (window.Sanitize ? window.Sanitize.escapeHtml : function(s){ return String(s||''); });
     var html = '<div style="padding:20px;max-width:340px;">';
     html += '<h3 style="margin:0 0 16px;font-size:17px;font-weight:700;color:var(--text-primary);">Slash Commands</h3>';
+    html += '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Group-only utilities — only work inside group chats</div>';
     for (var i = 0; i < COMMANDS.length; i++) {
       var c = COMMANDS[i];
       html += '<div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border-subtle);">';
       html += '  <div style="flex:1;min-width:0;">';
-      html += '    <div style="font-size:14px;font-weight:600;color:var(--accent-primary);font-family:monospace;">' + c.name + '</div>';
-      html += '    <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">' + c.desc + '</div>';
-      html += '    <div style="font-size:11px;color:var(--text-muted);margin-top:1px;font-family:monospace;">' + c.usage + '</div>';
+      html += '    <div style="font-size:14px;font-weight:600;color:var(--accent-primary);font-family:monospace;">' + esc(c.name) + '</div>';
+      html += '    <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">' + esc(c.desc) + '</div>';
+      html += '    <div style="font-size:11px;color:var(--text-muted);margin-top:1px;font-family:monospace;">' + esc(c.usage) + '</div>';
       html += '  </div>';
       html += '</div>';
     }
     html += '</div>';
-    OrbitSheet.showCustom(html);
+    sheet.showCustom(html);
+    // Clear the /help input after opening modal so it does not linger
+    var _helpInput = document.getElementById('chat-input');
+    if (_helpInput) {
+      _helpInput.value = '';
+      _helpInput.style.height = 'auto';
+      updateSendButton();
+      hideCommandTooltip();
+    }
   }
 
   /* ---- Slash Command Tooltip ---- */
   function showCommandTooltip(val) {
+    // Group-only guard: tooltip only appears inside group chats
+    var isGroupForTip = false;
+    try {
+      isGroupForTip = MStore.groups.some(function(g) { return g.id === activeChatId || g.groupId === activeChatId; });
+    } catch(e) { isGroupForTip = false; }
+    if (!isGroupForTip) {
+      hideCommandTooltip();
+      return;
+    }
     var tooltip = document.getElementById('slash-tooltip');
     if (!tooltip) {
       tooltip = document.createElement('div');
@@ -3589,6 +4275,7 @@ document.addEventListener('DOMContentLoaded', function() {
     { key: 'notifications', icon: 'bell', title: 'Notifications', desc: 'Sounds, DND, @mentions' },
     { key: 'privacy', icon: 'shield', title: 'Privacy & Security', desc: 'Encryption, auto-delete' },
     { key: 'network', icon: 'wifi', title: 'Network', desc: 'Ports, file size, add friend' },
+    { key: 'vault', icon: 'database-backup', title: 'Local Vault', desc: 'Encrypted local backup & restore' },
     { key: 'about', icon: 'info', title: 'About', desc: 'Version, statistics' },
     { key: 'advanced', icon: 'terminal', title: 'Advanced', desc: 'Developer tools, experimental features' }
   ];
@@ -3633,6 +4320,217 @@ document.addEventListener('DOMContentLoaded', function() {
     
     _settingsOverlayOpen = false;
     _settingsInSection = false;
+  }
+
+  /* ─── Network Map (Settings → Network) ─── */
+  function _netMapHash(s) {
+    var h = 5381;
+    var str = String(s || '');
+    for (var i = 0; i < str.length; i++) {
+      h = ((h << 5) + h) + str.charCodeAt(i);
+    }
+    return Math.abs(h);
+  }
+
+  function _netMapAngle(peerId) {
+    // Stable angle from peerId hash — deterministic layout across redraws
+    return (_netMapHash(peerId) % 6283) / 1000;
+  }
+
+  function _netMapColor(seed) {
+    // Hues drawn from the app's accent family (blue/violet/pink/cyan/orange)
+    var hues = [210, 260, 320, 180, 30, 90, 140];
+    return 'hsl(' + hues[_netMapHash(seed) % hues.length] + ', 75%, 58%)';
+  }
+
+  function _netMapIsConnected(peerId, friend) {
+    if (!window.Orbit || !Orbit.P2P) return false;
+    if (Orbit.P2P.isPeerConnected(peerId)) return true;
+    if (friend) {
+      if (friend.connectionId && Orbit.P2P.isPeerConnected(friend.connectionId)) return true;
+      if (friend.ip && Orbit.P2P.isPeerConnected(friend.ip)) return true;
+    }
+    return false;
+  }
+
+  function _netMapTransfers() {
+    // Returns { anyActive, someMatched, byPeer: { peerId: {fileName, percent} } }
+    var out = { anyActive: false, someMatched: false, byPeer: {} };
+    var txMap = out.byPeer;
+    // Incoming transfers: window.activeTransfers keyed by fileId, carry senderId
+    if (window.activeTransfers) {
+      Object.keys(window.activeTransfers).forEach(function(fileId) {
+        var tx = window.activeTransfers[fileId];
+        if (!tx) return;
+        out.anyActive = true;
+        var pid = tx.senderId;
+        if (pid && !txMap[pid]) {
+          txMap[pid] = {
+            fileName: tx.fileName || 'file',
+            percent: tx.total ? Math.round((tx.received / tx.total) * 100) : 0
+          };
+        }
+      });
+    }
+    // Outgoing transfers: window.activeSends keyed fileId + '::' + peerId
+    if (window.activeSends) {
+      Object.keys(window.activeSends).forEach(function(sendKey) {
+        var sess = window.activeSends[sendKey];
+        if (!sess || sess.done || sess.cancelled) return;
+        out.anyActive = true;
+        var pid = sess.peerId;
+        if (pid && !txMap[pid]) {
+          var fname = sess.att && sess.att.name ? sess.att.name :
+            (sess.startPayload && sess.startPayload.fileName ? sess.startPayload.fileName : 'file');
+          txMap[pid] = {
+            fileName: fname,
+            percent: sess.total ? Math.round((sess.ci / sess.total) * 100) : 0
+          };
+        }
+      });
+    }
+    return out;
+  }
+
+  function drawNetworkMap() {
+    var canvas = document.getElementById('network-map-canvas-mobile');
+    if (!canvas) return;
+    // Only redraw while the settings overlay is actually showing the section
+    if (!_settingsOverlayOpen || !_settingsInSection) return;
+    var block = canvas.parentNode;
+    if (!block) return;
+    var width = block.clientWidth;
+    if (!width) return; // lazily drawn on the first visible tick
+    var dpr = window.devicePixelRatio || 1;
+    var height = 220;
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    canvas.style.width = width + 'px';
+    canvas.style.height = height + 'px';
+    var ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+
+    var cx = width / 2;
+    var cy = height / 2;
+    var radius = Math.min(85, width / 2 - 46);
+
+    // Peers: friends first, then any connected ids not already known
+    var peers = [];
+    var seen = {};
+    (MStore.friends || []).forEach(function(f) {
+      var pid = f.id || f.peerId || '';
+      if (!pid || seen[pid]) return;
+      seen[pid] = true;
+      peers.push({ id: pid, friend: f });
+    });
+    if (window.Orbit && Orbit.P2P && Orbit.P2P.getConnections) {
+      var connIds = Orbit.P2P.getConnections() || [];
+      connIds.forEach(function(cid) {
+        if (!cid || seen[cid]) return;
+        seen[cid] = true;
+        peers.push({ id: cid, friend: null });
+      });
+    }
+
+    var transfers = _netMapTransfers();
+    var someMatched = peers.some(function(p) { return transfers.byPeer[p.id]; });
+    var now = Date.now();
+
+    // Edges (self → peer)
+    peers.forEach(function(peer) {
+      var angle = _netMapAngle(peer.id);
+      var px = cx + Math.cos(angle) * radius;
+      var py = cy + Math.sin(angle) * radius;
+      peer._x = px;
+      peer._y = py;
+      var connected = _netMapIsConnected(peer.id, peer.friend);
+      var tf = transfers.byPeer[peer.id] || null;
+      var pulse = !!tf || (transfers.anyActive && !someMatched);
+      var alpha = connected ? 0.9 : 0.35;
+      if (pulse) alpha = 0.5 + 0.5 * Math.abs(Math.sin(now / 400)); // activity pulse
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(px, py);
+      ctx.strokeStyle = connected ? 'rgba(10,132,255,' + alpha.toFixed(3) + ')' : 'rgba(150,150,160,' + alpha.toFixed(3) + ')';
+      ctx.lineWidth = pulse ? 2.5 : (connected ? 1.8 : 1.2);
+      if (!connected && !pulse) ctx.setLineDash([4, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    });
+
+    // Self node
+    ctx.beginPath();
+    ctx.arc(cx, cy, 16, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(10,132,255,0.25)';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(cx, cy, 13, 0, Math.PI * 2);
+    ctx.fillStyle = '#0A84FF';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.font = '600 13px "DM Sans", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    var myInitial = MStore.user && MStore.user.name ? MStore.user.name.charAt(0).toUpperCase() : 'Y';
+    ctx.fillText(myInitial, cx, cy + 1);
+    ctx.font = '10px "DM Sans", sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.fillText('You', cx, cy + 28);
+
+    // Peer nodes + labels
+    peers.forEach(function(peer) {
+      var px = peer._x;
+      var py = peer._y;
+      var connected = _netMapIsConnected(peer.id, peer.friend);
+      var name = peer.friend ? (peer.friend.name || peer.id) : peer.id;
+      var letter = name.charAt(0).toUpperCase();
+      ctx.beginPath();
+      ctx.arc(px, py, 13, 0, Math.PI * 2);
+      ctx.fillStyle = peer.friend ? _netMapColor(peer.id) : '#8E8E93';
+      ctx.fill();
+      ctx.strokeStyle = connected ? 'rgba(10,132,255,0.9)' : 'rgba(255,255,255,0.3)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = '#fff';
+      ctx.font = '600 12px "DM Sans", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(letter, px, py + 1);
+      var label = name.length > 12 ? name.slice(0, 12) + '…' : name;
+      ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      ctx.font = '10px "DM Sans", sans-serif';
+      ctx.fillText(label, px, py + 26);
+      var tf = transfers.byPeer[peer.id] || null;
+      if (tf) {
+        ctx.fillStyle = '#0A84FF';
+        ctx.font = '600 10px "DM Sans", sans-serif';
+        var shortName = tf.fileName.length > 14 ? tf.fileName.slice(0, 14) + '…' : tf.fileName;
+        ctx.fillText(shortName + ' ' + tf.percent + '%', px, py + 40);
+      }
+    });
+
+    // Status line under the canvas
+    var statusEl = document.getElementById('network-map-status');
+    if (statusEl) {
+      var connectedCount = 0;
+      peers.forEach(function(p) { if (_netMapIsConnected(p.id, p.friend)) connectedCount++; });
+      statusEl.textContent = 'Connected: ' + connectedCount + ' · Peers: ' + peers.length;
+    }
+  }
+
+  function ensureNetworkMapInterval() {
+    if (window._netmapInterval) return; // single interval, guarded like other app intervals
+    window._netmapInterval = setInterval(function() {
+      try {
+        drawNetworkMap();
+      } catch(e) {
+        console.warn('[Orbit] network map draw error:', e);
+      }
+    }, 1000);
   }
 
   function renderSettingsOverview() {
@@ -3689,7 +4587,8 @@ document.addEventListener('DOMContentLoaded', function() {
       {
         label: 'Connection',
         items: [
-          { key: 'network', icon: 'wifi', title: 'Network', desc: 'Ports, file size, add friend' }
+          { key: 'network', icon: 'wifi', title: 'Network', desc: 'Ports, file size, add friend' },
+          { key: 'vault', icon: 'database-backup', title: 'Local Vault', desc: 'Encrypted local backup & restore' }
         ]
       },
       {
@@ -3836,7 +4735,12 @@ document.addEventListener('DOMContentLoaded', function() {
             {v:'10',l:'10 min'},{v:'25',l:'25 min'},{v:'60',l:'60 min'}
           ], 'set-delete-after', String(s.deleteAttachmentsAfter || 0)));
       case 'network':
-        return card('radio', 'Network Mode', 'Connection discovery method',
+        return '<div class="settings-section-label">Network Map</div>' +
+        '<div class="network-map-block" data-search="Network Map visualize peer connections">' +
+          '<canvas id="network-map-canvas-mobile" width="0" height="0"></canvas>' +
+          '<div class="network-map-status" id="network-map-status">Connected: 0 · Peers: 0</div>' +
+        '</div>' +
+        card('radio', 'Network Mode', 'Connection discovery method',
           sel([{v:'LAN Auto-Discovery',l:'LAN Auto-Discovery'},{v:'Custom IP',l:'Custom IP'}], 'net-mode', s.networkMode || 'LAN Auto-Discovery')) +
         card('wifi', 'UDP Discovery Port', 'Port for peer discovery',
           '<input type="number" class="settings-input" id="net-udp" value="' + (s.udpPort || 45678) + '">') +
@@ -3940,6 +4844,35 @@ document.addEventListener('DOMContentLoaded', function() {
           card('zap-off', 'Performance Mode', 'Kill animations, reduce CPU usage',
             '<button class="settings-toggle ' + (s.experimentalPerformanceMode ? 'on' : '') + '" id="set-exp-perf"></button>')
         ) : '');
+      case 'vault':
+        var _vLastBackup = localStorage.getItem('orbit_vault_lastbackup');
+        var _vLastBackupTxt = '';
+        if (_vLastBackup) {
+          try { _vLastBackupTxt = new Date(_vLastBackup).toLocaleString(); } catch(e) {}
+        }
+        return '<div class="settings-section-label">Local Vault</div>' +
+        '<div class="vault-block" data-search="Local Vault encrypted backup restore files">' +
+          '<div class="vault-status" id="vault-status">' + (_vLastBackupTxt ? 'Last backup: ' + _vLastBackupTxt : 'No backup yet') + '</div>' +
+          '<div class="vault-status-sub">Backups are stored as a single JSON file in the app data folder (vault/).</div>' +
+        '</div>' +
+        card('lock', 'Encrypt Vault', 'Protect exports with a passphrase (PBKDF2 + AES-GCM)',
+          '<button class="settings-toggle ' + (s.vaultEncrypt ? 'on' : '') + '" id="vault-encrypt-toggle"></button>') +
+        (s.vaultEncrypt ? (
+          '<div class="settings-item-card" data-search="Vault Passphrase password encryption key">' +
+            '<div class="settings-item-icon"><i data-lucide="key-round"></i></div>' +
+            '<div class="settings-item-info">' +
+              '<span class="settings-item-title">Passphrase</span>' +
+              '<span class="settings-item-desc">Used to encrypt this export</span>' +
+            '</div>' +
+            '<div class="settings-item-action"><input type="password" class="vault-pass-input" id="vault-passphrase" placeholder="Enter passphrase" autocomplete="off" style="max-width:150px;"></div>' +
+          '</div>'
+        ) : '') +
+        card('smartphone', 'Auto-Backup on Background', 'Export silently when the app goes to background',
+          '<button class="settings-toggle ' + (s.vaultAutoBackup ? 'on' : '') + '" id="vault-auto-toggle"></button>') +
+        '<div class="settings-btn-row">' +
+          '<button id="btn-vault-export" class="settings-btn-primary"><i data-lucide="download"></i> Export Vault Now</button>' +
+          '<button id="btn-vault-restore" class="settings-btn-primary"><i data-lucide="upload"></i> Restore Vault</button>' +
+        '</div>';
       case 'folders':
         if (!s.experimentalFolders) return '';
         var folders = MStore.getChatFolders();
@@ -4160,6 +5093,16 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         var addFriendRow = document.getElementById('row-add-friend');
         if (addFriendRow) addFriendRow.addEventListener('click', showAddFriendModal);
+        ensureNetworkMapInterval();
+        drawNetworkMap();
+        break;
+      case 'vault':
+        bindToggle('vault-encrypt-toggle', function(on) { s.vaultEncrypt = on; MStore.save(); showSettingsSection('vault'); }, s.vaultEncrypt);
+        bindToggle('vault-auto-toggle', function(on) { s.vaultAutoBackup = on; MStore.save(); }, s.vaultAutoBackup);
+        var vExpBtn = document.getElementById('btn-vault-export');
+        if (vExpBtn) vExpBtn.addEventListener('click', function() { runVaultExport(true); });
+        var vResBtn = document.getElementById('btn-vault-restore');
+        if (vResBtn) vResBtn.addEventListener('click', runVaultRestore);
         break;
       case 'folders':
         _bindFolderActions();
@@ -4259,6 +5202,301 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
+  /* ─── Local Vault (encrypted local backup/restore) ─── */
+  function _vaultFilesystem() {
+    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem) {
+      return window.Capacitor.Plugins.Filesystem;
+    }
+    return null;
+  }
+
+  function _vaultAbToBase64(ab) {
+    var u8 = new Uint8Array(ab);
+    var CHUNK = 0x8000;
+    var binary = '';
+    for (var i = 0; i < u8.length; i += CHUNK) {
+      binary += String.fromCharCode.apply(null, u8.subarray(i, i + CHUNK));
+    }
+    return btoa(binary);
+  }
+
+  function _vaultPad2(n) { return n < 10 ? '0' + n : '' + n; }
+
+  function _vaultFmtBytes(b) {
+    if (!b && b !== 0) return '';
+    if (b < 1024) return b + ' B';
+    if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+    if (b < 1073741824) return (b / 1048576).toFixed(1) + ' MB';
+    return (b / 1073741824).toFixed(2) + ' GB';
+  }
+
+  function _vaultFmtDate(mtime) {
+    try { return new Date(mtime).toLocaleDateString(); } catch(e) { return ''; }
+  }
+
+  function _vaultReadBlobStore() {
+    if (!window.BlobStoreDB || !window.BlobStoreDB._open) return Promise.resolve({ blobs: {}, partials: [] });
+    return window.BlobStoreDB._open().then(function() {
+      return new Promise(function(resolve, reject) {
+        try {
+          var db = window.BlobStoreDB._db;
+          var blobs = {};
+          var partials = [];
+          var pending = 2;
+          function done() { if (--pending === 0) resolve({ blobs: blobs, partials: partials }); }
+          var tx = db.transaction(['blobs', 'partials'], 'readonly');
+          tx.onerror = function(e) { reject(e.target.error); };
+          tx.oncomplete = function() { /* all cursors done */ };
+          var blobsReq = tx.objectStore('blobs').openCursor();
+          blobsReq.onsuccess = function(e) {
+            var cursor = e.target.result;
+            if (cursor) {
+              try { blobs[cursor.key] = _vaultAbToBase64(cursor.value); } catch(err) { console.warn('[Vault] blob encode failed for', cursor.key, err); }
+              cursor['continue']();
+            } else { done(); }
+          };
+          var partsReq = tx.objectStore('partials').openCursor();
+          partsReq.onsuccess = function(e) {
+            var cursor = e.target.result;
+            if (cursor) {
+              partials.push(cursor.value);
+              cursor['continue']();
+            } else { done(); }
+          };
+        } catch(e) { reject(e); }
+      });
+    });
+  }
+
+  function _vaultCrypto() {
+    return window.crypto && window.crypto.subtle ? window.crypto.subtle : null;
+  }
+
+  function _vaultDeriveKey(passphrase, salt) {
+    var c = _vaultCrypto();
+    return c.importKey('raw', new TextEncoder().encode(passphrase), 'PBKDF2', false, ['deriveKey'])
+      .then(function(key) {
+        return c.deriveKey(
+          { name: 'PBKDF2', salt: salt, iterations: 100000, hash: 'SHA-256' },
+          key, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
+        );
+      });
+  }
+
+  function _vaultEncryptPayload(payloadObj, passphrase) {
+    var c = _vaultCrypto();
+    var salt = c.getRandomValues(new Uint8Array(16));
+    var iv = c.getRandomValues(new Uint8Array(12));
+    return _vaultDeriveKey(passphrase, salt).then(function(aesKey) {
+      var json = JSON.stringify(payloadObj);
+      return c.encrypt({ name: 'AES-GCM', iv: iv }, aesKey, new TextEncoder().encode(json));
+    }).then(function(ct) {
+      return {
+        salt: _vaultAbToBase64(salt.buffer),
+        iv: _vaultAbToBase64(iv.buffer),
+        ciphertext: _vaultAbToBase64(ct)
+      };
+    });
+  }
+
+  function _vaultDecryptPayload(encObj, passphrase) {
+    var c = _vaultCrypto();
+    return _vaultDeriveKey(passphrase, window.orbitBase64ToArrayBuffer(encObj.salt)).then(function(aesKey) {
+      var ct = window.orbitBase64ToArrayBuffer(encObj.ciphertext);
+      return c.decrypt({ name: 'AES-GCM', iv: window.orbitBase64ToArrayBuffer(encObj.iv) }, aesKey, ct);
+    }).then(function(pt) {
+      return JSON.parse(new TextDecoder().decode(pt));
+    });
+  }
+
+  function runVaultExport(showUI) {
+    var fs = _vaultFilesystem();
+    if (!fs) {
+      if (showUI !== false) showToast('Vault: Filesystem plugin unavailable', 'error');
+      return Promise.resolve(null);
+    }
+    if (window._vaultExportRunning) return Promise.resolve(null);
+    window._vaultExportRunning = true;
+
+    function finish(res) { window._vaultExportRunning = false; return res; }
+
+    return Promise.resolve().then(function() {
+      var data = {};
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && k.indexOf('orbit_') === 0) data[k] = localStorage.getItem(k);
+      }
+      return _vaultReadBlobStore().then(function(blobData) {
+        var s = MStore.settings || {};
+        var needsEnc = !!s.vaultEncrypt;
+        var pass = null;
+        if (needsEnc) {
+          var passEl = document.getElementById('vault-passphrase');
+          pass = passEl && passEl.value ? passEl.value : null;
+          if (!pass) {
+            if (showUI === false) return null; // auto-backup: no passphrase available — skip silently
+            pass = prompt('Enter a passphrase to encrypt this vault export:');
+          }
+          if (!pass) return null;
+        }
+        var payload = { data: data, blobs: blobData.blobs, partials: blobData.partials };
+        var base = {
+          app: 'Orbit',
+          version: window.APP_VERSION || '0.5.0-beta',
+          createdAt: new Date().toISOString()
+        };
+        if (needsEnc) {
+          return _vaultEncryptPayload(payload, pass).then(function(enc) {
+            return Object.assign({}, base, { encrypted: true }, enc);
+          });
+        }
+        return Object.assign({}, base, { encrypted: false }, payload);
+      }).then(function(vaultObj) {
+        if (!vaultObj) return null;
+        var json = JSON.stringify(vaultObj);
+        var d = new Date();
+        var stamp = d.getFullYear().toString() + _vaultPad2(d.getMonth() + 1) + _vaultPad2(d.getDate()) +
+          '-' + _vaultPad2(d.getHours()) + _vaultPad2(d.getMinutes());
+        var fileName = 'OrbitVault-' + stamp + '.json';
+        return fs.mkdir({ path: 'vault', directory: 'DATA', recursive: true })
+          .catch(function() { /* dir exists — continue */ })
+          .then(function() {
+            return fs.writeFile({ path: 'vault/' + fileName, data: json, directory: 'DATA', encoding: 'utf8' });
+          })
+          .then(function() {
+            var size = new Blob([json]).size;
+            try { localStorage.setItem('orbit_vault_lastbackup', new Date().toISOString()); } catch(e) {}
+            if (showUI !== false) {
+              showToast('Vault exported: ' + fileName + ' (' + _vaultFmtBytes(size) + ')', 'success');
+              var statusEl = document.getElementById('vault-status');
+              if (statusEl) statusEl.textContent = 'Last backup: ' + new Date().toLocaleString();
+            }
+            return { fileName: fileName, size: size };
+          });
+      });
+    }).catch(function(err) {
+      if (showUI !== false) showToast('Vault export failed: ' + (err && err.message ? err.message : String(err)), 'error');
+      console.warn('[Vault] export error:', err);
+      return null;
+    }).then(finish);
+  }
+
+  function runVaultRestore() {
+    var fs = _vaultFilesystem();
+    if (!fs) { showToast('Vault: Filesystem plugin unavailable', 'error'); return; }
+    fs.readdir({ path: 'vault', directory: 'DATA' }).then(function(res) {
+      var files = (res.files || []).filter(function(f) {
+        return f && f.name && f.name.toLowerCase().slice(-5) === '.json';
+      });
+      if (!files.length) { showToast('No vault backups found', 'warning'); return; }
+      files.sort(function(a, b) { return (b.mtime || 0) - (a.mtime || 0); });
+      _showVaultPicker(files);
+    }).catch(function(err) {
+      var msg = err && err.message ? err.message : String(err);
+      if (msg.toLowerCase().indexOf('does not exist') !== -1 || msg.toLowerCase().indexOf('no such') !== -1) {
+        showToast('No vault backups found', 'warning');
+      } else {
+        showToast('Vault: ' + msg, 'error');
+      }
+    });
+  }
+
+  function _showVaultPicker(files) {
+    if (!window.OrbitSheet) { showToast('Vault: picker unavailable', 'error'); return; }
+    var html = '<div class="vault-picker-title">Select a vault backup to restore</div>';
+    html += '<div class="vault-file-list">';
+    for (var i = 0; i < files.length; i++) {
+      var f = files[i];
+      var metaParts = [];
+      if (typeof f.size === 'number') metaParts.push(_vaultFmtBytes(f.size));
+      var timeTxt = _vaultFmtDate(f.mtime);
+      if (timeTxt) metaParts.push(timeTxt);
+      html += '<button class="vault-file-item" data-vault-idx="' + i + '">' +
+        '<i data-lucide="database-backup"></i>' +
+        '<span class="vault-file-name">' + escapeHtml(f.name) + '</span>' +
+        '<span class="vault-file-meta">' + escapeHtml(metaParts.join(' · ')) + '</span>' +
+        '</button>';
+    }
+    html += '</div>';
+    window.OrbitSheet.showCustom(html);
+    var btns = document.querySelectorAll('.vault-file-item');
+    for (var j = 0; j < btns.length; j++) {
+      (function(btn) {
+        btn.addEventListener('click', function() {
+          var idx = parseInt(btn.getAttribute('data-vault-idx'), 10);
+          window.OrbitSheet.hide();
+          if (files[idx]) _confirmVaultRestore(files[idx]);
+        });
+      })(btns[j]);
+    }
+  }
+
+  function _confirmVaultRestore(file) {
+    if (!confirm('Restore vault "' + file.name + '"? This will overwrite your current local data.')) return;
+    var fs = _vaultFilesystem();
+    fs.readFile({ path: 'vault/' + file.name, directory: 'DATA', encoding: 'utf8' }).then(function(res) {
+      var vaultObj;
+      try { vaultObj = JSON.parse(res.data); } catch(e) { showToast('Vault file is corrupt', 'error'); return; }
+      if (!vaultObj || vaultObj.app !== 'Orbit') { showToast('Not a valid Orbit vault file', 'error'); return; }
+      if (vaultObj.encrypted) {
+        var pass = prompt('Enter the vault passphrase:');
+        if (!pass) return;
+        return _vaultDecryptPayload(vaultObj, pass).then(function(payload) {
+          return _applyVaultData(payload);
+        }).catch(function(err) {
+          console.warn('[Vault] decrypt failed:', err);
+          showToast('Decryption failed — wrong passphrase?', 'error');
+          return null;
+        });
+      }
+      return _applyVaultData(vaultObj);
+    }).catch(function(err) {
+      showToast('Vault read failed: ' + (err && err.message ? err.message : String(err)), 'error');
+    });
+  }
+
+  function _applyVaultData(payload) {
+    var data = payload.data || {};
+    var restoreCount = 0;
+    for (var k in data) {
+      if (!data.hasOwnProperty(k)) continue;
+      // Never clobber existing vault prefs; restore them only if absent
+      if (k.indexOf('orbit_vault_') === 0) {
+        if (localStorage.getItem(k) === null) {
+          try { localStorage.setItem(k, data[k]); restoreCount++; } catch(e) {}
+        }
+        continue;
+      }
+      try { localStorage.setItem(k, data[k]); restoreCount++; } catch(e) {}
+    }
+    var blobKeys = payload.blobs || {};
+    var partials = payload.partials || [];
+    var promises = [];
+    for (var bk in blobKeys) {
+      if (!blobKeys.hasOwnProperty(bk)) continue;
+      var ab = window.orbitBase64ToArrayBuffer(blobKeys[bk]);
+      if (ab && ab.byteLength > 0) {
+        promises.push(window.BlobStoreDB.put(bk, ab));
+      }
+    }
+    partials.forEach(function(rec) {
+      if (rec && rec.fileId) promises.push(window.BlobStoreDB.partialPut(rec.fileId, rec));
+    });
+    return Promise.all(promises).then(function() {
+      // Best-effort: re-init in-memory store from the restored localStorage so
+      // the current session sees the data (and doesn't clobber it on next save).
+      try {
+        if (MStore && MStore.load) MStore.load();
+        renderFriends();
+        renderChatList();
+        if (activeChatId) renderMessages(activeChatId);
+      } catch(e) { console.warn('[Vault] post-restore re-init failed:', e); }
+      showToast('Vault restored (' + restoreCount + ' keys) — restart the app to apply fully', 'success');
+    }).catch(function(err) {
+      showToast('Vault restore error: ' + (err && err.message ? err.message : String(err)), 'error');
+    });
+  }
+
   function showChangelog() {
     if (document.getElementById('changelog-overlay')) return;
     var overlay = document.createElement('div');
@@ -4284,7 +5522,26 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button id="changelog-close-mobile" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;font-size:20px;">✕</button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
-        vBlock('0.4.2-beta', 'Latest Stable', [
+        vBlock('0.5.0-beta', 'Latest Stable', [
+          ['Features', [
+            'Resumable P2P File Transfers (Desktop) — Interrupted chunked transfers resume from the last contiguous chunk via FILE_TRANSFER_RESUME and auto-resume when peers reconnect.',
+            'Network Topology Visualizer (Desktop + Mobile) — Live canvas map in Settings → Network: you at the center, peers orbiting, RTT color-coded links, transfer pulses, activity flashes.',
+            'Message Threading (Desktop + Mobile) — Replies persist across restarts, render as indented chains with an "N replies" chip, and open in a View thread panel.',
+            'Local Vault (Mobile) — Encrypted local backup of all your data (settings, chats, messages, files) with restore picker and optional auto-backup on background.',
+            'Group Slash Commands (19) — /help /poll /me /shrug /tableflip /unflip /lenny /roll /flip /spoiler /clear /invite /members /topic /leave /shout /countdown /nick /kick — group chats only. /poll opens a visual builder; quoted syntax still works.'
+          ]],
+          ['Bug Fixes', [
+            '/help Now Works on Mobile — Hardened sheet access plus a cache-bust fixed the dead command in group chats.',
+            'Slash Commands Come to Desktop — Full parity with mobile, gated to groups.',
+            'Poll Builder Centered — The create-poll sheet (plus invite/members sheets) is now properly centered.',
+            'Invite Share Fixed — Group Info Share now uses the system share sheet (or copies invite text) instead of posting into whatever chat was open.',
+            'Music Visualizer Duration Line Matches Video Player — Seek bar, groove, fill, and tooltip styles harmonized.'
+          ]],
+          ['Technical', [
+            'Version bumped to v0.5.0-beta across all manifests; Android bundle resynced.'
+          ]]
+        ]) +
+        vBlock('0.4.2-beta', 'Stable', [
           ['Features', [
             'Chat Folders (Desktop, experimental) — New Folders rail in the sidebar: create/rename/delete folders, add chats via the context menu, and bulk-assign with the "Add Chats" picker. Folders persist per-device (no sync yet).',
             'Folder Tabs Polish (Mobile) — Uniform tab width, centered Friends/Groups/folder trio with one folder, scrollable sub-rail with several; no opaque backgrounds, centered underline, auto-scroll on new folders.'
@@ -4296,7 +5553,7 @@ document.addEventListener('DOMContentLoaded', function() {
             'Version bumped to v0.4.2-beta across all manifests.'
           ]]
         ]) +
-        vBlock('0.4.0-beta', 'Latest Stable', [
+        vBlock('0.4.0-beta', 'Stable', [
           ['Bug Fixes', [
             'Message Long-Press Menu Fixed — Press-and-hold on a message bubble now opens the reactions + actions sheet (Copy/Reply/Translate/Forward/Delete). Previously the wiring only ran through a secondary code path the app no longer uses, so the menu never initialized.',
             'Profile Frame Leak Fixed (4 renderers) — Avatar frames were still rendering when the Profile Frames setting was off. Gated _addAvatarFrames, renderProfilePill, and both chat-header renderers.',
@@ -6589,6 +7846,95 @@ document.addEventListener('DOMContentLoaded', function() {
     if (backdrop) backdrop.style.display = 'none';
   }
 
+  /* -- Thread Panel -- */
+  function _threadSenderName(m) {
+    if (!m) return 'Unknown';
+    if (m.from === 'me') return 'You';
+    var f = (MStore.friends || []).find(function(fr) { return fr.id === m.from; });
+    return f ? f.name : (m.fromName || m.from || 'Unknown');
+  }
+
+  function openThreadPanel(chatId, msgId) {
+    var panel = document.getElementById('panel-thread-overlay');
+    var backdrop = document.getElementById('thread-overlay-backdrop');
+    if (!panel || !backdrop) return;
+    var msgs = MStore.getMessages(chatId) || [];
+    var byId = {};
+    var target = null;
+    for (var ti = 0; ti < msgs.length; ti++) {
+      byId[String(msgs[ti].id)] = msgs[ti];
+      if (String(msgs[ti].id) === String(msgId)) target = msgs[ti];
+    }
+    if (!target) return;
+    // Walk up the replyTo chain to the thread root
+    var root = target;
+    var guard = 0;
+    while (root.replyTo != null && byId[String(root.replyTo)] && guard < 100) {
+      root = byId[String(root.replyTo)];
+      guard++;
+    }
+    var rootKey = String(root.id);
+    var threadMsgs = msgs.filter(function(m) {
+      var cur = m;
+      var g = 0;
+      while (cur.replyTo != null && byId[String(cur.replyTo)] && g < 100) {
+        cur = byId[String(cur.replyTo)];
+        g++;
+      }
+      return cur && String(cur.id) === rootKey;
+    });
+    // Newest last
+    threadMsgs.sort(function(a, b) {
+      return ((a.time ? new Date(a.time).getTime() : 0) - (b.time ? new Date(b.time).getTime() : 0));
+    });
+    var titleEl = document.getElementById('thread-overlay-title');
+    if (titleEl) titleEl.textContent = 'Thread (' + threadMsgs.length + ')';
+    var content = document.getElementById('thread-content');
+    var html = '';
+    for (var i = 0; i < threadMsgs.length; i++) {
+      var tm = threadMsgs[i];
+      var isRoot = String(tm.id) === rootKey;
+      var txt = (tm.text || '').trim();
+      if (!txt && tm.attachments && tm.attachments.length > 0) {
+        txt = '[' + (tm.attachments[0].name || 'Attachment') + ']';
+      } else if (!txt) {
+        txt = '(No text)';
+      }
+      html += '<div class="' + (isRoot ? 'thread-root-msg' : 'thread-msg-item') + '" data-thread-msg-id="' + tm.id + '">' +
+        '<div class="thread-msg-name">' + escapeHtml(_threadSenderName(tm)) + (isRoot ? ' <span class="thread-root-badge">Root</span>' : '') + '</div>' +
+        '<div class="thread-msg-text">' + escapeHtml(txt) + '</div>' +
+        '<div class="thread-msg-time">' + formatTime(tm.time) + '</div>' +
+      '</div>';
+    }
+    content.innerHTML = html;
+    content.querySelectorAll('[data-thread-msg-id]').forEach(function(row) {
+      row.addEventListener('click', function() {
+        var mId = this.getAttribute('data-thread-msg-id');
+        closeThreadPanel();
+        setTimeout(function() {
+          var el = document.querySelector('.message-row[data-msg-id="' + String(mId).replace(/"/g, '') + '"]');
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 150);
+      });
+    });
+    panel.classList.add('open');
+    backdrop.style.display = 'block';
+    var _thnav = document.getElementById('mobile-nav');
+    if (_thnav) _thnav.classList.add('nav-hidden');
+  }
+
+  function closeThreadPanel() {
+    var panel = document.getElementById('panel-thread-overlay');
+    var backdrop = document.getElementById('thread-overlay-backdrop');
+    if (!panel || !backdrop) return;
+    panel.classList.remove('open');
+    backdrop.style.display = 'none';
+    var _thnav2 = document.getElementById('mobile-nav');
+    if (_thnav2) _thnav2.classList.remove('nav-hidden');
+  }
+  window.openThreadPanel = openThreadPanel;
+  window.closeThreadPanel = closeThreadPanel;
+
   /* -- Group Info Panel -- */
   function _getMemberRoleBadge(role) {
     if (role === 'owner') return '<span class="group-role-badge group-role-owner">Owner</span>';
@@ -8485,6 +9831,10 @@ document.addEventListener('DOMContentLoaded', function() {
   var btnCloseGallery = document.getElementById('btn-close-gallery');
   if (btnCloseGallery) btnCloseGallery.addEventListener('click', hideGallery);
 
+  // Close thread panel
+  var btnCloseThread = document.getElementById('btn-close-thread');
+  if (btnCloseThread) btnCloseThread.addEventListener('click', closeThreadPanel);
+
   // Close profile
   document.getElementById('btn-close-profile').addEventListener('click', hideProfile);
 
@@ -8565,7 +9915,7 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
 
-    // Share invite code in current chat
+    // Share invite via system share sheet
     if (target.id === 'btn-group-share-invite') {
       var sg = MStore.groups.find(function(gr) { return gr.id === activeChatId; });
       if (sg) {
@@ -8575,40 +9925,35 @@ document.addEventListener('DOMContentLoaded', function() {
           sg.inviteCode = Array.from(codeBytes).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
           MStore.save();
         }
-        var shareText = 'Join my group "' + sg.name + '" on Orbit! Use invite code: ' + sg.inviteCode;
-        var shareMsgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
-        // Send in current chat if there's an active chat
-        if (activeChatId && activeChatId !== sg.id) {
-          MStore.addMessage(activeChatId, {
-            id: shareMsgId,
-            from: 'me',
-            text: shareText,
-            time: new Date().toISOString()
-          });
-          if (window.Orbit && window.Orbit.P2P && Orbit.P2P.isAvailable()) {
-            var activeChat = MStore.chats.find(function(c) { return c.id === activeChatId; });
-            if (activeChat) {
-              var isGroupChat = MStore.groups.some(function(g) { return g.id === activeChatId; });
-              if (isGroupChat) {
-                (sg.members || []).forEach(function(m) {
-                  var mid = typeof m === 'string' ? m : m.userId;
-                  if (mid !== (MStore.user ? MStore.user.id : '')) {
-                    var pkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.MESSAGE, MStore.user ? MStore.user.id : '', mid, { text: shareText, msgId: shareMsgId, chatId: activeChatId });
-                    Orbit.P2P.send(mid, pkt);
-                  }
-                });
-              } else {
-                var pkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.MESSAGE, MStore.user ? MStore.user.id : '', activeChatId, { text: shareText, msgId: shareMsgId, chatId: activeChatId });
-                Orbit.P2P.send(activeChatId, pkt);
-              }
+        var inviteText = 'Join "' + sg.name + '" on Orbit! Code: ' + sg.inviteCode;
+        try {
+          if (navigator.share) {
+            var canShareOk = true;
+            try { if (navigator.canShare && !navigator.canShare({ text: inviteText })) canShareOk = false; } catch(e) { canShareOk = true; }
+            if (canShareOk) {
+              navigator.share({ title: 'Orbit invite', text: inviteText }).then(function(){ showToast('Shared!', 'info'); }).catch(function(err){
+                if (err && err.name === 'AbortError') return;
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                  navigator.clipboard.writeText(inviteText).then(function(){ showToast('Invite text copied - share it anywhere', 'info'); }).catch(function(){
+                    var ta2 = document.createElement('textarea'); ta2.value = inviteText; document.body.appendChild(ta2); ta2.select(); document.execCommand('copy'); ta2.remove(); showToast('Invite text copied - share it anywhere', 'info');
+                  });
+                } else {
+                  var ta2 = document.createElement('textarea'); ta2.value = inviteText; document.body.appendChild(ta2); ta2.select(); document.execCommand('copy'); ta2.remove(); showToast('Invite text copied - share it anywhere', 'info');
+                }
+              });
+              return;
             }
           }
-          renderMessages(activeChatId);
-          renderChatList();
-          showToast('Invite code shared in chat', 'info');
-        } else {
-          showToast('Open a different chat first to share the invite', 'info');
-        }
+        } catch(e) {}
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(inviteText).then(function(){ showToast('Invite text copied - share it anywhere', 'info'); }).catch(function(){
+              var ta = document.createElement('textarea'); ta.value = inviteText; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); showToast('Invite text copied - share it anywhere', 'info');
+            });
+          } else {
+            var ta = document.createElement('textarea'); ta.value = inviteText; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); showToast('Invite text copied - share it anywhere', 'info');
+          }
+        } catch(e) { showToast('Copy failed', 'error'); }
       }
       return;
     }
@@ -8846,6 +10191,8 @@ document.addEventListener('DOMContentLoaded', function() {
   // Overlay backdrops
   document.getElementById('profile-overlay-backdrop').addEventListener('click', hideProfile);
   document.getElementById('gallery-overlay-backdrop').addEventListener('click', hideGallery);
+  var _threadBackdrop = document.getElementById('thread-overlay-backdrop');
+  if (_threadBackdrop) _threadBackdrop.addEventListener('click', closeThreadPanel);
 
   // Emoji picker
   document.getElementById('btn-emoji').addEventListener('click', function(e) {
@@ -9214,6 +10561,9 @@ document.addEventListener('DOMContentLoaded', function() {
       case 'forward':
         if (window.showForwardModal) window.showForwardModal(msgId);
         break;
+      case 'thread':
+        if (window.openThreadPanel) window.openThreadPanel(chatId, msgId);
+        break;
       case 'translate':
         if (typeof translateMessage === 'function') translateMessage(msgId);
         break;
@@ -9279,6 +10629,11 @@ document.addEventListener('DOMContentLoaded', function() {
       { label: 'Reply', icon: 'reply', action: 'reply', danger: false, always: true },
       { label: 'Forward', icon: 'send', action: 'forward', danger: false, always: true }
     ];
+
+    var _hasThread = msg.replyTo != null || ctxMsgs.some(function(x) { return x.replyTo != null && String(x.replyTo) === String(msg.id); });
+    if (_hasThread) {
+      actions.push({ label: 'View thread', icon: 'messages-square', action: 'thread', danger: false });
+    }
 
     if (MStore.settings && MStore.settings.messageTranslate) {
       actions.push({ label: 'Translate', icon: 'languages', action: 'translate', danger: false });
@@ -9820,12 +11175,84 @@ document.addEventListener('DOMContentLoaded', function() {
       var now = Date.now();
       Object.keys(window.activeTransfers).forEach(function(fileId) {
         var tx = window.activeTransfers[fileId];
-        if (tx._startTime && now - tx._startTime > 120000) {
+        // CROSS-4: idle-timeout semantics — only reap when NO chunk has arrived
+        // for 120s (a long but healthy transfer must not be killed)
+        var lastActivity = tx._lastChunkTime || tx._startTime;
+        if (lastActivity && now - lastActivity > 120000) {
           console.warn('[P2P] Reaping stalled transfer:', fileId, tx.fileName);
           delete window.activeTransfers[fileId];
+          window.BlobStoreDB.partialDelete(fileId).catch(function(err) {
+            console.warn('[P2P] Partial cleanup failed for', fileId, err);
+          });
         }
       });
     }, 30000);
+
+    // CROSS-4: ask the sender to skip ahead to the first missing chunk when the
+    // receive-side prefix stalls (lost chunks on the wire or a missed
+    // FILE_TRANSFER_END). The sender verifies the hash of the prefix we already
+    // hold before re-sending from our contiguous count.
+    function _maybeRequestResume(fileId) {
+      if (!window.activeTransfers || !window.activeTransfers[fileId]) return;
+      var tx = window.activeTransfers[fileId];
+      if (!tx.chunks || !tx.chunks.length) return;
+      // Contiguous prefix length: first slot that is still missing
+      var n = 0;
+      while (n < tx.chunks.length && tx.chunks[n] !== undefined) n++;
+      // F2: healthy in-order flow — the prefix is complete and only the tail
+      // is missing, so there is no hole for the sender to skip; a RESUME
+      // would only churn (base64-decode + hash the whole prefix for nothing).
+      // The END-with-gaps path still fires (there n < tx.received).
+      if (n === tx.received && n < tx.total) return;
+      var now = Date.now();
+      if (tx._resuming) return; // digest/send already in flight
+      if (tx._lastResumeReq && now - tx._lastResumeReq < 4000) return; // cooldown
+      if (n === 0 && now - tx._startTime < 5000) return; // right after START — useless
+      tx._resuming = true;
+      try {
+        // Hash the contiguous prefix we actually hold (chunks 0..n-1)
+        var _rLen = 0;
+        var _rBufs = [];
+        for (var _r = 0; _r < n; _r++) {
+          var _rCb = window.orbitBase64ToArrayBuffer(tx.chunks[_r]);
+          _rBufs.push(_rCb);
+          _rLen += _rCb.byteLength;
+        }
+        var _rMerged = new Uint8Array(_rLen);
+        var _rOff = 0;
+        for (var _r2 = 0; _r2 < _rBufs.length; _r2++) {
+          _rMerged.set(new Uint8Array(_rBufs[_r2]), _rOff);
+          _rOff += _rBufs[_r2].byteLength;
+        }
+        crypto.subtle.digest('SHA-256', _rMerged.buffer).then(function(hashBuf) {
+          var _rArr = Array.from(new Uint8Array(hashBuf));
+          var _rHex = _rArr.map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+          tx._resuming = false;
+          tx._lastResumeReq = Date.now();
+          var resumePayload = { fileId: fileId, receivedCount: n, hash: _rHex };
+          if (tx.chatId) resumePayload.chatId = tx.chatId; // group transfers
+          debugLog('P2P', 'Requesting resume for ' + (tx.fileName || fileId) + ' — ' + n + '/' + tx.total + ' chunks held');
+          try {
+            Orbit.P2P.send(tx.senderId, Orbit.Protocol.createPacket(
+              Orbit.Protocol.Types.FILE_TRANSFER_RESUME,
+              MStore.user ? MStore.user.id : '',
+              tx.senderId,
+              resumePayload
+            )).catch(function(e) {
+              console.warn('[P2P] RESUME send failed for', fileId, e);
+            });
+          } catch(e) {
+            console.warn('[P2P] RESUME send failed for', fileId, e);
+          }
+        }).catch(function(e) {
+          console.warn('[P2P] RESUME digest failed for', fileId, e);
+          tx._resuming = false;
+        });
+      } catch(e) {
+        console.warn('[P2P] RESUME failed for', fileId, e);
+        tx._resuming = false;
+      }
+    }
 
     // Listen for incoming connections — send identity beacon over TCP
     Orbit.P2P.onConnection(function(data) {
@@ -10204,16 +11631,63 @@ document.addEventListener('DOMContentLoaded', function() {
       // File transfers (Receive from Desktop)
       if (packet.type === Orbit.Protocol.Types.FILE_TRANSFER_START) {
         if (!packet.payload || !packet.payload.fileId) return;
+        // F3: receivers buffer whole files in RAM, so the 5000-chunk cap is a
+        // real limit — but a >5000-chunk file must not be silently saved as a
+        // truncated 312.5MB blob. Reject it explicitly instead.
+        if ((packet.payload.totalChunks || 0) > 5000) {
+          console.warn('[P2P] Rejecting oversized transfer', packet.payload.fileId, '—', packet.payload.totalChunks, 'chunks exceed the 5000 cap');
+          try {
+            Orbit.P2P.send(msgFrom, Orbit.Protocol.createPacket(
+              Orbit.Protocol.Types.FILE_TRANSFER_REJECT, MStore.user ? MStore.user.id : '', msgFrom,
+              { fileId: packet.payload.fileId, reason: 'too_large' }
+            )).catch(function(e) {
+              console.warn('[P2P] REJECT send failed for', packet.payload.fileId, e);
+            });
+          } catch(e) {
+            console.warn('[P2P] REJECT send failed for', packet.payload.fileId, e);
+          }
+          return;
+        }
         var totalChunks = Math.min(packet.payload.totalChunks || 0, 5000);
         if (totalChunks <= 0) return;
         window.activeTransfers = window.activeTransfers || {};
-        window.activeTransfers[packet.payload.fileId] = {
+        var _startFileId = packet.payload.fileId;
+        var _existingTx = window.activeTransfers[_startFileId];
+        if (_existingTx) {
+          // CROSS-4 duplicate-START guard: a fresh sender session re-sends START
+          // from chunk 0. Only replace the partial when the content hash differs;
+          // otherwise keep it and let the FILE_CHUNK handler fill the gaps (it
+          // skips already-defined slots), nudging the sender via RESUME.
+          var _startHash = packet.payload.hash || '';
+          var _oldHash = _existingTx.hash || '';
+          if (_startHash && _oldHash && _startHash !== _oldHash) {
+            console.warn('[P2P] START with different hash for', _startFileId, '— replacing partial');
+            window.BlobStoreDB.partialDelete(_startFileId).catch(function(err) {
+              console.warn('[P2P] Partial cleanup failed for', _startFileId, err);
+            });
+          } else {
+            debugLog('P2P', 'Duplicate START for in-progress transfer', _startFileId, '— keeping partial');
+            if (_existingTx.received < _existingTx.total) _maybeRequestResume(_startFileId);
+            return;
+          }
+        }
+        window.activeTransfers[_startFileId] = {
           chunks: new Array(totalChunks),
           fileName: packet.payload.fileName || 'unknown',
           total: totalChunks,
           received: 0,
           senderId: msgFrom,
-          _startTime: Date.now()
+          // CROSS-4: full-file hash from the sender ('' when crypto is
+          // unavailable) + chatId for group transfers (mirrors sender's START)
+          hash: packet.payload.hash || '',
+          chatId: packet.payload.chatId || '',
+          // Sender-stamped metadata (mobile stamps these in FILE_TRANSFER_START).
+          // Persisted so the END handler can classify voice clips (*.webm is in
+          // videoMatch) correctly on the merge-fallback path.
+          type: packet.payload.type || '',
+          mimeType: packet.payload.mimeType || '',
+          _startTime: Date.now(),
+          _lastChunkTime: Date.now()
         };
         debugLog('P2P', 'Started receiving file ' + (packet.payload.fileName || '?'));
         return;
@@ -10226,8 +11700,38 @@ document.addEventListener('DOMContentLoaded', function() {
         if (tx) {
           var chunkIdx = parseInt(packet.payload.chunkIndex, 10);
           if (!isNaN(chunkIdx) && chunkIdx >= 0 && chunkIdx < tx.chunks.length) {
-            if (tx.chunks[chunkIdx] === undefined) { tx.chunks[chunkIdx] = packet.payload.data; tx.received++; }
-            // tx.received++ removed since it is handled above
+            if (tx.chunks[chunkIdx] === undefined) {
+              tx.chunks[chunkIdx] = packet.payload.data; tx.received++;
+              // CROSS-RESTART: checkpoint the partial to IndexedDB every 50
+              // newly received chunks (non-fatal on failure — resume stays
+              // best-effort). The chunks object map (index→base64 for defined
+              // slots only) avoids sparse-array structured-clone ambiguity.
+              if (!tx._lastCheckpoint) tx._lastCheckpoint = 0;
+              if (tx.received - tx._lastCheckpoint >= 50) {
+                tx._lastCheckpoint = tx.received;
+                var _ckMap = {};
+                for (var _ckI = 0; _ckI < tx.chunks.length; _ckI++) {
+                  if (tx.chunks[_ckI] !== undefined) _ckMap[String(_ckI)] = tx.chunks[_ckI];
+                }
+                window.BlobStoreDB.partialPut(packet.payload.fileId, {
+                  fileId: packet.payload.fileId,
+                  fileName: tx.fileName,
+                  total: tx.total,
+                  received: tx.received,
+                  senderId: tx.senderId,
+                  type: tx.type,
+                  mimeType: tx.mimeType,
+                  hash: tx.hash,
+                  chatId: tx.chatId,
+                  chunks: _ckMap,
+                  savedAt: Date.now()
+                }).then(function() {
+                  console.log('[P2P] Checkpointed partial', packet.payload.fileId, tx.received + '/' + tx.total);
+                }).catch(function(err) {
+                  console.warn('[P2P] Partial checkpoint failed for', packet.payload.fileId, err);
+                });
+              }
+            }
           }
           var bwLimit = MStore.settings.netBandwidthLimit || 0;
           if (bwLimit > 0 && tx.received < tx.total) {
@@ -10241,6 +11745,10 @@ document.addEventListener('DOMContentLoaded', function() {
             }
           }
           tx._lastChunkTime = Date.now();
+          // CROSS-4: transfer still incomplete → ask the sender to skip ahead to
+          // the first gap (the helper computes the true contiguous prefix; the
+          // 4s cooldown keeps this cheap on out-of-order / duplicate chunks)
+          if (tx.received < tx.total) _maybeRequestResume(packet.payload.fileId);
         }
         return;
       }
@@ -10257,7 +11765,9 @@ document.addEventListener('DOMContentLoaded', function() {
           }
           if (!allReceived) {
             console.warn('[P2P] File transfer incomplete — missing chunks for', txEnd.fileName);
-            delete window.activeTransfers[packet.payload.fileId];
+            // CROSS-4: keep the partial alive and ask the sender to resume from
+            // the first gap instead of silently discarding it
+            _maybeRequestResume(packet.payload.fileId);
             return;
           }
           // CRIT-1: Decode each chunk independently and concatenate ArrayBuffers
@@ -10275,6 +11785,26 @@ document.addEventListener('DOMContentLoaded', function() {
           for (var _c = 0; _c < _chunkBufs.length; _c++) {
             _mergedBuf.set(new Uint8Array(_chunkBufs[_c]), _off);
             _off += _chunkBufs[_c].byteLength;
+          }
+          // N5: verify the sender's full-file hash against the assembled bytes.
+          // Non-fatal — a mismatch only warns and the file is still saved
+          // (mirrors desktop's handleEnd; desktop only discards on a
+          // resumed-transfer mismatch). Fire-and-forget: the async digest
+          // resolves after the synchronous save path below, so it never
+          // reorders or blocks it.
+          if (txEnd.hash) {
+            try {
+              crypto.subtle.digest('SHA-256', _mergedBuf.buffer).then(function(_hashBuf) {
+                var _hashHex = Array.from(new Uint8Array(_hashBuf)).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+                if (_hashHex.toLowerCase() !== String(txEnd.hash).toLowerCase()) {
+                  console.warn('[P2P] File hash mismatch for', txEnd.fileName, '— expected', txEnd.hash, 'actual', _hashHex, '— saving anyway (non-fatal)');
+                }
+              }).catch(function(err) {
+                console.warn('[P2P] File hash verification failed for', txEnd.fileName, err);
+              });
+            } catch(e) {
+              console.warn('[P2P] File hash verification unavailable for', txEnd.fileName, e);
+            }
           }
           var extMatch = txEnd.fileName.match(/\.(png|jpe?g|gif|webp|svg|tiff?|bmp|heic|heif|avif)$/i);
           // NOTE: .webm intentionally only in videoMatch — do NOT add to audioMatch
@@ -10299,6 +11829,24 @@ document.addEventListener('DOMContentLoaded', function() {
             var audioExtMap = { mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', flac: 'audio/flac', aac: 'audio/aac', m4a: 'audio/mp4', wma: 'audio/x-ms-wma', opus: 'audio/opus', mka: 'audio/x-matroska' };
             mimeType = audioExtMap[audioMatch[1].toLowerCase()] || 'audio/mpeg';
             isAudio = true;
+          }
+
+          // Sender-stamped type wins over extension inference (VOICE-1):
+          // voice clips are named *.webm (intentionally in videoMatch, see
+          // above) — mobile stamps type:'audio' + the real mimeType in
+          // FILE_TRANSFER_START. Only trust explicit image|video|audio stamps;
+          // anything else (desktop senders, ''/'file') falls through to the
+          // extension rules above, so genuinely-video files keep video.
+          var senderType = txEnd.type || '';
+          if (senderType === 'image' || senderType === 'video' || senderType === 'audio') {
+            isImage = senderType === 'image';
+            isVideo = senderType === 'video';
+            isAudio = senderType === 'audio';
+            if (txEnd.mimeType) {
+              mimeType = txEnd.mimeType;
+            } else if (isAudio && mimeType.indexOf('video/') === 0) {
+              mimeType = 'audio/webm'; // audio-stamped .webm without mime info
+            }
           }
           
           // Build blob URL from independently-decoded chunks
@@ -10371,6 +11919,9 @@ document.addEventListener('DOMContentLoaded', function() {
           }
           
           delete window.activeTransfers[packet.payload.fileId];
+          window.BlobStoreDB.partialDelete(packet.payload.fileId).catch(function(err) {
+            console.warn('[P2P] Partial cleanup failed for', packet.payload.fileId, err);
+          });
           if (activeChatId === chatId) renderMessages(activeChatId);
           renderChatList();
           debugLog('P2P', 'Completed receiving file ' + txEnd.fileName);
@@ -10378,9 +11929,144 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
 
+      // CROSS-4 — SENDER side of the resume protocol: a receiver asks us to
+      // continue from its contiguous prefix (lost chunks / missed END). We
+      // verify the hash of the prefix it claims to hold, then rewind/advance
+      // the send session's cursor; the driver loop picks it up on the next tick.
+      if (packet.type === Orbit.Protocol.Types.FILE_TRANSFER_RESUME) {
+        if (!packet.payload || !packet.payload.fileId) return;
+        window.activeSends = window.activeSends || {};
+        // Sessions are keyed fileId + '::' + peer so a group fan-out (same
+        // attachment.id sent to several members) keeps independent cursors;
+        // fall back to a plain fileId key for robustness.
+        var _sKey = packet.payload.fileId + '::' + msgFrom;
+        var _sess = window.activeSends[_sKey] || window.activeSends[packet.payload.fileId];
+        if (!_sess) {
+          debugLog('P2P', 'RESUME for unknown fileId ' + packet.payload.fileId + ' — no send session, ignoring');
+          return;
+        }
+        var _n = Number(packet.payload.receivedCount);
+        if (!isFinite(_n) || _n < 0 || _n > _sess.total) {
+          console.warn('[P2P] RESUME invalid offset', _n, 'for', packet.payload.fileId, '— cancelling');
+          Orbit.P2P.send(msgFrom, Orbit.Protocol.createPacket(
+            Orbit.Protocol.Types.FILE_TRANSFER_CANCEL, MStore.user ? MStore.user.id : '', msgFrom,
+            { fileId: packet.payload.fileId, error: 'Invalid resume offset' }
+          ));
+          _sess.cancelled = true;
+          return;
+        }
+        // F5: the session may already be done (END sent, within the 60s grace
+        // period) — the receiver missed END or its partial was purged and it
+        // re-requested. Re-send the stored END packet instead of resuming
+        // chunks (a queued transport may have resolved while the receiver
+        // never got the data).
+        if (_sess.done) {
+          debugLog('P2P', 'RESUME for completed session ' + packet.payload.fileId + ' — re-sending END');
+          var _doneEnd = _sess.endPayload || { fileId: packet.payload.fileId, hash: _sess.hash };
+          if (_sess.isGroup && _sess.chatId && !_doneEnd.chatId) _doneEnd.chatId = _sess.chatId;
+          try {
+            Orbit.P2P.send(msgFrom, Orbit.Protocol.createPacket(
+              Orbit.Protocol.Types.FILE_TRANSFER_END, MStore.user ? MStore.user.id : '', msgFrom,
+              _doneEnd
+            )).catch(function(e) {
+              console.warn('[P2P] END re-send failed for', packet.payload.fileId, e);
+            });
+          } catch(e) {
+            console.warn('[P2P] END re-send failed for', packet.payload.fileId, e);
+          }
+          return;
+        }
+        var _ab = _sess.att && _sess.att._arrayBuffer;
+        if (!_ab || !_ab.byteLength) {
+          console.warn('[P2P] RESUME: source buffer gone for', packet.payload.fileId, '— cancelling');
+          Orbit.P2P.send(msgFrom, Orbit.Protocol.createPacket(
+            Orbit.Protocol.Types.FILE_TRANSFER_CANCEL, MStore.user ? MStore.user.id : '', msgFrom,
+            { fileId: packet.payload.fileId, error: 'Sender no longer has the file' }
+          ));
+          _sess.cancelled = true;
+          return;
+        }
+        // Hash the first n chunks of our own file and compare (case-insensitive)
+        // CHUNK_SIZE (sendMessage-local) is out of scope here; 64KB is the
+        // protocol-fixed chunk size on both platforms.
+        var _chunkSize = 64 * 1024;
+        var _prefixBytes = Math.min(_n * _chunkSize, _ab.byteLength);
+        var _prefU8 = new Uint8Array(_ab, 0, _prefixBytes);
+        try {
+          crypto.subtle.digest('SHA-256', _prefU8).then(function(hashBuf) {
+            var _ha = Array.from(new Uint8Array(hashBuf));
+            var _hex = _ha.map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+            var _theirHash = String(packet.payload.hash || '').toLowerCase();
+            var _match = false;
+            if (_theirHash !== '') {
+              _match = (_hex === _theirHash);
+            } else if (_n === 0 && (!_sess.hash || _sess.hash === '')) {
+              // both sides hashless + empty prefix → full re-send is safe
+              _match = true;
+            }
+            if (_match) {
+              // F5: re-send START before rewinding so a receiver whose
+              // in-memory receive was reaped can re-open its persisted row
+              // (desktop's handleStart resume branch keys off the row hash)
+              if (_sess.startPayload) {
+                debugLog('P2P', 'Re-sending START for ' + packet.payload.fileId + ' (RESUME rewind)');
+                try {
+                  Orbit.P2P.send(msgFrom, Orbit.Protocol.createPacket(
+                    Orbit.Protocol.Types.FILE_TRANSFER_START, MStore.user ? MStore.user.id : '', msgFrom,
+                    _sess.startPayload
+                  )).catch(function(e) {
+                    console.warn('[P2P] START re-send failed for', packet.payload.fileId, e);
+                  });
+                } catch(e) {
+                  console.warn('[P2P] START re-send failed for', packet.payload.fileId, e);
+                }
+              }
+              _sess.ci = _n;
+              debugLog('P2P', 'RESUME verified for ' + packet.payload.fileId + ' — ' + (_n >= _sess.total ? 're-sending END' : 'streaming from chunk ' + _n));
+              // _n >= total: the driver sends FILE_TRANSFER_END on its next tick
+            } else {
+              console.warn('[P2P] RESUME hash mismatch for', packet.payload.fileId, '— cancelling');
+              Orbit.P2P.send(msgFrom, Orbit.Protocol.createPacket(
+                Orbit.Protocol.Types.FILE_TRANSFER_CANCEL, MStore.user ? MStore.user.id : '', msgFrom,
+                { fileId: packet.payload.fileId, error: 'Hash mismatch' }
+              ));
+              _sess.cancelled = true;
+            }
+          }).catch(function(e) {
+            console.warn('[P2P] RESUME digest failed for', packet.payload.fileId, e);
+            Orbit.P2P.send(msgFrom, Orbit.Protocol.createPacket(
+              Orbit.Protocol.Types.FILE_TRANSFER_CANCEL, MStore.user ? MStore.user.id : '', msgFrom,
+              { fileId: packet.payload.fileId, error: 'Hash verification failed' }
+            ));
+            _sess.cancelled = true;
+          });
+        } catch(e) {
+          console.warn('[P2P] RESUME digest unavailable for', packet.payload.fileId, e);
+          Orbit.P2P.send(msgFrom, Orbit.Protocol.createPacket(
+            Orbit.Protocol.Types.FILE_TRANSFER_CANCEL, MStore.user ? MStore.user.id : '', msgFrom,
+            { fileId: packet.payload.fileId, error: 'Hash verification unavailable' }
+          ));
+          _sess.cancelled = true;
+        }
+        return;
+      }
+
       if (packet.type === Orbit.Protocol.Types.FILE_TRANSFER_CANCEL || packet.type === Orbit.Protocol.Types.FILE_TRANSFER_REJECT) {
-        if (packet.payload && packet.payload.fileId && window.activeTransfers) {
-          delete window.activeTransfers[packet.payload.fileId];
+        if (packet.payload && packet.payload.fileId) {
+          // Receive side: drop the partial
+          if (window.activeTransfers) {
+            delete window.activeTransfers[packet.payload.fileId];
+          }
+          window.BlobStoreDB.partialDelete(packet.payload.fileId).catch(function(err) {
+            console.warn('[P2P] Partial cleanup failed for', packet.payload.fileId, err);
+          });
+          // Send side (CROSS-4): mark any matching send session cancelled — the
+          // driver loop observes the flag and cleans the session up
+          if (window.activeSends) {
+            var _cancelKey = packet.payload.fileId + '::' + msgFrom;
+            if (window.activeSends[_cancelKey]) window.activeSends[_cancelKey].cancelled = true;
+            if (window.activeSends[packet.payload.fileId]) window.activeSends[packet.payload.fileId].cancelled = true;
+          }
         }
         return;
       }
@@ -11111,6 +12797,10 @@ document.addEventListener('DOMContentLoaded', function() {
           } else {
             console.log('[Lifecycle] App backgrounded — service keeps running');
             MStore.save();
+            // Auto-backup vault silently when the app goes to background (if enabled)
+            if (MStore.settings && MStore.settings.vaultAutoBackup && !window._vaultExportRunning) {
+              try { runVaultExport(false); } catch(e) { console.warn('[Vault] auto-backup error:', e); }
+            }
             // Stop all media when going to background
             try {
               if (window.OrbitVideoPlayer) window.OrbitVideoPlayer.stopAll();

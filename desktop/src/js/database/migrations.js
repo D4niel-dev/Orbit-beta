@@ -173,6 +173,36 @@ const migrations = [
     if (!cols.some(function(c) { return c.name === 'avatarDataUrl'; })) {
       try { db.exec("ALTER TABLE groups ADD COLUMN avatarDataUrl TEXT"); } catch(e) {}
     }
+  },
+  // v13 - Resumable file transfer state.
+  // Persisted partials live in userData/temp/orbit_<fileId>; this table records
+  // how many contiguous 64KB chunks were received so a transfer can resume
+  // after a socket drop, app restart, or receiver timeout. Rows older than 24h
+  // are swept (partial + row) by the hourly temp cleanup in main.js.
+  (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS transfer_state (
+        fileId TEXT PRIMARY KEY,
+        fileName TEXT,
+        fileSize INTEGER,
+        totalChunks INTEGER,
+        receivedCount INTEGER DEFAULT 0,
+        hash TEXT,
+        senderId TEXT,
+        tempPath TEXT,
+        type TEXT NOT NULL DEFAULT '',
+        mimeType TEXT NOT NULL DEFAULT '',
+        updatedAt INTEGER
+      );
+    `);
+  },
+  // v14 - Message threading: persist reply chains (replyTo) so replies survive restarts.
+  (db) => {
+    var cols;
+    try { cols = db.pragma('table_info(messages)'); } catch(e) { cols = []; }
+    if (!cols.some(function(c) { return c.name === 'replyTo'; })) {
+      try { db.exec('ALTER TABLE messages ADD COLUMN replyTo TEXT'); } catch(e) {}
+    }
   }
 ];
 
