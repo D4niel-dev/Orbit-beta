@@ -229,6 +229,19 @@ document.addEventListener('DOMContentLoaded', function() {
         });
       });
     },
+    partialGet: function(fileId) {
+      var self = this;
+      return this._open().then(function() {
+        return new Promise(function(resolve, reject) {
+          try {
+            var tx = self._db.transaction('partials', 'readonly');
+            var req = tx.objectStore('partials').get(fileId);
+            req.onsuccess = function(e) { resolve(e.target.result); };
+            req.onerror = function(e) { reject(e.target.error); };
+          } catch(e) { reject(e); }
+        });
+      });
+    },
     partialDelete: function(fileId) {
       var self = this;
       return this._open().then(function() {
@@ -361,7 +374,8 @@ document.addEventListener('DOMContentLoaded', function() {
         hash: rec.hash || '',
         chatId: rec.chatId || '',
         _startTime: rec.savedAt,
-        _lastChunkTime: rec.savedAt,
+        // fresh 120s grace post-boot so the first reap can't kill a restored partial
+        _lastChunkTime: Date.now(),
         _rehydrated: true,
         _lastCheckpoint: rec.received || _recvCount
       };
@@ -3110,6 +3124,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var args = parts.slice(1).join(' ');
 
     switch(cmd) {
+      case '/h':
       case '/help':
         showHelpModal();
         return { cancel: true };
@@ -3136,7 +3151,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         var _pollEsc = (typeof escapeHtml === 'function' ? escapeHtml : function(s){ return String(s||''); });
         var pollHtml =
-          '<div style="padding:20px;max-width:360px;margin:0 auto;width:100%;box-sizing:border-box;">' +
+          '<div style="padding:20px;width:100%;box-sizing:border-box;">' +
             '<h3 style="margin:0 0 4px;font-size:17px;font-weight:700;color:var(--text-primary);">Create Poll</h3>' +
             '<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">Ask a question and add up to 6 options</div>' +
             '<input id="poll-question" class="bs-input" placeholder="Question?" autocomplete="off" style="width:100%;box-sizing:border-box;">' +
@@ -3351,7 +3366,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!code || code === '—') { showToast('No invite code available','error'); return { cancel: true }; }
         var escCode = (typeof escapeHtml === 'function' ? escapeHtml : function(s){ return String(s); })(code);
         var grpName = (typeof escapeHtml === 'function' ? escapeHtml : function(s){ return String(s); })(group.name || group.groupName || 'Group');
-        var inviteHtml = '<div style="padding:20px;max-width:360px;margin:0 auto;width:100%;box-sizing:border-box;">' +
+        var inviteHtml = '<div style="padding:20px;width:100%;box-sizing:border-box;">' +
           '<h3 style="margin:0 0 4px;font-size:17px;font-weight:700;color:var(--text-primary);">Invite — ' + grpName + '</h3>' +
           '<div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">Share this code with others to let them join</div>' +
           '<div style="display:flex;align-items:center;gap:10px;background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:12px;padding:12px 14px;">' +
@@ -3419,7 +3434,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var esc2 = (typeof escapeHtml === 'function' ? escapeHtml : function(s){ return String(s); });
         var escAttr2 = (typeof escapeAttr === 'function' ? escapeAttr : esc2);
         var grpName2 = esc2(group2.name || group2.groupName || 'Group');
-        var listHtml = '<div style="padding:20px;max-width:380px;margin:0 auto;width:100%;box-sizing:border-box;">' +
+        var listHtml = '<div style="padding:20px;width:100%;box-sizing:border-box;">' +
           '<h3 style="margin:0 0 4px;font-size:17px;font-weight:700;color:var(--text-primary);">' + grpName2 + '</h3>' +
           '<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">' + members.length + ' member' + (members.length !== 1 ? 's' : '') + '</div>';
         if (members.length === 0) {
@@ -3655,7 +3670,7 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     var esc = (typeof escapeHtml === 'function') ? escapeHtml : (window.Sanitize ? window.Sanitize.escapeHtml : function(s){ return String(s||''); });
-    var html = '<div style="padding:20px;max-width:340px;">';
+    var html = '<div style="padding:20px;width:100%;box-sizing:border-box;">';
     html += '<h3 style="margin:0 0 16px;font-size:17px;font-weight:700;color:var(--text-primary);">Slash Commands</h3>';
     html += '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Group-only utilities — only work inside group chats</div>';
     for (var i = 0; i < COMMANDS.length; i++) {
@@ -5522,7 +5537,16 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button id="changelog-close-mobile" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;font-size:20px;">✕</button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
-        vBlock('0.5.0-beta', 'Latest Stable', [
+        vBlock('0.5.1-beta', 'Latest', [
+          ['Bug Fixes', [
+            'Stalled Transfer Recovery (Mobile + Desktop) — Interrupted receives keep their saved progress across stalls, app restarts, and crashes; late chunks resume from the checkpoint instead of restarting or vanishing.',
+            '/help Now Works With Phone Keyboards — Soft keyboards that skip real Enter keydowns (IME 229 / insertLineBreak) now trigger slash commands like the send button does.'
+          ]],
+          ['Added', [
+            '/h Shortcut — Quick alias for /help on both platforms.'
+          ]]
+        ]) +
+        vBlock('0.5.0-beta', 'Stable', [
           ['Features', [
             'Resumable P2P File Transfers (Desktop) — Interrupted chunked transfers resume from the last contiguous chunk via FILE_TRANSFER_RESUME and auto-resume when peers reconnect.',
             'Network Topology Visualizer (Desktop + Mobile) — Live canvas map in Settings → Network: you at the center, peers orbiting, RTT color-coded links, transfer pulses, activity flashes.',
@@ -6277,7 +6301,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     var html = '<div class="action-sheet-overlay" id="wallpaper-picker-sheet" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;flex-direction:column;justify-content:flex-end;">' +
       '<div class="action-sheet-content" style="background:var(--bg-surface);border-radius:24px 24px 0 0;padding:24px 16px;animation:slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);">' +
-        '<div style="width:40px;height:5px;background:var(--border-subtle);border-radius:4px;margin:0 auto 24px;"></div>' +
+        '<div class="bottom-sheet-handle" style="width:40px;height:5px;background:var(--border-subtle);border-radius:4px;margin:0 auto 24px;"></div>' +
         '<div style="font-size:18px;font-weight:700;margin-bottom:8px;color:var(--text-primary);">Chat Wallpaper</div>' +
         '<div style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Set a custom wallpaper behind messages for this chat only.</div>' +
         '<div id="wallpaper-preview-area">' + previewHtml + '</div>' +
@@ -6296,6 +6320,10 @@ document.addEventListener('DOMContentLoaded', function() {
     div.innerHTML = html;
     var sheet = div.firstChild;
     document.body.appendChild(sheet);
+    // Drag-down-to-close (grab the visual content panel)
+    if (window.OrbitSheet && typeof window.OrbitSheet.enableDragClose === 'function') {
+      OrbitSheet.enableDragClose({ sheet: sheet.firstElementChild, onClose: function () { sheet.remove(); } });
+    }
     renderLucide({ root: sheet });
 
     sheet.addEventListener('click', function(e) {
@@ -6711,7 +6739,7 @@ document.addEventListener('DOMContentLoaded', function() {
       '<div class="profile-hero" style="' + bannerStyle + 'padding: 44px 20px 30px;">' +
         '<div class="profile-hero-bg"></div>' +
         // Drag handle
-        '<div style="position:absolute;top:12px;left:50%;transform:translateX(-50%);width:40px;height:5px;background:rgba(255,255,255,0.4);border-radius:4px;z-index:3;"></div>' +
+        '<div class="bottom-sheet-handle" style="position:absolute;top:12px;left:50%;transform:translateX(-50%);width:40px;height:5px;background:rgba(255,255,255,0.4);border-radius:4px;z-index:3;"></div>' +
         // X button
         '<button id="btn-profile-view-close" style="position:absolute;top:8px;right:12px;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,0.2);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;z-index:3;transition:background 0.15s;">✕</button>' +
         '<div class="profile-hero-content">' +
@@ -6745,6 +6773,10 @@ document.addEventListener('DOMContentLoaded', function() {
     sheet.innerHTML = heroHtml + contentHtml;
     backdrop.appendChild(sheet);
     document.body.appendChild(backdrop);
+    // Drag-down-to-close (grab the hero handle)
+    if (window.OrbitSheet && typeof window.OrbitSheet.enableDragClose === 'function') {
+      OrbitSheet.enableDragClose({ sheet: sheet, onClose: function () { backdrop.remove(); } });
+    }
     renderLucide({ root: sheet });
 
     // Close buttons
@@ -6978,7 +7010,7 @@ document.addEventListener('DOMContentLoaded', function() {
       '<div class="profile-hero" style="' + bannerStyle + 'padding: 44px 20px 30px;">' +
         '<div class="profile-hero-bg"></div>' +
         // Drag handle overlay (centered at top)
-        '<div style="position:absolute;top:12px;left:50%;transform:translateX(-50%);width:40px;height:5px;background:rgba(255,255,255,0.4);border-radius:4px;z-index:3;"></div>' +
+        '<div class="bottom-sheet-handle" style="position:absolute;top:12px;left:50%;transform:translateX(-50%);width:40px;height:5px;background:rgba(255,255,255,0.4);border-radius:4px;z-index:3;"></div>' +
         // Action button (✕ by default, ✓ when changes detected)
         '<button id="btn-profile-sheet-action" style="position:absolute;top:8px;right:12px;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,0.2);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;z-index:3;transition:all 0.2s;">✕</button>' +
         '<div class="profile-hero-content">' +
@@ -6998,6 +7030,9 @@ document.addEventListener('DOMContentLoaded', function() {
     sheet.appendChild(editContainer);
     backdrop.appendChild(sheet);
     document.body.appendChild(backdrop);
+
+    // Drag-down-to-close (grab the hero handle)
+    OrbitSheet.enableDragClose({ sheet: sheet, onClose: function () { closeProfileSheet(); } });
 
     // Save function
     function saveProfileChanges() {
@@ -7389,7 +7424,12 @@ document.addEventListener('DOMContentLoaded', function() {
           '</div>';
         
         backdrop.appendChild(fOverlay);
-        
+
+        // Drag-down-to-close (onClose mirrors the ✕ button handler)
+        if (window.OrbitSheet && typeof window.OrbitSheet.enableDragClose === 'function') {
+          OrbitSheet.enableDragClose({ sheet: fOverlay, onClose: function () { fOverlay.remove(); _framePickerOpen = false; } });
+        }
+
         document.getElementById('btn-close-frame-picker').addEventListener('click', function() {
           fOverlay.remove();
           _framePickerOpen = false;
@@ -9366,7 +9406,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!text && stagedFiles.length === 0) { _clearLongPress(); return; }
         var schedSheetHtml = '<div class="action-sheet-overlay" id="schedule-action-sheet" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10001;display:flex;flex-direction:column;justify-content:flex-end;">' +
           '<div class="action-sheet-content" style="background:var(--bg-surface);border-radius:24px 24px 0 0;padding:24px 16px;animation:slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);">' +
-            '<div style="width:40px;height:5px;background:var(--border-subtle);border-radius:4px;margin:0 auto 24px;"></div>' +
+            '<div class="bottom-sheet-handle" style="width:40px;height:5px;background:var(--border-subtle);border-radius:4px;margin:0 auto 24px;"></div>' +
             '<div class="action-btn" id="sched-send-now" style="padding:16px;display:flex;align-items:center;gap:14px;font-size:16px;font-weight:600;color:var(--text-primary);cursor:pointer;border-radius:12px;transition:background 0.2s;">' +
               '<i data-lucide="send" style="width:20px;height:20px;"></i> Send Now' +
             '</div>' +
@@ -9379,6 +9419,9 @@ document.addEventListener('DOMContentLoaded', function() {
         schedDiv.innerHTML = schedSheetHtml;
         var schedSheet = schedDiv.firstChild;
         document.body.appendChild(schedSheet);
+        if (window.OrbitSheet && typeof window.OrbitSheet.enableDragClose === 'function') {
+          OrbitSheet.enableDragClose({ sheet: schedSheet.firstElementChild, onClose: function () { schedSheet.remove(); } });
+        }
         renderLucide({ root: schedSheet });
         schedSheet.addEventListener('click', function(se) {
           if (se.target === schedSheet) schedSheet.remove();
@@ -9468,6 +9511,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Enter to send, Shift+Enter to insert newline, mention keyboard nav
   document.getElementById('chat-input').addEventListener('keydown', function(e) {
+    if (e.isComposing || e.keyCode === 229) return;
     // Mention dropdown keyboard navigation
     if (_mentionActive && _mentionUsers.length > 0) {
       if (e.key === 'ArrowDown') {
@@ -9493,7 +9537,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
     }
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' || e.keyCode === 13) {
       if (e.shiftKey) {
         // Insert newline at cursor — some Android keyboards don't default to this in textareas
         e.preventDefault();
@@ -9524,7 +9568,19 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   // Auto-resize textarea as content grows
-  document.getElementById('chat-input').addEventListener('input', function() {
+  document.getElementById('chat-input').addEventListener('input', function(e) {
+    // Soft-keyboard Enter safety net: some Android keyboards never fire a real
+    // keydown for Enter and only emit insertLineBreak.
+    if (e && e.inputType === 'insertLineBreak' && MStore.settings && MStore.settings.enterToSend) {
+      var _lbVal = this.value;
+      var _nlIdx = _lbVal.lastIndexOf('\n');
+      this.value = _nlIdx === -1 ? '' : _lbVal.substring(0, _nlIdx);
+      this.style.height = 'auto';
+      hideCommandTooltip();
+      _hideMentionDropdown();
+      sendMessage();
+      return;
+    }
     this.style.height = 'auto';
     this.style.height = Math.min(this.scrollHeight, 150) + 'px';
     updateSendButton();
@@ -9713,7 +9769,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var isGroup = !!MStore.groups.find(function(g) { return g.id === activeChatId; });
       var html = '<div class="action-sheet-overlay" id="chat-more-action-sheet" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;flex-direction:column;justify-content:flex-end;">' +
         '<div class="action-sheet-content" style="background:var(--bg-surface);border-radius:24px 24px 0 0;padding:24px 16px;animation:slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);">' +
-          '<div style="width:40px;height:5px;background:var(--border-subtle);border-radius:4px;margin:0 auto 24px;"></div>' +
+          '<div class="bottom-sheet-handle" style="width:40px;height:5px;background:var(--border-subtle);border-radius:4px;margin:0 auto 24px;"></div>' +
           '<div class="action-btn" id="action-view-info" style="padding:16px;display:flex;align-items:center;gap:14px;font-size:16px;font-weight:600;color:var(--text-primary);cursor:pointer;border-radius:12px;transition:background 0.2s;">' +
             '<i data-lucide="' + (isGroup ? 'users' : 'user') + '"></i> ' + (isGroup ? 'Group Info' : 'View Profile') +
           '</div>' +
@@ -9736,6 +9792,9 @@ document.addEventListener('DOMContentLoaded', function() {
       div.innerHTML = html;
       var sheet = div.firstChild;
       document.body.appendChild(sheet);
+      if (window.OrbitSheet && typeof window.OrbitSheet.enableDragClose === 'function') {
+        OrbitSheet.enableDragClose({ sheet: sheet.firstElementChild, onClose: function () { sheet.remove(); } });
+      }
       renderLucide({ root: sheet });
 
       sheet.addEventListener('click', function(e) {
@@ -9768,7 +9827,7 @@ document.addEventListener('DOMContentLoaded', function() {
         ];
         var timerSheetHtml = '<div class="action-sheet-overlay" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;flex-direction:column;justify-content:flex-end;">' +
           '<div class="action-sheet-content" style="background:var(--bg-surface);border-radius:24px 24px 0 0;padding:24px 16px;animation:slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);">' +
-            '<div style="width:40px;height:5px;background:var(--border-subtle);border-radius:4px;margin:0 auto 24px;"></div>' +
+            '<div class="bottom-sheet-handle" style="width:40px;height:5px;background:var(--border-subtle);border-radius:4px;margin:0 auto 24px;"></div>' +
             '<div style="font-size:17px;font-weight:700;color:var(--text-primary);margin-bottom:16px;text-align:center;">Disappearing Messages</div>' +
             timerOptions.map(function(o) {
               return '<div class="action-btn timer-option" data-value="' + o.v + '" style="padding:14px 16px;display:flex;align-items:center;gap:14px;font-size:16px;font-weight:500;color:var(--text-primary);cursor:pointer;border-radius:12px;transition:background 0.2s;' + (o.v === currentVal ? 'background:var(--accent-soft);color:var(--accent-primary);' : '') + '">' +
@@ -9782,6 +9841,9 @@ document.addEventListener('DOMContentLoaded', function() {
         timerDiv.innerHTML = timerSheetHtml;
         var timerSheet = timerDiv.firstChild;
         document.body.appendChild(timerSheet);
+        if (window.OrbitSheet && typeof window.OrbitSheet.enableDragClose === 'function') {
+          OrbitSheet.enableDragClose({ sheet: timerSheet.firstElementChild, onClose: function () { timerSheet.remove(); } });
+        }
         renderLucide({ root: timerSheet });
         timerSheet.addEventListener('click', function(te) {
           if (te.target === timerSheet) timerSheet.remove();
@@ -11168,6 +11230,7 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     }, keepAliveSec * 1000);
 
+    window._resumeExpectedReceives = window._resumeExpectedReceives || {}; // fileIds whose IndexedDB partial survives a reap (lazy re-open)
     // Reap stale activeTransfers every 30s (CROSS-4)
     if (window._transferReapInterval) clearInterval(window._transferReapInterval);
     window._transferReapInterval = setInterval(function() {
@@ -11180,10 +11243,8 @@ document.addEventListener('DOMContentLoaded', function() {
         var lastActivity = tx._lastChunkTime || tx._startTime;
         if (lastActivity && now - lastActivity > 120000) {
           console.warn('[P2P] Reaping stalled transfer:', fileId, tx.fileName);
+          window._resumeExpectedReceives[fileId] = true; // partial persists in IndexedDB — late CHUNK/END re-open it
           delete window.activeTransfers[fileId];
-          window.BlobStoreDB.partialDelete(fileId).catch(function(err) {
-            console.warn('[P2P] Partial cleanup failed for', fileId, err);
-          });
         }
       });
     }, 30000);
@@ -11280,16 +11341,19 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Listen for messages
-    Orbit.P2P.onMessage(function(data) { try {
-      if (!data || !data.data) {
-        debugLog('P2P', 'onMessage received empty data');
-        return;
-      }
-      debugLog('P2P', 'Raw message from ' + (data.connectionId || '?'), { length: data.data.length, preview: data.data.substring(0, 80) });
-      var packet = Orbit.Protocol.parsePacket(data.data);
+    var _handleP2PPacketData = function(data, _pre) { try {
+      var packet = _pre;
       if (!packet) {
-        debugLog('P2P', 'Failed to parse packet from ' + (data.connectionId || '?'));
-        return;
+        if (!data || !data.data) {
+          debugLog('P2P', 'onMessage received empty data');
+          return;
+        }
+        debugLog('P2P', 'Raw message from ' + (data.connectionId || '?'), { length: data.data.length, preview: data.data.substring(0, 80) });
+        packet = Orbit.Protocol.parsePacket(data.data);
+        if (!packet) {
+          debugLog('P2P', 'Failed to parse packet from ' + (data.connectionId || '?'));
+          return;
+        }
       }
       debugLog('P2P', 'Parsed packet type=' + packet.type + ' from=' + (packet.from || packet.senderId || '?'), packet.payload);
       if (MStore.settings.logNetworkPackets) console.log('[NET] P2P recv <-', data.connectionId, packet);
@@ -11629,6 +11693,26 @@ document.addEventListener('DOMContentLoaded', function() {
       }
 
       // File transfers (Receive from Desktop)
+      // Lazy re-open of a reaped receive from its IndexedDB partial (mobile M3).
+      // Rebuilds activeTransfers[fileId] exactly like startup rehydration, then
+      // the caller re-dispatches the packet through _handleP2PPacketData.
+      function _reopenPartialReceive(fileId) {
+        return window.BlobStoreDB.partialGet(fileId).then(function(rec){
+          if (!rec || !rec.fileId) return false;
+          if (window.activeTransfers && window.activeTransfers[fileId]) return true;
+          var arr = new Array(rec.total || 0);
+          var recv = 0;
+          if (rec.chunks && typeof rec.chunks === 'object') {
+            for (var k in rec.chunks) {
+              var i2 = parseInt(k, 10);
+              if (!isNaN(i2) && i2 >= 0 && i2 < arr.length) { arr[i2] = rec.chunks[k]; recv++; }
+            }
+          }
+          window.activeTransfers = window.activeTransfers || {};
+          window.activeTransfers[fileId] = { chunks: arr, fileName: rec.fileName || 'unknown', total: rec.total || 0, received: recv, senderId: rec.senderId || '', type: rec.type || '', mimeType: rec.mimeType || '', hash: rec.hash || '', chatId: rec.chatId || '', _startTime: Date.now(), _lastChunkTime: Date.now(), _rehydrated: true, _lastCheckpoint: rec.received || recv };
+          return true;
+        }).catch(function(){ return false; });
+      }
       if (packet.type === Orbit.Protocol.Types.FILE_TRANSFER_START) {
         if (!packet.payload || !packet.payload.fileId) return;
         // F3: receivers buffer whole files in RAM, so the 5000-chunk cap is a
@@ -11665,6 +11749,7 @@ document.addEventListener('DOMContentLoaded', function() {
             window.BlobStoreDB.partialDelete(_startFileId).catch(function(err) {
               console.warn('[P2P] Partial cleanup failed for', _startFileId, err);
             });
+            delete window._resumeExpectedReceives[_startFileId];
           } else {
             debugLog('P2P', 'Duplicate START for in-progress transfer', _startFileId, '— keeping partial');
             if (_existingTx.received < _existingTx.total) _maybeRequestResume(_startFileId);
@@ -11697,6 +11782,17 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!packet.payload || !packet.payload.fileId) return;
         window.activeTransfers = window.activeTransfers || {};
         var tx = window.activeTransfers[packet.payload.fileId];
+        if (!tx && window._resumeExpectedReceives && window._resumeExpectedReceives[packet.payload.fileId]) {
+          // Reaped receive with the connection still up: restore the persisted
+          // partial, then re-dispatch this chunk through the normal path.
+          _reopenPartialReceive(packet.payload.fileId).then(function(ok){
+            if (ok) {
+              delete window._resumeExpectedReceives[packet.payload.fileId];
+              _handleP2PPacketData(null, packet);
+            }
+          });
+          return;
+        }
         if (tx) {
           var chunkIdx = parseInt(packet.payload.chunkIndex, 10);
           if (!isNaN(chunkIdx) && chunkIdx >= 0 && chunkIdx < tx.chunks.length) {
@@ -11757,6 +11853,17 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!packet.payload || !packet.payload.fileId) return;
         window.activeTransfers = window.activeTransfers || {};
         var txEnd = window.activeTransfers[packet.payload.fileId];
+        if (!txEnd && window._resumeExpectedReceives && window._resumeExpectedReceives[packet.payload.fileId]) {
+          // Reaped receive with the connection still up: restore the persisted
+          // partial, then re-dispatch this chunk through the normal path.
+          _reopenPartialReceive(packet.payload.fileId).then(function(ok){
+            if (ok) {
+              delete window._resumeExpectedReceives[packet.payload.fileId];
+              _handleP2PPacketData(null, packet);
+            }
+          });
+          return;
+        }
         if (txEnd) {
           // Validate all chunks received before assembly (MSG-8)
           var allReceived = true;
@@ -11919,6 +12026,7 @@ document.addEventListener('DOMContentLoaded', function() {
           }
           
           delete window.activeTransfers[packet.payload.fileId];
+          delete window._resumeExpectedReceives[packet.payload.fileId];
           window.BlobStoreDB.partialDelete(packet.payload.fileId).catch(function(err) {
             console.warn('[P2P] Partial cleanup failed for', packet.payload.fileId, err);
           });
@@ -12057,6 +12165,7 @@ document.addEventListener('DOMContentLoaded', function() {
           if (window.activeTransfers) {
             delete window.activeTransfers[packet.payload.fileId];
           }
+          delete window._resumeExpectedReceives[packet.payload.fileId];
           window.BlobStoreDB.partialDelete(packet.payload.fileId).catch(function(err) {
             console.warn('[P2P] Partial cleanup failed for', packet.payload.fileId, err);
           });
@@ -12388,7 +12497,8 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
     } catch(e) { console.error('[P2P] onMessage crash:', e); if (typeof showToast === 'function') showToast('P2P crash:'+_errLoc(e)+' '+e.message,'error'); }
-    });
+    };
+    Orbit.P2P.onMessage(_handleP2PPacketData);
 
     // Listen for connection failures (clean up phantom connections)
     Orbit.P2P.onConnectFailed(function(data) {

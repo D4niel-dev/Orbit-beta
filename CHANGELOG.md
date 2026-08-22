@@ -1,5 +1,24 @@
 # Orbit Changelog
 
+## v0.5.1-beta
+
+> **Note:** Bug-fix release — /help on mobile with soft keyboards, /h shortcut, slash autocomplete hardening.
+
+### Bug Fixes
+
+- **Stalled Mobile Transfers No Longer Lose Their Progress** — The 120s reaper deleted the persisted partial of an interrupted receive, leaving the sender streaming into a void (and a restarted sender unrecoverable). The checkpoint now survives reaps: late chunks/END lazily restore it and the transfer continues; restored partials also get a fresh grace window after app start.
+- **Desktop Receive Robustness (Transfers)** — Receive-side write streams handle disk errors gracefully instead of risking the main process, and reconnect-resume verifies/truncates crash-lagged partials correctly so valid progress resumes instead of forcing a full re-send.
+- **`/help` Now Works With Phone Keyboards (Mobile)** — The chat input only reacted to a physical-style Enter keydown, which many Android soft keyboards never send (they emit IME composition events with keyCode 229 or only an `insertLineBreak` input event). The handler now skips IME-composition keystrokes (`isComposing`/229), also matches `keyCode === 13`, and an insertLineBreak safety net strips the newline and sends when the keydown path was bypassed — so typing `/help` and hitting the keyboard's Enter opens the command sheet exactly like tapping the send button.
+
+### Added
+
+- **`/h` Shortcut** — `/h` now runs `/help` on desktop and mobile (fall-through alias; registry/help list stays clean).
+- **Slash Autocomplete Confirmed for Aliases** — Typing `/h` filters the tooltip to `/help` on both platforms.
+
+### Technical
+
+- **Version:** Bumped to v0.5.1-beta across all three `package.json` files; Android bundle resynced.
+
 ## v0.5.0-beta — **Stable Release**
 
 ### Features

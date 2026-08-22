@@ -3555,6 +3555,7 @@ window.ChatPanel = {
     var self = this;
 
     switch(cmd) {
+      case '/h':
       case '/help':
         self.showHelpModal();
         return { cancel: true };

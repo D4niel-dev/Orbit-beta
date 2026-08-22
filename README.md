@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v050-beta">v0.5.0-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v051-beta">v0.5.1-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,8 @@
 
 | Channel | Version | Status |
 |---------|---------|--------|
-| **Stable** | v0.5.0-beta | Latest stable release |
+| **Latest** | v0.5.1-beta | Latest bugfix release |
+| **Stable** | v0.5.0-beta | Stable release |
 | Earlier **Stable** | v0.4.0-beta | Stable release |
 | Legacy **Stable** | v0.1.1-beta | Legacy stable release |
 
@@ -493,6 +494,14 @@ Orbit is a **beta-stage desktop app** aimed at trusted private networks — not 
 - **Folder Picker Fixed (Desktop)** — Outside-click dismisses; interior clicks no longer navigate into the folder.
 </details>
 <details open>
+<summary>v0.5.1-beta</summary>
+
+- **Stalled Mobile Transfers No Longer Lose Their Progress** — The 120s reaper deleted the persisted partial of an interrupted receive, leaving the sender streaming into a void (and a restarted sender unrecoverable). The checkpoint now survives reaps: late chunks/END lazily restore it and the transfer continues; restored partials also get a fresh grace window after app start.
+- **Desktop Receive Robustness (Transfers)** — Receive-side write streams handle disk errors gracefully instead of risking the main process, and reconnect-resume verifies/truncates crash-lagged partials correctly so valid progress resumes instead of forcing a full re-send.
+- **/help Fixed on Mobile Soft Keyboards** — IME guard (isComposing/keyCode 229), keyCode 13 fallback, and an insertLineBreak safety net so keyboard-Enter triggers slash commands just like the send button.
+- **/h Shortcut** — Short alias for /help on both platforms.
+</details>
+<details>
 <summary>v0.5.0-beta (Stable)</summary>
 
 - **Resumable File Transfers (Desktop)** — `FILE_TRANSFER_RESUME` protocol resumes partial chunked transfers from the last stored chunk (migration v13, partial-hash verification, auto-resume on reconnect, 24h stale-partial sweep).

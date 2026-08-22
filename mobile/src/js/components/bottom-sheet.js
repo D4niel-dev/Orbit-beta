@@ -94,3 +94,114 @@ var OrbitSheet = {
   /** Set callbacks for actions */
   _callbacks: {}
 };
+
+// Swipe-down-to-close
+(function() {
+  var sheet = document.getElementById('bottom-sheet');
+  var overlay = document.getElementById('bottom-sheet-overlay');
+  if (!sheet || !overlay) return;
+  var startY = 0, curY = 0, dragging = false, startTime = 0;
+  var _rafPending = false, _lastDy = 0;
+
+  function canStartDrag(target) {
+    // Handle-only grabbing: dragging anywhere else conflicts with content
+    // scrolling and horizontal swipes.
+    return !!(target && target.closest && target.closest('.bottom-sheet-handle'));
+  }
+
+  sheet.addEventListener('touchstart', function (e) {
+    if (!overlay.classList.contains('active')) { dragging = false; return; }
+    if (!canStartDrag(e.target)) { dragging = false; return; }
+    dragging = true;
+    startTime = Date.now();
+    startY = e.touches[0].clientY;
+    curY = startY;
+    sheet.style.willChange = 'transform'; // promote to its own layer for the drag
+  }, { passive: true });
+
+  sheet.addEventListener('touchmove', function (e) {
+    if (!dragging) return;
+    var dy = e.touches[0].clientY - startY;
+    if (dy < 0) dy = 0;
+    curY = e.touches[0].clientY;
+    _lastDy = dy;
+    sheet.style.transition = 'none';
+    if (_rafPending) return;
+    _rafPending = true;
+    requestAnimationFrame(function () {
+      _rafPending = false;
+      sheet.style.transform = 'translate3d(0,' + _lastDy + 'px,0)';
+    });
+  }, { passive: true });
+
+  sheet.addEventListener('touchend', function () {
+    if (!dragging) return;
+    dragging = false;
+    var dy = curY - startY;
+    var elapsed = Math.max(1, Date.now() - startTime);
+    var velocity = dy / elapsed;
+    sheet.style.transition = '';
+    sheet.style.willChange = '';
+    sheet.style.transform = '';
+    if (dy > 120 || velocity > 0.5) OrbitSheet.hide();
+  });
+})();
+
+/* ---- Reusable drag-close for bespoke sheets ---- */
+OrbitSheet.enableDragClose = function (opts) {
+  opts = opts || {};
+  var el = opts.sheet;
+  if (!el || el.__dragCloseBound) return;
+  var onClose = typeof opts.onClose === 'function' ? opts.onClose : function () {};
+  el.__dragCloseBound = true;
+
+  // Visible grab affordance, same look as the main sheet's handle.
+  if (!el.querySelector('.bottom-sheet-handle')) {
+    var h = document.createElement('div');
+    h.className = 'bottom-sheet-handle';
+    el.insertBefore(h, el.firstChild);
+  }
+
+  var startY = 0, curY = 0, dragging = false, startTime = 0;
+  var _rafPending = false, _lastDy = 0;
+
+  function canStart(target) {
+    return !!(target && target.closest && target.closest('.bottom-sheet-handle'));
+  }
+
+  el.addEventListener('touchstart', function (e) {
+    if (!canStart(e.target)) { dragging = false; return; }
+    dragging = true;
+    startTime = Date.now();
+    startY = e.touches[0].clientY;
+    curY = startY;
+    el.style.willChange = 'transform'; // promote to its own layer for the drag
+  }, { passive: true });
+
+  el.addEventListener('touchmove', function (e) {
+    if (!dragging) return;
+    var dy = e.touches[0].clientY - startY;
+    if (dy < 0) dy = 0;
+    curY = e.touches[0].clientY;
+    _lastDy = dy;
+    el.style.transition = 'none';
+    if (_rafPending) return;
+    _rafPending = true;
+    requestAnimationFrame(function () {
+      _rafPending = false;
+      el.style.transform = 'translate3d(0,' + _lastDy + 'px,0)';
+    });
+  }, { passive: true });
+
+  el.addEventListener('touchend', function () {
+    if (!dragging) return;
+    dragging = false;
+    var dy = curY - startY;
+    var elapsed = Math.max(1, Date.now() - startTime);
+    var velocity = dy / elapsed;
+    el.style.transition = '';
+    el.style.willChange = '';
+    el.style.transform = '';
+    if (dy > 120 || velocity > 0.5) onClose();
+  });
+};

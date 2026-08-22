@@ -409,6 +409,17 @@ class TransferManager {
       // recover. _reopenFromRow seeds nothing at offset total and just waits
       // for the sender to re-send START + END, which finalizes the transfer.
       (async () => {
+        // F6-parity: a crash between chunk writes and the 50-chunk checkpoint
+        // can leave extra bytes beyond the contiguous prefix. Truncate to the
+        // exact prefix so the digest matches what the sender verifies for
+        // receivedCount chunks — otherwise crash-lagged resumes are rejected.
+        try {
+          const psize = fs.statSync(row.tempPath).size;
+          const expect = Math.max(0, row.receivedCount || 0) * this.CHUNK_SIZE;
+          if (psize > expect) fs.truncateSync(row.tempPath, expect);
+        } catch (e) {
+          // stat/truncate failed — hash as-is; sender re-verifies
+        }
         let partialHash = '';
         try { partialHash = await this._hashPartialFile(row.tempPath); } catch (e) {}
         this.socketManager.sendMessage(peerId, null, Protocol.Types.FILE_TRANSFER_RESUME, {
@@ -529,6 +540,16 @@ class TransferManager {
     };
     this.activeReceives.set(fileId, transfer);
 
+    // D1: async open/write failures (EACCES/ENOSPC) emit on the stream after
+    // the sync try/catch above has already returned. Idempotent: ignore if
+    // this entry was replaced/finalized already.
+    transfer.stream.on('error', (err) => {
+      if (this.activeReceives.get(fileId) !== transfer) return;
+      console.warn('[Transfer] Receive write-stream error:', err && err.message);
+      this.cancelReceive(transfer.fileId);
+      if (this.onError) this.onError(transfer.fileId, 'Disk write error: ' + ((err && err.message) || err));
+    });
+
     // Seed the SHA-256 accumulator by hashing the partial file. Chunks that
     // arrive before the seed completes are queued and flushed once ready.
     transfer._ready = this._seedAccumulator(transfer).then(() => {
@@ -556,7 +577,7 @@ class TransferManager {
       if (this.onError) this.onError(payload.fileId, 'Failed to open temp file: ' + err.message);
       return;
     }
-    this.activeReceives.set(payload.fileId, {
+    const transfer = {
       fileId: payload.fileId,
       fileName: payload.fileName,
       fileSize: payload.fileSize,
@@ -574,6 +595,17 @@ class TransferManager {
       _pendingChunks: [],
       _seedPending: false,
       _ready: null
+    };
+    this.activeReceives.set(payload.fileId, transfer);
+
+    // D1: async open/write failures (EACCES/ENOSPC) emit on the stream after
+    // the sync try/catch above has already returned. Idempotent: ignore if
+    // this entry was replaced/finalized already.
+    transfer.stream.on('error', (err) => {
+      if (this.activeReceives.get(transfer.fileId) !== transfer) return;
+      console.warn('[Transfer] Receive write-stream error:', err && err.message);
+      this.cancelReceive(transfer.fileId);
+      if (this.onError) this.onError(transfer.fileId, 'Disk write error: ' + ((err && err.message) || err));
     });
   }
 

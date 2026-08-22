@@ -4889,6 +4889,7 @@ textarea#chat-input {
   opacity: 0.3;
   margin: 4px auto 8px;
   flex-shrink: 0;
+  touch-action: none; /* handle owns vertical drags — no scroll-vs-drag disambiguation delay */
 }
 .bottom-sheet-content {
   padding: 4px 0 calc(8px + var(--safe-area-bottom, 0px));
