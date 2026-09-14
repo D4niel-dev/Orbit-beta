@@ -90,6 +90,9 @@ class Store {
         experimentalFolders: false,
         chatFolders: [],
         profileFrames: true,
+        // Automatic "is there a newer Orbit?" check. Off means no network
+        // contact at all; Settings → About's manual check still works.
+        updateCheckEnabled: true,
         experimentalMessageTranslate: true,
         messageTranslate: true,
         translateTargetLang: '',
@@ -805,9 +808,16 @@ class Store {
       const fromId = packet.payload.chatId || packet.payload.groupId || packet.from;
       var text = packet.payload.text || (typeof packet.payload === 'string' ? packet.payload : '');
 
-      // Decrypt E2EE messages
+      // Decrypt E2EE messages. Two envelope shapes are accepted: the unified
+      // ciphertext/nonce pair (mobile, and desktop v0.6+) and the legacy packed
+      // string carried in `text` (older desktop builds).
       if (packet.payload.e2ee && this.state.settings.e2eeEnabled) {
-        var decrypted = this.e2eeDecryptMessage(text, packet.from);
+        var decrypted = null;
+        if (packet.payload.ciphertext) {
+          decrypted = this.e2eeDecryptMessageV2(packet.payload.ciphertext, packet.payload.nonce, packet.from);
+        } else {
+          decrypted = this.e2eeDecryptMessage(text, packet.from);
+        }
         if (decrypted) text = decrypted;
       }
 
@@ -931,18 +941,30 @@ class Store {
     this.setState({ peerPublicKeys: peerPublicKeys, friends: friends });
   }
 
-  e2eeEncryptMessage(plaintext, peerId) {
-    if (!this.state.settings.e2eeEnabled) return plaintext;
-    var pubKey = this.getPeerPublicKey(peerId);
-    if (!pubKey || !window.orbitAPI) return plaintext;
-    return window.orbitAPI.e2eeEncrypt(plaintext, pubKey) || plaintext;
-  }
+  // NOTE: there is deliberately no e2eeEncryptMessage() here.
+  //
+  // An earlier version had one, and it returned the PLAINTEXT whenever
+  // encryption was unavailable — a silent downgrade. It had no callers, so it
+  // was removed rather than fixed: reviving it would silently reintroduce that
+  // bug. Outgoing DMs are encrypted in chat-panel.js sendMessage(), which blocks
+  // the send and tells the user instead.
+  // See plans/docs/Orbit E2EE Unification Design.md §5.2
 
   e2eeDecryptMessage(ciphertext, fromId) {
     if (!ciphertext || !this.state.settings.e2eeEnabled) return ciphertext;
     var pubKey = this.getPeerPublicKey(fromId);
     if (!pubKey || !window.orbitAPI) return ciphertext;
     return window.orbitAPI.e2eeDecrypt(ciphertext, pubKey) || ciphertext;
+  }
+
+  // Unified envelope: ciphertext and nonce arrive as separate fields.
+  // Returns null on failure so the caller keeps the original (unreadable) text
+  // rather than rendering ciphertext as if it were a message.
+  e2eeDecryptMessageV2(ciphertext, nonce, fromId) {
+    if (!ciphertext || !this.state.settings.e2eeEnabled) return null;
+    var pubKey = this.getPeerPublicKey(fromId);
+    if (!pubKey || !window.orbitAPI || !window.orbitAPI.e2eeDecryptV2) return null;
+    return window.orbitAPI.e2eeDecryptV2(ciphertext, nonce, pubKey);
   }
 
   addMessage(chatId, messageObj) {

@@ -8,6 +8,10 @@
 # Playwright E2E artifacts (desktop/)
 desktop/test-results/
 desktop/playwright-report/
+# Root-level scratch/unit tests only. Anchored with a leading slash on purpose:
+# a bare `tests/` also matches desktop/tests/e2e/ and silently hides every new
+# Playwright spec from git (the CI suite lives there).
+/tests/
 
 # Android
 mobile/.android/
@@ -30,6 +34,7 @@ plans/
 .opencode/
 .impeccable/
 .claude/
+.workbuddy-ai/
 graphify/
 graphify-out/
 *AGENTS.md

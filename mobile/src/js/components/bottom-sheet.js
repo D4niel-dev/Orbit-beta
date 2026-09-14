@@ -2,6 +2,39 @@
 // v0.2.8 — Bottom Sheet System
 
 var OrbitSheet = {
+  /**
+   * Keep the overlay inside the VISIBLE area.
+   *
+   * `.bottom-sheet-overlay` is `position: fixed; top: 0; bottom: 0`, which
+   * resolves against the LAYOUT viewport. Android does not shrink that when the
+   * soft keyboard opens — the keyboard simply overlays it — so a bottom-anchored
+   * sheet renders BEHIND the keyboard and the user sees nothing at all.
+   * `visualViewport` tracks the genuinely visible region, so we size to that.
+   */
+  _syncViewport: function() {
+    var overlay = document.getElementById('bottom-sheet-overlay');
+    if (!overlay) return;
+    var vv = window.visualViewport;
+    if (!vv || !vv.height) { overlay.style.height = ''; return; }
+    overlay.style.height = vv.height + 'px';
+  },
+
+  /**
+   * Close the soft keyboard if a text field is focused.
+   *
+   * Belt-and-braces alongside _syncViewport: the conventional mobile behaviour
+   * is that opening a sheet dismisses the keyboard, and it guarantees the sheet
+   * is visible even on WebView builds where visualViewport is unreliable.
+   */
+  _dismissKeyboard: function() {
+    try {
+      var el = document.activeElement;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) {
+        el.blur();
+      }
+    } catch (e) { /* ignore */ }
+  },
+
   /** Show a bottom sheet with items (icon left, label right) */
   show: function(items) {
     var overlay = document.getElementById('bottom-sheet-overlay');
@@ -9,6 +42,9 @@ var OrbitSheet = {
     var backdrop = document.getElementById('bottom-sheet-backdrop');
     
     if (!overlay || !content) return;
+
+    OrbitSheet._dismissKeyboard();
+    OrbitSheet._syncViewport();
     
     // Build content
     var html = '';
@@ -61,6 +97,10 @@ var OrbitSheet = {
     var content = document.getElementById('bottom-sheet-content');
     var backdrop = document.getElementById('bottom-sheet-backdrop');
     if (!overlay || !content) return;
+
+    // Must happen BEFORE the sheet becomes visible — see _syncViewport.
+    OrbitSheet._dismissKeyboard();
+    OrbitSheet._syncViewport();
     
     content.innerHTML = html;
     OrbitSheet._addCancelPill();
@@ -146,6 +186,17 @@ var OrbitSheet = {
     if (dy > 120 || velocity > 0.5) OrbitSheet.hide();
   });
 })();
+
+/* ---- Keep the sheet inside the visible area while the keyboard moves ----
+   Sheets that contain their own inputs (the /poll builder, folder rename, …)
+   re-open the keyboard as soon as the user taps a field, which would cover the
+   sheet again. Re-sync on every visualViewport change while a sheet is open. */
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', function () {
+    var overlay = document.getElementById('bottom-sheet-overlay');
+    if (overlay && overlay.classList.contains('active')) OrbitSheet._syncViewport();
+  });
+}
 
 /* ---- Reusable drag-close for bespoke sheets ---- */
 OrbitSheet.enableDragClose = function (opts) {

@@ -11,6 +11,16 @@ function tmpUserDataDir(label) {
   return fs.mkdtempSync(path.join(os.tmpdir(), `orbit-e2e-${label}-`));
 }
 
+// Electron's renderer crashes during boot on some Windows machines (and in
+// headless CI) unless GPU acceleration and the sandbox are disabled. The
+// symptom is `Target crashed`, or #chat-input never appearing. These switches
+// are inert on machines that don't need them, so they are always passed.
+const DEFAULT_ELECTRON_ARGS = [
+  '--disable-gpu',
+  '--no-sandbox',
+  '--disable-software-rasterizer'
+];
+
 // Launch the Electron app against the given user data dir.
 // The app's own Electron binary is used — no Playwright browsers involved.
 // extraArgs are appended as Chromium switches (e.g. fake media flags for the
@@ -18,7 +28,7 @@ function tmpUserDataDir(label) {
 // project, because the launch happens here in the helper, not in the config.
 async function launchApp(userDataDir, extraArgs = []) {
   const app = await electron.launch({
-    args: ['.', `--user-data-dir=${userDataDir}`, ...extraArgs],
+    args: ['.', `--user-data-dir=${userDataDir}`, ...DEFAULT_ELECTRON_ARGS, ...extraArgs],
     cwd: DESKTOP_DIR
   });
   const page = await app.firstWindow();

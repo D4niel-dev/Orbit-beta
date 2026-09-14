@@ -1114,6 +1114,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if (window.Toast) window.Toast.init();
           if (window.CustomThemeModal) window.CustomThemeModal.init();
           if (window.AccountSwitcher) window.AccountSwitcher.init();
+          if (window.UpdateNotice) window.UpdateNotice.init();
           setTimeout(function() {
             if (window.TutorialModal && window.TutorialModal.shouldShowOnStartup()) {
               window.TutorialModal.show();
@@ -1132,6 +1133,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (window.Toast) window.Toast.init();
     if (window.CustomThemeModal) window.CustomThemeModal.init();
     if (window.AccountSwitcher) window.AccountSwitcher.init();
+    // Throttled "new version available" check — silent, and it no-ops if the
+    // app was updated in the last 6h or the user skipped that version.
+    if (window.UpdateNotice) window.UpdateNotice.init();
 
     setTimeout(function() {
       if (window.TutorialModal && window.TutorialModal.shouldShowOnStartup()) {

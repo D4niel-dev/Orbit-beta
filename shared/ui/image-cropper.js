@@ -690,7 +690,12 @@
         var ih = imgEl.naturalHeight;
         var scaleX = pbw / iw;
         var scaleY = pbh / ih;
-        var baseScale = Math.max(scaleX, scaleY);
+        // MUST match updateImagePosition() above, which uses Math.min. The
+        // preview contains the image inside the box; composing with Math.max
+        // here scaled it to COVER instead, so the export came out zoomed in
+        // relative to what the user saw — by the aspect-ratio mismatch (a 4:3
+        // photo in a square crop exported ~33% too large).
+        var baseScale = Math.min(scaleX, scaleY);
 
         var displayW = iw * baseScale;
         var displayH = ih * baseScale;

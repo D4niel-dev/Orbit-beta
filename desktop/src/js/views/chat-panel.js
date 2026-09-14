@@ -126,6 +126,16 @@ window.ChatPanel = {
         this._prevChatId = state.activeChatId;
         if (savedAudio && window.OrbitAudioPlayer.restorePlaying) window.OrbitAudioPlayer.restorePlaying(savedAudio);
         if (savedVideo && window.OrbitVideoPlayer.restorePlaying) window.OrbitVideoPlayer.restorePlaying(savedVideo);
+      } else if (changedState && 'friends' in changedState) {
+        // Peer presence and a peer's profile frame both arrive as a
+        // friends-only change (store.addOrUpdatePeer). A full renderChat would
+        // rebuild the whole feed and force-scroll it to the bottom mid-read, so
+        // repaint just the header strip. Group headers derive from `groups`
+        // (already in `relevant`) and refreshing would drop the member-count
+        // listener, so only DMs take this path.
+        var fState = window.store.getState();
+        var inGroupChat = fState.groups.some(function(g) { return g.groupId === fState.activeChatId; });
+        if (!inGroupChat) this._refreshHeaderStrip(fState);
       }
     });
 
@@ -649,6 +659,88 @@ window.ChatPanel = {
     lucide.createIcons({ root: this.container });
   },
 
+  // Left-hand side of the chat header: avatar (with profile frame), name and
+  // presence line. Split out of renderChat so a *friends-only* store change can
+  // repaint just this strip. That case matters: peer presence and a peer's
+  // profile frame both arrive via `setState({ friends })` (addOrUpdatePeer), and
+  // re-running renderChat for it would rebuild the whole message feed and
+  // force-scroll it to the bottom mid-read.
+  _buildHeaderStrip(state) {
+    var activeGroup = state.groups.find(function(g) { return g.groupId === state.activeChatId; });
+    var activeFriend = state.friends.find(function(f) { return f.userId === state.activeChatId; });
+
+    if (activeGroup) {
+      var memberCount = (activeGroup.members || []).length;
+      var groupHeaderAvatar;
+      if (activeGroup.avatarPath) {
+        groupHeaderAvatar = '<img src="orbit-avatar://' + window.Sanitize.escapeHtml(activeGroup.groupId) + '?t=' + (activeGroup.avatarUpdatedAt || 0) + '" style="width:40px;height:40px;border-radius:12px;object-fit:cover;">';
+      } else if (activeGroup.avatarDataUrl) {
+        // This branch was missing entirely — a group whose avatar is a data URL
+        // (e.g. set at creation) fell through to the initial letter.
+        groupHeaderAvatar = '<img src="' + window.Sanitize.escapeHtml(activeGroup.avatarDataUrl) + '" style="width:40px;height:40px;border-radius:12px;object-fit:cover;">';
+      } else if (window.OrbitGroupAvatar) {
+        groupHeaderAvatar = window.OrbitGroupAvatar.html(activeGroup.members || [], 40, 'var(--bg-surface)');
+      } else {
+        groupHeaderAvatar = '<div style="display:flex;align-items:center;justify-content:center;background:var(--accent-primary);border-radius:12px;width:40px;height:40px;font-weight:700;color:white;font-size:16px;">' + window.Sanitize.escapeHtml((activeGroup.groupName || 'G').charAt(0).toUpperCase()) + '</div>';
+      }
+      return '<div class="avatar avatar-md" style="margin-right: var(--spacing-md); display:flex; align-items: center; justify-content: center;">' +
+          groupHeaderAvatar +
+        '</div>' +
+        '<div style="flex:1;">' +
+          '<div style="font-weight: 600; font-family: var(--font-display); font-size: 16px;">' + window.Sanitize.escapeHtml(activeGroup.groupName) + '</div>' +
+          '<div id="group-member-count" style="font-size: 12px; color: var(--text-muted); cursor:pointer;">' + memberCount + ' member' + (memberCount !== 1 ? 's' : '') + '</div>' +
+        '</div>';
+    }
+
+    if (!activeFriend) return '';
+
+    var statusColors = { online: 'var(--accent-success)', away: 'var(--accent-warning)', busy: 'var(--accent-danger)', dnd: 'var(--accent-danger)', offline: 'var(--text-muted)', invisible: 'var(--text-muted)' };
+    var statusLabels = { online: 'Online', away: 'Away', busy: 'Busy', dnd: 'Do Not Disturb', invisible: 'Invisible', offline: 'Offline' };
+    var friendStatus = activeFriend.status || 'offline';
+    var statusColor = statusColors[friendStatus] || 'var(--text-muted)';
+    var statusLabel = statusLabels[friendStatus] || 'Offline';
+    var lastSeenText = '';
+    if (friendStatus === 'offline' && activeFriend.lastSeen) {
+      var lastSeenStr = window.Format.relativeTime ? window.Format.relativeTime(new Date(activeFriend.lastSeen).toISOString()) : '';
+      lastSeenText = lastSeenStr ? ' · Last seen ' + lastSeenStr : '';
+    }
+
+    // Profile frame — same overlay pattern as the chat list / message avatars.
+    // The frame sits at -14%/122% so it bleeds slightly outside the 36px avatar
+    // circle; `.avatar` has no overflow:hidden, so it is not clipped.
+    var headerFrame = window.Frames ? window.Frames.getFrameForUser(activeFriend.userId) : 0;
+    var headerAvatarInner = activeFriend.avatar
+      ? '<img src="' + window.Sanitize.escapeHtml(activeFriend.avatar) + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">'
+      : '<i data-lucide="user"></i>';
+    var headerAvatarContainer = '<div style="position:relative;display:flex;align-items:center;justify-content:center;width:100%;height:100%;">' +
+      headerAvatarInner +
+      (headerFrame ? '<img src="icons/frames/pfp_frame_' + headerFrame + '.png" style="position:absolute;top:-14%;left:-14%;width:122%;height:122%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '') +
+    '</div>';
+
+    return '<div class="avatar avatar-md chat-header-avatar" style="margin-right: var(--spacing-md); position:relative; cursor:pointer;">' +
+        headerAvatarContainer +
+        '<div class="status-indicator ' + window.Sanitize.escapeHtml(friendStatus) + '"></div>' +
+      '</div>' +
+      '<div style="flex:1;">' +
+        '<div style="font-weight: 600; font-family: var(--font-display); font-size: 16px;">' + window.Sanitize.escapeHtml(activeFriend.username) + '</div>' +
+        '<div style="font-size: 12px; color: ' + statusColor + '; display:flex; align-items:center; gap:4px;">' +
+          '<div style="width:6px;height:6px;background:' + statusColor + ';border-radius:50%;"></div> ' + window.Sanitize.escapeHtml(statusLabel) + window.Sanitize.escapeHtml(lastSeenText) +
+        '</div>' +
+      '</div>';
+  },
+
+  // Repaint only #chat-header-strip, leaving the header's action buttons (and
+  // their listeners) untouched. Safe to swap innerHTML: the header avatar click
+  // is delegated from the container.
+  _refreshHeaderStrip(state) {
+    var strip = document.getElementById('chat-header-strip');
+    if (!strip) return;
+    strip.innerHTML = this._buildHeaderStrip(state || window.store.getState());
+    if (window.lucide && window.lucide.createIcons) {
+      try { window.lucide.createIcons({ root: strip }); } catch (e) { /* non-fatal */ }
+    }
+  },
+
   renderChat(state) {
     if (state.activeTab !== 'dms') {
       this.container.style.display = 'none';
@@ -1010,47 +1102,8 @@ window.ChatPanel = {
       }
     }
 
-    // Header
-    var headerHtml = '';
-    if (isGroup) {
-      var memberCount = (activeGroup.members || []).length;
-      headerHtml =
-        '<div class="avatar avatar-md" style="margin-right: var(--spacing-md); display:flex; align-items:center; justify-content:center;">' +
-          (activeGroup.avatarPath
-            ? '<img src="orbit-avatar://' + window.Sanitize.escapeHtml(activeGroup.groupId) + '?t=' + (activeGroup.avatarUpdatedAt || 0) + '" style="width:40px;height:40px;border-radius:12px;object-fit:cover;">'
-            : '<div style="display:flex;align-items:center;justify-content:center;background:var(--accent-primary);border-radius:12px;width:40px;height:40px;font-weight:700;color:white;font-size:16px;">' + window.Sanitize.escapeHtml(activeGroup.groupName.charAt(0).toUpperCase()) + '</div>'
-          ) +
-        '</div>' +
-        '<div style="flex:1;">' +
-          '<div style="font-weight: 600; font-family: var(--font-display); font-size: 16px;">' + window.Sanitize.escapeHtml(activeGroup.groupName) + '</div>' +
-          '<div id="group-member-count" style="font-size: 12px; color: var(--text-muted); cursor:pointer;">' + memberCount + ' member' + (memberCount !== 1 ? 's' : '') + '</div>' +
-        '</div>';
-    } else {
-      var statusColors = { online: 'var(--accent-success)', away: 'var(--accent-warning)', busy: 'var(--accent-danger)', dnd: 'var(--accent-danger)', offline: 'var(--text-muted)', invisible: 'var(--text-muted)' };
-      var statusLabels = { online: 'Online', away: 'Away', busy: 'Busy', dnd: 'Do Not Disturb', invisible: 'Invisible', offline: 'Offline' };
-      var friendStatus = activeFriend.status || 'offline';
-      var statusColor = statusColors[friendStatus] || 'var(--text-muted)';
-      var statusLabel = statusLabels[friendStatus] || 'Offline';
-      var lastSeenText = '';
-      if (friendStatus === 'offline' && activeFriend.lastSeen) {
-        var lastSeenStr = window.Format.relativeTime ? window.Format.relativeTime(new Date(activeFriend.lastSeen).toISOString()) : '';
-        lastSeenText = lastSeenStr ? ' · Last seen ' + lastSeenStr : '';
-      }
-      var headerAvatar = activeFriend.avatar
-        ? '<img src="' + window.Sanitize.escapeHtml(activeFriend.avatar) + '" style="width:100%;height:100%;border-radius:50%;">'
-        : '<i data-lucide="user"></i>';
-      headerHtml =
-        '<div class="avatar avatar-md chat-header-avatar" style="margin-right: var(--spacing-md); position:relative; cursor:pointer;">' +
-          headerAvatar +
-          '<div class="status-indicator ' + window.Sanitize.escapeHtml(friendStatus) + '"></div>' +
-        '</div>' +
-        '<div style="flex:1;">' +
-          '<div style="font-weight: 600; font-family: var(--font-display); font-size: 16px;">' + window.Sanitize.escapeHtml(activeFriend.username) + '</div>' +
-          '<div style="font-size: 12px; color: ' + statusColor + '; display:flex; align-items:center; gap:4px;">' +
-            '<div style="width:6px;height:6px;background:' + statusColor + ';border-radius:50%;"></div> ' + window.Sanitize.escapeHtml(statusLabel) + window.Sanitize.escapeHtml(lastSeenText) +
-          '</div>' +
-        '</div>';
-    }
+    // Header (see _buildHeaderStrip — shared with the friends-only refresh path)
+    var headerHtml = this._buildHeaderStrip(state);
 
     // Inline progress — rendered inside the message feed
     var progressHtml = '';
@@ -1115,7 +1168,9 @@ window.ChatPanel = {
     this.container.innerHTML =
       '<!-- Chat Header -->' +
       '<div class="chat-header" style="height: 64px; border-bottom: 1px solid var(--border-subtle); display:flex; align-items:center; padding: 0 var(--spacing-lg);">' +
+        '<div id="chat-header-strip" style="display:flex;align-items:center;flex:1;min-width:0;">' +
         headerHtml +
+        '</div>' +
         '<div style="display:flex; gap:16px; align-items:center; color: var(--text-secondary);">' +
           (state.settings && state.settings.privacyMode ? '<span style="font-size:10px;font-weight:700;color:#fff;background:var(--accent-warning);border-radius:3px;padding:2px 6px;text-transform:uppercase;">Privacy</span>' : '') +
           '<button id="btn-gallery" title="Image Gallery" style="background:transparent; border:none; cursor:pointer; color:inherit;"><i data-lucide="image"></i></button>' +
@@ -2827,17 +2882,37 @@ window.ChatPanel = {
         payload.isSpoiler = true;
       }
 
-      // E2EE: encrypt text for each recipient
+      // E2EE: encrypt text for the single DM recipient.
+      //
+      // If E2EE is enabled we must NOT fall back to plaintext. The user believes
+      // the message is encrypted; sending it in the clear would silently break
+      // that promise. Block the send and say why instead.
+      // See plans/docs/Orbit E2EE Unification Design.md §5.2
       var settings = window.store.getState().settings;
       if (settings.e2eeEnabled && !isGroup && recipients.length === 1 && text) {
-        var pubKey = window.store.getPeerPublicKey(recipients[0].userId);
-        if (pubKey && window.orbitAPI && window.orbitAPI.e2eeEncrypt) {
-          var encrypted = window.orbitAPI.e2eeEncrypt(text, pubKey);
-          if (encrypted) {
-            payload.text = encrypted;
-            payload.e2ee = true;
-          }
+        var peer = recipients[0];
+        var pubKey = window.store.getPeerPublicKey(peer.userId);
+        var encrypted = (pubKey && window.orbitAPI && window.orbitAPI.e2eeEncrypt)
+          ? window.orbitAPI.e2eeEncrypt(text, pubKey)
+          : null;
+        if (!encrypted) {
+          // Reset the send lock or the composer stays stuck forever, and return
+          // before sendToAll so no phantom message lands in the list.
+          this._sending = false;
+          this._notifyE2EEBlocked(peer, !pubKey);
+          return;
         }
+        if (encrypted.v === 2) {
+          // Unified envelope. payload.text must NOT carry the plaintext —
+          // the receiver reads ciphertext/nonce instead.
+          payload.ciphertext = encrypted.ciphertext;
+          payload.nonce = encrypted.nonce;
+          payload.text = '';
+        } else {
+          // Legacy envelope for an older desktop peer.
+          payload.text = encrypted.packed;
+        }
+        payload.e2ee = true;
       }
 
       sendToAll(window.Protocol.Types.MESSAGE, payload);
@@ -2964,6 +3039,32 @@ window.ChatPanel = {
     localStorage.removeItem('orbit_draft_' + activeChatId);
     window.store.notify();
     this._sending = false;
+  },
+
+  // Shown when E2EE is enabled but a message cannot be encrypted. Blocking is
+  // deliberate — a silent plaintext fallback would mean the user believes a
+  // message is encrypted when it is not.
+  _notifyE2EEBlocked(peer, keyMissing) {
+    var name = 'this contact';
+    try {
+      var st = window.store.getState();
+      var f = st.friends.find(function(x) { return x.userId === (peer && peer.userId); });
+      if (f) name = f.username || f.name || name;
+      else if (peer && peer.userId) name = peer.userId;
+    } catch (e) { /* store unavailable */ }
+
+    var reason = keyMissing
+      ? "Orbit doesn't have " + name + "'s encryption key yet."
+      : 'Orbit could not encrypt this message.';
+    var advice = ' It was NOT sent, because sending it unencrypted would break your ' +
+      'End-to-End Encryption setting. Turn E2EE off in Settings \u2192 Data Manager ' +
+      'if you want to send unencrypted.';
+
+    if (window.Toast && window.Toast.show) {
+      window.Toast.show('Message not sent', reason + advice, 'error', 9000);
+    } else {
+      console.warn('[E2EE] Blocked send to ' + name + ' — ' + reason);
+    }
   },
 
   // Send a packet to the given recipients via the main-process socket layer.

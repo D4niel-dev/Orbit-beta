@@ -37,9 +37,11 @@
   <!-- Lucide Icons -->
   <script src="../node_modules/lucide/dist/umd/lucide.min.js"></script>
 
-  <!-- QR Code Generator -->
-  <script src="https://unpkg.com/qrcode-generator@1.4.4/qrcode.js"></script>
+  <!-- QR Code Generator + Decoder (vendored locally — QR pairing must work
+       with no internet, which is exactly when it is most useful) -->
+  <script src="../node_modules/qrcode-generator/dist/qrcode.js"></script>
   <script>window.QRCode = qrcode;</script>
+  <script src="../node_modules/jsqr/dist/jsQR.js"></script>
 
   <!-- Emoji Picker Element -->
   <script type="module" src="../node_modules/emoji-picker-element/index.js"></script>
@@ -191,6 +193,11 @@
   <script src="js/components/webrtc-call.js"></script>
   <script src="js/components/pin-lock-screen.js"></script>
   <script src="js/components/account-switcher.js"></script>
+  <script src="js/components/qr-scanner.js"></script>
+  <script src="js/components/update-notice.js"></script>
+  <script src="js/components/group-avatar.js"></script>
+  <script src="../../shared/network/qr-pairing.js"></script>
+  <script src="../../shared/network/update-check.js"></script>
   <script src="../../shared/ui/audio-player.js"></script>
   <script src="../../shared/ui/video-player.js"></script>
   <script src="../../shared/ui/image-cropper.js"></script>

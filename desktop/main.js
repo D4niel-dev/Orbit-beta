@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, Notification, nativeImage, protocol, net, dialog, clipboard } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, Notification, nativeImage, protocol, net, dialog, clipboard, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -36,6 +36,38 @@ function getLocalIPv4() {
     }
   }
   return null;
+}
+
+// Ordered list of candidate IPv4 addresses for QR pairing.
+// Unlike getLocalIPv4() this returns ALL of them, because a QR has no UDP source
+// address to fall back on — the peer has to try candidates until one connects.
+// Only here (not in the renderer) do we know interface names, so this is where
+// virtual adapters get deprioritized and real LAN adapters get promoted.
+var VIRTUAL_IFACE_RE = /docker|vethernet|wsl|vmware|virtualbox|hyper-v|hyperv|loopback|vpn|tailscale|zerotier|^utun|^tun\d|^tap\d|^br-|^virbr|^veth/i;
+var PHYSICAL_IFACE_RE = /wi-?fi|wlan|wireless|ethernet|^eth\d|^en\d|^enp|^eno|^wlp/i;
+
+function getLocalIPv4s() {
+  const preferred = [];
+  const rest = [];
+  let interfaces;
+  try {
+    interfaces = os.networkInterfaces();
+  } catch (e) {
+    return [];
+  }
+  for (const name of Object.keys(interfaces)) {
+    const iface = interfaces[name];
+    if (!iface) continue;
+    const isVirtual = VIRTUAL_IFACE_RE.test(name);
+    const isPhysical = PHYSICAL_IFACE_RE.test(name);
+    for (const addr of iface) {
+      if (addr.family !== 'IPv4' || addr.internal) continue;
+      if (addr.address === '0.0.0.0') continue;
+      const bucket = (isPhysical && !isVirtual) ? preferred : rest;
+      if (bucket.indexOf(addr.address) === -1) bucket.push(addr.address);
+    }
+  }
+  return preferred.concat(rest);
 }
 
 function scanBatch(socketMgr, subnet, localIp, start, end, onDone) {
@@ -173,7 +205,7 @@ let currentIdentity = null;
 let mainWindow = null;
 let tray = null;
 let tempDirPath = null;
-let e2eeKeyPair = null; // { publicKey, privateKey } hex strings
+// E2EE key material is owned by desktop/e2ee.js (see the e2ee instance below).
 const _autoConnectLastAttempt = new Map(); // peerId -> timestamp of last TCP attempt
 const AUTO_CONNECT_THROTTLE = 30000; // Don't retry same peer more than once per 30s
 
@@ -224,51 +256,25 @@ function _tryAutoConnect(peer) {
   });
 }
 
-// E2EE helpers using Node crypto
-function e2eeGetOrCreateKeyPair() {
-  if (e2eeKeyPair) return e2eeKeyPair;
-  var saved = persistentStore.get('e2ee-keypair');
-  if (saved && saved.publicKey && saved.privateKey) {
-    e2eeKeyPair = saved;
-    return saved;
-  }
-  var ecdh = crypto.createECDH('prime256v1');
-  ecdh.generateKeys();
-  e2eeKeyPair = {
-    publicKey: ecdh.getPublicKey('hex'),
-    privateKey: ecdh.getPrivateKey('hex')
-  };
-  persistentStore.set('e2ee-keypair', e2eeKeyPair);
-  return e2eeKeyPair;
-}
+// ── E2EE helpers (Node crypto) ──────────────────────────────────────────────
+//
+// UNIFIED SCHEME — desktop now speaks the same scheme as mobile:
+//   key encoding : SPKI DER hex (was a raw uncompressed point)
+//   derivation   : HKDF-SHA256(secret, salt, info)   (was SHA-256(secret))
+//   envelope     : ciphertext + nonce as separate fields (was one packed string)
+//
+// Negotiation needs no handshake and no new beacon field: the peer's key FORMAT
+// is itself the capability signal. SPKI means the peer speaks the unified
+// scheme; raw hex means an older desktop build, which still gets the legacy
+// derivation and envelope.
+//
+// See plans/docs/Orbit E2EE Unification Design.md
 
-function e2eeDeriveAESKey(peerPublicKeyHex) {
-  var kp = e2eeGetOrCreateKeyPair();
-  var ecdh = crypto.createECDH('prime256v1');
-  ecdh.setPrivateKey(kp.privateKey, 'hex');
-  var shared = ecdh.computeSecret(peerPublicKeyHex, 'hex');
-  return crypto.createHash('sha256').update(shared).digest();
-}
-
-function e2eeEncrypt(plaintext, peerPublicKeyHex) {
-  var key = e2eeDeriveAESKey(peerPublicKeyHex);
-  var iv = crypto.randomBytes(12);
-  var cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
-  var enc = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
-  var tag = cipher.getAuthTag();
-  return Buffer.concat([iv, enc, tag]).toString('base64');
-}
-
-function e2eeDecrypt(ciphertextB64, peerPublicKeyHex) {
-  var key = e2eeDeriveAESKey(peerPublicKeyHex);
-  var buf = Buffer.from(ciphertextB64, 'base64');
-  var iv = buf.subarray(0, 12);
-  var tag = buf.subarray(buf.length - 16);
-  var enc = buf.subarray(12, buf.length - 16);
-  var decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-  decipher.setAuthTag(tag);
-  return decipher.update(enc) + decipher.final('utf8');
-}
+// The implementation lives in desktop/e2ee.js so it can be unit-tested without
+// booting Electron — see tests/unit/e2ee-interop.test.js. A test that merely
+// mirrored this logic would pass while the shipped code drifted.
+var createE2EE = require('./e2ee.js');
+var e2ee = createE2EE(persistentStore);
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'orbit-file', privileges: { secure: true, standard: true, supportFetchAPI: true } },
@@ -590,6 +596,86 @@ app.whenReady().then(() => {
     app.exit(0);
   });
 
+  // Authoritative app version. preload's `version` field reads
+  // process.env.npm_package_version, which is only set when the app is started
+  // through an npm script — in a packaged build it is undefined and falls back
+  // to a hardcoded string. The update check compares against this value, so a
+  // stale answer would report "update available" forever.
+  ipcMain.on('app-version', (event) => {
+    event.returnValue = app.getVersion();
+  });
+
+  // Open a link in the user's browser. Restricted to https GitHub hosts on
+  // purpose: this is reachable from the renderer, and a blanket openExternal
+  // would let any injected string launch arbitrary schemes (file:, smb:,
+  // custom protocol handlers) on the host.
+  //
+  // NOTE: event.returnValue is assigned exactly once, at the end. Electron
+  // reads it when the handler returns, but only the first assignment appears to
+  // stick — setting it up front as a default and again on success leaves the
+  // renderer with the initial value.
+  ipcMain.on('open-external', (event, url) => {
+    let opened = false;
+    if (typeof url === 'string' && url.length <= 2048) {
+      let parsed = null;
+      try {
+        parsed = new URL(url);
+      } catch (e) {
+        parsed = null;
+      }
+      if (parsed && parsed.protocol === 'https:') {
+        const host = parsed.hostname.toLowerCase();
+        const allowed = host === 'github.com' || host.endsWith('.github.com') || host.endsWith('.githubusercontent.com');
+        if (allowed) {
+          try {
+            const pending = shell.openExternal(url);
+            if (pending && typeof pending.catch === 'function') pending.catch(() => {});
+            opened = true;
+          } catch (e) {
+            console.log('[Update] openExternal failed:', e && e.message);
+          }
+        }
+      }
+    }
+    event.returnValue = opened;
+  });
+
+  // Update checks fetch GitHub over the network. The renderer cannot do this
+  // itself: index.html pins a Content-Security-Policy whose connect-src lists
+  // only a few origins, so api.github.com / raw.githubusercontent.com are
+  // blocked there ("Failed to fetch"). Rather than widen the CSP for this, the
+  // request happens here — where there is no CSP and no CORS — and only the
+  // response body crosses back. Hosts are allowlisted for the same reason
+  // open-external is.
+  const UPDATE_HOSTS = ['api.github.com', 'raw.githubusercontent.com'];
+  ipcMain.handle('update-fetch', async (event, url) => {
+    if (typeof url !== 'string' || url.length > 2048) return { ok: false, status: 0, body: '', error: 'bad url' };
+    let parsed;
+    try {
+      parsed = new URL(url);
+    } catch (e) {
+      return { ok: false, status: 0, body: '', error: 'bad url' };
+    }
+    if (parsed.protocol !== 'https:' || UPDATE_HOSTS.indexOf(parsed.hostname.toLowerCase()) === -1) {
+      return { ok: false, status: 0, body: '', error: 'host not allowed' };
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    try {
+      const res = await fetch(url, {
+        signal: controller.signal,
+        headers: { 'Accept': 'application/vnd.github+json', 'User-Agent': 'Orbit/' + app.getVersion() }
+      });
+      const body = await res.text();
+      return { ok: res.ok, status: res.status, body: body };
+    } catch (e) {
+      return { ok: false, status: 0, body: '', error: String((e && e.message) || e) };
+    } finally {
+      clearTimeout(timer);
+    }
+  });
+
   // Tray Setup
   const iconPath = path.join(__dirname, 'src/icons/app/orbit.ico');
   const icon = nativeImage.createFromPath(iconPath);
@@ -649,6 +735,9 @@ app.whenReady().then(() => {
   ipcMain.on('get-uuid', (event) => {
     event.returnValue = uuidv4();
   });
+  ipcMain.handle('get-local-ips', () => {
+    return getLocalIPv4s();
+  });
   ipcMain.on('write-clipboard', (event, text) => {
     clipboard.writeText(text || '');
     event.returnValue = true;
@@ -656,19 +745,30 @@ app.whenReady().then(() => {
 
   // E2EE IPC
   ipcMain.on('e2ee-get-public-key', (event) => {
-    var kp = e2eeGetOrCreateKeyPair();
-    event.returnValue = kp.publicKey;
+    // SPKI hex — the unified format both platforms advertise.
+    event.returnValue = e2ee.getPublicKey();
   });
-  ipcMain.on('e2ee-encrypt', (event, plaintext, peerPublicKeyHex) => {
+  // Returns { v:2, ciphertext, nonce } for a unified peer, { v:1, packed } for a
+  // legacy peer, or null when the message cannot be encrypted.
+  ipcMain.on('e2ee-encrypt', (event, plaintext, peerKey) => {
     try {
-      event.returnValue = e2eeEncrypt(plaintext, peerPublicKeyHex);
+      event.returnValue = e2ee.encrypt(plaintext, peerKey);
     } catch (e) {
       event.returnValue = null;
     }
   });
-  ipcMain.on('e2ee-decrypt', (event, ciphertextB64, peerPublicKeyHex) => {
+  // Legacy envelope — a single packed base64 string (iv || ct || tag).
+  ipcMain.on('e2ee-decrypt', (event, packedB64, peerKey) => {
     try {
-      event.returnValue = e2eeDecrypt(ciphertextB64, peerPublicKeyHex);
+      event.returnValue = e2ee.decryptPacked(packedB64, peerKey);
+    } catch (e) {
+      event.returnValue = null;
+    }
+  });
+  // Unified envelope — ciphertext and nonce as separate fields.
+  ipcMain.on('e2ee-decrypt-v2', (event, ciphertextB64, nonceB64, peerKey) => {
+    try {
+      event.returnValue = e2ee.decryptFields(ciphertextB64, nonceB64, peerKey);
     } catch (e) {
       event.returnValue = null;
     }

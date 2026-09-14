@@ -66,6 +66,11 @@ Orbit.E2EE = (function() {
       return crypto.subtle.deriveKey(
         {
           name: 'HKDF',
+          // `hash` is REQUIRED by the WebCrypto spec. Chrome/Android WebView
+          // currently default it to SHA-256 so this works without it, but
+          // relying on that leniency is fragile — stricter implementations
+          // (including Node's) throw. Must stay SHA-256 to match desktop.
+          hash: 'SHA-256',
           salt: new Uint8Array(16),
           info: new TextEncoder().encode('orbit-e2ee-v1')
         },

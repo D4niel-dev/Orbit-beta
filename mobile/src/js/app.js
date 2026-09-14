@@ -2809,11 +2809,29 @@ document.addEventListener('DOMContentLoaded', function() {
     function _broadcastToGroupMembers(groupId, textToSend, isE2EE) {
       var grp = MStore.groups.find(function(g) { return g.id === groupId; });
       if (!grp) return;
+
+      // Members we could not encrypt to. Group E2EE is pairwise, so blocking the
+      // whole message over one member without a key would be too blunt — but
+      // sending them PLAINTEXT would silently leak a message the user believes
+      // is encrypted. Skip them, and say so.
+      var skipped = [];
+      var pending = 0;
+      var reported = false;
+
+      function reportIfDone() {
+        if (reported || pending > 0 || skipped.length === 0) return;
+        reported = true;
+        showToast('Sent encrypted — ' + skipped.length + ' member' +
+          (skipped.length === 1 ? '' : 's') + ' skipped (no encryption key): ' +
+          skipped.join(', '), 'info');
+      }
+
       (grp.members || []).forEach(function(m) {
         var memberId = typeof m === 'string' ? m : m.userId;
         if (memberId === (MStore.user ? MStore.user.id : '')) return;
         var memberFriend = MStore.friends.find(function(f) { return f.id === memberId; });
         var memberKey = memberFriend ? memberFriend.publicKey : (typeof m !== 'string' ? m.publicKey : null);
+        var memberLabel = memberFriend ? memberFriend.name : memberId;
         var grpAttachments = inlineAttachments.length > 0 ? inlineAttachments.slice() : [];
         largeFiles.forEach(function(lf) { grpAttachments.push({ id: lf.id, _fileId: lf.id, name: lf.name, type: lf.type, _poster: lf._poster || undefined, _pending: true }); });
         var payload = {
@@ -2822,20 +2840,38 @@ document.addEventListener('DOMContentLoaded', function() {
           fromName: newMsg.fromName,
           poll: newMsg.poll || undefined
         };
-        if (isE2EE && memberKey) {
-          Orbit.E2EE.encrypt(textToSend, memberKey).then(function(encrypted) {
-            if (encrypted) {
-              payload.e2ee = true;
-              payload.ciphertext = encrypted.ciphertext;
-              payload.nonce = encrypted.nonce;
-              payload.poll = newMsg.poll || undefined;
-              Orbit.P2P.send(memberId, Orbit.Protocol.createPacket(Orbit.Protocol.Types.MESSAGE, MStore.user.id, memberId, payload));
-            }
-          });
-        } else {
+
+        // E2EE off for this group — plaintext is what the user asked for.
+        if (!isE2EE) {
           Orbit.P2P.send(memberId, Orbit.Protocol.createPacket(Orbit.Protocol.Types.MESSAGE, MStore.user ? MStore.user.id : 'mobile', memberId, payload));
+          return;
         }
+
+        // No key for this member: skip rather than send them plaintext.
+        if (!memberKey) {
+          skipped.push(memberLabel);
+          reportIfDone();
+          return;
+        }
+
+        pending++;
+        Orbit.E2EE.encrypt(textToSend, memberKey).then(function(encrypted) {
+          pending--;
+          if (!encrypted) {
+            skipped.push(memberLabel);
+            reportIfDone();
+            return;
+          }
+          payload.e2ee = true;
+          payload.ciphertext = encrypted.ciphertext;
+          payload.nonce = encrypted.nonce;
+          payload.poll = newMsg.poll || undefined;
+          Orbit.P2P.send(memberId, Orbit.Protocol.createPacket(Orbit.Protocol.Types.MESSAGE, MStore.user.id, memberId, payload));
+          reportIfDone();
+        });
       });
+
+      reportIfDone();
     }
 
     // Shared base64 decoder for hash computation (avoids allocating lookup table repeatedly)
@@ -3043,23 +3079,34 @@ document.addEventListener('DOMContentLoaded', function() {
 
       if (MStore.settings.e2eeEnabled && window.Orbit.E2EE) {
         var friend = MStore.friends.find(function(f) { return f.id === activeChatId; });
-        if (friend && friend.publicKey) {
-          Orbit.E2EE.encrypt(text, friend.publicKey).then(function(encrypted) {
-            if (encrypted) {
-              // Include large file metadata so receiver can merge text+file into one message (CRIT-4)
-              var e2eeAttachments = inlineAttachments.length > 0 ? inlineAttachments.slice() : [];
-              largeFiles.forEach(function(lf) { e2eeAttachments.push({ id: lf.id, _fileId: lf.id, name: lf.name, type: lf.type, _poster: lf._poster || undefined, _pending: true }); });
-              Orbit.P2P.send(activeChatId, Orbit.Protocol.createPacket(
-                Orbit.Protocol.Types.MESSAGE, myId, activeChatId,
-                { e2ee: true, ciphertext: encrypted.ciphertext, nonce: encrypted.nonce, msgId: newMsg.id, replyTo: newMsg.replyTo, attachments: e2eeAttachments.length > 0 ? e2eeAttachments : undefined, fromName: newMsg.fromName, poll: newMsg.poll || undefined }
-              ));
-            }
-          });
+        // E2EE is ON for this chat, so there is no plaintext path from here.
+        // Previously a missing key fell through to the plaintext send below,
+        // silently breaking the user's E2EE setting.
+        if (!friend || !friend.publicKey) {
+          showToast('Not sent — no encryption key for this contact yet', 'info');
+          return;
+        }
+        Orbit.E2EE.encrypt(text, friend.publicKey).then(function(encrypted) {
+          if (!encrypted) {
+            // Previously this failed silently: nothing was sent, but the
+            // message was already in the local list, so it looked delivered.
+            showToast('Not sent — encryption failed', 'info');
+            return;
+          }
+          // Include large file metadata so receiver can merge text+file into one message (CRIT-4)
+          var e2eeAttachments = inlineAttachments.length > 0 ? inlineAttachments.slice() : [];
+          largeFiles.forEach(function(lf) { e2eeAttachments.push({ id: lf.id, _fileId: lf.id, name: lf.name, type: lf.type, _poster: lf._poster || undefined, _pending: true }); });
+          Orbit.P2P.send(activeChatId, Orbit.Protocol.createPacket(
+            Orbit.Protocol.Types.MESSAGE, myId, activeChatId,
+            { e2ee: true, ciphertext: encrypted.ciphertext, nonce: encrypted.nonce, msgId: newMsg.id, replyTo: newMsg.replyTo, attachments: e2eeAttachments.length > 0 ? e2eeAttachments : undefined, fromName: newMsg.fromName, poll: newMsg.poll || undefined }
+          ));
+          // Attachments ride with a message that actually went out, so they are
+          // sent only on the success path.
           if (largeFiles.length > 0) {
             largeFiles.forEach(function(att) { _sendLargeFileToPeer(att, activeChatId, false); });
           }
-          return;
-        }
+        });
+        return;
       }
 
       // Include large file metadata so receiver can merge text+file into one message (CRIT-4)
@@ -4805,6 +4852,26 @@ document.addEventListener('DOMContentLoaded', function() {
             '<span class="settings-item-desc">' + friendsCount + ' friends · ' + chatsCount + ' chats</span>' +
           '</div>' +
         '</div>' +
+        '<div class="settings-item-card" id="row-check-update" data-search="Check for updates New version Orbit ' + _appVer + '" style="cursor:pointer;">' +
+          '<div class="settings-item-icon"><i data-lucide="download-cloud"></i></div>' +
+          '<div class="settings-item-info">' +
+            '<span class="settings-item-title">Check for Updates</span>' +
+            '<span class="settings-item-desc">See if a newer version of Orbit is available</span>' +
+          '</div>' +
+          '<div class="settings-item-action">' +
+            '<i data-lucide="chevron-right" style="width:18px;height:18px;color:var(--text-muted);"></i>' +
+          '</div>' +
+        '</div>' +
+        '<div class="settings-item-card" data-search="Automatic Update Checks GitHub network new version">' +
+          '<div class="settings-item-icon"><i data-lucide="refresh-cw"></i></div>' +
+          '<div class="settings-item-info">' +
+            '<span class="settings-item-title">Automatic Update Checks</span>' +
+            '<span class="settings-item-desc">Check GitHub for a new version after launch (max once per 6h)</span>' +
+          '</div>' +
+          '<div class="settings-item-action">' +
+            '<button class="settings-toggle ' + (MStore.settings.updateCheckEnabled !== false ? 'on' : '') + '" id="set-update-check"></button>' +
+          '</div>' +
+        '</div>' +
         '<div class="settings-item-card" id="row-show-changelog" data-search="What\'s New View latest changes and updates" style="cursor:pointer;">' +
           '<div class="settings-item-icon"><i data-lucide="megaphone"></i></div>' +
           '<div class="settings-item-info">' +
@@ -5213,6 +5280,15 @@ document.addEventListener('DOMContentLoaded', function() {
       case 'about':
         var changelogBtn = document.getElementById('row-show-changelog');
         if (changelogBtn) changelogBtn.addEventListener('click', showChangelog);
+        var updateRow = document.getElementById('row-check-update');
+        if (updateRow) updateRow.addEventListener('click', function() {
+          if (window.UpdateNotice) window.UpdateNotice.checkManual();
+        });
+        // Automatic checks are opt-out; the manual row above always works.
+        bindToggle('set-update-check', function(on) {
+          s.updateCheckEnabled = on;
+          MStore.save();
+        });
         break;
     }
   }
@@ -5249,26 +5325,59 @@ document.addEventListener('DOMContentLoaded', function() {
     try { return new Date(mtime).toLocaleDateString(); } catch(e) { return ''; }
   }
 
-  function _vaultReadBlobStore() {
-    if (!window.BlobStoreDB || !window.BlobStoreDB._open) return Promise.resolve({ blobs: {}, partials: [] });
+  // Peak memory during a vault export is roughly 4x the raw blob bytes:
+  //   blobs -> base64 strings (1.33x) -> JSON.stringify (a second ~1.33x copy)
+  //   -> the Capacitor bridge serialises that whole string again to reach native.
+  //
+  // On Android all of that lands in the WebView heap, which is typically
+  // 128-512 MB, and an OOM there is NOT catchable — it kills the renderer, which
+  // is what users reported as "the app crashes when I back up". The blob store
+  // is unbounded (every inline attachment and every large-file chunk is put
+  // there, and maxFileSize defaults to 500 MB), so this needs a hard budget.
+  //
+  // 32 MB of blobs keeps the peak near ~128 MB.
+  var VAULT_BLOB_BUDGET_BYTES = 32 * 1024 * 1024;
+
+  // Reads the blob store, stopping base64-encoding once `maxBytes` is exceeded.
+  // The cursor keeps draining after that (so the transaction can close) but
+  // nothing further is allocated — encoding is the expensive part.
+  // Returns { blobs, partials, totalBytes, truncated }.
+  function _vaultReadBlobStore(maxBytes) {
+    var empty = { blobs: {}, partials: [], totalBytes: 0, truncated: false };
+    if (!window.BlobStoreDB || !window.BlobStoreDB._open) return Promise.resolve(empty);
+    var budget = maxBytes || VAULT_BLOB_BUDGET_BYTES;
     return window.BlobStoreDB._open().then(function() {
       return new Promise(function(resolve, reject) {
         try {
           var db = window.BlobStoreDB._db;
           var blobs = {};
           var partials = [];
+          var totalBytes = 0;
+          var truncated = false;
           var pending = 2;
-          function done() { if (--pending === 0) resolve({ blobs: blobs, partials: partials }); }
+          function done() {
+            if (--pending === 0) {
+              resolve({ blobs: blobs, partials: partials, totalBytes: totalBytes, truncated: truncated });
+            }
+          }
           var tx = db.transaction(['blobs', 'partials'], 'readonly');
           tx.onerror = function(e) { reject(e.target.error); };
           tx.oncomplete = function() { /* all cursors done */ };
           var blobsReq = tx.objectStore('blobs').openCursor();
           blobsReq.onsuccess = function(e) {
             var cursor = e.target.result;
-            if (cursor) {
-              try { blobs[cursor.key] = _vaultAbToBase64(cursor.value); } catch(err) { console.warn('[Vault] blob encode failed for', cursor.key, err); }
+            if (!cursor) { done(); return; }
+            if (truncated) { cursor['continue'](); return; }
+            var value = cursor.value;
+            var size = (value && value.byteLength) ? value.byteLength : 0;
+            totalBytes += size;
+            if (totalBytes > budget) {
+              truncated = true;
               cursor['continue']();
-            } else { done(); }
+              return;
+            }
+            try { blobs[cursor.key] = _vaultAbToBase64(value); } catch(err) { console.warn('[Vault] blob encode failed for', cursor.key, err); }
+            cursor['continue']();
           };
           var partsReq = tx.objectStore('partials').openCursor();
           partsReq.onsuccess = function(e) {
@@ -5335,6 +5444,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function finish(res) { window._vaultExportRunning = false; return res; }
 
+    // Set by the blob reader when attachment data exceeded the export budget.
+    var vaultTruncated = false;
+
     return Promise.resolve().then(function() {
       var data = {};
       for (var i = 0; i < localStorage.length; i++) {
@@ -5342,6 +5454,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (k && k.indexOf('orbit_') === 0) data[k] = localStorage.getItem(k);
       }
       return _vaultReadBlobStore().then(function(blobData) {
+        vaultTruncated = !!blobData.truncated;
         var s = MStore.settings || {};
         var needsEnc = !!s.vaultEncrypt;
         var pass = null;
@@ -5360,6 +5473,13 @@ document.addEventListener('DOMContentLoaded', function() {
           version: window.APP_VERSION || '0.5.0-beta',
           createdAt: new Date().toISOString()
         };
+        if (vaultTruncated) {
+          // Recorded in the file itself so a restore can explain the gap rather
+          // than silently appearing to have lost attachments.
+          base.attachmentsExcluded = true;
+          base.attachmentsExcludedReason = 'Attachment data exceeded the ' +
+            _vaultFmtBytes(VAULT_BLOB_BUDGET_BYTES) + ' export budget';
+        }
         if (needsEnc) {
           return _vaultEncryptPayload(payload, pass).then(function(enc) {
             return Object.assign({}, base, { encrypted: true }, enc);
@@ -5382,7 +5502,14 @@ document.addEventListener('DOMContentLoaded', function() {
             var size = new Blob([json]).size;
             try { localStorage.setItem('orbit_vault_lastbackup', new Date().toISOString()); } catch(e) {}
             if (showUI !== false) {
-              showToast('Vault exported: ' + fileName + ' (' + _vaultFmtBytes(size) + ')', 'success');
+              if (vaultTruncated) {
+                showToast('Vault exported WITHOUT attachments: ' + fileName + ' (' +
+                  _vaultFmtBytes(size) + '). Attachment data exceeded the ' +
+                  _vaultFmtBytes(VAULT_BLOB_BUDGET_BYTES) +
+                  ' limit and was left out to avoid running out of memory.', 'info');
+              } else {
+                showToast('Vault exported: ' + fileName + ' (' + _vaultFmtBytes(size) + ')', 'success');
+              }
               var statusEl = document.getElementById('vault-status');
               if (statusEl) statusEl.textContent = 'Last backup: ' + new Date().toLocaleString();
             }
@@ -5537,7 +5664,31 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button id="changelog-close-mobile" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;font-size:20px;">✕</button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
-        vBlock('0.5.1-beta', 'Latest', [
+        vBlock('0.5.2-beta', 'Latest', [
+          ['Features', [
+            'Cross-Platform E2EE — Desktop now speaks the same encryption scheme as Android (SPKI keys, HKDF-SHA256, two-field envelope), so encrypted DMs finally work in both directions. The peer\'s advertised key format decides which path is used, so peers on older builds keep working.',
+            'QR Pairing v2 — A QR code is now a portable beacon: your identity, every LAN address, your TCP port and your public key. Scan one with the camera, or share yours from the Add Friend sheet. Every invalid code explains itself instead of failing silently.',
+            'In-App Update Notifications — Orbit tells you when a newer version exists, shows what changed, and hands you the APK in one tap. Checked at most once every 6 hours, skippable per version, and switchable off in Settings → About.'
+          ]],
+          ['Security', [
+            'Silent E2EE Downgrade Fixed (4 sites) — A missing peer key or a failed encryption could previously send a message as plaintext while the UI still showed encryption as on; one mobile path left a message on screen that was never actually sent. Mobile now blocks the send and tells you why, and group messages skip keyless members instead of downgrading for them.',
+            'QR key pinning now works between Android and desktop.'
+          ]],
+          ['Bug Fixes', [
+            'Local Vault No Longer Kills the App — Large exports assembled the whole blob store in memory with no limit, and an out-of-memory kill cannot be caught. Exports now stop at 32 MB and record what was left out, so a restore can explain the gap.',
+            'Bottom Sheets No Longer Open Behind the Keyboard — /help, the /poll builder and folder rename were invisible on device, because Android does not shrink the viewport when the soft keyboard appears.',
+            'Mobile QR Codes Now Work Between Phones — The app was encoding a bare user id instead of the pairing payload, so phone-to-phone scanning could never work, and the error was swallowed silently.',
+            'Android Now Shares Its Real Addresses in a QR Code — So a scanned code actually connects.',
+            'Group Avatars No Longer Show "undefined" — Four implementations that had drifted apart are now one shared member-avatar grid.',
+            'Image Cropper Is Now WYSIWYG — The export was about a third more zoomed than the preview.',
+            'Group Image Upload — The create-group sheet can set a group image now.'
+          ]],
+          ['Technical', [
+            'Version: Bumped to v0.5.2-beta; Android bundle resynced.',
+            'Unit tests 158 → 267 assertions across four suites; desktop E2E suite 9 → 34 specs. The new E2EE interop suite caught three bugs before they shipped.'
+          ]]
+        ]) +
+        vBlock('0.5.1-beta', '', [
           ['Bug Fixes', [
             'Stalled Transfer Recovery (Mobile + Desktop) — Interrupted receives keep their saved progress across stalls, app restarts, and crashes; late chunks resume from the checkpoint instead of restarting or vanishing.',
             '/help Now Works With Phone Keyboards — Soft keyboards that skip real Enter keydowns (IME 229 / insertLineBreak) now trigger slash commands like the send button does.'
@@ -8639,32 +8790,52 @@ document.addEventListener('DOMContentLoaded', function() {
           container.innerHTML = '<div style="font-size:13px;color:var(--text-muted);padding:20px;">User data not available</div>';
           return;
         }
-        var qrData = MStore.user.id || MStore.user.name || 'orbit-user';
-        try {
-          var qr = new QRCode(0, 'M');
-          qr.addData(qrData);
-          qr.make();
-          var canvas = document.createElement('canvas');
-          canvas.width = 160;
-          canvas.height = 160;
-          var ctx = canvas.getContext('2d');
-          var modCount = qr.getModuleCount();
-          var cellSize = 160 / modCount;
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, 160, 160);
-          ctx.fillStyle = '#000000';
-          for (var row = 0; row < modCount; row++) {
-            for (var col = 0; col < modCount; col++) {
-              if (qr.isDark(row, col)) {
-                ctx.fillRect(Math.floor(col * cellSize), Math.floor(row * cellSize), Math.ceil(cellSize), Math.ceil(cellSize));
+
+        function paint(qrData) {
+          try {
+            var qr = new QRCode(0, 'M');
+            qr.addData(qrData);
+            qr.make();
+            var canvas = document.createElement('canvas');
+            canvas.width = 160;
+            canvas.height = 160;
+            var ctx = canvas.getContext('2d');
+            var modCount = qr.getModuleCount();
+            var cellSize = 160 / modCount;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, 160, 160);
+            ctx.fillStyle = '#000000';
+            for (var row = 0; row < modCount; row++) {
+              for (var col = 0; col < modCount; col++) {
+                if (qr.isDark(row, col)) {
+                  ctx.fillRect(Math.floor(col * cellSize), Math.floor(row * cellSize), Math.ceil(cellSize), Math.ceil(cellSize));
+                }
               }
             }
+            container.innerHTML = '';
+            container.appendChild(canvas);
+          } catch(e) {
+            container.textContent = 'Could not generate QR code';
           }
-          container.innerHTML = '';
-          container.appendChild(canvas);
-        } catch(e) {
-          container.textContent = 'Could not generate QR code';
         }
+
+        // v1 fallback (identity only). Previously this function encoded a BARE
+        // user id string, which JSON.parse could not read — the scanner threw,
+        // swallowed the error, and scanned forever. Never regress to that.
+        function paintV1() {
+          paint(JSON.stringify({ v: 1, id: MStore.user.id, n: MStore.user.name, t: MStore.user.tag }));
+        }
+
+        if (!window.Orbit || !Orbit.QRPairing) { paintV1(); return; }
+
+        Orbit.QRPairing.listLocalIPv4().then(function(ips) {
+          var payload = Orbit.QRPairing.buildPayload(MStore.user, {
+            ips: ips,
+            port: Orbit.QRPairing.DEFAULT_PORT,
+            publicKey: MStore.user.publicKey || null
+          });
+          if (payload) paint(payload); else paintV1();
+        }).catch(paintV1);
       }
       
       // Wire connect
@@ -8767,6 +8938,10 @@ document.addEventListener('DOMContentLoaded', function() {
   /* -- QR Scanner -- */
   var _qrScanning = false;
   var _qrStream = null;
+  // Debounce: a code held in frame decodes ~30x/sec. Without this, a bad code
+  // would spam a toast every frame.
+  var _lastQRRaw = null;
+  var _lastQRAt = 0;
 
   function startQRScanner() {
     var overlay = document.getElementById('qr-scanner-overlay');
@@ -8804,31 +8979,116 @@ document.addEventListener('DOMContentLoaded', function() {
     if (typeof jsQR !== 'undefined') {
       var code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
       if (code && code.data) {
-        try {
-          var parsed = JSON.parse(code.data);
-          if (parsed && parsed.v === 1 && parsed.id) {
-            stopQRScanner();
-            // Auto-add friend from QR data
-            var peerId = parsed.id;
-            var peerName = parsed.n || 'Unknown';
-            var peerTag = parsed.t || '';
-            var existing = MStore.friends.find(function(f) { return f.id === peerId; });
-            if (!existing) {
-              MStore.friends.push({ id: peerId, name: peerName, tag: peerTag, status: 'offline', avatar: null, bio: '', ip: null, publicKey: null });
-              MStore.chats.push({ id: peerId, name: peerName, lastMessage: '', lastTime: '', unread: 0 });
-              MStore.save();
-              renderFriends();
-              renderChatList();
-              showToast('Added ' + peerName, 'info');
-            } else {
-              showToast(peerName + ' is already a friend', 'info');
-            }
-            return;
-          }
-        } catch(e) {}
+        var now = Date.now();
+        if (code.data !== _lastQRRaw || (now - _lastQRAt) > 3000) {
+          _lastQRRaw = code.data;
+          _lastQRAt = now;
+          handleQRPayload(code.data);
+        }
       }
     }
     requestAnimationFrame(scanFrame);
+  }
+
+  // Validate and pair. Every failure path reports to the user — the previous
+  // implementation caught parse errors silently and scanned forever, so a bad
+  // code looked identical to a camera that simply wasn't finding anything.
+  function handleQRPayload(raw) {
+    if (!window.Orbit || !Orbit.QRPairing) {
+      showToast('Pairing unavailable — update the app', 'info');
+      return;
+    }
+    // Own addresses, so a QR can never make us connect to ourselves.
+    Orbit.QRPairing.listLocalIPv4().then(function(ownIps) {
+      var res = Orbit.QRPairing.parsePayload(raw, { ownIps: ownIps });
+      if (!res.ok) {
+        showToast(Orbit.QRPairing.describeReason(res.reason), 'info');
+        return;
+      }
+      stopQRScanner();
+      pairFromQRData(res.data);
+    }).catch(function() {
+      showToast('Could not read network addresses', 'info');
+    });
+  }
+
+  function pairFromQRData(data) {
+    var peerId = data.id;
+    var peerName = data.n || 'Unknown';
+    var peerTag = data.t || '';
+    var ip = data.ips.length ? data.ips[0] : null;
+
+    // Only pin a key we can actually encrypt to. Desktop keys are hex and
+    // mobile keys are SPKI — a key from the other platform would be stored and
+    // then fail silently at encrypt time, so it is skipped instead.
+    var publicKey = null;
+    if (Orbit.QRPairing.isUsableKey(data)) {
+      publicKey = Orbit.QRPairing.exportKey(data.key);
+    } else if (data.key) {
+      showToast('Paired without key pinning (different key format)', 'info');
+    }
+
+    var existing = MStore.friends.find(function(f) { return f.id === peerId; });
+    if (existing) {
+      if (ip) existing.ip = ip;
+      if (data.port) existing.tcpPort = data.port;
+      if (publicKey) existing.publicKey = publicKey;
+      MStore.save();
+      renderFriends();
+      showToast(peerName + ' updated', 'info');
+    } else {
+      MStore.friends.push({
+        id: peerId, name: peerName, tag: peerTag, status: 'offline',
+        avatar: null, bio: '', ip: ip, tcpPort: data.port, publicKey: publicKey
+      });
+      MStore.chats.push({ id: peerId, name: peerName, lastMessage: '', lastTime: '', unread: 0 });
+      MStore.save();
+      renderFriends();
+      renderChatList();
+      showToast('Added ' + peerName, 'info');
+    }
+
+    if (!data.ips.length) {
+      // v1 codes and codes generated before address enumeration existed.
+      // Falling back to discovery is expected here, not a failure.
+      showToast('No address in the code — waiting for discovery', 'info');
+      return;
+    }
+    connectViaQR(data.ips, data.port, peerId, peerName);
+  }
+
+  // A QR carries every candidate address the other device has (Wi-Fi, Ethernet,
+  // virtual adapters). We cannot know which one this phone can reach, so try
+  // them in order with a short timeout each.
+  function connectViaQR(ips, port, peerId, peerName) {
+    var idx = 0;
+    var perAttemptMs = Math.min((MStore.settings.netTimeout || 30) * 1000, 10000);
+
+    function attempt() {
+      if (idx >= ips.length) {
+        showToast('Could not reach ' + peerName + ' — trying discovery', 'info');
+        return;
+      }
+      var ip = ips[idx++];
+      if (!window.Orbit || !Orbit.P2P || !Orbit.P2P.connect) return;
+      Orbit.P2P.connect(ip, port, peerId, perAttemptMs).then(function(r) {
+        if (r && r.success) {
+          var f = MStore.friends.find(function(x) { return x.id === peerId; });
+          if (f) {
+            f.ip = ip;
+            f.tcpPort = port;
+            if (r.connectionId) f.connectionId = r.connectionId;
+            MStore.save();
+          }
+          showToast('Connected to ' + peerName, 'info');
+        } else {
+          attempt();
+        }
+      }).catch(function() { attempt(); });
+    }
+
+    showToast('Connecting to ' + peerName + '…', 'info');
+    attempt();
   }
 
   function stopQRScanner() {
@@ -10454,17 +10714,35 @@ document.addEventListener('DOMContentLoaded', function() {
         if (qrContainer && !qrContainer.hasChildNodes() && typeof QRCode !== 'undefined') {
           var user = MStore.user;
           if (user) {
-            var qrData = JSON.stringify({ v: 1, id: user.id, n: user.name, t: user.tag });
-            try {
-              var qr = QRCode(0, 'M');
-              qr.addData(qrData);
-              qr.make();
-              qrContainer.innerHTML = qr.createImgTag(3, 0);
-              var img = qrContainer.querySelector('img');
-              if (img) img.style.display = 'block';
-            } catch(e) {
-              qrContainer.innerHTML = '<span style="color:var(--text-muted);font-size:11px;">Error</span>';
-            }
+            (function paintModalQR() {
+              function paint(qrData) {
+                try {
+                  var qr = QRCode(0, 'M');
+                  qr.addData(qrData);
+                  qr.make();
+                  qrContainer.innerHTML = qr.createImgTag(3, 0);
+                  var img = qrContainer.querySelector('img');
+                  if (img) img.style.display = 'block';
+                } catch(e) {
+                  qrContainer.innerHTML = '<span style="color:var(--text-muted);font-size:11px;">Error</span>';
+                }
+              }
+
+              function paintV1() {
+                paint(JSON.stringify({ v: 1, id: user.id, n: user.name, t: user.tag }));
+              }
+
+              if (!window.Orbit || !Orbit.QRPairing) { paintV1(); return; }
+
+              Orbit.QRPairing.listLocalIPv4().then(function(ips) {
+                var payload = Orbit.QRPairing.buildPayload(user, {
+                  ips: ips,
+                  port: Orbit.QRPairing.DEFAULT_PORT,
+                  publicKey: user.publicKey || null
+                });
+                if (payload) paint(payload); else paintV1();
+              }).catch(paintV1);
+            })();
           }
         }
       }
@@ -12909,7 +13187,12 @@ document.addEventListener('DOMContentLoaded', function() {
             MStore.save();
             // Auto-backup vault silently when the app goes to background (if enabled)
             if (MStore.settings && MStore.settings.vaultAutoBackup && !window._vaultExportRunning) {
-              try { runVaultExport(false); } catch(e) { console.warn('[Vault] auto-backup error:', e); }
+              // runVaultExport is async, so a sync try/catch cannot catch its
+              // rejections. Attach to the promise instead.
+              var _autoBackup = runVaultExport(false);
+              if (_autoBackup && typeof _autoBackup.catch === 'function') {
+                _autoBackup.catch(function(e) { console.warn('[Vault] auto-backup error:', e); });
+              }
             }
             // Stop all media when going to background
             try {
@@ -13071,6 +13354,10 @@ document.addEventListener('DOMContentLoaded', function() {
   updateSendButton();
 
   showToast('Orbit Mobile ready', 'info');
+
+  // Throttled "new version available" check — silent, delayed, and a no-op if
+  // the app checked in the last 6h or the user skipped that version.
+  if (window.UpdateNotice) window.UpdateNotice.init();
 
   // Attempt immersive mode on Android
   if (Orbit.env.isAndroid) {

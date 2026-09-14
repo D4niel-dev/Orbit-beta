@@ -33,6 +33,9 @@ class Store {
       showConnectionStats: false,
       enableExperimental: false,
       profileFrames: true,
+      // Automatic "is there a newer Orbit?" check. Off means no network
+      // contact at all; Settings → About's manual check still works.
+      updateCheckEnabled: true,
       experimentalAnimatedAvatars: false,
       messageFx: false,
       experimentalFolders: false,

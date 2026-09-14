@@ -538,6 +538,37 @@ public class OrbitForegroundService extends Service {
         return ips;
     }
 
+    // Ordered candidate IPv4 addresses for QR pairing.
+    //
+    // The WebView cannot enumerate interfaces itself, and unlike a UDP beacon a
+    // QR has no source address for the peer to learn, so we must hand back every
+    // plausible address — Wi-Fi and Ethernet first, virtual/cellular adapters
+    // after. The scanning device tries them in order until one connects.
+    public String[] getLocalIpsForPairing() {
+        java.util.LinkedHashSet<String> preferred = new java.util.LinkedHashSet<>();
+        java.util.LinkedHashSet<String> rest = new java.util.LinkedHashSet<>();
+        try {
+            for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                if (ni == null || !ni.isUp() || ni.isLoopback()) continue;
+                String name = ni.getName() == null ? "" : ni.getName().toLowerCase();
+                boolean isPhysical = name.startsWith("wlan") || name.startsWith("eth");
+                for (java.net.InetAddress addr : Collections.list(ni.getInetAddresses())) {
+                    if (!(addr instanceof java.net.Inet4Address) || addr.isLoopbackAddress()) continue;
+                    String host = addr.getHostAddress();
+                    if (host == null || host.isEmpty()) continue;
+                    int pct = host.indexOf('%');
+                    if (pct > 0) host = host.substring(0, pct);
+                    if (host.isEmpty()) continue;
+                    if (preferred.contains(host) || rest.contains(host)) continue;
+                    if (isPhysical) preferred.add(host); else rest.add(host);
+                }
+            }
+        } catch (Exception ignored) {}
+        java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>(preferred);
+        out.addAll(rest);
+        return out.toArray(new String[0]);
+    }
+
     // ── Foreground notification ──
 
     private void createNotificationChannel() {

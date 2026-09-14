@@ -1,6 +1,6 @@
 {
   "name": "orbit-beta",
-  "version": "0.5.1-beta",
+  "version": "0.5.2-beta",
   "description": "Orbit P2P Chat Application",
   "author": "Orbit Team <hello@orbit.chat>",
   "repository": {
@@ -14,7 +14,8 @@
     "build:mac": "electron-builder --mac --publish never",
     "build:linux": "electron-builder --linux --publish never",
     "build:all": "electron-builder --win --mac --linux --publish never",
-    "test": "playwright test"
+    "test": "playwright test",
+    "test:sharded": "playwright test --shard=1/2 && playwright test --shard=2/2"
   },
   "keywords": [],
   "license": "MIT",
@@ -27,7 +28,9 @@
     "better-sqlite3": "^12.10.0",
     "electron-store": "^8.2.0",
     "emoji-picker-element": "^1.29.1",
+    "jsqr": "^1.4.0",
     "lucide": "^1.17.0",
+    "qrcode-generator": "^2.0.4",
     "sharp": "^0.34.5",
     "sqlite3": "^6.0.1",
     "uuid": "^14.0.0",

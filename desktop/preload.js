@@ -7,7 +7,20 @@ contextBridge.exposeInMainWorld('orbitAPI', {
   invoke:   (channel, data)   => ipcRenderer.invoke(channel, data),
   log:      (...args)         => ipcRenderer.send('log', ...args),
   platform: process.platform,
+  // Legacy field: process.env.npm_package_version is only set when the app is
+  // launched through an npm script, so in a packaged build this silently falls
+  // back to a hardcoded string. getAppVersion() below is the real source.
   version:  process.env.npm_package_version ?? '0.1.2-beta',
+  // Authoritative version from app.getVersion() in the main process. Lazy on
+  // purpose: the IPC handler is registered just after loadFile(), so calling it
+  // during preload could race it. Everything calls it post-boot.
+  getAppVersion: () => ipcRenderer.sendSync('app-version'),
+  // Opens an https GitHub URL in the user's browser. Returns true if the main
+  // process accepted it — every other scheme/host is rejected there.
+  openExternal: (url) => ipcRenderer.sendSync('open-external', url),
+  // Fetches a GitHub URL from the main process (the renderer's CSP blocks
+  // direct calls). Resolves to { ok, status, body, error? }.
+  updateFetch: (url) => ipcRenderer.invoke('update-fetch', url),
   electronVersion: process.versions.electron,
   nodeVersion: process.versions.node,
   
@@ -17,6 +30,7 @@ contextBridge.exposeInMainWorld('orbitAPI', {
   storeDelete: (key) => ipcRenderer.sendSync('store-delete', key),
   getHostname: () => ipcRenderer.sendSync('get-hostname'),
   getUuid: () => ipcRenderer.sendSync('get-uuid'),
+  getLocalIPv4s: () => ipcRenderer.invoke('get-local-ips'),
   
   // Networking
   networkStart: (identity, reconnectEnabled, reconnectIntervalMs) => ipcRenderer.sendSync('network-start', identity, reconnectEnabled, reconnectIntervalMs),
@@ -35,9 +49,12 @@ contextBridge.exposeInMainWorld('orbitAPI', {
   writeClipboard: (text) => ipcRenderer.sendSync('write-clipboard', text),
 
   // E2EE
+  // e2eeEncrypt resolves to { v:2, ciphertext, nonce } for a unified peer or
+  // { v:1, packed } for a legacy peer — never a bare string.
   e2eeGetPublicKey: () => ipcRenderer.sendSync('e2ee-get-public-key'),
   e2eeEncrypt: (plaintext, peerPublicKey) => ipcRenderer.sendSync('e2ee-encrypt', plaintext, peerPublicKey),
   e2eeDecrypt: (ciphertext, peerPublicKey) => ipcRenderer.sendSync('e2ee-decrypt', ciphertext, peerPublicKey),
+  e2eeDecryptV2: (ciphertext, nonce, peerPublicKey) => ipcRenderer.sendSync('e2ee-decrypt-v2', ciphertext, nonce, peerPublicKey),
 
   // Account Switcher
   dbGetAllUsers: () => ipcRenderer.sendSync('db-get-all-users'),

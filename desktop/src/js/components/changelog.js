@@ -14,7 +14,34 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.5.1-beta', 'Latest', [
+        versionBlock('0.5.2-beta', 'Latest', [
+          ['Features', [
+            'Cross-Platform E2EE — Desktop now speaks the same encryption scheme as Android (SPKI keys, HKDF-SHA256, two-field envelope), so encrypted DMs finally work in both directions. The peer\'s advertised key format decides which path is used, so peers on older builds keep working. Existing desktop keypairs migrate in place with the private key preserved.',
+            'QR Pairing v2 — A QR code is now a portable beacon: your identity, every LAN address, your TCP port and your public key. Desktop can scan one by pasting, dropping or choosing an image; Android uses its camera. Every invalid code explains itself instead of failing silently.',
+            'In-App Update Notifications — Orbit tells you when a newer version exists, shows what changed, and hands you the right installer or APK in one click. Checked at most once every 6 hours, skippable per version, and switchable off in Settings → About.',
+            'Tabbed Add-a-Friend (Desktop) — Switch between entering an IP address and pairing by QR code, with the scanner inline.'
+          ]],
+          ['Security', [
+            'Silent E2EE Downgrade Fixed (4 sites) — A missing peer key or a failed encryption could previously send a message as plaintext while the UI still showed encryption as on; one mobile path left a message on screen that was never actually sent. Both platforms now block the send and tell you why, and mobile groups skip keyless members instead of downgrading for them.',
+            'QR key pinning now works between desktop and Android, and the dead e2eeEncryptMessage() plaintext fallback was deleted.'
+          ]],
+          ['Bug Fixes', [
+            'shared/ Was Missing From Desktop Installs — The audio player, video player and image cropper had been failing to load in every packaged build. Fixed.',
+            'Local Vault No Longer Kills Android — Large exports assembled the whole blob store in memory with no limit, and an out-of-memory kill cannot be caught. Exports now stop at 32 MB and record what was left out, so a restore can explain the gap.',
+            'Bottom Sheets No Longer Open Behind the Keyboard — /help, the /poll builder and folder rename were invisible on device, because Android does not shrink the viewport when the soft keyboard appears.',
+            'Chat Header Keeps Up — Peer status and profile frames no longer freeze until something unrelated forces a repaint.',
+            'Chat Header Profile Frames — The header was the one place frames did not render.',
+            'Group Avatars No Longer Show "undefined" — Four implementations that had drifted apart are now one shared member-avatar grid.',
+            'Image Cropper Is Now WYSIWYG — The export was about a third more zoomed than the preview.',
+            'Group Image Upload — The create-group dialog can set a group image now.',
+            'Desktop Reported the Wrong Version — Packaged builds showed a hardcoded 0.1.2-beta in Settings → About.'
+          ]],
+          ['Technical', [
+            'Version: Bumped to v0.5.2-beta across all three package.json files; Android bundle resynced.',
+            'Unit tests 158 → 267 assertions across four suites; desktop E2E suite 9 → 34 specs. The new E2EE interop suite caught three bugs before they shipped.'
+          ]]
+        ]) +
+        versionBlock('0.5.1-beta', '', [
           ['Bug Fixes', [
             'Stalled Transfer Recovery (Mobile + Desktop) — Interrupted receives keep their saved progress across stalls, app restarts, and crashes; late chunks resume from the checkpoint instead of restarting or vanishing.',
             '/help Now Works With Phone Keyboards — Soft keyboards that skip real Enter keydowns (IME 229 / insertLineBreak) now trigger slash commands like the send button does.'

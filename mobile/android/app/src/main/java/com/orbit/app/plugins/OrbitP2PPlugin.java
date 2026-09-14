@@ -380,6 +380,16 @@ public class OrbitP2PPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void getLocalIps(PluginCall call) {
+        // Used to build QR pairing payloads — the WebView has no way to
+        // enumerate network interfaces on its own.
+        String[] ips = boundService != null ? boundService.getLocalIpsForPairing() : new String[0];
+        JSObject result = new JSObject();
+        result.put("ips", ips);
+        call.resolve(result);
+    }
+
+    @PluginMethod
     public void cleanup(PluginCall call) {
         // DO NOT call stopService() here! That would stop the Android foreground service
         // asynchronously — onServiceDisconnected fires after a delay, so boundService is

@@ -12,6 +12,14 @@ files:
   - "!android/**"
   - "!.gemini/**"
 
+# shared/ lives OUTSIDE the app directory (desktop/), so `files` cannot reach it.
+# The renderer loads ../../shared/* from desktop/src/ and the main process
+# requires ../shared/crypto/* — both resolve to resources/shared at runtime.
+# Without this, every shared/ module 404s in packaged builds.
+extraResources:
+  - from: ../shared
+    to: shared
+
 # --- Windows ---
 win:
   target:

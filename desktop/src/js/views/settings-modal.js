@@ -187,8 +187,12 @@ window.SettingsModal = {
             '<div style="font-size:13px;color:var(--text-secondary);font-family:var(--font-mono);word-break:break-all;padding:10px 12px;background:var(--bg-base);border-radius:8px;border:1px solid var(--border-subtle);">' + (user.userId || 'N/A') + '</div>' +
             '<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border-subtle);text-align:center;">' +
               '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Your QR Code</div>' +
-              '<p style="font-size:11px;color:var(--text-muted);margin:0 0 10px;">Share this with others so they can add you.</p>' +
+              '<p style="font-size:11px;color:var(--text-muted);margin:0 0 10px;">Scan this with Orbit on another device to connect instantly.</p>' +
               '<div id="qr-code-container" style="display:inline-block;padding:10px;background:#fff;border-radius:10px;"></div>' +
+              '<div style="margin-top:14px;">' +
+                '<button id="btn-scan-qr" style="padding:8px 16px;background:transparent;color:var(--text-secondary);' +
+                'border:1px solid var(--border-subtle);border-radius:8px;font-size:12px;cursor:pointer;">Scan a QR code…</button>' +
+              '</div>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -201,29 +205,61 @@ window.SettingsModal = {
 
       lucide.createIcons({ root: content });
 
-      // Generate QR code for user profile
+      // Generate QR code for user profile (pairing payload v2)
+      // See plans/docs/Orbit QR Pairing v2 Design.md
       (function generateQR() {
         var qrContainer = document.getElementById('qr-code-container');
         if (!qrContainer || typeof QRCode === 'undefined') return;
         var state = window.store.getState();
         var user = state.currentUser;
         if (!user) return;
-        var qrData = JSON.stringify({
-          v: 1,
-          id: user.userId,
-          n: user.username,
-          t: user.usertag
-        });
-        try {
-          var qr = QRCode(0, 'M');
-          qr.addData(qrData);
-          qr.make();
-          qrContainer.innerHTML = qr.createImgTag(4, 0);
-          qrContainer.querySelector('img').style.display = 'block';
-        } catch(e) {
-          qrContainer.innerHTML = '<span style="color:var(--text-muted);font-size:12px;">Could not generate QR code</span>';
+
+        function render(qrData) {
+          try {
+            var qr = QRCode(0, 'M');
+            qr.addData(qrData);
+            qr.make();
+            qrContainer.innerHTML = qr.createImgTag(4, 0);
+            qrContainer.querySelector('img').style.display = 'block';
+          } catch(e) {
+            qrContainer.innerHTML = '<span style="color:var(--text-muted);font-size:12px;">Could not generate QR code</span>';
+          }
         }
+
+        // Identity-only payload (v1). Used if the shared pairing module is
+        // unavailable, so this panel never renders blank.
+        function renderV1() {
+          render(JSON.stringify({ v: 1, id: user.userId, n: user.username, t: user.usertag }));
+        }
+
+        if (!window.Orbit || !Orbit.QRPairing) { renderV1(); return; }
+
+        var publicKey = null;
+        try {
+          if (window.orbitAPI && window.orbitAPI.e2eeGetPublicKey) publicKey = window.orbitAPI.e2eeGetPublicKey();
+        } catch(e) {}
+
+        Orbit.QRPairing.listLocalIPv4().then(function(ips) {
+          var payload = Orbit.QRPairing.buildPayload(user, {
+            ips: ips,
+            port: Orbit.QRPairing.DEFAULT_PORT,
+            publicKey: publicKey
+          });
+          if (payload) render(payload); else renderV1();
+        }).catch(renderV1);
       })();
+
+      // Desktop has no camera — pairing from an image (paste / drop / picker)
+      var scanBtn = document.getElementById('btn-scan-qr');
+      if (scanBtn) {
+        scanBtn.addEventListener('click', function() {
+          if (window.OrbitQRScanner) {
+            window.OrbitQRScanner.open();
+          } else if (window.Toast) {
+            window.Toast.show('Unavailable', 'QR scanner not loaded.', 'error');
+          }
+        });
+      }
 
       // Live preview updates
       function updatePreview() {
@@ -2249,11 +2285,22 @@ window.SettingsModal = {
       });
 
     } else if (tabName === 'about') {
-      var version = window.orbitAPI ? (window.orbitAPI.version || '0.2.0-beta') : '0.2.0-beta';
+      // Prefer the main process's app.getVersion(): preload's `version` field
+      // reads process.env.npm_package_version, which is unset in a packaged
+      // build, so it would report a hardcoded fallback forever.
+      var version = '0.0.0';
+      if (window.orbitAPI) {
+        if (typeof window.orbitAPI.getAppVersion === 'function') {
+          try { version = window.orbitAPI.getAppVersion() || version; } catch (e) { /* fall through */ }
+        } else if (window.orbitAPI.version) {
+          version = window.orbitAPI.version;
+        }
+      }
       var friendCount = state.friends ? state.friends.length : 0;
       var groupCount = state.groups ? state.groups.length : 0;
       var chatCount = Object.keys(state.messages || {}).length;
       var s = state.settings || {};
+      var updateCheckOn = s.updateCheckEnabled !== false;
 
       content.innerHTML =
         '<h3 style="font-family:var(--font-display);font-size:24px;margin-bottom:24px;">About</h3>' +
@@ -2275,9 +2322,25 @@ window.SettingsModal = {
               '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">Node.js</span><span style="color:var(--text-primary);font-family:var(--font-mono);">' + (window.orbitAPI ? (window.orbitAPI.nodeVersion || '?') : '?') + '</span></div>' +
               '<div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);">License</span><span style="color:var(--text-primary);font-family:var(--font-mono);">MIT</span></div>' +
             '</div>' +
-            '<button id="settings-btn-changelog" style="display:flex;align-items:center;gap:8px;padding:10px 20px;border-radius:24px;background:var(--accent-primary);color:#fff;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:opacity 0.15s;" onmouseenter="this.style.opacity=\'0.85\'" onmouseleave="this.style.opacity=\'1\'">' +
-              '<i data-lucide="sparkles" style="width:16px;height:16px;"></i> What\'s New' +
-            '</button>' +
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+              '<button id="settings-btn-changelog" style="display:flex;align-items:center;gap:8px;padding:10px 20px;border-radius:24px;background:var(--accent-primary);color:#fff;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:opacity 0.15s;" onmouseenter="this.style.opacity=\'0.85\'" onmouseleave="this.style.opacity=\'1\'">' +
+                '<i data-lucide="sparkles" style="width:16px;height:16px;"></i> What\'s New' +
+              '</button>' +
+              '<button id="settings-btn-check-update" style="display:flex;align-items:center;gap:8px;padding:10px 20px;border-radius:24px;background:transparent;color:var(--text-secondary);border:1px solid var(--border-subtle);cursor:pointer;font-size:13px;font-weight:500;transition:opacity 0.15s;" onmouseenter="this.style.opacity=\'0.85\'" onmouseleave="this.style.opacity=\'1\'">' +
+                '<i data-lucide="download-cloud" style="width:16px;height:16px;"></i> Check for updates' +
+              '</button>' +
+            '</div>' +
+            '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:16px;padding-top:16px;border-top:1px solid var(--border-subtle);">' +
+              '<div>' +
+                '<div style="font-size:13px;font-weight:600;color:var(--text-primary);">Automatic Update Checks</div>' +
+                '<div style="font-size:12px;color:var(--text-muted);margin-top:2px;line-height:1.4;">Ask GitHub for a newer version shortly after launch (at most once every 6 hours). Off means no automatic network contact — the button above still works.</div>' +
+              '</div>' +
+              '<label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;">' +
+                '<input type="checkbox" id="update-check-toggle"' + (updateCheckOn ? ' checked' : '') + ' style="opacity:0;width:0;height:0;">' +
+                '<span class="toggle-slider" style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:' + (updateCheckOn ? 'var(--accent-primary)' : 'var(--border-strong)') + ';border-radius:24px;transition:0.3s;"></span>' +
+                '<span class="toggle-knob" style="position:absolute;height:18px;width:18px;left:3px;bottom:3px;background:white;border-radius:50%;transition:0.3s;' + (updateCheckOn ? 'transform:translateX(20px);' : '') + '"></span>' +
+              '</label>' +
+            '</div>' +
           '</div>' +
         '</div>' +
 
@@ -2347,6 +2410,40 @@ window.SettingsModal = {
       if (changelogBtn) {
         changelogBtn.addEventListener('click', function() {
           if (window.Changelog) window.Changelog.show();
+        });
+      }
+
+      var updateBtn = content.querySelector('#settings-btn-check-update');
+      if (updateBtn) {
+        updateBtn.addEventListener('click', function() {
+          if (window.UpdateNotice) window.UpdateNotice.checkManual();
+        });
+      }
+
+      var updateToggle = content.querySelector('#update-check-toggle');
+      if (updateToggle) {
+        updateToggle.addEventListener('change', function() {
+          var on = updateToggle.checked;
+          var next = { ...window.store.getState().settings, updateCheckEnabled: on };
+          window.store.setState({ settings: next });
+          // Write BOTH stores. Boot reads settings from SQLite
+          // (database.getAllStartupData → getSetting('settings')), but the DB
+          // constructor re-runs migrateFromElectronStore(true) on every launch,
+          // and that call bypasses its own "already migrated" guard — so it
+          // copies electron-store's `settings` over SQLite each boot. A
+          // SQLite-only write is therefore silently reverted on the next
+          // launch whenever electron-store still holds an older snapshot
+          // (verified). electron-store alone also works, but only because of
+          // that migration; writing both makes the choice robust either way.
+          if (window.orbitAPI && window.orbitAPI.dbSetSetting) {
+            window.orbitAPI.dbSetSetting('settings', next);
+          }
+          window.Storage.set('settings', next);
+          // Repaint the slider in place rather than re-rendering the tab.
+          var slider = updateToggle.parentNode.querySelector('.toggle-slider');
+          var knob = updateToggle.parentNode.querySelector('.toggle-knob');
+          if (slider) slider.style.background = on ? 'var(--accent-primary)' : 'var(--border-strong)';
+          if (knob) knob.style.transform = on ? 'translateX(20px)' : '';
         });
       }
 
