@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="desktop/src/icons/app/orbit\\\_banner.png" alt="Orbit" width="30%">
+  <img src="desktop/src/icons/app/orbit_banner.png" alt="Orbit" width="30%">
 </p>
 
 <h1 align="center">Orbit</h1>
@@ -18,8 +18,8 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-0078D6?style=flat-square\\\&logo=electron\\\&logoColor=white" alt="Platform: Windows | macOS | Linux | Android">
-  <img src="https://img.shields.io/badge/Electron-32-47848F?style=flat-square\\\&logo=electron\\\&logoColor=white" alt="Electron 32">
+  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-0078D6?style=flat-square&logo=electron&logoColor=white" alt="Platform: Windows | macOS | Linux | Android">
+  <img src="https://img.shields.io/badge/Electron-32-47848F?style=flat-square&logo=electron&logoColor=white" alt="Electron 32">
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License: MIT">
   <img src="https://img.shields.io/badge/status-beta-orange?style=flat-square" alt="Status: Beta">
 </p>
@@ -600,10 +600,10 @@ Pre-built Windows installers are published on [GitHub Releases](https://github.c
 |[v0.0.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.2-beta)|Windows|SQLite storage, privacy mode, large file transfers|
 |[v0.0.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.1-beta)|Windows|Original release|
 
-> The \\\*\\\*Releases\\\*\\\* page is the source of truth — every current release is a prerelease (`-beta`), and GitHub's `releases/latest` shortcut deliberately skips prereleases, so it will not resolve to an Orbit build.
+> The **Releases** page is the source of truth — every current release is a prerelease (`-beta`), and GitHub's `releases/latest` shortcut deliberately skips prereleases, so it will not resolve to an Orbit build.
 
-> Windows may show SmartScreen for unsigned builds. Choose \\\*\\\*More info → Run anyway\\\*\\\* if you trust the source.
-> macOS users may need to right-click → \\\*\\\*Open\\\*\\\* on first launch for unsigned apps.
+> Windows may show SmartScreen for unsigned builds. Choose **More info → Run anyway** if you trust the source.
+> macOS users may need to right-click → **Open** on first launch for unsigned apps.
 
 ### Run from source
 
@@ -632,7 +632,7 @@ npx cap sync android   # sync Capacitor Android project
 npx cap open android   # open in Android Studio for building
 ```
 
-Or let GitHub Actions build it automatically — push a `v\\\*` tag or trigger the workflow manually.
+Or let GitHub Actions build it automatically — push a `v*` tag or trigger the workflow manually.
 
 ## Tech Stack
 
@@ -896,7 +896,7 @@ npm run test:sharded      # Same suite split in two — use this if a single run
 ```bash
 # In the app folder
 cd mobile
-npm install		  # Install requirements
+npm install		            # Install requirements
 npm run shared:sync       # Copy shared modules into mobile/src/
 npx cap sync android      # Sync Capacitor Android project
 npx cap open android      # Open in Android Studio
@@ -938,7 +938,7 @@ Bug *reports* and *feature ideas* are welcome via [GitHub Issues](https://github
 
 [MIT](LICENSE) — Copyright (c) 2026 [D4niel-dev](https://github.com/D4niel-dev) \& Orbit Team. See [LICENSE](LICENSE) for the full text.
 
-\---
+---
 
 <p align="center">
   <strong>Orbit Team</strong> · Lead developer <a href="https://github.com/D4niel-dev">D4niel-dev</a><br>
