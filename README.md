@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v052-beta">v0.5.2-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v053-beta">v0.5.3-beta</a>
 </p>
 
 <p align="center">
@@ -28,10 +28,9 @@
 
 |Channel|Version|Status|
 |-|-|-|
-|**Latest**|v0.5.2-beta|Security \& platform release — cross-platform E2EE, QR pairing v2, update notifications|
-|Previous|v0.5.1-beta|Bugfix release|
+|**Latest**|v0.5.3-beta|Calling release — Android voice/video calls, ringtone, call log, encrypted vault fixed|
+|Previous|v0.5.2-beta|Security & platform release — cross-platform E2EE, QR pairing v2, update notifications|
 |**Stable**|v0.5.0-beta|Stable release|
-|Earlier **Stable**|v0.4.0-beta|Stable release|
 |Legacy **Stable**|v0.1.1-beta|Legacy stable release|
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
@@ -57,13 +56,13 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
 <p align="center">
   <img src="desktop/src/icons/screenshots/preview-gallery-dark.png" alt="Orbit gallery (dark)" width="360">
   <img src="desktop/src/icons/screenshots/preview-gallery-light.png" alt="Orbit gallery (light)" width="360"><br>
-  <em>Gallery \\\&amp; file sharing</em>
+  <em>Gallery &amp; File sharing</em>
 </p>
 
 <p align="center">
   <img src="desktop/src/icons/screenshots/preview-group-dark.png" alt="Orbit group chat (dark)" width="360">
   <img src="desktop/src/icons/screenshots/preview-group-light.png" alt="Orbit group chat (light)" width="360"><br>
-  <em>Group chat</em>
+  <em>Group Chat</em>
 </p>
 
 ## Mobile Preview
@@ -73,7 +72,7 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
   <img src="desktop/src/icons/screenshots/preview-groups-dark-M.png" alt="Mobile groups chat screen" width="200">
   <img src="desktop/src/icons/screenshots/preview-settings-dark-M.png" alt="Mobile settings screen" width="200">
   <img src="desktop/src/icons/screenshots/preview-group-info-dark-M.png" alt="Mobile group info panel" width="200"><br>
-  <em>Android app — chat, friends, settings, group info</em>
+  <em>Android app — chat, groups, settings, group info</em>
 </p>
 
 ## Why Orbit?
@@ -88,19 +87,19 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 |**Peer-to-peer**|Clients talk directly over LAN sockets — no mandatory relay or signup server.|
 |**LAN-first**|Auto-discovery finds nearby Orbit clients on the same network.|
 |**No cloud lock-in**|No required SaaS backend, no vendor account, no subscription gate.|
-|**Open \& approachable**|MIT-licensed, readable stack (Electron + SQLite), built for transparency.|
+|**Open & approachable**|MIT-licensed, readable stack (Electron + SQLite), built for transparency.|
 
 Orbit is a **beta-stage app for desktop and Android** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
-## Highlights (v0.5.2-beta)
+## Highlights (v0.5.3-beta)
 
-* **Cross-Platform E2EE** — Desktop now speaks the same encryption scheme as Android, so encrypted DMs work in both directions. Key encoding (SPKI), derivation (HKDF-SHA256) and envelope layout are unified; the peer's advertised key format is the capability signal, so mixed-version networks still work and old builds fall back to the legacy path. Retires the "E2EE key derivation incompatible" limitation that had been on the roadmap since v0.5.0.
-* **QR Pairing v2** — A QR code is now a portable beacon: identity, every LAN address, the TCP port and the public key, validated as untrusted input (RFC1918/link-local addresses only, size, port and key-format checks, self-connect rejected). Desktop gains an image scanner (paste, drag-drop or pick a file); Android's camera scanner now produces and consumes the same payload.
-* **In-App Update Notifications** — Orbit tells you when a newer version exists, shows what changed, and hands you the correct installer or APK in one click. Throttled to once per 6 hours, skippable per version, and switchable off entirely in Settings → About.
-* **Silent E2EE Downgrade Eliminated** — Four code paths could previously send a message as plaintext while the UI still showed encryption as on, including one that left a message visible in the chat that was never actually sent. All four now block and explain instead.
-* **Tabbed Add-a-Friend Modal (Desktop)** — Switch between entering an IP address and pairing by QR code, with the scanner inline.
-* **Packaging Fix: `shared/` Was Never Shipped** — Every desktop installer to date was missing the shared modules, so the audio player, video player and image cropper 404'd in packaged builds. Fixed.
-* **Crash and Robustness Fixes** — Local Vault no longer OOM-kills the Android renderer on large exports, mobile bottom sheets no longer open behind the soft keyboard, the chat header stops going stale on presence changes, and the image cropper now exports exactly what it previewed.
+* **Voice & Video Calling on Android** — Android had the call protocol but no implementation behind it. It now has the full stack: outgoing calls, an incoming ring with Accept/Decline, mute, speaker and camera toggles, a duration timer and a picture-in-picture self-view. Signalling rides the existing encrypted P2P transport, and calls work between a phone and a computer.
+* **The Encrypted Vault Export Never Actually Worked** — `getRandomValues` was being called on `crypto.subtle` instead of `crypto`, so every encrypted export died on its first line, before any encryption happened. The error was caught and toasted, which made the feature look unreliable rather than broken — and with auto-backup on it failed silently in the background. Fixed, and verified with a full export-and-restore round trip.
+* **The Vault OOM Fix Was Incomplete** — v0.5.2 capped attachments but left in-progress transfer data unbudgeted. On a realistic account that pushed the payload to **101 MB serialised and ~290 MB at peak**, which is an uncatchable OOM on Android. The budget now covers both, counts serialised size rather than raw bytes, and **tunes itself to the device's heap ceiling** — so a low-memory phone automatically exports less instead of dying.
+* **Real Ringtone, and a Call Log** — Calls ring with a real sound for up to **1m30** on both platforms (desktop had no ringtone at all), and every finished call leaves a chat entry showing what kind of call it was, how long it lasted, and a **Call again** button.
+* **Bottom Sheets You Can Actually Close** — The Cancel button was sitting at the bottom of the scroll area, ~1400px below the fold on a long sheet, and a leftover drag transform could make the close button do nothing at all. Both fixed, and tall sheets now scroll properly with the keyboard up.
+* **Group Avatars Match Desktop** — Android was still drawing a single initial letter for a group with no image; it now renders the same member-avatar grid desktop does, from one shared implementation.
+* **Robustness Fixes** — Desktop calls had no no-answer timeout and left the caller on a dead screen; ringtones kept ringing after the callee answered; and the chat header, image cropper and group-avatar surfaces keep their v0.5.2 fixes.
 
 ## Version History
 
@@ -108,9 +107,9 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 <summary>v0.0.1-beta</summary>
 
 * **P2P messaging** — Direct socket-based chat on your local network
-* **File \& image sharing** — Send attachments peer-to-peer (configurable limit, default **500 MB**)
+* **File & image sharing** — Send attachments peer-to-peer (configurable limit, default **500 MB**)
 * **Auto-discovery** — Find other Orbit clients on the LAN without manual IP entry
-* **Profiles \& themes** — Custom display name, avatar, light/dark/system UI
+* **Profiles & themes** — Custom display name, avatar, light/dark/system UI
 * **Gallery** — Browse shared images with WebP thumbnails for fast scrolling
 * **System tray** — Minimize to tray instead of quitting
 
@@ -144,8 +143,8 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 <summary>v0.0.5-beta (Stable)</summary>
 
 * **End-to-end encryption** — ECDH key exchange + AES-256-GCM message encryption for DMs. Toggle in Settings → Data Manager.
-* **Backup \& Restore** — Export/import full database as .orzip or .zip archives
-* **Unread Badges \& Read Receipts** — Per-chat unread counts, @mention badges, and read indicators
+* **Backup & Restore** — Export/import full database as .orzip or .zip archives
+* **Unread Badges & Read Receipts** — Per-chat unread counts, @mention badges, and read indicators
 * **Activity Center** — Unified view of recent messages across all chats
 * **Customizable Sidebar** — Show/hide Activity Center, Gallery, and Storage buttons in the left sidebar
 
@@ -194,8 +193,8 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Android P2P Stability** — 8 Java plugin fixes (multicast lock, beacon gating, TCP buffer, connection tracking) + 4 JS bridge fixes for reliable Android discovery and messaging
 * **Desktop P2P Stability** — 9 fixes including per-connection write queue, oversized frame guard, socket error handlers, self-beacon IP filter, transfer backpressure, and clean restart support
 * **Mobile Group Info Panel** — Full panel: edit group name/description, change avatar, invite code with Copy/Share, pin/mute toggles, member list with roles (Owner/Admin) + join dates, promote/demote/remove members, leave/delete group
-* **Cross-Platform Group Sync** — Group creation (GROUP\_CREATE) and leave (GROUP\_LEAVE) broadcast compatible between mobile and desktop
-* **Pinned Messages** — Pin/unpin in message action bar; pinned messages section in group info; cross-platform sync via PIN\_MESSAGE/UNPIN\_MESSAGE protocol
+* **Cross-Platform Group Sync** — Group creation (GROUP_CREATE) and leave (GROUP_LEAVE) broadcast compatible between mobile and desktop
+* **Pinned Messages** — Pin/unpin in message action bar; pinned messages section in group info; cross-platform sync via PIN_MESSAGE/UNPIN_MESSAGE protocol
 * **Message Search** — Search bar filters messages in real-time on mobile chat header
 * **Enhanced Message FX** — Particle confetti system on sent messages (both platforms); safe CSS for Android WebView compatibility
 * **Mobile Settings Added** — Font Size (Small/Medium/Large), Message Animation (Slide/Fade), Auto-Reconnect toggle, Connection Timeout (5/10/30/60s)
@@ -215,7 +214,7 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 <summary>v0.0.9.3-beta</summary>
 
 * **Group Info Panel Overhaul** — Redesigned with Add Member (friend picker), Leave Group, Transfer Ownership, member search bar, created date, online/total count
-* **GROUP\_MEMBER\_ADDED / GROUP\_OWNER\_TRANSFER** — New protocol types with cross-platform handlers
+* **GROUP_MEMBER_ADDED / GROUP_OWNER_TRANSFER** — New protocol types with cross-platform handlers
 * **DM Context Menus** — Desktop right-click and mobile long-press: Pin/Unpin, Mute, View Profile, Copy ID, Close DM
 * **Pinned DMs** — Pinned state sorted first in sidebar with pin icon
 * **Close DM Removes Friend** — Full cleanup from DB; persists closedDMs; auto-reopens on new message
@@ -223,15 +222,15 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Global Gallery Type Filters** — All/Images/Files toggle; non-image files render with Lucide icons
 * **Gallery Sidebar Files Tab Fix** — Format.bytes→fileSize; download button replaces window.open
 * **Create Group Modal Avatars** — Friend list shows actual avatars with profile frames
-* **Context Menu \& P2P Fixes** — data-action rewrite, protocol type audit, TCP merge IP strip
+* **Context Menu & P2P Fixes** — data-action rewrite, protocol type audit, TCP merge IP strip
 
 </details>
 <details>
 <summary>v0.1.0-beta</summary>
 
-* **Performance: Up to 5× Faster Startup \& Rendering** — Selective store subscriptions, setStateBatch microtask coalescing, insertAdjacentHTML, event delegation for all message actions
-* **Startup: \~40% Faster (5s → 3s)** — Deferred init phases (setTimeout(0) + requestIdleCallback), batched store IPC (7+ calls → 1), lazy message loading (last 50 per chat, load on demand)
-* **freezeGifImages** — Canvas cache via \_frozenCache Map; expanded selectors; global call on Reduce Motion toggle
+* **Performance: Up to 5× Faster Startup & Rendering** — Selective store subscriptions, setStateBatch microtask coalescing, insertAdjacentHTML, event delegation for all message actions
+* **Startup: ~40% Faster (5s → 3s)** — Deferred init phases (setTimeout(0) + requestIdleCallback), batched store IPC (7+ calls → 1), lazy message loading (last 50 per chat, load on demand)
+* **freezeGifImages** — Canvas cache via _frozenCache Map; expanded selectors; global call on Reduce Motion toggle
 * **Data Manager "Load All Stored Data"** — Double-confirmation button loads all messages from DB into memory on demand
 * **Bug Fixes** — orbit-db://attachment/ 404, selective subscriber undefined changedState, message avatar click re-attached, loadFullChatMessages dropping existing messages
 
@@ -239,7 +238,7 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 <details>
 <summary>v0.1.1-beta (Stable)</summary>
 
-* **Voice \& Video Calls (P2P WebRTC)** — Full call system with incoming notification, mute/speaker controls, timer, ICE candidate exchange over P2P network layer
+* **Voice & Video Calls (P2P WebRTC)** — Full call system with incoming notification, mute/speaker controls, timer, ICE candidate exchange over P2P network layer
 * **Group Calls (Mesh)** — Each participant gets their own RTCPeerConnection; video grid or avatar circles for audio-only; start/join/leave group calls
 * **Camera Toggle** — On/off during calls with deterministic HSL avatar placeholder when camera is off
 * **Message Forwarding** — Forward messages with attachments to any chat via chat picker modal (desktop + mobile)
@@ -276,24 +275,24 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Video Compression** — Large videos (>5MB) auto-compressed to 720p/500kbps before sending
 * **P2P Discovery Optimized** — Beacon interval 5s→10s, stale threshold 120s→180s, exponential chunk retry backoff
 * **image-viewer.js Null-Safety** — `openFromMessage` checks null store/messages with fallback; `close()` and `openVideo()` wrapped in try/catch; `init()` uses `readyState` guard
-* **Compact Spacing \& Swipe-to-Reply** — Moved from Experimental to general chat settings
+* **Compact Spacing & Swipe-to-Reply** — Moved from Experimental to general chat settings
 
 </details>
 <details>
 <summary>v0.1.4-beta</summary>
 
 * **P2P Auto-Connection Stabilization** — PING/PONG keep-alive heartbeat, 8s connection timeout, exponential backoff reconnect (max 5 attempts), stale peer pruning (180s), network IP change detection, auto-connect duplicate protection
-* **Desktop P2P Bugfix Audit (17 fixes)** — Socket 8s timeout disabled after connect, write-queue key collision fixed, reconnect .catch() + counter reset, GROUP\_CREATE publicKey enrichment, GROUP\_JOIN\_REQUEST fields, PIN/UNPIN/SYSTEM routing
+* **Desktop P2P Bugfix Audit (17 fixes)** — Socket 8s timeout disabled after connect, write-queue key collision fixed, reconnect .catch() + counter reset, GROUP_CREATE publicKey enrichment, GROUP_JOIN_REQUEST fields, PIN/UNPIN/SYSTEM routing
 * **Translation Engine Rewrite** — In-memory cache, request dedup, AbortController, inline retry link
 * **Image Viewer Overhaul** — Quick-save button (File System Access API), keyboard navigation, swipe, download fix for custom protocol URLs, loading placeholder CSS
 * **Voice Messages Stabilization** — Content-Type fix, onerror auto-retry, chunked transfer detection with MIME mapping
 * **Performance Mode** — Two-step confirmation, CSS class on `<html>`, runtime guards in chat-panel and app.js
 * **Mobile Protocol.js Synced** — 15+ missing types added (46 total, matching desktop)
-* **Mobile Settings Parity** — 11 desktop defaults ported; logLevel filters debugLog; tcpPort/udpPort in beacon/P2P; netReconnectInterval in reconnect; netKeepAlive in heartbeat; netBandwidthLimit throttles FILE\_CHUNK
+* **Mobile Settings Parity** — 11 desktop defaults ported; logLevel filters debugLog; tcpPort/udpPort in beacon/P2P; netReconnectInterval in reconnect; netKeepAlive in heartbeat; netBandwidthLimit throttles FILE_CHUNK
 * **Mobile DB Migration Fixed** — Runs before MStore.load(); visible console output; reload safety net
 * **Mobile profileFrame Clean-Up** — Helper function defends all 7 render locations; TCP beacon stores 0 correctly
 * **Mobile Changelog** — What's New modal in About tab (v0.0.2 through v0.1.4)
-* **Desktop group sync fixes** — GROUP\_OWNER\_TRANSFER, GROUP\_LEAVE cleanup, GROUP\_INVITE init
+* **Desktop group sync fixes** — GROUP_OWNER_TRANSFER, GROUP_LEAVE cleanup, GROUP_INVITE init
 * **Desktop reconnect settings bridge** — preload forwards reconnectEnabled/reconnectIntervalMs to main process
 
 </details>
@@ -309,27 +308,27 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Store.js syntax error:** Removed trailing commas between class methods that caused "Unexpected token ','".
 * **`window.ChatPanel.showChat is not a function`:** Removed premature `ChatPanel.showChat()` call from `reloadDataForCurrentUser()`.
 * **`require('crypto')` in renderer:** Changed to `window.crypto` for invite code generation.
-* **Migration v11 robustness:** Column-existence checks before `ALTER TABLE`. Guard in `migrations.run()` handles non-transactional `user\\\_version` — if version ≥ 11 but columns missing, resets to 10 and re-runs.
+* **Migration v11 robustness:** Column-existence checks before `ALTER TABLE`. Guard in `migrations.run()` handles non-transactional `user_version` — if version ≥ 11 but columns missing, resets to 10 and re-runs.
 * **Identity System:** `Identity.init()` loads from multi-user DB. `getAll()` returns all saved users. `switchTo(userId)` swaps identity and updates last active tracking. `saveUser` stores `profileFrame` with `!= null` guard.
-* **Database Schema:** v10: `ALTER TABLE users ADD COLUMN profileFrame INTEGER DEFAULT 0`. v11: `accountOwnerId TEXT` on friends, groups, group\_members tables.
+* **Database Schema:** v10: `ALTER TABLE users ADD COLUMN profileFrame INTEGER DEFAULT 0`. v11: `accountOwnerId TEXT` on friends, groups, group_members tables.
 * **Network Restart:** Account switch calls `networkStop` (nullifies all instances) → `Identity.switchTo()` → `networkStart` (re-creates with new identity). All TCP connections drop and re-establish.
-* **Migration Rollback Guard:** `db.pragma('user\\\_version')` is non-transactional. Added column-existence check at start of `migrations.run()` to detect partial migration state and recover.
+* **Migration Rollback Guard:** `db.pragma('user_version')` is non-transactional. Added column-existence check at start of `migrations.run()` to detect partial migration state and recover.
 
 </details>
 <details>
 <summary>v0.1.6-beta</summary>
 
-* **Android Foreground Service (Background Execution):** P2P networking extracted into persistent Foreground Service with notification, WakeLock, START\_STICKY. BootReceiver restarts on device boot. Service survives Activity/WebView destruction.
+* **Android Foreground Service (Background Execution):** P2P networking extracted into persistent Foreground Service with notification, WakeLock, START_STICKY. BootReceiver restarts on device boot. Service survives Activity/WebView destruction.
 * **P2P Connectivity Fixes:** Desktop auto-connect port fixed (was hardcoded 46000); reconnect now uses per-peer stored TCP port; mobile disconnect handler fixed (connectionId→friend lookup); mobile beacon handlers store tcpPort/connectionId/ip; mobile auto-reconnect uses peer's port.
-* **Message Editing \& Reactions:** Desktop edit broadcast loop eliminated; mobile edits broadcast over P2P to DMs and groups; mobile reaction UI (6 emojis, toggle, P2P broadcast).
+* **Message Editing & Reactions:** Desktop edit broadcast loop eliminated; mobile edits broadcast over P2P to DMs and groups; mobile reaction UI (6 emojis, toggle, P2P broadcast).
 * **OrbitForegroundService:** Full P2P engine (TCP server, UDP multicast, connection map, thread pool) as Android Service. Plugin proxies via Binder. Event queue drained every 100ms.
-* **Silent Bug Fixes:** 7 fixes from service audit — sendFailed/connectFailed events, serverSocket volatile, PeerConnection map leak, executor shutdown, eventQueue clear, SO\_REUSEADDR, Android 10+ joinGroup fix.
+* **Silent Bug Fixes:** 7 fixes from service audit — sendFailed/connectFailed events, serverSocket volatile, PeerConnection map leak, executor shutdown, eventQueue clear, SO_REUSEADDR, Android 10+ joinGroup fix.
 
 </details>
 <details>
 <summary>v0.1.7-beta</summary>
 
-* **fMP4 Video Playback Fixed:** PIPELINE\_ERROR\_DECODE root cause fixed — Content-Type serving in main.js now correctly serves video files. Videos play continuously.
+* **fMP4 Video Playback Fixed:** PIPELINE_ERROR_DECODE root cause fixed — Content-Type serving in main.js now correctly serves video files. Videos play continuously.
 * **Re-render Guard:** Message re-renders blocked during video playback (except chat switches). Prevents player destruction from innerHTML re-renders.
 * **Decode Error Retry:** On audio packet decode failure, source reloads and skips forward +2s (up to 3 attempts).
 * **Larger Media Players:** Video 720×600, audio waveform 200px — rendered outside image grid as standalone blocks at full width.
@@ -339,16 +338,16 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 <details>
 <summary>v0.1.8-beta</summary>
 
-* **Store Class Ported to Mobile:** Inline MStore (\~350 lines) extracted into dedicated `store.js` (760 lines) — full Store class with backward-compatible property-based access (532+ references) plus desktop-style getState()/setState()/subscribe().
+* **Store Class Ported to Mobile:** Inline MStore (~350 lines) extracted into dedicated `store.js` (760 lines) — full Store class with backward-compatible property-based access (532+ references) plus desktop-style getState()/setState()/subscribe().
 * **Desktop Parity Features:** subscribe/notify, blockUser/unblockUser, pinMessage/unpinMessage, markAsRead, toggleMute, group management (addGroup/removeGroup/addMemberToGroup), DM management (closeDM/togglePinDM/reopenDM), E2EE key storage, transfer tracking, addOrUpdatePeer.
 * **Bug Fixes:** addMessage() unread tracking fixed (counted every message as unread — removed); mutedChats aliased to settings.mutedChats for mobile read path; setState() now handles currentUser key.
-* **CSP \& Prism.js Fixes:** Desktop CSP updated for Prism.js (cdnjs.cloudflare.com); Prism loaded before app.js on both platforms; language-\* class on pre elements for immediate syntax highlighting.
+* **CSP & Prism.js Fixes:** Desktop CSP updated for Prism.js (cdnjs.cloudflare.com); Prism loaded before app.js on both platforms; language-* class on pre elements for immediate syntax highlighting.
 
 </details>
 <details>
 <summary>v0.1.8.1-beta</summary>
 
-* **Media Persistence Fixed:** Received files (images, audio, video) no longer lost after app restart. \_dataUrl stored alongside blob URL for recovery; incoming MESSAGE attachments preserve \_dataUrl.
+* **Media Persistence Fixed:** Received files (images, audio, video) no longer lost after app restart. _dataUrl stored alongside blob URL for recovery; incoming MESSAGE attachments preserve _dataUrl.
 * **renderMessages No Longer Corrupts Store:** data:→blob URL conversion no longer mutates MStore.messages in-place — eliminates silent data loss from subsequent saves (reactions, edits, deletes).
 * **.webm Misclassification Fixed:** Removed .webm from audioMatch regex — .webm videos no longer misclassified as audio. Video checked before audio in type detection.
 * **Desktop isVideo Added:** Desktop file-received handler now classifies incoming videos as type 'video' with correct MIME instead of 'file' / application/octet-stream.
@@ -362,19 +361,19 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **CRITICAL: Desktop→Mobile Chunk Joining Fixed** — desktop btoa()'s each 64KB chunk independently; mobile chunks.join('') produced invalid base64. Per-chunk independent decode + ArrayBuffer concat.
 * **CRITICAL: WriteStream Race Fixed** — mobile→desktop truncated files due to async stream.end(). stream.on('finish') wraps completion.
 * **CRITICAL: P2P cleanup() Race Fixed** — Android stopService() async race skipped service restart on re-init. Java cleanup is now a no-op.
-* **Mobile Video Type Override Fixed** — FILE\_TRANSFER\_END no longer overwrites video/audio type with extension regex.
+* **Mobile Video Type Override Fixed** — FILE_TRANSFER_END no longer overwrites video/audio type with extension regex.
 * **Mobile Video Compression Dropped Audio Fixed** — disabled lossy compression; raw video with audio sent.
-* **Group Chat File Routing Fixed** — chatId added to FILE\_TRANSFER\_START/END packets.
+* **Group Chat File Routing Fixed** — chatId added to FILE_TRANSFER_START/END packets.
 * **Mobile Metadata Preload** — muted=true + preload=metadata forces immediate duration display.
 * **Unstable AV Transfer Warning Modal** — alert-triangle modal with "Don't show again" checkbox.
-* **Auto-Discovery Diagnostic Logging** — \[AutoConnect] logs for firewall debugging.
+* **Auto-Discovery Diagnostic Logging** — [AutoConnect] logs for firewall debugging.
 
 </details>
 <details>
 <summary>v0.2.0-beta</summary>
 
 * **CRITICAL: Mobile Background Notifications Fixed** — `document.hidden` unreliable in Capacitor WebView. Fixed: JS tracks background via `appStateChange`; Java plugin creates notifications directly via `NotificationManager`.
-* **CRITICAL: Large File Persistence on Mobile** — Files >10MB in IndexedDB lost blob: URLs on restart. Added `BlobStoreDB` + `\\\_restoreAllBlobAttachments()`.
+* **CRITICAL: Large File Persistence on Mobile** — Files >10MB in IndexedDB lost blob: URLs on restart. Added `BlobStoreDB` + `_restoreAllBlobAttachments()`.
 * **Mobile base64 Streaming Optimizations** — All 7 binary decode sites rewritten as single-pass streaming decoders (no intermediate strings).
 * **Desktop AV Type Honor Fix** — Desktop honors sender's type classification; .webm audio no longer misrouted to video player.
 * **`muted=true` Gated to Mobile Only** — Desktop players no longer start muted.
@@ -423,7 +422,7 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 <details>
 <summary>v0.2.6-beta</summary>
 
-* File persistence investigation: root cause found (P2P chats invisible to \_restoreAllBlobAttachments at startup)
+* File persistence investigation: root cause found (P2P chats invisible to _restoreAllBlobAttachments at startup)
 * Player file identity enforced (byte-identical across platforms)
 
 </details>
@@ -434,7 +433,7 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * Mobile A/V persistence: all-chat pre-loading, exponential backoff retry, local send path cleanup
 * Status circle: PONG/MESSAGE/onPeerFound all update lastSeen properly
 * Emoji reactions: packet.from routing fix, data-msg-id on reactions-row
-* Overlay controls: touchstart handler, \_touchTap guard
+* Overlay controls: touchstart handler, _touchTap guard
 * Code blocks: redesigned with Copy button + language badge
 * Chat list: markdown-stripped previews
 
@@ -496,7 +495,7 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Desktop Status Icons** — Changed to filled colored circles.
 * **Status Text Color Fix** — Profile pill no longer gray on startup. Local `statusColors` map in home-screen.js.
 * **Mobile Search Enhanced** — Categorized results (Chats/Friends/Messages), text highlighting, recent searches (max 5), empty-state prompt on focus.
-* **Search CSS** — New `.search-results-\\\*` and `.recent-search-\\\*` styles in mobile.css.
+* **Search CSS** — New `.search-results-*` and `.recent-search-*` styles in mobile.css.
 * **Mobile Gallery Bug Fixes (7 bugs)** — Null guards on gallery button/close bindings; null checks in show/hide gallery; blob URL memory leak fixed (video/audio now revoked properly); filter index mismatch fixed; date-group visual order mismatch fixed (clicking media now opens correct item regardless of date sorting); missing scaleIn animation defined; lightbox close button respects safe-area-top.
 
 </details>
@@ -508,7 +507,7 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Profile Frames Graduated** — Moved from Experimental to stable settings (Appearance on mobile, Account on desktop); on by default.
 * **Profile Frame Leak Fixed** — 4 renderers gated so frames never appear when the setting is off.
 * **Folders Gated Behind Experimental** — New `experimentalFolders` toggle (off by default); folder tab icons removed for clean text-only tabs.
-* **Experimental Toggle Audit** — Value-based selectors fix Avatars/Frames/Perf Mode off-states; Compact Spacing attribute selector restored; FPS Monitor \& Dev Overlay resume on reload.
+* **Experimental Toggle Audit** — Value-based selectors fix Avatars/Frames/Perf Mode off-states; Compact Spacing attribute selector restored; FPS Monitor & Dev Overlay resume on reload.
 * **Profile Frame Icon Removed (Desktop)** — Account settings header shows title only.
 
 </details>
@@ -535,18 +534,18 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 <details>
 <summary>v0.5.0-beta (Stable)</summary>
 
-* **Resumable File Transfers (Desktop)** — `FILE\\\_TRANSFER\\\_RESUME` protocol resumes partial chunked transfers from the last stored chunk (migration v13, partial-hash verification, auto-resume on reconnect, 24h stale-partial sweep).
+* **Resumable File Transfers (Desktop)** — `FILE_TRANSFER_RESUME` protocol resumes partial chunked transfers from the last stored chunk (migration v13, partial-hash verification, auto-resume on reconnect, 24h stale-partial sweep).
 * **Network Topology Visualizer (Desktop + Mobile)** — Live canvas map in Settings → Network: self node centered, peers orbiting by hash angle, RTT color-coded edges (green <150ms / yellow / red), transfer pulse badges, and activity flashes.
 * **Message Threading (Desktop + Mobile)** — Replies persist across restart (migration v14 `messages.replyTo`); threaded chains render indented with connector lines, "N replies" chips on parents, and a View thread panel with click/tap-to-jump.
-* **Local Vault (Mobile)** — Settings → Connection → Local Vault exports all `orbit\\\_\\\*` localStorage keys + IndexedDB blobs/partials to `OrbitVault-\\\*.json`, with optional PBKDF2 + AES-GCM encryption, restore picker with decrypt prompt, and auto-backup on background.
+* **Local Vault (Mobile)** — Settings → Connection → Local Vault exports all `orbit_*` localStorage keys + IndexedDB blobs/partials to `OrbitVault-*.json`, with optional PBKDF2 + AES-GCM encryption, restore picker with decrypt prompt, and auto-backup on background.
 * **Group Slash Commands (19, Group-Only)** — `/help`, `/poll` (+ builder), `/me`, `/shrug`, `/tableflip`, `/unflip`, `/lenny`, `/roll`, `/flip`, `/spoiler`, `/clear`, `/invite`, `/members`, `/topic`, `/leave`, `/shout`, `/countdown`, `/nick`, `/kick` — DMs show a "group chats only" toast.
-* **Voice-Note Type Stamps** — `type`/`mimeType` stamped in `FILE\\\_TRANSFER\\\_START`; receivers honor explicit stamps so voice clips (`\\\*.webm`) stay audio.
+* **Voice-Note Type Stamps** — `type`/`mimeType` stamped in `FILE_TRANSFER_START`; receivers honor explicit stamps so voice clips (`*.webm`) stay audio.
 * **Voice Recorder Level Meter (Desktop)** — Live 32-bar AnalyserNode level meter (0–6kHz) in a floating bar above the chat input.
-* **Android Mic Permissions** — `RECORD\\\_AUDIO` + `MODIFY\\\_AUDIO\\\_SETTINGS` for WebView `getUserMedia`.
+* **Android Mic Permissions** — `RECORD_AUDIO` + `MODIFY_AUDIO_SETTINGS` for WebView `getUserMedia`.
 * **Playwright E2E Suite + CI** — `desktop/tests/e2e/` (echo chat, folders, theme, settings, persistence, navigation) run on pull requests.
 * **Mobile /help Fixed** — Hardened `window.OrbitSheet` reference + cache-bust restored slash help in mobile groups.
 * **Desktop Slash Commands Added** — Full parity implementation matching the mobile command set.
-* **Poll Builder \& Sheets Centering Fixed (Mobile)** — Poll/invite/members sheets centered; duplicate Cancel pill removed.
+* **Poll Builder & Sheets Centering Fixed (Mobile)** — Poll/invite/members sheets centered; duplicate Cancel pill removed.
 * **Invite Share Button Fixed (Both Platforms)** — Uses the system share sheet with clipboard fallback instead of posting the invite into whatever chat was open.
 * **Music Player Seek Bar Harmonized (Desktop)** — Audio player duration line now matches video player styling.
 * **Group-Create Friend Picker Fixed (Desktop)** — Capped height with internal scroll; footer pinned to the bottom.
@@ -562,16 +561,16 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **/h Shortcut** — Short alias for /help on both platforms.
 
 </details>
-<details open>
+<details>
 <summary>v0.5.2-beta</summary>
 
 * **Cross-Platform E2EE Unified** — Desktop adopts mobile's encryption scheme end to end: SPKI key encoding, HKDF-SHA256 derivation (16-byte zero salt, `orbit-e2ee-v1` info) and the two-field envelope `{v:2, ciphertext, nonce}`. No handshake is needed — the peer's advertised key format is the capability signal, so SPKI peers use the unified path and legacy raw-hex peers keep the old SHA-256 + packed envelope. Existing desktop keypairs migrate in place with the private key preserved. Encrypted desktop↔Android DMs now work in both directions.
 * **Silent E2EE Downgrade Eliminated (4 sites)** — A missing peer key or a failed encryption could previously send a message as plaintext while the UI still showed E2EE as on; one mobile path added the message locally *before* encryption resolved, so a failure left a message on screen that was never sent. Desktop now blocks the send and names the peer; mobile 1:1 has no plaintext path left; mobile groups skip keyless members instead of downgrading for them, and report who was skipped.
-* **QR Pairing v2** — `shared/network/qr-pairing.js` builds a `{v:2, id, n, t, ips\\\[], port, pk, pkf}` payload carrying every LAN address (a locally-generated QR cannot use the UDP source-address trick discovery relies on) plus the peer's public key for TOFU pinning. The code is treated as untrusted input: size, id charset, IPv4 range (RFC1918 + link-local only — anything wider is a LAN SSRF primitive), port range and key format are validated, and self-connect is rejected. v1 codes still parse; v3+ reports "needs a newer version"; every failure now shows a toast instead of failing silently.
+* **QR Pairing v2** — `shared/network/qr-pairing.js` builds a `{v:2, id, n, t, ips[], port, pk, pkf}` payload carrying every LAN address (a locally-generated QR cannot use the UDP source-address trick discovery relies on) plus the peer's public key for TOFU pinning. The code is treated as untrusted input: size, id charset, IPv4 range (RFC1918 + link-local only — anything wider is a LAN SSRF primitive), port range and key format are validated, and self-connect is rejected. v1 codes still parse; v3+ reports "needs a newer version"; every failure now shows a toast instead of failing silently.
 * **QR Scanning on Both Platforms** — Desktop gains an image scanner (paste with Ctrl+V, drag-drop, or file picker) since a desktop has no camera. Android enumerates its own LAN addresses so mobile QRs carry real addresses. Fixed a bug where mobile's own QR encoded a bare user id instead of the payload — mobile→mobile scanning could never have worked, and an empty `catch` hid it.
 * **In-App Update Notifications** — New `shared/network/update-check.js` lists GitHub Releases and picks the newest by semver (GitHub's `/releases/latest` excludes prereleases, and the whole `v0.5.x` line is one). Highlights come from the release body, falling back to the `CHANGELOG.md` section at that tag — which is what actually works, since the CI release body carries only download/install boilerplate. Desktop shows a heads-up card plus a What's New dialog with a one-click download of the right installer; Android shows the same dialog with the APK. Throttled to 6 hours, skippable per version, and switchable off in Settings → About.
 * **Tabbed Add-a-Friend Modal (Desktop)** — Switch between entering an IP address and pairing by QR code, with the image scanner mounted inline.
-* **`shared/` Was Never Packaged Into Desktop Builds** — electron-builder's app directory is `desktop/`, and `files: "\\\*\\\*/\\\*"` cannot reach outside it, so every `../../shared/\\\*` reference resolved to a non-existent path in shipped installers. The audio player, video player and image cropper had been 404-ing in **every release**, and the main process could not have required the shared crypto spec. Fixed with `extraResources`.
+* **`shared/` Was Never Packaged Into Desktop Builds** — electron-builder's app directory is `desktop/`, and `files: "**/*"` cannot reach outside it, so every `../../shared/*` reference resolved to a non-existent path in shipped installers. The audio player, video player and image cropper had been 404-ing in **every release**, and the main process could not have required the shared crypto spec. Fixed with `extraResources`.
 * **Local Vault OOM Crash on Android** — The export assembled the whole blob store in memory with about four copies live at peak, and the store is unbounded while `maxFileSize` defaults to 500 MB. An Android WebView OOM is not catchable — it kills the renderer. Now a 32 MB export budget stops encoding once exceeded, the vault file records what was excluded and why, and auto-backup (which fires on app-background, exactly when Android is most likely to reclaim the process) attaches a real `.catch()` instead of a synchronous try/catch around an async call.
 * **Mobile Bottom Sheets Opened Behind the Soft Keyboard** — `.bottom-sheet-overlay` is `position: fixed; top: 0; bottom: 0`, which resolves against the layout viewport — and Android does not shrink that when the keyboard opens. Every sheet-opening command (`/help`, the `/poll` builder, folder rename) was invisible on device while working fine in a desktop browser. Sheets now size to `visualViewport.height` and dismiss the keyboard.
 * **Chat Header Went Stale on Presence and Frame Updates** — The header re-rendered only for a fixed set of state keys and `friends` was not among them, yet peer presence *and* profile frames both arrive as friends-only changes. Fixed with a header-only repaint, because a full re-render ends by force-scrolling the message feed and would yank the reader to the bottom on every status blip.
@@ -579,9 +578,26 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Group Avatar Rendered the Literal Word "undefined"** — `var` hoisting meant the initial was read before assignment. The four places rendering group avatars had drifted into four different behaviours and are now one shared implementation (`group-avatar.js`) with a member-avatar grid.
 * **Image Cropper Exported a Different Zoom Than It Previewed** — The preview sized with `Math.min` (contain) while the export composed with `Math.max` (cover), so a non-square photo in a square crop exported about a third more zoomed than the user had lined up. Both paths now use `Math.min`.
 * **Group Image Upload** — The create-group modal can now set a group image (URL or upload, square crop, live preview).
-* **Desktop Reported the Wrong App Version** — `preload.js` read `process.env.npm\\\_package\\\_version`, which is only set when Electron is started through an npm script; in a packaged build it fell back to a hardcoded `0.1.2-beta`, which Settings → About displayed.
-* **Dead Code Removed** — 877 lines across 8 files (`fix-\\\*.js`, `trace.js`, `debug.js`, two `.bak`s) that `index.html` never loaded.
+* **Desktop Reported the Wrong App Version** — `preload.js` read `process.env.npm_package_version`, which is only set when Electron is started through an npm script; in a packaged build it fell back to a hardcoded `0.1.2-beta`, which Settings → About displayed.
+* **Dead Code Removed** — 877 lines across 8 files (`fix-*.js`, `trace.js`, `debug.js`, two `.bak`s) that `index.html` never loaded.
 * **Test Suites** — Unit assertions grew 158 → **267** across four suites; the desktop Playwright E2E suite grew 9 → **34** specs. The interop suite exercises the real `desktop/e2ee.js` against a WebCrypto peer mirroring the mobile implementation, proving both directions, unicode round-trips, legacy-peer compatibility and keypair migration — and it caught three bugs before they shipped.
+
+</details>
+<details open>
+<summary>v0.5.3-beta</summary>
+
+* **Voice & Video Calling on Android** — New `mobile/src/js/components/call-manager.js` implements the whole stack the protocol already had room for: outgoing calls, incoming ring with Accept/Decline, mute/speaker/camera toggles, a duration timer, picture-in-picture self-view, and teardown that stops every track so the microphone indicator does not stay lit. Signalling rides the existing P2P transport, so it is encrypted in transit and needed no protocol change. Verified with two renderers running a real `RTCPeerConnection` against each other: voice and video connect both ways, and decline, busy and hang-up all tear down cleanly.
+* **Real Ringtone on Both Platforms** — `shared/sounds/Call-ring-1.mp3` loops for **1m30** while a call rings, on both platforms. Desktop had **no ringtone at all** before this. The ring window doubles as the no-answer timeout, and a callee whose ring expires is dismissed as a missed call rather than left on a stuck ring screen.
+* **Call Log Entries in the Chat** — A finished call leaves a message showing the kind of call, how long it lasted, and a **Call again** button that redials the same kind. Stored as an ordinary message with a `call` object instead of text, so it inherits ordering, timestamps, unread counts and deletion with no new packet type — the same shape polls already use. Covers `ended` (with duration), `missed`, `declined`, `no-answer`, `busy` and `failed`.
+* **The Encrypted Vault Export Never Worked** — `_vaultCrypto()` returns `crypto.subtle`, and `getRandomValues` was then called on it, but that method lives on `crypto`. Every encrypted export threw before encrypting anything; the `catch` toasted and returned `null`, so it read as flaky rather than broken. Fixed and verified end to end — the exported file is genuinely encrypted (the plaintext marker is absent) and restores both localStorage data and IndexedDB blobs.
+* **Vault OOM, Properly This Time** — The v0.5.2 budget covered only the `blobs` store; the `partials` store (base64 chunks of **in-progress** transfers, up to 500 MB) was unbudgeted. Measured on a realistic account: **101 MB payload, ~290 MB peak**, dominated by 55.9 MB of partials. One budget now spans both, measured by **serialised** size (base64 is 4 chars per 3 bytes, so the old raw-byte check let 1.33x more through), walked attachments-first for determinism. The budget is also derived from the WebView's own heap ceiling and halved for the encrypted path, which holds four copies of the payload at once. Verified by simulating a 192 MB heap: the budget dropped to 15.4 MB on its own and the export still succeeded.
+* **Vault Restore No Longer Holds Every Attachment at Once** — Restore built one `Promise.all` over every blob write, keeping each decoded ArrayBuffer alive until all of them finished. Now batched three at a time, with the raw file string released before the object graph is walked, and the recorded `attachmentsExcluded` metadata surfaced in the restore toast.
+* **Mobile Bottom Sheets Could Not Be Closed** — The Cancel pill was appended to the sheet's own scroll container, so on a long sheet it sat ~1400px below the fold (measured at y=2153 in a 754px viewport). Separately, `hide()` only toggles a class while the drag handlers write an inline `transform` on every `touchmove`, and **neither drag block handled `touchcancel`** — which Android fires routinely. The leftover inline transform then outranked both the open and closed CSS rules, so `hide()` visibly did nothing, permanently. The sheet is now a flex column whose content scrolls, Cancel is a pinned footer, transforms are reset on open and close, and `touchcancel` is handled.
+* **Some Bottom Sheets Would Not Scroll** — `max-height` used `70vh`, which resolves against the layout viewport Android does not shrink for the keyboard, while the overlay is sized from `visualViewport.height`. Now both track `--sheet-vh`, so the sheet can never be taller than the space it is anchored in.
+* **Group Avatars Match Desktop on Mobile** — Mobile still drew a single initial in five places where desktop rendered a member-avatar grid. One shared implementation now (`shared/ui/group-avatar.js`), with a `setResolver()` hook so mobile can enrich members from the friend record — needed because a peer-synced group can carry members as bare userId strings.
+* **Desktop Calls Had No No-Answer Timeout** — An unanswered call left the caller on a dead call screen indefinitely. Now the same 1m30 window as the ringtone.
+* **Ringtone Kept Ringing After the Callee Answered** — Caught by testing the transitions rather than just the happy path. Desktop's ring decision cannot key off `isIncoming` alone, because that flag is `false` for both "outgoing" and "accepted an incoming call".
+* **Test Suites** — Unit assertions remain **267/267**; the desktop Playwright E2E suite remains **34/34** (run sharded). This release additionally verified mobile voice and video calls end to end, decline and busy handling, the call log across all eight outcome variants on both platforms, and a full encrypted vault round trip.
 
 </details>
 
@@ -596,6 +612,7 @@ Pre-built Windows installers are published on [GitHub Releases](https://github.c
 |Release|Platform|Notes|
 |-|-|-|
 |[All releases](https://github.com/D4niel-dev/Orbit-beta/releases)|Win / Mac / Linux / Android|Most recent build first|
+|[v0.5.3-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.5.3-beta)|Win / Mac / Linux / Android|Android voice/video calls, ringtone, call log, encrypted vault fixed|
 |[v0.5.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.5.2-beta)|Win / Mac / Linux / Android|Cross-platform E2EE, QR pairing v2, update notifications|
 |[v0.0.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.2-beta)|Windows|SQLite storage, privacy mode, large file transfers|
 |[v0.0.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.1-beta)|Windows|Original release|
@@ -644,6 +661,7 @@ Or let GitHub Actions build it automatically — push a `v*` tag or trigger the 
 |UI|HTML, CSS, JavaScript|
 |Storage|[better-sqlite3](https://github.com/WiseLibs/better-sqlite3) (desktop) · IndexedDB + localStorage (mobile)|
 |Networking|Raw TCP P2P sockets, LAN multicast discovery|
+|Calling|[WebRTC](https://webrtc.org/) (peer-to-peer audio/video, STUN for address discovery); signalling rides the existing P2P transport|
 |Media|[sharp](https://sharp.pixelplumbing.com/) (WebP thumbnails)|
 |QR codes|[qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) (encode) + [jsQR](https://github.com/cozmo/jsQR) (decode) — vendored on mobile, bundled on desktop so pairing works with no internet|
 |Testing|[Playwright](https://playwright.dev/) E2E (desktop, drives the app's own Electron binary) + plain Node unit suites|
@@ -676,7 +694,7 @@ Orbit runs on two platforms with a shared cross-platform core:
 
 |Layer|Desktop|Mobile|
 |-|-|-|
-|**Main process**|Electron (`main.js`) — owns networking, DB, E2EE, IPC|Native Java plugin (OrbitP2PPlugin) — networking \& beacon, bridged via Capacitor|
+|**Main process**|Electron (`main.js`) — owns networking, DB, E2EE, IPC|Native Java plugin (OrbitP2PPlugin) — networking & beacon, bridged via Capacitor|
 |**Preload**|Context-bridge (`preload.js`) — typed IPC surface|N/A (uses Web APIs instead)|
 |**Renderer**|`desktop/src/` — HTML/CSS/JS chat UI via `<script>` tags|`mobile/src/` — same UI adapted for touch|
 |**Shared core**|`shared/` — env detection, database factory, protocol, crypto|Same `shared/` modules, mobile backends|
@@ -704,16 +722,16 @@ Orbit-beta/
 │       ├── js/
 │       │   ├── app.js           #   Renderer entry — UI wiring, message rendering
 │       │   ├── store.js         #   Renderer state store
-│       │   ├── identity.js      #   Local identity \\\& account switching
+│       │   ├── identity.js      #   Local identity & account switching
 │       │   ├── components/      #   Toasts, modals, profile-card, emoji-picker,
 │       │   │                    #     webrtc-call, image-viewer, context-menu,
-│       │   │                    #     qr-scanner, update-notice, group-avatar, ...
+│       │   │                    #     qr-scanner, update-notice, ...
 │       │   ├── views/           #   Chat panel, settings modal, sidebars, gallery
 │       │   ├── network/         #   socket.js, discovery.js, protocol.js, transfer.js
 │       │   ├── database/        #   SQLite wrapper + schema migrations
 │       │   └── utils/           #   format, sanitize, profanity, storage
 │       ├── styles/              #   base, layout, components, animations, themes/
-│       └── icons/               #   App icons \\\& screenshots
+│       └── icons/               #   App icons & screenshots
 │
 ├── mobile/                      # Capacitor Android app
 │   ├── capacitor.config.json
@@ -726,9 +744,10 @@ Orbit-beta/
 │       ├── js/
 │       │   ├── app.js           #   Entry — UI wiring, message rendering
 │       │   ├── store.js         #   State store + localStorage persistence
-│       │   ├── version.js       #   Auto-generated APP\\\_VERSION
+│       │   ├── version.js       #   Auto-generated APP_VERSION
 │       │   ├── components/      #   navigation, home-screen, chat-screen,
-│       │   │                    #     bottom-sheet, update-notice
+│       │   │                    #     bottom-sheet, update-notice, group-avatar,
+│       │   │                    #     call-manager (voice/video calling)
 │       │   └── debug.js         #   Dev-mode helpers
 │       ├── styles/              #   base, layout, mobile, components, animations, themes/
 │       ├── lib/                 #   Vendored: lucide, qrcode, jsqr, emoji-picker-element
@@ -742,12 +761,14 @@ Orbit-beta/
 │   │                            #     update-check.js, p2p-mobile.js
 │   ├── crypto/                  #   e2ee-key.js (shared key/envelope spec),
 │   │                            #     e2ee-desktop / e2ee-mobile
-│   ├── ui/                      #   audio-player, video-player, image-cropper
+│   ├── ui/                      #   audio-player, video-player, image-cropper,
+│   │                            #     group-avatar (shared member-avatar grid)
+│   ├── sounds/                  #   Call-ring-*.mp3 ringtones (both platforms)
 │   └── utils/                   #   format.js, sanitize.js
 │
 ├── tests/unit/                  # Node unit tests (npm run test:unit)
 ├── docs/                        # Landing / documentation page
-├── security/                    # Release signing keys \\\& docs
+├── security/                    # Release signing keys & docs
 ├── plans/                       # Planning notes
 └── .github/                     # CI/CD workflows
 ```
@@ -813,7 +834,7 @@ Notable settings (in-app **Settings**):
 |**Theme / profile**|Display name, avatar, light or dark theme|
 |**Profile frame**|Decorative frame overlaid on your avatar, shown to peers|
 |**Automatic update checks**|Whether the app asks GitHub for a newer version (Settings → About; the manual "Check for updates" button always works)|
-|**Sidebar buttons**|Choose which buttons appear in the left sidebar (Appearance → Text \& Layout)|
+|**Sidebar buttons**|Choose which buttons appear in the left sidebar (Appearance → Text & Layout)|
 
 ## Known Limitations
 
@@ -826,16 +847,32 @@ Transparency matters in beta. Current constraints include:
 |**Unsigned builds**|Installers are not code-signed; Windows SmartScreen warnings are expected.|
 |**Update checks contact GitHub**|At most once every 6 hours the app asks `api.github.com` for the newest release and, if the release body has no notes, reads `CHANGELOG.md` from `raw.githubusercontent.com`. Nothing about you, your identity or your chats is sent, and the check can be turned off in Settings → About.|
 |**Third-party data egress**|Message Translate sends the message text to MyMemory (`api.mymemory.translated.net`); GIF search queries Giphy. Both are user-initiated and optional, but **neither is covered by Orbit's E2EE** — that content leaves your device in plaintext.|
+|**Calls are LAN-only**|Like messaging, a call needs both peers on the same network. Media is peer-to-peer with STUN for address discovery — there is no relay and no NAT traversal, so calling across the internet is not supported.|
+|**Group calls are desktop-only**|Desktop has mesh group calls; mobile handles 1:1 calls, and a group call offer is declined as busy rather than half-joined.|
 |**No iOS support**|Android is the only mobile platform — iOS/iPadOS is not planned.|
 
 ## Known Issues
 
+* **Calling has not been tested on physical hardware.** Voice and video calls were verified against a two-peer WebRTC harness (real `RTCPeerConnection`, synthetic camera and microphone) in a desktop environment. Real device hardware, Android audio routing (earpiece vs speaker) and behaviour when the app is backgrounded mid-call still need a phone.
+* **The speaker button mutes remote audio** rather than switching Android's audio route — that needs a native `AudioManager` call.
 * Large file transfers between Desktop and Android are under active development
 * Mobile UI redesign planned
 * Discovery reliability depends on local network configuration
 * Beta stability: occasional UI quirks and forced reflow warnings in DevTools
 
 ## Roadmap
+
+### Shipped (v0.5.3-beta)
+
+* **Voice & Video Calling (Android)** — Full 1:1 calling stack: outgoing, incoming ring, mute/speaker/camera, duration timer, PiP self-view; signalling over the existing encrypted P2P transport
+* **Real Ringtone (Both Platforms)** — `shared/sounds/Call-ring-1.mp3` looping for 1m30, doubling as the no-answer timeout; desktop had no ringtone at all before
+* **Call Log in the Chat** — Each finished call leaves an entry with the call kind, duration and a Call again button, on both platforms
+* **Encrypted Vault Export Fixed** — `getRandomValues` was called on `crypto.subtle`, so every encrypted export failed before encrypting anything
+* **Vault Budget, Properly Bounded** — One budget spanning attachments and in-progress transfer data, measured by serialised size, tuned to the device's heap ceiling and halved for the encrypted path
+* **Vault Restore Batching** — Blobs decode and write in small batches instead of all at once
+* **Bottom Sheet Close/Scroll** — Cancel pill pinned outside the scroll area, drag transforms reset on open/close, `touchcancel` handled, and `max-height` tracking the visible viewport
+* **Group Avatar Parity (Mobile)** — One shared member-avatar grid used by five mobile surfaces
+* **Robustness** — Desktop no-answer timeout, and ringtones stop the moment the callee answers
 
 ### Shipped (v0.5.2-beta)
 
@@ -862,6 +899,8 @@ Transparency matters in beta. Current constraints include:
 ### In Progress / Planned
 
 * **Mobile Account Switcher** — Multi-account support on Android (desktop done in v0.1.5-beta)
+* **Group calls on mobile** — Desktop has mesh group calls; Android currently handles 1:1 only
+* **Native audio routing during calls** — Switching between earpiece and loudspeaker needs a native `AudioManager` bridge; today the speaker button mutes the remote audio instead
 * **Group E2EE** — Extend end-to-end encryption to group chats (currently DM-only); membership changes will need re-keying
 * **Signed builds** — Code signing for Windows and macOS, which is also the prerequisite for true silent auto-update
 * **Large file transfer stability** — Cross-platform transfer hardening
@@ -873,7 +912,7 @@ Transparency matters in beta. Current constraints include:
 * **WebRTC-based NAT traversal** — Connect across subnets
 * **Plugin system** — Community extensions API
 
-> Roadmap items are intentions, not commitments. See \\\[GitHub Issues](https://github.com/D4niel-dev/Orbit-beta/issues) for tracking and discussion.
+> Roadmap items are intentions, not commitments. See [GitHub Issues](https://github.com/D4niel-dev/Orbit-beta/issues) for tracking and discussion.
 
 ## Development
 
@@ -896,7 +935,7 @@ npm run test:sharded      # Same suite split in two — use this if a single run
 ```bash
 # In the app folder
 cd mobile
-npm install		            # Install requirements
+npm install		  # Install requirements
 npm run shared:sync       # Copy shared modules into mobile/src/
 npx cap sync android      # Sync Capacitor Android project
 npx cap open android      # Open in Android Studio
@@ -936,7 +975,7 @@ Bug *reports* and *feature ideas* are welcome via [GitHub Issues](https://github
 
 ## License
 
-[MIT](LICENSE) — Copyright (c) 2026 [D4niel-dev](https://github.com/D4niel-dev) \& Orbit Team. See [LICENSE](LICENSE) for the full text.
+[MIT](LICENSE) — Copyright (c) 2026 [D4niel-dev](https://github.com/D4niel-dev) & Orbit Team. See [LICENSE](LICENSE) for the full text.
 
 ---
 

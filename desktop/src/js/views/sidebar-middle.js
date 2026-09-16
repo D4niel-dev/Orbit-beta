@@ -188,7 +188,7 @@ window.SidebarMiddle = {
 
     // Group avatar — uploaded image, else a grid of member avatars.
     // Previously this drew offset overlapping circles, which read as a smear at
-    // 40px. See components/group-avatar.js for the shared implementation.
+    // 40px. See shared/ui/group-avatar.js for the shared implementation.
     var avatarHtml = '';
     if (group.avatarPath) {
       avatarHtml = '<img src="orbit-avatar://' + window.Sanitize.escapeHtml(group.groupId) + '?t=' + (group.avatarUpdatedAt || 0) + '" style="width:40px;height:40px;border-radius:12px;object-fit:cover;">';
@@ -277,7 +277,7 @@ window.SidebarMiddle = {
               '<input id="group-name-input" type="text" placeholder="Group name..." style="width:100%;padding:14px 16px;border-radius:10px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);font-size:14px;outline:none;box-sizing:border-box;">' +
               // Optional group image — a pasted link, or pick a file with the
               // button on the right. Left empty, the group falls back to the
-              // member-avatar grid (components/group-avatar.js).
+              // member-avatar grid (shared/ui/group-avatar.js).
               '<div style="display:flex;gap:12px;align-items:center;margin-top:12px;">' +
                 '<div id="group-avatar-preview" style="width:56px;height:56px;border-radius:14px;flex-shrink:0;overflow:hidden;background:var(--bg-base);border:1px solid var(--border-subtle);display:flex;align-items:center;justify-content:center;color:var(--text-muted);">' +
                   '<i data-lucide="image-plus" style="width:20px;height:20px;"></i>' +
@@ -1762,7 +1762,7 @@ window.SidebarMiddle = {
       });
     }
 
-    // Default group avatar = member grid (components/group-avatar.js).
+    // Default group avatar = member grid (shared/ui/group-avatar.js).
     // The initial-letter fallback that used to live here rendered the literal
     // string "undefined": it referenced `groupInitial`, which was declared
     // AFTER this line, so `var` hoisting left it undefined at use.

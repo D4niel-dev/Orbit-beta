@@ -1,4 +1,4 @@
-// desktop/src/js/components/group-avatar.js
+// shared/ui/group-avatar.js
 // Default group avatar — a grid of member avatars, shown whenever a group has
 // no uploaded image.
 //
@@ -6,13 +6,12 @@
 //   4+ members  -> all four corners (top-left, top-right, bottom-left, bottom-right)
 //   < 4 members -> at most two, bottom-right first, then top-left
 //
-// Four places render a default group avatar (sidebar row, chat header, Group
-// Info panel, Manage Group preview). They had drifted apart — two showed a
-// single initial, one showed offset overlapping circles, one rendered the
-// literal string "undefined" — so this is the single implementation they all
-// call now.
+// This used to be desktop-only (desktop/src/js/components/group-avatar.js) while
+// mobile rendered a single initial letter in four separate places. It lives in
+// shared/ now so both platforms render the same thing from one implementation.
 //
 // Exposes window.OrbitGroupAvatar.html(members, size, borderColor)
+//   and   window.OrbitGroupAvatar.setResolver(fn)   — optional, see below.
 
 (function() {
   function esc(s) {
@@ -20,8 +19,29 @@
     return String(s == null ? '' : s);
   }
 
+  // Platform hook. A member record is not always self-describing: on mobile a
+  // group synced from a peer can carry nothing but a userId, while the display
+  // name and avatar live on the matching friend record. Rather than teach this
+  // shared module about MStore, each platform can install a resolver that turns
+  // whatever it has into {name, avatar}. Returning a falsy value falls back to
+  // the generic handling below, so desktop (which installs nothing) is
+  // unaffected.
+  var userResolver = null;
+
+  function resolveMember(m) {
+    if (userResolver) {
+      try {
+        var r = userResolver(m);
+        if (r) return { name: r.name || '', avatar: r.avatar || null };
+      } catch (e) { /* fall through to the generic path */ }
+    }
+    return null;
+  }
+
   // Accepts either a member object or a bare id string.
   function memberInfo(m) {
+    var resolved = resolveMember(m);
+    if (resolved) return resolved;
     if (!m) return null;
     if (typeof m === 'string') return { name: m, avatar: null };
     return {
@@ -78,5 +98,8 @@
     return '<div style="position:relative;width:' + size + 'px;height:' + size + 'px;">' + out + '</div>';
   }
 
-  window.OrbitGroupAvatar = { html: html };
+  window.OrbitGroupAvatar = {
+    html: html,
+    setResolver: function(fn) { userResolver = (typeof fn === 'function') ? fn : null; }
+  };
 })();

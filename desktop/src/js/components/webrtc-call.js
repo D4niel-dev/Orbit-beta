@@ -1,3 +1,138 @@
+// Ringtone. Shares the same clip as mobile (shared/sounds/, shipped into the
+// installer by electron-builder's extraResources). Desktop resolves it from the
+// app directory; the CSP's media-src 'self' already permits it.
+var CALL_RING_SOUND = '../../shared/sounds/Call-ring-1.mp3';
+// Ring for 1m30, looping the ~21.5 s clip, then stop. Mirrors mobile.
+var CALL_RING_WINDOW_MS = 90000;
+
+var CallRingtone = {
+  _audio: null,
+  _stopTimer: null,
+
+  start: function() {
+    var self = this;
+    this.stop();
+    try {
+      var a = new Audio(CALL_RING_SOUND);
+      a.loop = true;
+      a.preload = 'auto';
+      a.volume = 1;
+      this._audio = a;
+      var p = a.play();
+      if (p && p.catch) {
+        p.catch(function(err) { console.warn('[Call] ringtone playback blocked:', err && err.name); });
+      }
+    } catch (e) {
+      console.warn('[Call] ringtone unavailable:', e && e.message);
+    }
+    // Hard stop after the ring window, so it cannot ring forever if the far end
+    // vanishes without sending CALL_END.
+    this._stopTimer = setTimeout(function() { self.stop(); }, CALL_RING_WINDOW_MS);
+  },
+
+  stop: function() {
+    if (this._stopTimer) { clearTimeout(this._stopTimer); this._stopTimer = null; }
+    if (this._audio) {
+      try { this._audio.pause(); this._audio.currentTime = 0; } catch (e) {}
+      this._audio = null;
+    }
+  }
+};
+
+/* ─── Call log entries in the chat ───
+   A finished call leaves a message with a `call` object instead of `text`, so it
+   sits in the timeline with a timestamp and can be deleted like any other
+   message. Mirrors mobile's window.OrbitCallLog. */
+window.OrbitCallLog = {
+  _esc: function(s) {
+    if (window.Sanitize && window.Sanitize.escapeHtml) return window.Sanitize.escapeHtml(s);
+    return String(s == null ? '' : s);
+  },
+
+  _fmtDuration: function(sec) {
+    sec = Math.max(0, Math.floor(sec || 0));
+    var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+    var mm = (m < 10 ? '0' : '') + m, ss = (s < 10 ? '0' : '') + s;
+    return h > 0 ? (h + ':' + mm + ':' + ss) : (m + ':' + ss);
+  },
+
+  /** HTML for a call entry. Returns '' for anything without a `call` object. */
+  render: function(msg) {
+    if (!msg || !msg.call) return '';
+    var c = msg.call;
+    var esc = this._esc;
+    var isVideo = c.kind === 'video';
+    var peerId = c.peerId || '';
+    var title = isVideo ? 'Video call' : 'Voice call';
+    var sub = '';
+    var icon = isVideo ? 'video' : 'phone';
+    var muted = false;
+
+    switch (c.outcome) {
+      case 'ended':
+        sub = this._fmtDuration(c.durationSec);
+        break;
+      case 'missed':
+        title = isVideo ? 'Missed video call' : 'Missed voice call';
+        sub = 'No answer'; icon = 'phone-missed'; muted = true;
+        break;
+      case 'declined':
+        sub = 'Declined'; icon = 'phone-off'; muted = true;
+        break;
+      case 'no-answer':
+        sub = 'No answer'; icon = 'phone-missed'; muted = true;
+        break;
+      case 'busy':
+        sub = 'They were on another call'; icon = 'phone-off'; muted = true;
+        break;
+      case 'failed':
+        sub = 'Call failed'; icon = 'phone-off'; muted = true;
+        break;
+      default:
+        sub = 'Call ended'; muted = true;
+    }
+
+    return '<div class="call-log' + (muted ? ' is-muted' : '') + '">' +
+      '<div class="call-log-icon"><i data-lucide="' + icon + '"></i></div>' +
+      '<div class="call-log-body">' +
+        '<div class="call-log-title">' + esc(title) + '</div>' +
+        '<div class="call-log-sub">' + esc(sub) + '</div>' +
+      '</div>' +
+      '<button class="call-log-again" data-call-again="' + esc(peerId) + '" data-call-video="' + (isVideo ? '1' : '0') + '" title="Call again">' +
+        '<i data-lucide="' + (isVideo ? 'video' : 'phone') + '"></i>' +
+        '<span>Call again</span>' +
+      '</button>' +
+    '</div>';
+  },
+
+  /** Record a finished call in the chat. `entry` = { peerId, kind, outcome,
+   *  durationSec, direction }. Each side keeps its own record, so no extra
+   *  packet is needed and a lost CALL_END cannot leave one side without history. */
+  add: function(entry) {
+    try {
+      if (!entry || !entry.peerId || !window.store) return;
+      var st = window.store.getState();
+      var me = (st.currentUser && st.currentUser.userId) || '';
+      var peerId = String(entry.peerId);
+
+      window.store.addMessage(peerId, {
+        id: 'call_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        // Desktop decides own-vs-other by comparing sender to currentUser.
+        sender: entry.direction === 'outgoing' ? me : peerId,
+        timestamp: new Date().toISOString(),
+        call: {
+          kind: entry.kind === 'video' ? 'video' : 'voice',
+          outcome: entry.outcome || 'ended',
+          durationSec: Math.max(0, Math.floor(entry.durationSec || 0)),
+          peerId: peerId
+        }
+      });
+    } catch (e) {
+      console.warn('[CallLog] failed to record call:', e && e.message);
+    }
+  }
+};
+
 function _callAvatarColor(str) {
   if (!str) return '#5865f2';
   var h = 0;
@@ -11,10 +146,16 @@ window.CallModal = {
   seconds: 0,
   isGroup: false,
 
-  show(callerInfo, isVideo, isIncoming) {
-    this.hide();
+  show(callerInfo, isVideo, isIncoming, ring) {
+    this.hide();   // also stops any ringtone still playing
     this.isGroup = false;
     this.seconds = 0;
+    // Ring unless told otherwise. Defaulting to the incoming case means every
+    // existing incoming-call site rings without any change; the outgoing caller
+    // passes true explicitly, while the "accepted an incoming call" re-render in
+    // answerCall passes isIncoming=false and so stays silent — otherwise the
+    // callee's phone would keep ringing after they picked up.
+    if (ring === undefined ? !!isIncoming : !!ring) CallRingtone.start();
     var overlay = document.createElement('div');
     overlay.className = 'call-modal-overlay';
     overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;';
@@ -151,10 +292,11 @@ window.CallModal = {
     });
   },
 
-  showGroup(groupTitle, participants, isVideo) {
+  showGroup(groupTitle, participants, isVideo, ring) {
     this.hide();
     this.isGroup = true;
     this.seconds = 0;
+    if (ring) CallRingtone.start();
     this._participants = participants || {};
     var overlay = document.createElement('div');
     overlay.className = 'call-modal-overlay';
@@ -338,6 +480,8 @@ window.CallModal = {
   },
 
   startTimer() {
+    // Media is flowing — stop ringing.
+    CallRingtone.stop();
     var el = this.overlay && this.overlay.querySelector('#call-timer');
     if (el) el.style.display = 'block';
     var statusEl = this.overlay && this.overlay.querySelector('#call-status-text');
@@ -356,6 +500,7 @@ window.CallModal = {
   },
 
   hide() {
+    CallRingtone.stop();
     clearInterval(this.timerInterval);
     this.isGroup = false;
     this._participants = null;
@@ -378,6 +523,11 @@ window.CallManager = {
   peerConnections: {},
   participants: {},
   groupCallId: null,
+  // Call-log bookkeeping: did media ever flow, and why did it end?
+  _connected: false,
+  _endReason: null,
+  _logged: false,
+  _ringTimer: null,
 
   startCall(isVideo, targetUserId, targetPeerIp) {
     var state = window.store.getState();
@@ -390,6 +540,9 @@ window.CallManager = {
     }
     this.targetUserId = targetUserId;
     this.targetPeerIp = targetPeerIp;
+    this._connected = false;
+    this._endReason = null;
+    this._logged = false;
     var constraints = { audio: true };
     if (isVideo) constraints.video = { width: { ideal: 640 }, height: { ideal: 480 } };
     navigator.mediaDevices.getUserMedia(constraints)
@@ -397,7 +550,8 @@ window.CallManager = {
         this.localStream = stream;
         this.activeCall = { isVideo: isVideo, direction: 'outgoing', isGroup: false };
         if (window.CallModal) {
-          window.CallModal.show({ username: friend.username, avatar: friend.avatar }, isVideo, false);
+          // ring=true: the caller hears ringback until the far end answers.
+          window.CallModal.show({ username: friend.username, avatar: friend.avatar }, isVideo, false, true);
           var localVid = document.getElementById('local-video');
           if (localVid) localVid.srcObject = stream;
         }
@@ -420,6 +574,15 @@ window.CallManager = {
           window.orbitAPI.networkSend(targetUserId, targetPeerIp, window.Protocol.Types.CALL_OFFER, packet);
           if (window.Toast) window.Toast.show('Calling', 'Calling ' + (friend.username || 'friend') + '...');
         }
+        // Same 1m30 window as the ringtone. Without this an unanswered call
+        // leaves the caller on a dead screen forever.
+        if (this._ringTimer) clearTimeout(this._ringTimer);
+        this._ringTimer = setTimeout(function() {
+          if (this._connected || !this.activeCall) return;
+          if (window.Toast) window.Toast.show('No answer', 'They did not pick up.', 'info');
+          this._endReason = 'no-answer';
+          this.endCall();
+        }.bind(this), CALL_RING_WINDOW_MS);
       }.bind(this))
       .catch(function(err) {
         console.error('Call start error:', err);
@@ -466,7 +629,7 @@ window.CallManager = {
         this.localStream = stream;
         this.activeCall = { isVideo: isVideo, direction: 'outgoing', isGroup: true, groupId: groupId };
         if (window.CallModal) {
-          window.CallModal.showGroup(group.groupName, initialParticipants, isVideo);
+          window.CallModal.showGroup(group.groupName, initialParticipants, isVideo, true);
           var localVid = document.getElementById('local-video');
           if (localVid) localVid.srcObject = stream;
           window.CallModal.updateGroupStatus('Calling ' + otherMembers.length + ' member' + (otherMembers.length !== 1 ? 's' : '') + '...');
@@ -529,6 +692,7 @@ window.CallManager = {
     }.bind(this);
     pc.onconnectionstatechange = function() {
       if (pc.connectionState === 'connected') {
+        this._connected = true;
         if (window.CallModal) window.CallModal.addParticipant(userId,
           (this.participants[userId] || {}).name || userId,
           (this.participants[userId] || {}).avatar || null
@@ -581,6 +745,7 @@ window.CallManager = {
       }.bind(this));
     }
     this.peerConnection.ontrack = function(event) {
+      this._connected = true;
       this.remoteStream = event.streams[0];
       var remoteVid = document.getElementById('remote-video');
       if (remoteVid) remoteVid.srcObject = this.remoteStream;
@@ -596,8 +761,15 @@ window.CallManager = {
       }
     }.bind(this);
     this.peerConnection.onconnectionstatechange = function() {
+      if (this.peerConnection.connectionState === 'connected') {
+        this._connected = true;
+      }
       if (this.peerConnection.connectionState === 'disconnected' || this.peerConnection.connectionState === 'failed') {
-        if (window.Toast) window.Toast.show('Call Ended', 'Connection lost.', 'info');
+        if (this._connected) {
+          if (window.Toast) window.Toast.show('Call Ended', 'Connection lost.', 'info');
+        } else {
+          this._endReason = 'failed';
+        }
         this.cleanup();
       }
     }.bind(this);
@@ -716,6 +888,7 @@ window.CallManager = {
     }.bind(this);
     pc.onconnectionstatechange = function() {
       if (pc.connectionState === 'connected') {
+        this._connected = true;
         if (window.CallModal) window.CallModal.addParticipant(userId, callData.callerName || userId, callData.callerAvatar || null);
       }
       if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
@@ -851,6 +1024,7 @@ window.CallManager = {
       this._declineIncomingGroup();
       return;
     }
+    this._endReason = 'declined';
     if (window.orbitAPI && this.targetUserId) {
       window.orbitAPI.networkSend(this.targetUserId, this.targetPeerIp, window.Protocol.Types.CALL_DECLINE, {});
     }
@@ -889,6 +1063,8 @@ window.CallManager = {
   },
 
   cleanup() {
+    // Must run FIRST — everything below clears the duration and metadata it needs.
+    this._logCall();
     this.activeCall = null;
     this.targetUserId = null;
     this.targetPeerIp = null;
@@ -904,10 +1080,50 @@ window.CallManager = {
       try { this.peerConnections[uid].close(); } catch(e) {}
     }.bind(this));
     this.peerConnections = {};
+    if (this._ringTimer) { clearTimeout(this._ringTimer); this._ringTimer = null; }
     if (this.localStream) {
       this.localStream.getTracks().forEach(function(t) { t.stop(); });
       this.localStream = null;
     }
+    this._connected = false;
+    this._endReason = null;
     if (window.CallModal) window.CallModal.hide();
+  },
+
+  /**
+   * Append a call-log entry to the chat. Runs once per call, on whichever side is
+   * tearing down, so each side keeps its own record.
+   */
+  _logCall() {
+    if (this._logged) return;
+    var call = this.activeCall || this.incomingCallData;
+    var peerId = this.targetUserId;
+    if (!call || !peerId) return;
+    this._logged = true;
+
+    // CallModal.seconds is the connected-time counter, so it is 0 when the call
+    // never connected.
+    var durationSec = Math.floor((window.CallModal && window.CallModal.seconds) || 0);
+    var direction = this.activeCall
+      ? (this.activeCall.direction || 'outgoing')
+      : 'incoming';
+
+    var outcome;
+    if (this._connected) outcome = 'ended';
+    else if (this._endReason) outcome = this._endReason;
+    else outcome = (direction === 'incoming') ? 'missed' : 'no-answer';
+
+    var kind = (this.activeCall && this.activeCall.isVideo) ||
+               (this.incomingCallData && this.incomingCallData.isVideo) ? 'video' : 'voice';
+
+    if (window.OrbitCallLog) {
+      window.OrbitCallLog.add({
+        peerId: peerId,
+        kind: kind,
+        outcome: outcome,
+        durationSec: outcome === 'ended' ? durationSec : 0,
+        direction: direction
+      });
+    }
   }
 };

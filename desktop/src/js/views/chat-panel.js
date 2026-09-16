@@ -84,6 +84,17 @@ window.ChatPanel = {
         var url = lp.getAttribute('data-url');
         if (url) window.open(url, '_blank');
       }
+      // "Call again" on a call-log entry - redials the same kind of call.
+      var callAgain = e.target.closest('.call-log-again');
+      if (callAgain) {
+        e.stopPropagation();
+        var peerId = callAgain.getAttribute('data-call-again');
+        var isVideo = callAgain.getAttribute('data-call-video') === '1';
+        if (!peerId || !window.CallManager) return;
+        var st = window.store.getState();
+        var f = st.friends.find(function(fr) { return fr.userId === peerId; });
+        window.CallManager.startCall(isVideo, peerId, (f && f.ip) || '');
+      }
     });
     this.initDelegatedActions();
     
@@ -838,6 +849,15 @@ window.ChatPanel = {
       const isMine = msg.sender === myId;
       const timeStr = window.Format.absoluteTime(msg.timestamp).split(' · ')[0];
       var sanitizedText = window.Sanitize.markdown(msg.text);
+      // A finished call is stored as a message with a `call` object instead of
+      // text (see window.OrbitCallLog). Render the call card and drop the empty
+      // text wrapper so the bubble contains only the card.
+      var callLogHtml = (msg.call && window.OrbitCallLog)
+        ? window.OrbitCallLog.render(msg)
+        : '';
+      var textWrapHtml = (callLogHtml && !sanitizedText)
+        ? ''
+        : '<div class="msg-text">' + sanitizedText + '</div>';
       // Make known invite codes clickable
       if (sanitizedText && state.groups) {
         state.groups.forEach(function(g) {
@@ -1030,7 +1050,7 @@ window.ChatPanel = {
             senderName +
             '<div class="message-bubble" data-msg-id="' + msg.id + '" data-debug="Bubble: ' + msg.id + '" style="position:relative;' + bubbleBgMine + ' ' + bubblePadding + ' border-radius: 16px 16px 0 16px; line-height: 1.4; font-size: 14px; cursor:context-menu; max-width: 100%;">' +
               '<div class="message-id" style="display:none;font-size:9px;font-family:monospace;color:rgba(255,255,255,0.4);margin-bottom:2px;">#' + String(msg.id).substring(0, 8) + '</div>' +
-            actionsBar + replyHtml + attachmentsHtml + '<div class="msg-text">' + sanitizedText + '</div>' + linkPreviewHtml + editedBadge +
+            actionsBar + replyHtml + attachmentsHtml + textWrapHtml + callLogHtml + linkPreviewHtml + editedBadge +
             (reactionsHtml ? '<div style="border-top:1px solid rgba(255,255,255,0.15);margin-top:8px;padding-top:6px;">' + reactionsHtml + '</div>' : '') +
           '</div>' +
           threadChipHtml +
@@ -1069,7 +1089,7 @@ window.ChatPanel = {
             '<div style="font-size: 11px; color: var(--text-secondary); font-weight: 500; margin-bottom: 2px; margin-left: 4px;">' + senderName + '</div>' +
             '<div class="message-bubble" data-msg-id="' + msg.id + '" data-debug="Bubble: ' + msg.id + '" style="position:relative;' + bubbleBgOther + ' ' + bubblePadding + ' border-radius: 0 16px 16px 16px; line-height: 1.4; font-size: 14px; cursor:context-menu; max-width: 100%;">' +
               '<div class="message-id" style="display:none;font-size:9px;font-family:monospace;color:var(--text-muted);margin-bottom:2px;">#' + String(msg.id).substring(0, 8) + '</div>' +
-              actionsBar + replyHtml + attachmentsHtml + '<div class="msg-text">' + sanitizedText + '</div>' + linkPreviewHtml + editedBadgeOther +
+              actionsBar + replyHtml + attachmentsHtml + textWrapHtml + callLogHtml + linkPreviewHtml + editedBadgeOther +
               (reactionsHtml ? '<div style="border-top:1px solid var(--border-subtle);margin-top:8px;padding-top:6px;">' + reactionsHtml + '</div>' : '') +
             '</div>' +
             threadChipHtml +

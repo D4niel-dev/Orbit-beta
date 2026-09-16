@@ -1,5 +1,5 @@
 // mobile/src/js/components/bottom-sheet.js
-// v0.2.8 — Bottom Sheet System
+// v0.5.3 — Bottom Sheet System
 
 var OrbitSheet = {
   /**
@@ -10,13 +10,24 @@ var OrbitSheet = {
    * soft keyboard opens — the keyboard simply overlays it — so a bottom-anchored
    * sheet renders BEHIND the keyboard and the user sees nothing at all.
    * `visualViewport` tracks the genuinely visible region, so we size to that.
+   *
+   * The same measurement is published as `--sheet-vh` so the sheet's own
+   * max-height can be capped against the visible height rather than `vh`
+   * (see .bottom-sheet in mobile.css). Without that the sheet could end up
+   * taller than the box it is anchored in, pushing its top — and the drag
+   * handle — off-screen while covering the entire backdrop.
    */
   _syncViewport: function() {
     var overlay = document.getElementById('bottom-sheet-overlay');
     if (!overlay) return;
     var vv = window.visualViewport;
-    if (!vv || !vv.height) { overlay.style.height = ''; return; }
+    if (!vv || !vv.height) {
+      overlay.style.height = '';
+      overlay.style.removeProperty('--sheet-vh');
+      return;
+    }
     overlay.style.height = vv.height + 'px';
+    overlay.style.setProperty('--sheet-vh', vv.height + 'px');
   },
 
   /**
@@ -35,6 +46,25 @@ var OrbitSheet = {
     } catch (e) { /* ignore */ }
   },
 
+  /**
+   * Drop any transform/transition left on the sheet by a drag.
+   *
+   * show/hide work by toggling `.active` on the overlay, but an INLINE
+   * transform beats both CSS rules. The drag-to-close handlers write
+   * `sheet.style.transform` on every touchmove, and if that gesture ends in a
+   * touchcancel instead of a touchend (Android does this whenever the WebView
+   * claims the gesture, e.g. as a scroll) the inline value is never cleared —
+   * after which hide() looks like it does nothing at all, because the sheet
+   * keeps the transform it was left with. Called on open and on close.
+   */
+  _resetSheetTransform: function() {
+    var sheet = document.getElementById('bottom-sheet');
+    if (!sheet) return;
+    sheet.style.transform = '';
+    sheet.style.transition = '';
+    sheet.style.willChange = '';
+  },
+
   /** Show a bottom sheet with items (icon left, label right) */
   show: function(items) {
     var overlay = document.getElementById('bottom-sheet-overlay');
@@ -45,6 +75,7 @@ var OrbitSheet = {
 
     OrbitSheet._dismissKeyboard();
     OrbitSheet._syncViewport();
+    OrbitSheet._resetSheetTransform();
     
     // Build content
     var html = '';
@@ -61,6 +92,7 @@ var OrbitSheet = {
       html += '</button>';
     }
     content.innerHTML = html;
+    content.scrollTop = 0;
     
     // Add cancel pill
     OrbitSheet._addCancelPill();
@@ -101,8 +133,10 @@ var OrbitSheet = {
     // Must happen BEFORE the sheet becomes visible — see _syncViewport.
     OrbitSheet._dismissKeyboard();
     OrbitSheet._syncViewport();
+    OrbitSheet._resetSheetTransform();
     
     content.innerHTML = html;
+    content.scrollTop = 0;
     OrbitSheet._addCancelPill();
     overlay.classList.add('active');
     if (window.lucide) lucide.createIcons();
@@ -115,10 +149,17 @@ var OrbitSheet = {
   /** Hide bottom sheet */
   hide: function() {
     var overlay = document.getElementById('bottom-sheet-overlay');
-    if (overlay) overlay.classList.remove('active');
+    if (!overlay) return;
+    // Clear the drag transform FIRST, or it overrides the closed-state CSS and
+    // the sheet visibly stays open. See _resetSheetTransform.
+    OrbitSheet._resetSheetTransform();
+    overlay.classList.remove('active');
   },
 
-  /** Add cancel pill to bottom sheet */
+  /** Add cancel pill to bottom sheet.
+   *  Appended to #bottom-sheet (a flex column) AFTER #bottom-sheet-content, so
+   *  it is a pinned footer and always on screen — the content scrolls, the pill
+   *  does not. */
   _addCancelPill: function() {
     var existing = document.querySelector('.bottom-sheet-cancel');
     if (existing) existing.remove();
@@ -149,6 +190,15 @@ var OrbitSheet = {
     return !!(target && target.closest && target.closest('.bottom-sheet-handle'));
   }
 
+  function endDrag() {
+    if (!dragging) return false;
+    dragging = false;
+    sheet.style.transition = '';
+    sheet.style.willChange = '';
+    sheet.style.transform = '';
+    return true;
+  }
+
   sheet.addEventListener('touchstart', function (e) {
     if (!overlay.classList.contains('active')) { dragging = false; return; }
     if (!canStartDrag(e.target)) { dragging = false; return; }
@@ -176,15 +226,18 @@ var OrbitSheet = {
 
   sheet.addEventListener('touchend', function () {
     if (!dragging) return;
-    dragging = false;
     var dy = curY - startY;
     var elapsed = Math.max(1, Date.now() - startTime);
     var velocity = dy / elapsed;
-    sheet.style.transition = '';
-    sheet.style.willChange = '';
-    sheet.style.transform = '';
+    endDrag();
     if (dy > 120 || velocity > 0.5) OrbitSheet.hide();
   });
+
+  // Android cancels the touch stream whenever the WebView takes the gesture over
+  // (a scroll, a system edge swipe, the keyboard appearing). Without this the
+  // drag never ends, so the sheet keeps the inline transform it was left with
+  // and hide() becomes a no-op. Always reset.
+  sheet.addEventListener('touchcancel', function () { endDrag(); }, { passive: true });
 })();
 
 /* ---- Keep the sheet inside the visible area while the keyboard moves ----
@@ -220,6 +273,15 @@ OrbitSheet.enableDragClose = function (opts) {
     return !!(target && target.closest && target.closest('.bottom-sheet-handle'));
   }
 
+  function endDrag() {
+    if (!dragging) return false;
+    dragging = false;
+    el.style.transition = '';
+    el.style.willChange = '';
+    el.style.transform = '';
+    return true;
+  }
+
   el.addEventListener('touchstart', function (e) {
     if (!canStart(e.target)) { dragging = false; return; }
     dragging = true;
@@ -246,13 +308,14 @@ OrbitSheet.enableDragClose = function (opts) {
 
   el.addEventListener('touchend', function () {
     if (!dragging) return;
-    dragging = false;
     var dy = curY - startY;
     var elapsed = Math.max(1, Date.now() - startTime);
     var velocity = dy / elapsed;
-    el.style.transition = '';
-    el.style.willChange = '';
-    el.style.transform = '';
+    endDrag();
     if (dy > 120 || velocity > 0.5) onClose();
   });
+
+  // Same touchcancel leak as the main sheet — reset instead of leaving the
+  // element parked at whatever offset the cancelled drag reached.
+  el.addEventListener('touchcancel', function () { endDrag(); }, { passive: true });
 };

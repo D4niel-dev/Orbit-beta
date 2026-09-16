@@ -4871,11 +4871,20 @@ textarea#chat-input {
   position: relative;
   background: var(--bg-surface);
   border-radius: 20px 20px 0 0;
-  padding: 8px 0 calc(8px + var(--safe-area-bottom));
+  padding: 8px 0 0;
   transform: translateY(100%);
   transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  max-height: 70vh;
-  overflow-y: auto;
+  /* --sheet-vh is written from visualViewport by OrbitSheet._syncViewport(), so
+     the 70% cap tracks the VISIBLE area. A plain 70vh resolves against the
+     LAYOUT viewport, which Android does not shrink when the soft keyboard
+     opens — so with the keyboard up the sheet could be taller than the space it
+     is anchored in, pushing its top (and the drag handle) off-screen and
+     covering the whole backdrop. */
+  max-height: calc(var(--sheet-vh, 100vh) * 0.7);
+  /* Flex column: the content scrolls, the Cancel pill stays pinned below it. */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   box-shadow: 0 -8px 32px rgba(0,0,0,0.3);
 }
 .bottom-sheet-overlay.active .bottom-sheet {
@@ -4892,7 +4901,15 @@ textarea#chat-input {
   touch-action: none; /* handle owns vertical drags — no scroll-vs-drag disambiguation delay */
 }
 .bottom-sheet-content {
-  padding: 4px 0 calc(8px + var(--safe-area-bottom, 0px));
+  /* This is the scroller. `min-height: 0` is the important bit: a flex child
+     defaults to min-height:auto and refuses to shrink below its content, which
+     is what stopped long sheets (e.g. /help) from scrolling at all. */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 4px 0 8px;
 }
 .bottom-sheet-item {
   display: flex;
@@ -4963,6 +4980,18 @@ textarea#chat-input {
   font-size: 14px;
   font-weight: 700;
   flex-shrink: 0;
+}
+
+/* ─── Default group avatar (member grid) ───
+   When a group has no uploaded image, the avatar container holds a grid of
+   member avatars from shared/ui/group-avatar.js instead of a single initial.
+   These containers are styled as a filled accent circle/rounded-square for the
+   initial-letter case, which would show through the grid as a coloured disc
+   behind it — so drop the fill. */
+.chat-row-avatar.has-group-avatar,
+.chat-header-avatar.has-group-avatar,
+.group-info-avatar.has-group-avatar {
+  background: transparent;
 }
 .chat-header-avatar img {
   width: 100%;
@@ -5469,7 +5498,11 @@ textarea#chat-input {
   line-height: 1;
 }
 
-/* 21. Bottom Sheet Cancel Pill */
+/* 21. Bottom Sheet Cancel Pill
+   Pinned footer, deliberately OUTSIDE #bottom-sheet-content. It used to be
+   appended to the sheet itself, which is the scroll container, so on any sheet
+   taller than the 70% cap it sat at the very bottom of the scroll and could not
+   be reached — the sheet looked impossible to close. */
 .bottom-sheet-cancel {
   display: block;
   width: calc(100% - 32px);
@@ -5483,6 +5516,7 @@ textarea#chat-input {
   font-weight: 600;
   text-align: center;
   cursor: pointer;
+  flex-shrink: 0;
   transition: background 0.15s;
 }
 .bottom-sheet-cancel:active {
@@ -6496,10 +6530,14 @@ textarea#chat-input {
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
   box-shadow: 0 -4px 24px rgba(0,0,0,0.3);
-  overflow: hidden;
   z-index: 100;
-  max-height: 200px;
+  /* Capped against the visible height, not just a flat 200px, so a long match
+     list can never run off the top of the screen on a short viewport. */
+  max-height: min(200px, 40vh);
+  overflow-x: hidden;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 .slash-tooltip-item {
   display: flex;
@@ -6738,8 +6776,14 @@ textarea#chat-input {
 }
 
 .vault-file-list {
-  max-height: 50vh;
+  /* --sheet-vh is inherited from #bottom-sheet-overlay (set by
+     OrbitSheet._syncViewport). A flat 50vh resolves against the LAYOUT
+     viewport, so with the soft keyboard up this inner list would be taller than
+     the sheet content area around it and the two scrollers would fight. */
+  max-height: calc(var(--sheet-vh, 100vh) * 0.4);
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .vault-file-item {
@@ -6783,3 +6827,266 @@ textarea#chat-input {
   color: var(--text-muted);
   flex-shrink: 0;
 }
+
+/* ════════════════════════════════════════════════════════════════════
+   Voice & video calling (mobile/src/js/components/call-manager.js)
+   Fullscreen surface: incoming ring, outgoing, and active call.
+   z-index sits above the bottom sheet (200) and the lightbox (10000).
+   ════════════════════════════════════════════════════════════════════ */
+.orbit-call-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 10050;
+  display: flex;
+  flex-direction: column;
+  background: #0b0b0f;
+  color: #fff;
+  padding: calc(12px + var(--safe-area-top, 0px)) 16px calc(20px + var(--safe-area-bottom, 0px));
+  box-sizing: border-box;
+  animation: orbit-call-in 0.18s ease-out;
+}
+@keyframes orbit-call-in {
+  from { opacity: 0; transform: scale(0.98); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.orbit-call-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+.orbit-call-remote-video {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  background: #000;
+}
+
+.orbit-call-avatar-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+.orbit-call-avatar-wrap.is-hidden { display: none; }
+
+.orbit-call-avatar {
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: 700;
+  color: #fff;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.orbit-call-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.orbit-call-avatar-lg {
+  width: 132px; height: 132px;
+  font-size: 52px;
+  box-shadow: 0 12px 44px rgba(0,0,0,0.5);
+}
+
+/* Incoming: a pulsing halo so the screen reads as "ringing" at a glance. */
+.orbit-call-avatar-wrap.is-ringing .orbit-call-avatar-lg {
+  animation: orbit-call-pulse 1.8s ease-out infinite;
+}
+@keyframes orbit-call-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(88,101,242,0.55), 0 12px 44px rgba(0,0,0,0.5); }
+  70%  { box-shadow: 0 0 0 26px rgba(88,101,242,0), 0 12px 44px rgba(0,0,0,0.5); }
+  100% { box-shadow: 0 0 0 0 rgba(88,101,242,0), 0 12px 44px rgba(0,0,0,0.5); }
+}
+
+.orbit-call-wave {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+}
+.orbit-call-wave span {
+  display: block;
+  width: 6px;
+  border-radius: 3px;
+  background: var(--accent-primary);
+  transform-origin: center bottom;
+  animation: orbit-call-wave 1s ease-in-out infinite;
+}
+.orbit-call-wave span:nth-child(1) { height: 14px; animation-delay: 0s; }
+.orbit-call-wave span:nth-child(2) { height: 26px; animation-delay: 0.15s; }
+.orbit-call-wave span:nth-child(3) { height: 34px; animation-delay: 0.3s; }
+.orbit-call-wave span:nth-child(4) { height: 22px; animation-delay: 0.45s; }
+.orbit-call-wave span:nth-child(5) { height: 16px; animation-delay: 0.6s; }
+@keyframes orbit-call-wave {
+  0%, 100% { transform: scaleY(0.4); }
+  50%      { transform: scaleY(1); }
+}
+
+/* Local self-view, picture-in-picture. */
+.orbit-call-local-wrap {
+  position: absolute;
+  bottom: 14px;
+  right: 14px;
+  width: 104px;
+  height: 148px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid rgba(255,255,255,0.22);
+  background: #111;
+  box-shadow: 0 6px 22px rgba(0,0,0,0.5);
+  z-index: 2;
+}
+.orbit-call-local-wrap.is-hidden { display: none; }
+.orbit-call-local-video {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+  transform: scaleX(-1);   /* self-view should be mirrored, like every camera app */
+}
+
+.orbit-call-info {
+  flex-shrink: 0;
+  text-align: center;
+  padding: 14px 8px 6px;
+}
+.orbit-call-name {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.orbit-call-status {
+  margin-top: 5px;
+  font-size: 14px;
+  color: rgba(255,255,255,0.55);
+}
+.orbit-call-timer {
+  margin-top: 4px;
+  font-size: 13px;
+  color: rgba(255,255,255,0.4);
+  font-variant-numeric: tabular-nums;
+}
+
+.orbit-call-controls {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  padding: 10px 0 4px;
+}
+.orbit-call-btn {
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.09);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s, transform 0.12s;
+}
+.orbit-call-btn i { width: 24px; height: 24px; }
+.orbit-call-btn:active { transform: scale(0.94); background: rgba(255,255,255,0.18); }
+.orbit-call-btn.is-off { background: rgba(255,255,255,0.9); color: #111; }
+.orbit-call-btn-danger { background: var(--accent-danger, #ef4444); border-color: transparent; }
+.orbit-call-btn-danger:active { background: #dc2626; }
+.orbit-call-btn-accept { background: var(--accent-success, #22c55e); border-color: transparent; }
+.orbit-call-btn-accept:active { background: #16a34a; }
+
+/* ════════════════════════════════════════════════════════════════════
+   Call log entries in the chat
+   A finished call leaves a message with a `call` object instead of text:
+   kind (voice/video), duration, and a Call again button.
+   ════════════════════════════════════════════════════════════════════ */
+.message-row.msg-call .message-bubble {
+  max-width: 88%;
+  padding: 10px 12px;
+}
+
+.call-log {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px 11px;
+  min-width: 190px;
+}
+
+.call-log-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--accent-soft, rgba(88,101,242,0.16));
+  color: var(--accent-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.call-log-icon i { width: 17px; height: 17px; }
+
+/* Missed / declined / failed read as neutral rather than a live call. */
+.call-log.is-muted .call-log-icon {
+  background: var(--bg-base);
+  color: var(--text-muted);
+}
+
+.call-log-body { min-width: 0; }
+
+.call-log-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.call-log-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 1px;
+  font-variant-numeric: tabular-nums;
+}
+
+.call-log-again {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 44px;   /* Android's minimum comfortable tap target */
+  padding: 8px 10px;
+  margin-top: 2px;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent-primary);
+  color: #fff;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.15s, transform 0.12s;
+}
+.call-log-again i { width: 14px; height: 14px; }
+.call-log-again:active { transform: scale(0.97); opacity: 0.88; }

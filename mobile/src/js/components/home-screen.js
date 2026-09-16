@@ -338,9 +338,25 @@ var OrbitHome = {
       }
 
       var safeAvatarSrc = OrbitHome._safeAvatarSrc(avatarUrl);
+      // A group with no uploaded image renders the member-avatar grid, exactly
+      // like desktop (shared/ui/group-avatar.js). Previously this fell through
+      // to the group name's first letter.
+      var groupGridHtml = null;
+      if (isGroup && !safeAvatarSrc && window.OrbitGroupAvatarMobile) {
+        var grpRec = null;
+        var grps = MStore.groups || [];
+        for (var gi = 0; gi < grps.length; gi++) {
+          if (String(grps[gi].id) === String(chatId) || String(grps[gi].groupId) === String(chatId)) {
+            grpRec = grps[gi];
+            break;
+          }
+        }
+        // 52 to match .chat-row-avatar, which mobile.css pins to 52px.
+        groupGridHtml = window.OrbitGroupAvatarMobile.forGroup(grpRec, 52, 'var(--bg-base)');
+      }
       var avatarHtml = safeAvatarSrc
         ? '<img src="' + safeAvatarSrc + '" alt="' + OrbitHome._escapeAttr(initial) + '" loading="lazy" onerror="var f=this;f.onerror=null;var i=f.getAttribute(\'data-init\')||\'' + OrbitHome._escapeJs(initial) + '\';f.style.display=\'none\';var d=document.createElement(\'div\');d.textContent=i;d.style.cssText=\'width:40px;height:40px;border-radius:50%;background:var(--accent-soft);color:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;\';f.parentNode.insertBefore(d,f);" data-init="' + OrbitHome._escapeAttr(initial) + '">'
-        : OrbitHome._escape(initial);
+        : (groupGridHtml || OrbitHome._escape(initial));
       
       var preview = chat.lastMessage || '';
       // Strip markdown for preview
@@ -366,7 +382,7 @@ var OrbitHome = {
       var mentionCount = MStore.mentionCounts && MStore.mentionCounts[chatId] || 0;
       
       html += '<div class="chat-row' + (unread > 0 ? ' unread' : '') + (mentionCount > 0 ? ' has-mention' : '') + '" data-chatid="' + OrbitHome._escapeAttr(chatId) + '"' + (!isGroup ? ' data-user-id="' + OrbitHome._escape(chat.peerId || chat.id) + '"' : '') + ' onclick="OrbitHome._onChatClick(\'' + OrbitHome._escapeJs(chatId) + '\')">';
-      html += '  <div class="chat-row-avatar">' + avatarHtml;
+      html += '  <div class="chat-row-avatar' + (groupGridHtml ? ' has-group-avatar' : '') + '">' + avatarHtml;
       // Presence dot is for DMs/users only — groups don't have online status
       if (!isGroup) {
         if (isOnline) {

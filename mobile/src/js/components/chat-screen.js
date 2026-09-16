@@ -214,11 +214,31 @@ var OrbitChat = {
         // DM chats: the header avatar is the partner → long-press opens the user actions sheet
         if (dmPeerId) avatarEl.setAttribute('data-user-id', dmPeerId);
         else avatarEl.removeAttribute('data-user-id');
-        if (chat.avatar) {
-        avatarEl.innerHTML = '<img src="' + OrbitChat._escapeAttr(chat.avatar) + '" alt="">';
-      } else {
-        avatarEl.textContent = initial;
-      }
+        // A group with no uploaded image gets the member-avatar grid, matching
+        // desktop (shared/ui/group-avatar.js). The MStore.groups record is
+        // preferred because it carries the authoritative member list.
+        var headerGridHtml = null;
+        if (isGroupChat && !chat.avatar && window.OrbitGroupAvatarMobile) {
+          var hdrGroup = null;
+          var hdrGroups = MStore.groups || [];
+          for (var hgi = 0; hgi < hdrGroups.length; hgi++) {
+            if (String(hdrGroups[hgi].id) === String(chat.id) ||
+                String(hdrGroups[hgi].groupId) === String(chat.id)) {
+              hdrGroup = hdrGroups[hgi];
+              break;
+            }
+          }
+          // 36 to match .chat-header-avatar.
+          headerGridHtml = window.OrbitGroupAvatarMobile.forGroup(hdrGroup || chat, 36, 'var(--bg-surface)');
+        }
+        avatarEl.classList.toggle('has-group-avatar', !!headerGridHtml);
+        if (headerGridHtml) {
+          avatarEl.innerHTML = headerGridHtml;
+        } else if (chat.avatar) {
+          avatarEl.innerHTML = '<img src="' + OrbitChat._escapeAttr(chat.avatar) + '" alt="">';
+        } else {
+          avatarEl.textContent = initial;
+        }
       // Add profile frame for DM chats (friend's profile frame) — gated on stable setting
       if (MStore.settings && MStore.settings.profileFrames) {
         if (chat.type !== 'group') {

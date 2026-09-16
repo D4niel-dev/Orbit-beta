@@ -14,7 +14,27 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.5.2-beta', 'Latest', [
+        versionBlock('0.5.3-beta', 'Latest', [
+          ['Features', [
+            'Voice & Video Calling on Android — Android had the call protocol but no way to use it. You can now call someone directly: outgoing calls, an incoming ring you can accept or decline, mute, speaker and camera toggles, a call timer, and a picture-in-picture view of yourself. Calls work between a phone and a computer, and the signalling travels over the same encrypted connection as your messages.',
+            'A Real Ringtone — Calls now ring with an actual sound for up to a minute and a half, on both desktop and Android. Desktop was completely silent before this.',
+            'Call History in the Chat — Every finished call leaves a message in the conversation showing whether it was a voice or video call, how long it lasted, and a Call again button. Missed, declined and unanswered calls are recorded too.'
+          ]],
+          ['Bug Fixes', [
+            'Encrypted Vault Export Never Worked — Turning on encryption for a Local Vault export made it fail every single time, silently, before it encrypted anything. Fixed and verified end to end.',
+            'Local Vault Could Still Crash on a Big Account — The previous fix covered saved attachments but not the data left behind by interrupted file transfers, which on a busy account pushed the export to roughly 290 MB of memory. The limit now covers both, and it adjusts to the device on its own — a low-memory phone exports less rather than dying.',
+            'Restoring a Vault No Longer Loads Everything at Once — Attachments are restored in small batches, so a large backup restores without running out of memory.',
+            'Bottom Sheets Could Not Be Closed — The Cancel button sat at the very bottom of the scroll area on long sheets like /help, and a leftover drag could make closing stop working entirely. Both fixed, and tall sheets now scroll properly with the keyboard open.',
+            'Group Avatars Match Desktop — Android was still showing a single letter for a group without a picture; it now shows the same member-avatar grid desktop does.',
+            'Desktop Calls Never Gave Up — An unanswered call left you on a dead call screen indefinitely. It now gives up after the same 1m30 as the ringtone.',
+            'Ringtones Stopped When Answered — Fixed before release: the ring could keep playing after the other person picked up.'
+          ]],
+          ['Technical', [
+            'Version: Bumped to v0.5.3-beta across all three package.json files; Android bundle resynced.',
+            'Unit tests 267/267; desktop E2E suite 34/34. Calling was verified with two real peers connected to each other, and the vault with a full encrypted export-and-restore round trip.'
+          ]]
+        ]) +
+        versionBlock('0.5.2-beta', '', [
           ['Features', [
             'Cross-Platform E2EE — Desktop now speaks the same encryption scheme as Android (SPKI keys, HKDF-SHA256, two-field envelope), so encrypted DMs finally work in both directions. The peer\'s advertised key format decides which path is used, so peers on older builds keep working. Existing desktop keypairs migrate in place with the private key preserved.',
             'QR Pairing v2 — A QR code is now a portable beacon: your identity, every LAN address, your TCP port and your public key. Desktop can scan one by pasting, dropping or choosing an image; Android uses its camera. Every invalid code explains itself instead of failing silently.',
@@ -531,7 +551,7 @@ window.Changelog = {
             'Build Pipeline Overhaul: Android assembleRelease, SHA256 checksums, artifact verification, build metadata (version/commit/date), asset size table in release notes'
           ]]
         ]) +
-        versionBlock('0.1.1-beta', 'Latest Stable', [
+        versionBlock('0.1.1-beta', 'Legacy Stable', [
           ['New Features', [
             'Voice & Video Calls (P2P): Full WebRTC call system with incoming notification, mute/speaker controls, timer, ICE exchange',
             'Group Calls (Mesh): Each participant gets their own RTCPeerConnection; video grid or avatar circles for audio-only',

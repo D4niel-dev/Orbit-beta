@@ -538,6 +538,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var avatarHtml = '';
       var statusDot = '';
       var chatFrameHtml = '';
+      var usedGroupGrid = false;
       if (MStore.settings.showChatAvatars !== false) {
         var initial = c.name ? c.name.charAt(0).toUpperCase() : '?';
         var cAvatarSrc = safeAvatarSrc(c.avatar);
@@ -547,6 +548,12 @@ document.addEventListener('DOMContentLoaded', function() {
         if (isGroup) {
           var group = groupIds[c.id];
           var memberCount = group && group.members ? group.members.length : 0;
+          // A group with no uploaded image gets the member-avatar grid, matching
+          // desktop (shared/ui/group-avatar.js).
+          if (!cAvatarSrc && window.OrbitGroupAvatarMobile) {
+            var gridHtml = window.OrbitGroupAvatarMobile.forGroup(group, 52, 'var(--bg-base)');
+            if (gridHtml) { avatarHtml = gridHtml; usedGroupGrid = true; }
+          }
           statusDot = '<span style="font-size:10px;color:var(--text-muted);background:var(--bg-hover);padding:1px 6px;border-radius:8px;margin-left:auto;">' + memberCount + '</span>';
         } else {
           var statusClass = c.status && c.status !== 'offline' ? c.status : '';
@@ -620,7 +627,7 @@ document.addEventListener('DOMContentLoaded', function() {
       return '<div class="' + rowClass + '" data-chat="' + c.id + '">' +
         (MStore.settings.showChatAvatars !== false
           ? '<div class="chat-row-avatar-wrapper">' +
-            '<div class="chat-row-avatar"' + (isGroup ? ' style="border-radius:12px;"' : '') + '>' + avatarHtml + '</div>' +
+            '<div class="chat-row-avatar' + (usedGroupGrid ? ' has-group-avatar' : '') + '"' + (isGroup ? ' style="border-radius:12px;"' : '') + '>' + avatarHtml + '</div>' +
             chatFrameHtml +
             statusDot +
           '</div>'
@@ -769,7 +776,15 @@ document.addEventListener('DOMContentLoaded', function() {
       var chatAvatar = chat.avatar || (_friendAv ? _friendAv.avatar : null);
       var _displayName = chat.name || 'Chat';
       _avatarEl.style.position = 'relative';
-      if (chatAvatar) {
+      // A group with no uploaded image gets the member-avatar grid, matching
+      // desktop (shared/ui/group-avatar.js).
+      var _hdrGridHtml = (group && !chatAvatar && window.OrbitGroupAvatarMobile)
+        ? window.OrbitGroupAvatarMobile.forGroup(group, 36, 'var(--bg-surface)')
+        : null;
+      _avatarEl.classList.toggle('has-group-avatar', !!_hdrGridHtml);
+      if (_hdrGridHtml) {
+        _avatarEl.innerHTML = _hdrGridHtml;
+      } else if (chatAvatar) {
         _avatarEl.innerHTML = '<img src="' + escapeHtml(chatAvatar) + '" alt="">';
       } else {
         _avatarEl.textContent = _displayName.charAt(0).toUpperCase();
@@ -1631,6 +1646,134 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
+  /* ─── Call log messages ───
+     A finished call leaves an entry in the chat: how long it lasted, whether it
+     was a voice or video call, and a button to call back. Stored as a normal
+     message with a `call` object instead of `text`, so it sits in the timeline,
+     gets a timestamp and can be deleted like anything else. */
+  function _fmtCallDuration(sec) {
+    sec = Math.max(0, Math.floor(sec || 0));
+    var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+    var mm = (m < 10 ? '0' : '') + m, ss = (s < 10 ? '0' : '') + s;
+    return h > 0 ? (h + ':' + mm + ':' + ss) : (m + ':' + ss);
+  }
+
+  function renderCallLog(m) {
+    if (!m || !m.call) return '';
+    var c = m.call;
+    var isVideo = c.kind === 'video';
+    var peerId = c.peerId || m.from || '';
+    var title = isVideo ? 'Video call' : 'Voice call';
+    var sub = '';
+    var icon = isVideo ? 'video' : 'phone';
+    var muted = false;
+
+    switch (c.outcome) {
+      case 'ended':
+        sub = _fmtCallDuration(c.durationSec);
+        break;
+      case 'missed':
+        title = isVideo ? 'Missed video call' : 'Missed voice call';
+        sub = 'No answer';
+        icon = 'phone-missed';
+        muted = true;
+        break;
+      case 'declined':
+        sub = 'Declined';
+        icon = 'phone-off';
+        muted = true;
+        break;
+      case 'no-answer':
+        sub = 'No answer';
+        icon = 'phone-missed';
+        muted = true;
+        break;
+      case 'busy':
+        sub = 'They were on another call';
+        icon = 'phone-off';
+        muted = true;
+        break;
+      case 'failed':
+        sub = 'Call failed';
+        icon = 'phone-off';
+        muted = true;
+        break;
+      default:
+        sub = 'Call ended';
+        muted = true;
+    }
+
+    return '<div class="call-log' + (muted ? ' is-muted' : '') + '">' +
+      '<div class="call-log-icon"><i data-lucide="' + icon + '"></i></div>' +
+      '<div class="call-log-body">' +
+        '<div class="call-log-title">' + escapeHtml(title) + '</div>' +
+        '<div class="call-log-sub">' + escapeHtml(sub) + '</div>' +
+      '</div>' +
+      '<button class="call-log-again" data-call-again="' + escapeHtml(peerId) + '" data-call-video="' + (isVideo ? '1' : '0') + '" title="Call again">' +
+        '<i data-lucide="' + (isVideo ? 'video' : 'phone') + '"></i>' +
+        '<span>Call again</span>' +
+      '</button>' +
+    '</div>';
+  }
+
+  /* Public entry point for the call manager: record a finished call in the chat.
+     `entry` = { kind, outcome, durationSec, peerId, direction } */
+  window.OrbitCallLog = {
+    add: function (entry) {
+      try {
+        if (!entry || !entry.peerId) return;
+        var peerId = String(entry.peerId);
+        var me = (MStore.user && MStore.user.id) || 'mobile';
+
+        // A call can come from someone you have never messaged, so make sure the
+        // chat exists before the message is appended or it would be invisible.
+        var chat = MStore.chats.find(function (c) { return String(c.id) === peerId; });
+        if (!chat) {
+          var friend = MStore.friends.find(function (f) {
+            return String(f.id) === peerId || String(f.peerId) === peerId;
+          });
+          chat = {
+            id: peerId,
+            name: (friend && friend.name) || peerId,
+            avatar: friend ? friend.avatar : null,
+            lastMessage: '',
+            lastTime: '',
+            unread: 0
+          };
+          MStore.chats.push(chat);
+        }
+
+        var msg = {
+          id: 'call_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+          // 'me' when I placed the call, otherwise the peer — this drives which
+          // side of the timeline the entry sits on.
+          from: entry.direction === 'outgoing' ? 'me' : peerId,
+          time: new Date().toISOString(),
+          call: {
+            kind: entry.kind === 'video' ? 'video' : 'voice',
+            outcome: entry.outcome || 'ended',
+            durationSec: Math.max(0, Math.floor(entry.durationSec || 0)),
+            peerId: peerId
+          }
+        };
+
+        var msgs = MStore.getMessages(peerId);
+        msgs.push(msg);
+        MStore._saveMsgs(peerId);
+
+        chat.lastMessage = msg.call.kind === 'video' ? 'Video call' : 'Voice call';
+        chat.lastTime = msg.time;
+        if (activeChatId !== peerId) chat.unread = (chat.unread || 0) + 1;
+        MStore.save();
+
+        if (activeChatId === peerId) renderMessages(peerId);
+        renderChatList(window._activeHomeTab);
+      } catch (e) {
+        console.warn('[CallLog] failed to record call:', e && e.message);
+      }
+    }
+  };
+
   function renderPoll(msg, chatId) {
     if (!msg || !msg.poll) return '';
     var poll = msg.poll;
@@ -1980,6 +2123,12 @@ document.addEventListener('DOMContentLoaded', function() {
         pollHtml = renderPoll(m, chatId);
       }
 
+      // Call log rendering (a finished call, not a text message)
+      var callLogHtml = '';
+      if (m.call) {
+        callLogHtml = renderCallLog(m);
+      }
+
       // Thread replies chip (shown when this message has replies in the chain)
       var threadChipHtml = '';
       var _threadReplies = threadMap[String(m.id)];
@@ -1994,14 +2143,20 @@ document.addEventListener('DOMContentLoaded', function() {
       if (m.isSpoiler) {
         _renderedText = '<span class="spoiler-text" onclick="this.classList.toggle(\'revealed\')">' + _renderedText + '</span>';
       }
-      html += '<div class="message-row ' + (isMine ? 'mine' : 'other') + (isGrouped ? ' grouped' : '') + (m.replyTo != null ? ' msg-threaded' : '') + '" data-msg-id="' + m.id + '"' + _animAttr + '>' +
+      // A call entry has no text of its own — don't leave an empty text wrapper
+      // taking up the bubble's first line.
+      var _textWrapHtml = (m.call && !_renderedText)
+        ? ''
+        : '<div class="msg-text-mob">' + _renderedText + editedBadge + '</div>';
+      html += '<div class="message-row ' + (isMine ? 'mine' : 'other') + (isGrouped ? ' grouped' : '') + (m.replyTo != null ? ' msg-threaded' : '') + (m.call ? ' msg-call' : '') + '" data-msg-id="' + m.id + '"' + _animAttr + '>' +
         '<div class="message-bubble">' +
           senderLabel +
           replyHtml +
-          '<div class="msg-text-mob">' + _renderedText + editedBadge + '</div>' +
+          _textWrapHtml +
           attachmentsHtml +
           linkPreviewHtml +
           pollHtml +
+          callLogHtml +
           reactionsHtml +
           threadChipHtml +
           '<div class="message-time">' + (_getDisappearTimer(chatId) !== 'off' ? '<span class="msg-disappear-indicator" title="Auto-deletes after ' + _getDisappearTimer(chatId) + '">⏱</span>' : '') + formatTime(m.time) + '</div>' +
@@ -2070,6 +2225,17 @@ document.addEventListener('DOMContentLoaded', function() {
     requestAnimationFrame(function() { feed.removeAttribute('data-refreshing'); });
     feed.querySelectorAll('.reaction-pill').forEach(function(pill) {
       pill.addEventListener('click', function(e) { e.stopPropagation(); var rm = this.parentElement.getAttribute('data-msg-id') || (this.closest('[data-msg-id]') || {}).getAttribute('data-msg-id'); if (rm) toggleReaction(rm, this); });
+    });
+    // "Call again" on a call-log entry — redials the same kind of call.
+    feed.querySelectorAll('.call-log-again').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var peerId = this.getAttribute('data-call-again');
+        var isVideo = this.getAttribute('data-call-video') === '1';
+        if (!peerId) return;
+        if (!window.OrbitCall) { showToast('Calling is unavailable', 'error'); return; }
+        window.OrbitCall.startCall(isVideo, peerId);
+      });
     });
     feed.querySelectorAll('.msg-thread-chip').forEach(function(chip) {
       chip.addEventListener('click', function(e) {
@@ -5325,75 +5491,131 @@ document.addEventListener('DOMContentLoaded', function() {
     try { return new Date(mtime).toLocaleDateString(); } catch(e) { return ''; }
   }
 
-  // Peak memory during a vault export is roughly 4x the raw blob bytes:
-  //   blobs -> base64 strings (1.33x) -> JSON.stringify (a second ~1.33x copy)
-  //   -> the Capacitor bridge serialises that whole string again to reach native.
+  // Serialised-size budget for attachment data (blobs + partials) in one export.
   //
-  // On Android all of that lands in the WebView heap, which is typically
-  // 128-512 MB, and an OOM there is NOT catchable — it kills the renderer, which
-  // is what users reported as "the app crashes when I back up". The blob store
-  // is unbounded (every inline attachment and every large-file chunk is put
-  // there, and maxFileSize defaults to 500 MB), so this needs a hard budget.
+  // Peak memory during an export is several times the SERIALISED payload:
+  //   payload object -> JSON.stringify (one full copy) -> the Capacitor bridge
+  //   serialises that whole string again to reach native.
+  // And every base64 string costs TWO bytes per character in JS (UTF-16), so a
+  // 23 MB payload measures as ~80-150 MB of real renderer memory.
   //
-  // 32 MB of blobs keeps the peak near ~128 MB.
-  var VAULT_BLOB_BUDGET_BYTES = 32 * 1024 * 1024;
+  // On Android all of that lands in the WebView heap, and an OOM there is NOT
+  // catchable — it kills the renderer, which is the reported "app crashes when I
+  // back up". So rather than a fixed number, derive the budget from the heap
+  // ceiling the WebView actually has and keep the export to a small slice of it.
+  // Measured: a 23.5 MB export peaked ~349 MB on desktop, against a 268 MB
+  // baseline — so ~8% of the ceiling is the right order of magnitude.
+  //
+  // Both stores that can hold bulk data must be budgeted, because either one is
+  // unbounded on its own:
+  //   - `blobs`    — every inline attachment. maxFileSize defaults to 500 MB.
+  //   - `partials` — checkpointed chunks of IN-PROGRESS transfers, stored as
+  //                  base64 (64 KB chunk -> ~87 KB of text). A single interrupted
+  //                  large-file receive can dwarf the whole attachment store.
+  var VAULT_BLOB_BUDGET_FLOOR = 4 * 1024 * 1024;
+  var VAULT_BLOB_BUDGET_CAP = 32 * 1024 * 1024;
 
-  // Reads the blob store, stopping base64-encoding once `maxBytes` is exceeded.
-  // The cursor keeps draining after that (so the transaction can close) but
-  // nothing further is allocated — encoding is the expensive part.
-  // Returns { blobs, partials, totalBytes, truncated }.
+  function _vaultHeapLimit() {
+    try {
+      return (window.performance && performance.memory && performance.memory.jsHeapSizeLimit) || 0;
+    } catch (e) { return 0; }
+  }
+
+  // The budget actually used for a given export. `needsEnc` halves it: the
+  // encrypted path additionally holds the JSON string, a TextEncoder copy of it,
+  // the ciphertext and a base64 of the ciphertext all at once.
+  function _vaultExportBudget(needsEnc) {
+    var heap = _vaultHeapLimit();
+    // No signal (or a non-Chromium engine): stay conservative.
+    var base = heap ? Math.floor(heap * 0.08) : 16 * 1024 * 1024;
+    base = Math.max(VAULT_BLOB_BUDGET_FLOOR, Math.min(VAULT_BLOB_BUDGET_CAP, base));
+    return needsEnc ? Math.floor(base / 2) : base;
+  }
+
+  // Reads the blob + partials stores, stopping once `maxBytes` of SERIALISED
+  // attachment data has been accumulated. Cursors keep draining after that (so
+  // the transaction can still close) but nothing further is allocated —
+  // base64-encoding is the expensive part, so it is skipped entirely for
+  // anything over budget rather than encoded and then discarded.
+  //
+  // The two stores are walked in separate passes, attachments first. Finished
+  // attachments are user data; a partial is only resumable-transfer state, so
+  // that is the thing worth dropping. Separate passes also make the result
+  // deterministic — sharing one transaction meant the budget went to whichever
+  // cursor happened to run first, so the same store could export different
+  // contents on different runs.
+  // Returns { blobs, partials, totalBytes, truncated, droppedBlobs, droppedPartials }.
   function _vaultReadBlobStore(maxBytes) {
-    var empty = { blobs: {}, partials: [], totalBytes: 0, truncated: false };
-    if (!window.BlobStoreDB || !window.BlobStoreDB._open) return Promise.resolve(empty);
-    var budget = maxBytes || VAULT_BLOB_BUDGET_BYTES;
+    var budget = maxBytes || _vaultExportBudget(false);
+    var acc = {
+      blobs: {}, partials: [], totalBytes: 0,
+      truncated: false, droppedBlobs: 0, droppedPartials: 0
+    };
+    if (!window.BlobStoreDB || !window.BlobStoreDB._open) return Promise.resolve(acc);
+    function remaining() { return budget - acc.totalBytes; }
+
     return window.BlobStoreDB._open().then(function() {
-      return new Promise(function(resolve, reject) {
+      return _vaultWalkStore('blobs', function (cursor, value) {
+        var raw = (value && value.byteLength) ? value.byteLength : 0;
+        // Count what will actually be serialised, not the raw bytes: base64 is
+        // 4 characters per 3 bytes. Checking the raw size would let a full
+        // 32 MB of blobs through as 43 MB of text.
+        var encoded = Math.ceil(raw / 3) * 4;
+        if (encoded > remaining()) { acc.truncated = true; acc.droppedBlobs++; return; }
         try {
-          var db = window.BlobStoreDB._db;
-          var blobs = {};
-          var partials = [];
-          var totalBytes = 0;
-          var truncated = false;
-          var pending = 2;
-          function done() {
-            if (--pending === 0) {
-              resolve({ blobs: blobs, partials: partials, totalBytes: totalBytes, truncated: truncated });
-            }
-          }
-          var tx = db.transaction(['blobs', 'partials'], 'readonly');
-          tx.onerror = function(e) { reject(e.target.error); };
-          tx.oncomplete = function() { /* all cursors done */ };
-          var blobsReq = tx.objectStore('blobs').openCursor();
-          blobsReq.onsuccess = function(e) {
-            var cursor = e.target.result;
-            if (!cursor) { done(); return; }
-            if (truncated) { cursor['continue'](); return; }
-            var value = cursor.value;
-            var size = (value && value.byteLength) ? value.byteLength : 0;
-            totalBytes += size;
-            if (totalBytes > budget) {
-              truncated = true;
-              cursor['continue']();
-              return;
-            }
-            try { blobs[cursor.key] = _vaultAbToBase64(value); } catch(err) { console.warn('[Vault] blob encode failed for', cursor.key, err); }
-            cursor['continue']();
-          };
-          var partsReq = tx.objectStore('partials').openCursor();
-          partsReq.onsuccess = function(e) {
-            var cursor = e.target.result;
-            if (cursor) {
-              partials.push(cursor.value);
-              cursor['continue']();
-            } else { done(); }
-          };
-        } catch(e) { reject(e); }
+          acc.blobs[cursor.key] = _vaultAbToBase64(value);
+          acc.totalBytes += encoded;
+        } catch (err) { console.warn('[Vault] blob encode failed for', cursor.key, err); }
       });
+    }).then(function() {
+      return _vaultWalkStore('partials', function (cursor, rec) {
+        // A checkpoint is a map of index -> base64 chunk. Measure it before
+        // pushing it into the payload.
+        var size = 0;
+        if (rec && rec.chunks) {
+          for (var ck in rec.chunks) {
+            if (Object.prototype.hasOwnProperty.call(rec.chunks, ck)) size += (rec.chunks[ck] || '').length;
+          }
+        }
+        if (size > remaining()) { acc.truncated = true; acc.droppedPartials++; return; }
+        acc.partials.push(rec);
+        acc.totalBytes += size;
+      });
+    }).then(function() { return acc; });
+  }
+
+  // Walks one object store, handing every record to `visit` as it arrives.
+  function _vaultWalkStore(storeName, visit) {
+    return new Promise(function(resolve, reject) {
+      try {
+        var tx = window.BlobStoreDB._db.transaction(storeName, 'readonly');
+        tx.onerror = function(e) { reject(e.target.error); };
+        var req = tx.objectStore(storeName).openCursor();
+        req.onsuccess = function(e) {
+          var cursor = e.target.result;
+          if (!cursor) { resolve(); return; }
+          visit(cursor, cursor.value);
+          cursor['continue']();
+        };
+      } catch (e) { reject(e); }
     });
   }
 
   function _vaultCrypto() {
     return window.crypto && window.crypto.subtle ? window.crypto.subtle : null;
+  }
+
+  // Random bytes for the salt/IV.
+  //
+  // NOTE: getRandomValues lives on `crypto`, NOT on `crypto.subtle` — and
+  // _vaultCrypto() returns the subtle object. Calling c.getRandomValues(...) on
+  // it throws "TypeError: c.getRandomValues is not a function", which meant the
+  // encrypted export never produced a file at all: every attempt died on the
+  // first line of _vaultEncryptPayload, before any encryption happened.
+  function _vaultRandomBytes(len) {
+    var out = new Uint8Array(len);
+    window.crypto.getRandomValues(out);
+    return out;
   }
 
   function _vaultDeriveKey(passphrase, salt) {
@@ -5409,8 +5631,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function _vaultEncryptPayload(payloadObj, passphrase) {
     var c = _vaultCrypto();
-    var salt = c.getRandomValues(new Uint8Array(16));
-    var iv = c.getRandomValues(new Uint8Array(12));
+    var salt = _vaultRandomBytes(16);
+    var iv = _vaultRandomBytes(12);
     return _vaultDeriveKey(passphrase, salt).then(function(aesKey) {
       var json = JSON.stringify(payloadObj);
       return c.encrypt({ name: 'AES-GCM', iv: iv }, aesKey, new TextEncoder().encode(json));
@@ -5446,6 +5668,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Set by the blob reader when attachment data exceeded the export budget.
     var vaultTruncated = false;
+    var vaultDropped = { blobs: 0, partials: 0 };
+    var vaultBudget = _vaultExportBudget(false);
 
     return Promise.resolve().then(function() {
       var data = {};
@@ -5453,11 +5677,20 @@ document.addEventListener('DOMContentLoaded', function() {
         var k = localStorage.key(i);
         if (k && k.indexOf('orbit_') === 0) data[k] = localStorage.getItem(k);
       }
-      return _vaultReadBlobStore().then(function(blobData) {
+      var _settings = MStore.settings || {};
+      var needsEnc = !!_settings.vaultEncrypt;
+      // Computed before the read so the encrypted path can use a smaller budget.
+      vaultBudget = _vaultExportBudget(needsEnc);
+      return _vaultReadBlobStore(vaultBudget).then(function(blobData) {
         vaultTruncated = !!blobData.truncated;
-        var s = MStore.settings || {};
-        var needsEnc = !!s.vaultEncrypt;
+        vaultDropped = { blobs: blobData.droppedBlobs || 0, partials: blobData.droppedPartials || 0 };
+        var s = _settings;
         var pass = null;
+        if (needsEnc && !_vaultCrypto()) {
+          // Say so plainly instead of dying later on a cryptic TypeError.
+          if (showUI !== false) showToast('Vault export failed: encryption is unavailable in this build.', 'error');
+          return null;
+        }
         if (needsEnc) {
           var passEl = document.getElementById('vault-passphrase');
           pass = passEl && passEl.value ? passEl.value : null;
@@ -5477,8 +5710,12 @@ document.addEventListener('DOMContentLoaded', function() {
           // Recorded in the file itself so a restore can explain the gap rather
           // than silently appearing to have lost attachments.
           base.attachmentsExcluded = true;
-          base.attachmentsExcludedReason = 'Attachment data exceeded the ' +
-            _vaultFmtBytes(VAULT_BLOB_BUDGET_BYTES) + ' export budget';
+          base.attachmentsExcludedReason = 'Attachment and in-progress transfer data exceeded the ' +
+            _vaultFmtBytes(vaultBudget) + ' export budget';
+          base.attachmentsExcludedCounts = {
+            attachments: vaultDropped.blobs,
+            partialTransfers: vaultDropped.partials
+          };
         }
         if (needsEnc) {
           return _vaultEncryptPayload(payload, pass).then(function(enc) {
@@ -5489,24 +5726,36 @@ document.addEventListener('DOMContentLoaded', function() {
       }).then(function(vaultObj) {
         if (!vaultObj) return null;
         var json = JSON.stringify(vaultObj);
+        // Release the object graph now that it has been flattened. Without this
+        // the multi-megabyte object tree stays alive on top of the string, and
+        // the Capacitor bridge then serialises the string a second time.
+        vaultObj = null;
         var d = new Date();
         var stamp = d.getFullYear().toString() + _vaultPad2(d.getMonth() + 1) + _vaultPad2(d.getDate()) +
           '-' + _vaultPad2(d.getHours()) + _vaultPad2(d.getMinutes());
         var fileName = 'OrbitVault-' + stamp + '.json';
+        // json.length, not new Blob([json]).size: the payload is ASCII-dominant
+        // base64, so the character count is a good byte proxy — and unlike a
+        // Blob it does not allocate another full copy of the string at exactly
+        // the moment we are trying not to run out of memory.
+        var size = json.length;
         return fs.mkdir({ path: 'vault', directory: 'DATA', recursive: true })
           .catch(function() { /* dir exists — continue */ })
           .then(function() {
             return fs.writeFile({ path: 'vault/' + fileName, data: json, directory: 'DATA', encoding: 'utf8' });
           })
           .then(function() {
-            var size = new Blob([json]).size;
+            json = null;
             try { localStorage.setItem('orbit_vault_lastbackup', new Date().toISOString()); } catch(e) {}
             if (showUI !== false) {
               if (vaultTruncated) {
-                showToast('Vault exported WITHOUT attachments: ' + fileName + ' (' +
-                  _vaultFmtBytes(size) + '). Attachment data exceeded the ' +
-                  _vaultFmtBytes(VAULT_BLOB_BUDGET_BYTES) +
-                  ' limit and was left out to avoid running out of memory.', 'info');
+                var leftOut = [];
+                if (vaultDropped.blobs) leftOut.push(vaultDropped.blobs + ' attachment' + (vaultDropped.blobs === 1 ? '' : 's'));
+                if (vaultDropped.partials) leftOut.push(vaultDropped.partials + ' in-progress transfer' + (vaultDropped.partials === 1 ? '' : 's'));
+                showToast('Vault exported: ' + fileName + ' (' +
+                  _vaultFmtBytes(size) + '). Left out ' + (leftOut.join(' and ') || 'oversized data') +
+                  ' to stay within the ' + _vaultFmtBytes(vaultBudget) +
+                  ' export limit and avoid running out of memory.', 'info');
               } else {
                 showToast('Vault exported: ' + fileName + ' (' + _vaultFmtBytes(size) + ')', 'success');
               }
@@ -5577,27 +5826,33 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!confirm('Restore vault "' + file.name + '"? This will overwrite your current local data.')) return;
     var fs = _vaultFilesystem();
     fs.readFile({ path: 'vault/' + file.name, directory: 'DATA', encoding: 'utf8' }).then(function(res) {
+      var raw = res.data;
       var vaultObj;
-      try { vaultObj = JSON.parse(res.data); } catch(e) { showToast('Vault file is corrupt', 'error'); return; }
+      try { vaultObj = JSON.parse(raw); } catch(e) { showToast('Vault file is corrupt', 'error'); return; }
+      // Release the raw text before the object graph is walked. On a large
+      // vault this is a multi-megabyte string and the parse result already
+      // holds its own copy of everything in it.
+      raw = null;
+      res = null;
       if (!vaultObj || vaultObj.app !== 'Orbit') { showToast('Not a valid Orbit vault file', 'error'); return; }
       if (vaultObj.encrypted) {
         var pass = prompt('Enter the vault passphrase:');
         if (!pass) return;
         return _vaultDecryptPayload(vaultObj, pass).then(function(payload) {
-          return _applyVaultData(payload);
+          return _applyVaultData(payload, vaultObj);
         }).catch(function(err) {
           console.warn('[Vault] decrypt failed:', err);
           showToast('Decryption failed — wrong passphrase?', 'error');
           return null;
         });
       }
-      return _applyVaultData(vaultObj);
+      return _applyVaultData(vaultObj, vaultObj);
     }).catch(function(err) {
       showToast('Vault read failed: ' + (err && err.message ? err.message : String(err)), 'error');
     });
   }
 
-  function _applyVaultData(payload) {
+  function _applyVaultData(payload, meta) {
     var data = payload.data || {};
     var restoreCount = 0;
     for (var k in data) {
@@ -5613,18 +5868,41 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     var blobKeys = payload.blobs || {};
     var partials = payload.partials || [];
-    var promises = [];
+
+    // Decode and write blobs in small sequential batches rather than building one
+    // big Promise.all. Every base64 string decodes to an ArrayBuffer that stays
+    // live until its write resolves, so restoring a large vault in one go holds
+    // EVERY attachment in memory at once — the same shape of problem the export
+    // had. A few at a time keeps the restore peak flat regardless of vault size.
+    var RESTORE_BATCH = 3;
+    var blobList = [];
     for (var bk in blobKeys) {
-      if (!blobKeys.hasOwnProperty(bk)) continue;
-      var ab = window.orbitBase64ToArrayBuffer(blobKeys[bk]);
-      if (ab && ab.byteLength > 0) {
-        promises.push(window.BlobStoreDB.put(bk, ab));
-      }
+      if (blobKeys.hasOwnProperty(bk)) blobList.push(bk);
     }
+
+    var chain = Promise.resolve();
+    for (var bi = 0; bi < blobList.length; bi += RESTORE_BATCH) {
+      (function(batch) {
+        chain = chain.then(function() {
+          var jobs = [];
+          batch.forEach(function(key) {
+            var ab = window.orbitBase64ToArrayBuffer(blobKeys[key]);
+            // Release the encoded string as soon as it has been decoded.
+            blobKeys[key] = null;
+            if (ab && ab.byteLength > 0) jobs.push(window.BlobStoreDB.put(key, ab));
+          });
+          return Promise.all(jobs);
+        });
+      })(blobList.slice(bi, bi + RESTORE_BATCH));
+    }
+
     partials.forEach(function(rec) {
-      if (rec && rec.fileId) promises.push(window.BlobStoreDB.partialPut(rec.fileId, rec));
+      if (rec && rec.fileId) {
+        chain = chain.then(function() { return window.BlobStoreDB.partialPut(rec.fileId, rec); });
+      }
     });
-    return Promise.all(promises).then(function() {
+
+    return chain.then(function() {
       // Best-effort: re-init in-memory store from the restored localStorage so
       // the current session sees the data (and doesn't clobber it on next save).
       try {
@@ -5633,7 +5911,16 @@ document.addEventListener('DOMContentLoaded', function() {
         renderChatList();
         if (activeChatId) renderMessages(activeChatId);
       } catch(e) { console.warn('[Vault] post-restore re-init failed:', e); }
-      showToast('Vault restored (' + restoreCount + ' keys) — restart the app to apply fully', 'success');
+      // The export records when it had to leave bulk data out (see
+      // attachmentsExcluded). Say so here too, or a partial restore reads as
+      // silent data loss.
+      var gapNote = (meta && meta.attachmentsExcluded)
+        ? ' — this backup was exported without some attachments' +
+          (meta.attachmentsExcludedCounts ? ' (' +
+            (meta.attachmentsExcludedCounts.attachments || 0) + ' attachment(s), ' +
+            (meta.attachmentsExcludedCounts.partialTransfers || 0) + ' in-progress transfer(s))' : '')
+        : '';
+      showToast('Vault restored (' + restoreCount + ' keys)' + gapNote + ' — restart the app to apply fully', 'success');
     }).catch(function(err) {
       showToast('Vault restore error: ' + (err && err.message ? err.message : String(err)), 'error');
     });
@@ -5664,7 +5951,27 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button id="changelog-close-mobile" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;font-size:20px;">✕</button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
-        vBlock('0.5.2-beta', 'Latest', [
+        vBlock('0.5.3-beta', 'Latest', [
+          ['Features', [
+            'Voice & Video Calling — You can call someone from a chat now. Open a chat, tap the ⋯ button and choose Voice Call or Video Call. They get a ring with Accept and Decline, and once connected you both see the call screen with mute, speaker and camera buttons and a running timer. Video calls show the other person full screen with a small picture-in-picture view of yourself. Signalling travels over the same encrypted connection as your messages.',
+            'A Real Ringtone — Calls ring with an actual sound for up to a minute and a half before giving up. If the ring runs out, the call is logged as a missed call instead of leaving you on a stuck screen.',
+            'Call History in the Chat — Every finished call leaves a message in the conversation showing whether it was a voice or video call, how long it lasted, and a Call again button. Missed, declined and unanswered calls are recorded too.'
+          ]],
+          ['Bug Fixes', [
+            'Encrypted Vault Export Never Worked — Turning on encryption for a Local Vault export made it fail every single time, silently, before it encrypted anything. Fixed and verified end to end, including restoring the backup afterwards.',
+            'Local Vault Could Still Crash on a Big Account — The previous fix covered saved attachments but not the data left behind by interrupted file transfers, which on a busy account pushed the export to roughly 290 MB of memory. The limit now covers both, and it adjusts to your device on its own — a low-memory phone exports less rather than dying.',
+            'Restoring a Vault No Longer Loads Everything at Once — Attachments are restored in small batches, so a large backup restores without running out of memory.',
+            'Bottom Sheets Could Not Be Closed — The Cancel button sat at the very bottom of the scroll area on long sheets like /help, and a leftover drag could make closing stop working entirely. Both fixed, and tall sheets now scroll properly with the keyboard open.',
+            'Some Bottom Sheets Would Not Scroll — Sheet height was measured against the full screen rather than the area the keyboard leaves visible, so a tall sheet could be pushed off the top.',
+            'Group Avatars Now Match Desktop — Groups without a picture used to show a single letter; they now show the same grid of member avatars that desktop uses.'
+          ]],
+          ['Technical', [
+            'Version: Bumped to v0.5.3-beta; Android bundle resynced.',
+            'Unit tests 267/267. Calling was verified with two real peers connected to each other, and the vault with a full encrypted export-and-restore round trip.',
+            'Note: calling has not yet been tested on physical hardware — please report anything odd on a real device.'
+          ]]
+        ]) +
+        vBlock('0.5.2-beta', '', [
           ['Features', [
             'Cross-Platform E2EE — Desktop now speaks the same encryption scheme as Android (SPKI keys, HKDF-SHA256, two-field envelope), so encrypted DMs finally work in both directions. The peer\'s advertised key format decides which path is used, so peers on older builds keep working.',
             'QR Pairing v2 — A QR code is now a portable beacon: your identity, every LAN address, your TCP port and your public key. Scan one with the camera, or share yours from the Add Friend sheet. Every invalid code explains itself instead of failing silently.',
@@ -6130,7 +6437,7 @@ document.addEventListener('DOMContentLoaded', function() {
             'Desktop Bug Fixes — require(crypto) → window.crypto in sidebar-middle; PIN_MESSAGE groupId in payload'
           ]]
         ]) +
-        vBlock('0.1.1-beta', '', [
+        vBlock('0.1.1-beta', 'Legacy Stable', [
           ['New Features', [
             'Voice & Video Calls (P2P): Full WebRTC call system with incoming notification, mute/speaker controls',
             'Group Calls (Mesh): Each participant gets their own RTCPeerConnection',
@@ -8168,9 +8475,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // ── Avatar HTML ──
     var gAvatarSrc = safeAvatarSrc(group.avatar);
+    // A group with no uploaded image gets the member-avatar grid, matching
+    // desktop (shared/ui/group-avatar.js). 80 to match .group-info-avatar.
+    var groupGridHtml = (!gAvatarSrc && window.OrbitGroupAvatarMobile)
+      ? window.OrbitGroupAvatarMobile.forGroup(group, 80, 'var(--bg-surface)')
+      : null;
     var avatarHtml = gAvatarSrc
       ? '<img src="' + gAvatarSrc + '" alt="">'
-      : '<span>' + escapeHtml(groupInitial) + '</span>';
+      : (groupGridHtml || ('<span>' + escapeHtml(groupInitial) + '</span>'));
     var editOverlay = isOwner
       ? '<div class="group-info-avatar-edit" id="btn-group-info-avatar">Edit</div>'
       : '';
@@ -8241,7 +8553,7 @@ document.addEventListener('DOMContentLoaded', function() {
       // Avatar Section (standalone card)
       '<div class="group-info-card">' +
         '<div class="group-info-avatar-section">' +
-          '<div class="group-info-avatar">' + avatarHtml + editOverlay + '</div>' +
+          '<div class="group-info-avatar' + (groupGridHtml ? ' has-group-avatar' : '') + '">' + avatarHtml + editOverlay + '</div>' +
           '<div class="group-info-group-name">' + escapeHtml(group.name) + '</div>' +
           '<div class="group-info-group-meta">' + members.length + ' member' + (members.length !== 1 ? 's' : '') + '</div>' +
         '</div>' +
@@ -10021,6 +10333,20 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   // --- Add Three Dots Menu ---
+  /** Resolve who to call for the currently open chat, then place the call. */
+  function _startCallFromChat(isVideo) {
+    if (!window.OrbitCall) { showToast('Calling is unavailable', 'error'); return; }
+    // For a DM the active chat id is the peer's user id, but chats created from
+    // the friends list use 'dm_' + peerId.
+    var peerId = (activeChatId && activeChatId.indexOf('dm_') === 0)
+      ? activeChatId.substring(3)
+      : activeChatId;
+    var friend = MStore.friends.find(function(f) { return f.id === peerId || f.peerId === peerId; });
+    if (friend) peerId = friend.id;
+    if (!peerId) { showToast('Cannot tell who to call', 'error'); return; }
+    window.OrbitCall.startCall(!!isVideo, peerId);
+  }
+
   var moreBtn = document.getElementById('btn-chat-more');
   if (moreBtn) {
     moreBtn.addEventListener('click', function() {
@@ -10033,6 +10359,13 @@ document.addEventListener('DOMContentLoaded', function() {
           '<div class="action-btn" id="action-view-info" style="padding:16px;display:flex;align-items:center;gap:14px;font-size:16px;font-weight:600;color:var(--text-primary);cursor:pointer;border-radius:12px;transition:background 0.2s;">' +
             '<i data-lucide="' + (isGroup ? 'users' : 'user') + '"></i> ' + (isGroup ? 'Group Info' : 'View Profile') +
           '</div>' +
+          (isGroup ? '' :
+          '<div class="action-btn" id="action-voice-call" style="padding:16px;display:flex;align-items:center;gap:14px;font-size:16px;font-weight:600;color:var(--text-primary);cursor:pointer;border-radius:12px;transition:background 0.2s;">' +
+            '<i data-lucide="phone"></i> Voice Call' +
+          '</div>' +
+          '<div class="action-btn" id="action-video-call" style="padding:16px;display:flex;align-items:center;gap:14px;font-size:16px;font-weight:600;color:var(--text-primary);cursor:pointer;border-radius:12px;transition:background 0.2s;">' +
+            '<i data-lucide="video"></i> Video Call' +
+          '</div>') +
           '<div class="action-btn" id="action-mute" style="padding:16px;display:flex;align-items:center;gap:14px;font-size:16px;font-weight:600;color:var(--text-primary);cursor:pointer;border-radius:12px;transition:background 0.2s;">' +
             '<i data-lucide="bell-off"></i> Mute Notifications' +
           '</div>' +
@@ -10065,6 +10398,18 @@ document.addEventListener('DOMContentLoaded', function() {
         sheet.remove();
         if (isGroup) showGroupInfo();
         else showProfileOverlay(activeChatId);
+      });
+
+      var _voiceCallBtn = document.getElementById('action-voice-call');
+      if (_voiceCallBtn) _voiceCallBtn.addEventListener('click', function() {
+        sheet.remove();
+        _startCallFromChat(false);
+      });
+
+      var _videoCallBtn = document.getElementById('action-video-call');
+      if (_videoCallBtn) _videoCallBtn.addEventListener('click', function() {
+        sheet.remove();
+        _startCallFromChat(true);
       });
       
       document.getElementById('action-mute').addEventListener('click', function() {
@@ -11659,6 +12004,32 @@ document.addEventListener('DOMContentLoaded', function() {
             renderChatList();
           }
         }
+        return;
+      }
+
+      // ── Voice / video call signalling ──
+      // Control packets: handled and returned so they never fall through to the
+      // message path below. The manager lives in components/call-manager.js.
+      // `packet.from` is the sender's user id; data.connectionId is the same
+      // value on mobile (the native plugin uses peerId as the connectionId).
+      if (packet.type === Orbit.Protocol.Types.CALL_OFFER) {
+        if (window.OrbitCall) window.OrbitCall.handleOffer(packet.payload, packet.from || data.connectionId);
+        return;
+      }
+      if (packet.type === Orbit.Protocol.Types.CALL_ANSWER) {
+        if (window.OrbitCall) window.OrbitCall.handleAnswer(packet.payload);
+        return;
+      }
+      if (packet.type === Orbit.Protocol.Types.CALL_ICE_CANDIDATE) {
+        if (window.OrbitCall) window.OrbitCall.handleIceCandidate(packet.payload);
+        return;
+      }
+      if (packet.type === Orbit.Protocol.Types.CALL_END) {
+        if (window.OrbitCall) window.OrbitCall.handleEnd();
+        return;
+      }
+      if (packet.type === Orbit.Protocol.Types.CALL_DECLINE) {
+        if (window.OrbitCall) window.OrbitCall.handleDecline(packet.payload);
         return;
       }
 
