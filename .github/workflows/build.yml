@@ -157,7 +157,16 @@ jobs:
           cache-dependency-path: mobile/package-lock.json
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          # The action's default is `tools platform-tools`, but Google removed the
+          # legacy standalone `tools` package from the SDK repository, so
+          # sdkmanager exits 1 with "Failed to find package 'tools'" and the whole
+          # job dies before Gradle ever runs. Install only what this project needs:
+          # platform-tools, the platform matching compileSdkVersion, and the
+          # build-tools that go with it. Keep these in step with
+          # mobile/android/variables.gradle (compileSdkVersion).
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
 
       - name: Install dependencies
         run: npm ci
@@ -256,24 +265,33 @@ jobs:
         run: |
           TABLE="| Artifact | Size |"
           TABLE+=$'\n|----------|------|'
-          for f in $(find release-artifacts -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.apk" \) | sort); do
+          # while-read rather than `for f in $(find ...)`: a `for` loop word-splits
+          # on whitespace, and the Windows installer is "Orbit Setup <version>.exe".
+          # That split it into three bogus rows ("Orbit", "Setup", "<version>.exe"),
+          # each with no size, in every published release table.
+          while IFS= read -r f; do
             NAME=$(basename "$f")
             SIZE=$(ls -lh "$f" | awk '{print $5}')
             TABLE+=$'\n| '"$NAME"' | '"$SIZE"' |'
-          done
+          done < <(find release-artifacts -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.apk" \) | sort)
           echo "table<<EOF" >> $GITHUB_OUTPUT
           echo "$TABLE" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Consolidate SHA256 checksums
         run: |
+          # Same word-splitting trap as the size table above — in the fallback path
+          # a `for` loop would skip "Orbit Setup <version>.exe" entirely and the
+          # checksum file would silently omit the Windows installer.
           PER_PLATFORM=$(find release-artifacts -name "SHA256SUMS_*.txt" -type f)
           if [ -n "$PER_PLATFORM" ]; then
-            cat $PER_PLATFORM > release-artifacts/SHA256SUMS.txt
+            while IFS= read -r f; do
+              [ -n "$f" ] && cat "$f"
+            done <<< "$PER_PLATFORM" > release-artifacts/SHA256SUMS.txt
           else
-            for f in $(find release-artifacts -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.apk" \) | sort); do
+            while IFS= read -r f; do
               shasum -a 256 "$f" >> release-artifacts/SHA256SUMS.txt
-            done
+            done < <(find release-artifacts -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.apk" \) | sort)
           fi
 
       - name: Import GPG key
