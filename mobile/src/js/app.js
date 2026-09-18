@@ -2772,13 +2772,47 @@ document.addEventListener('DOMContentLoaded', function() {
    * back. Falls back to a direct send if the module is missing, so an older cached
    * bundle cannot lose messages outright.
    */
+  /**
+   * Send a message, and report honestly whether the transport took it.
+   *
+   * The transport ALREADY owns delivery and retry, and I did not realise that when I
+   * built the outbox on top of it. shared/network/p2p-mobile.js:
+   *
+   *   - `send()` is async and returns { success: true } or { success: false, queued: true }
+   *   - on failure it pushes onto `_pendingMessages` (its own retry queue)
+   *   - `flushPending(connectionId)` drains that queue and re-sends when a peer connects
+   *   - entries expire via `_maxPendingAge`
+   *
+   * So queueing the same packet in a second outbox meant every failed message was
+   * retried TWICE — duplicate delivery. The repeated identical frames in the desktop log
+   * were almost certainly that.
+   *
+   * The old version also showed "Waiting for them to come back" whenever reachable()
+   * said no, which was frequently wrong (a peer can be known by user id, connection id,
+   * host or IP and only one is registered) — so the toast appeared on sends that had
+   * actually succeeded.
+   *
+   * This now just reports what happened. No second queue.
+   */
   function _deliverOrQueue(peerId, packet, msgId) {
-    if (window.OrbitOutbox && typeof OrbitOutbox.send === 'function') {
-      var sent = OrbitOutbox.send(peerId, packet, { chatId: peerId, msgId: msgId });
-      if (!sent) _markMessagePending(peerId, msgId);
-      return sent;
+    var result;
+    try {
+      result = Orbit.P2P.send(peerId, packet);
+    } catch (e) {
+      console.warn('[Send] transport threw:', e);
+      _markMessagePending(peerId, msgId);
+      return false;
     }
-    try { Orbit.P2P.send(peerId, packet); } catch (e) { console.warn('[Outbox] send failed', e); }
+
+    if (result && typeof result.then === 'function') {
+      result.then(function (r) {
+        // Only claim it is waiting when the transport actually says it could not send.
+        if (r && r.success === false) _markMessagePending(peerId, msgId);
+      }).catch(function (e) {
+        console.warn('[Send] transport rejected:', e);
+        _markMessagePending(peerId, msgId);
+      });
+    }
     return true;
   }
 
@@ -6402,7 +6436,7 @@ document.addEventListener('DOMContentLoaded', function() {
             'Messages group by chat, so a burst from one person collapses into a single notification instead of stacking up.'
           ]],
           ['Reliability', [
-            'Messages now wait for people who are offline — Sending to someone who is not reachable used to drop the message silently, which on a local network happens constantly (a laptop closes, a phone leaves Wi-Fi). Orbit now holds the message and sends it the moment they are back, with an hourglass on the bubble so nothing ever looks delivered when it is not.',
+            'Messages now wait for people who are offline — Sending to someone who is not reachable used to drop the message silently, which on a local network happens constantly (a laptop closes, a phone leaves Wi-Fi). Orbit now holds the message and sends it the moment they are back, with an hourglass on the bubble so nothing ever looks delivered when it is not. If you close the app while something is still waiting, it will need sending again.',
             'You are told when someone’s security key changes — Keys are pinned the first time you connect, but a changed key used to be accepted silently. Orbit now fingerprints each contact’s key and warns you clearly if it is not the one you pinned, so a swapped key cannot pass unnoticed. It does not block the chat — people do reinstall — it tells you.',
             'This release fixes notifications properly. They had never actually appeared in the background — for three separate reasons, any one of which was enough to lose them. Every notification also used Android’s built-in info icon, which is why they all looked like the same generic "i".'
           ]],

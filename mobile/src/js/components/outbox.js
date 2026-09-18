@@ -164,33 +164,67 @@
       var now = Date.now();
       var remaining = [];
       var delivered = 0;
+      var pending = [];   // in-flight async sends for this pass
 
       list.forEach(function (entry) {
         // Expire rather than retry forever.
         if (now - (entry.queuedAt || 0) > MAX_AGE_MS) return;
 
-        if (!reachable(entry.peerId)) { remaining.push(entry); return; }
-
+        // ATTEMPT the send. Do NOT gate on reachable().
+        //
+        // This was the bug: reachable() is a guess, and when it guessed wrong the
+        // outbox queued messages that could have gone straight out — so the safety net
+        // manufactured the failure it existed to prevent. The transport is the
+        // authority on whether it can send, so ask it and believe the answer.
+        //
+        // A send that throws, or that returns false, means it did not go out and the
+        // entry stays queued. (If P2P.send ever silently no-ops while disconnected,
+        // that is a transport bug to fix there — guessing around it here is what
+        // caused this in the first place.)
+        // Orbit.P2P.send is ASYNC and resolves to { success, queued }. Treating its
+        // return value as a boolean was wrong — a Promise is never `false`, so every
+        // send looked successful even when it had failed. Collect the promises and
+        // decide on the real answers below.
+        var outcome;
         try {
-          Orbit.P2P.send(entry.peerId, entry.packet);
-          delivered++;
+          outcome = Orbit.P2P.send(entry.peerId, entry.packet);
         } catch (e) {
-          entry.attempts = (entry.attempts || 0) + 1;
-          remaining.push(entry);
+          outcome = null;
+        }
+
+        if (outcome && typeof outcome.then === 'function') {
+          pending.push(
+            outcome.then(function (r) {
+              return { entry: entry, ok: !!(r && r.success !== false) };
+            }).catch(function () {
+              return { entry: entry, ok: false };
+            })
+          );
+        } else {
+          // Non-promise transport (older build): no failure signal, so treat as sent.
+          delivered++;
         }
       });
 
-      if (delivered) {
-        save(remaining);
-        _emit();
-        if (window.showToast) {
-          showToast('Sent ' + delivered + ' queued message' + (delivered === 1 ? '' : 's'), 'success');
+      // Resolve the async sends, then decide what stays queued.
+      return Promise.all(pending).then(function (results) {
+        results.forEach(function (r) {
+          if (r.ok) delivered++;
+          else { r.entry.attempts = (r.entry.attempts || 0) + 1; remaining.push(r.entry); }
+        });
+
+        if (delivered) {
+          save(remaining);
+          _emit();
+          if (window.showToast) {
+            showToast('Sent ' + delivered + ' queued message' + (delivered === 1 ? '' : 's'), 'success');
+          }
+        } else if (remaining.length !== list.length) {
+          save(remaining);
+          _emit();
         }
-      } else if (remaining.length !== list.length) {
-        save(remaining);
-        _emit();
-      }
-      return delivered;
+        return delivered;
+      });
     }).then(function (n) {
       _flushing = false;
       if (_rerun) { _rerun = false; return flush().then(function (m) { return n + m; }); }
