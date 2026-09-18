@@ -7129,7 +7129,8 @@ textarea#chat-input {
 }
 .diag-row {
   display: flex;
-  align-items: center;
+  align-items: baseline;
+  justify-content: space-between;
   gap: 10px;
   padding: 11px 4px;
   border-bottom: 1px solid var(--border-subtle);
@@ -7155,6 +7156,10 @@ textarea#chat-input {
   color: var(--text-secondary);
   text-align: right;
   flex-shrink: 0;
+  /* A real margin, not just flex distribution — the label and the value must never
+     be able to read as one run-together string. */
+  margin-left: 14px;
+  white-space: nowrap;
 }
 .diag-hint {
   padding: 0 4px 12px 22px;

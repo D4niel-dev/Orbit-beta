@@ -31,6 +31,7 @@
 
   var _timer = null;
   var _flushing = false;
+  var _rerun = false;   // a flush was asked for while one was already running
 
   /* ── storage ── */
 
@@ -69,6 +70,7 @@
     if (!window.Orbit || !Orbit.P2P || typeof Orbit.P2P.isPeerConnected !== 'function') return false;
     try {
       if (Orbit.P2P.isPeerConnected(peerId)) return true;
+
       var friend = null;
       if (window.MStore && MStore.friends) {
         friend = MStore.friends.find(function (f) {
@@ -78,6 +80,27 @@
       if (friend) {
         if (friend.connectionId && Orbit.P2P.isPeerConnected(friend.connectionId)) return true;
         if (friend.ip && Orbit.P2P.isPeerConnected(friend.ip)) return true;
+      }
+
+      // The P2P layer may know the connection only by host. app.js does exactly this
+      // at its own check (`isPeerConnected(peerId) || isPeerConnected(data.host)`),
+      // and without it a perfectly live link reads as unreachable — which queued
+      // messages that could have gone straight out.
+      var hosts = [];
+      if (friend) {
+        if (friend.ip) hosts.push(friend.ip);
+        if (friend.host) hosts.push(friend.host);
+      }
+      for (var i = 0; i < hosts.length; i++) {
+        if (Orbit.P2P.isPeerConnected(hosts[i])) return true;
+      }
+      if (typeof Orbit.P2P.getConnections === 'function') {
+        var conns = Orbit.P2P.getConnections() || [];
+        for (var j = 0; j < conns.length; j++) {
+          var c = conns[j] || {};
+          if (c.peerId === peerId || c.id === peerId) return true;
+          if (friend && (c.host === friend.ip || c.ip === friend.ip)) return true;
+        }
       }
     } catch (e) { /* treat as unreachable */ }
     return false;
@@ -97,15 +120,14 @@
     opts = opts || {};
     if (!peerId || !packet) return false;
 
-    if (reachable(peerId)) {
-      try {
-        Orbit.P2P.send(peerId, packet);
-        return true;
-      } catch (e) {
-        // Fall through to queueing — a throw here means it did NOT go out.
-      }
-    }
-
+    // Write-ahead, deliberately: enqueue FIRST, then try to drain immediately.
+    //
+    // Gating delivery on a reachability pre-check is what broke this — the P2P layer
+    // can know a peer by user id, connection id, host or IP, and a wrong "unreachable"
+    // silently queued messages that could have been delivered (and, before the flush
+    // triggers were right, could sit there indefinitely). Enqueueing first makes a
+    // wrong answer cost a retry instead of a stuck message: flush() removes the entry
+    // the moment it actually goes out, and the pending flag clears with it.
     var list = load();
     list.push({
       peerId: peerId,
@@ -118,12 +140,21 @@
     });
     save(list);
     _emit();
-    return false;
+
+    var lookedReachable = reachable(peerId);
+    flush();   // async — delivers now if the link is up, and clears the entry
+    return lookedReachable;
   }
 
   /** Try to deliver everything that is now deliverable. Safe to call often. */
   function flush() {
-    if (_flushing) return Promise.resolve(0);
+    if (_flushing) {
+      // send() enqueues then flushes; if a flush is already in flight that call would
+      // be skipped and the new entry would wait for the next timer tick. Remember it
+      // and drain again on the way out instead.
+      _rerun = true;
+      return Promise.resolve(0);
+    }
     _flushing = true;
 
     return Promise.resolve().then(function () {
@@ -162,9 +193,11 @@
       return delivered;
     }).then(function (n) {
       _flushing = false;
+      if (_rerun) { _rerun = false; return flush().then(function (m) { return n + m; }); }
       return n;
     }).catch(function () {
       _flushing = false;
+      _rerun = false;
       return 0;
     });
   }

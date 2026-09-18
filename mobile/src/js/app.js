@@ -9963,7 +9963,21 @@ document.addEventListener('DOMContentLoaded', function() {
     } catch (e) { /* non-fatal */ }
   });
 
+  // Kinds that mean "someone is trying to reach you". These must never appear as a
+  // system notification while the user is looking at the app — they are already seeing
+  // the message, and a banner on top of it is noise. Other kinds (vault progress,
+  // errors) are about work the user started and stay unconditional.
+  var REACH_ME_KINDS = { MESSAGE: true, MENTION: true, CALL: true, VIDEO_CALL: true };
+
   window.orbitNotify = function (kind, title, text, groupKey) {
+    // The native path already gates on the activity lifecycle (see
+    // OrbitP2PPlugin: if (!_isForeground) postMessageNotification(...)). This is the
+    // JS side of the same rule: without it, anything JS raises posts regardless of
+    // whether the app is on screen.
+    if (REACH_ME_KINDS[kind] && typeof window.orbitIsBackground === 'function'
+        && !window.orbitIsBackground()) {
+      return;
+    }
     showNativeNotification(title, text, groupKey ? { groupKey: groupKey } : null, kind);
   };
 
