@@ -516,21 +516,44 @@ button:active,
   50% { box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.05); }
 }
 
-/* pfp-frame overlay — resets inherited avatar img styles */
+/* ── Profile frame overlays ──
+   ONE geometry for every surface: the frame is drawn at 125% of the avatar and
+   centred, so the art wraps AROUND the circle instead of sitting on its edge.
+
+   The frame art is a wreath (blossoms, ribbons, halos) drawn inside a 288x288
+   square, meant to surround a circular avatar. I verified the scale by compositing
+   a real frame over a plain circle at 100 / 115 / 125 / 150% and looking at it:
+   at 100% the wreath is crushed against the circle and overlaps it, at 125% it sits
+   outside and holds it, and at 150% it floats away. So 125% is the authored scale —
+   the old values were not all wrong, they were just inconsistent and mis-centred.
+
+   What WAS wrong:
+     * the offset. A 125%-wide overlay needs top/left:-12.5% to stay centred; nine
+       sites used -16%, which shifted the art off-centre by ~3.5% of the avatar.
+     * six different sets of numbers across ~15 sites — -16%/125%, -13%/120%, -15%,
+       -1px, 113/-9px, 69/-7px, and object-fit:fill on the profile pill (which
+       stretched the art). The same frame therefore composed differently in the
+       friends tab, the chat header and the profile panel.
+     * desktop draws frames at inset:0 / 100%, which is why its wreaths hug the edge
+       too. Mobile is now the correct one; desktop should be brought to match.
+
+   !important is required because the render sites still carry inline styles. This
+   block is deliberately the single source of truth so the values cannot drift apart
+   again — change them here, not at the call sites. */
 img.pfp-frame {
+  position: absolute !important;
+  top: -12.5% !important;
+  left: -12.5% !important;
+  width: 125% !important;
+  height: 125% !important;
+  max-width: none !important;
+  max-height: none !important;
+  object-fit: contain !important;
   border-radius: 0 !important;
   border: none !important;
   background: transparent !important;
-  object-fit: contain !important;
-  width: 125% !important;
-  height: 125% !important;
-}
-/* smaller frame for tiny nav avatar */
-#nav-user-avatar ~ img.pfp-frame {
-  width: 26px !important;
-  height: 26px !important;
-  top: -2px !important;
-  left: -2px !important;
+  pointer-events: none !important;
+  z-index: 5 !important;
 }
 
 /* Experimental: Profile Frames */

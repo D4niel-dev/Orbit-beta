@@ -40,6 +40,11 @@ public class OrbitP2PPlugin extends Plugin {
 
     // Foreground tracking — updated by JS via setForeground()
     private volatile boolean _isForeground = true;
+    // Our own user id, set by JS via setIdentity(). Needed to tell whether an
+    // incoming message actually @mentions us while the WebView is paused.
+    private volatile String _selfId = "";
+    private android.app.Application.ActivityLifecycleCallbacks _lifecycle = null;
+    private int _startedActivities = 0;
 
     // ── Service lifecycle ──
 
@@ -179,31 +184,30 @@ public class OrbitP2PPlugin extends Plugin {
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
             );
 
-            // Use notification builder matching SDK
-            Notification notification;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                notification = new Notification.Builder(ctx, "orbit_messages")
-                    .setContentTitle(fromName)
-                    .setContentText(text)
-                    .setSmallIcon(android.R.drawable.ic_dialog_info)
-                    .setContentIntent(pendingIntent)
-                    .setAutoCancel(true)
-                    .setPriority(Notification.PRIORITY_HIGH)
-                    .build();
-            } else {
-                notification = new Notification.Builder(ctx)
-                    .setContentTitle(fromName)
-                    .setContentText(text)
-                    .setSmallIcon(android.R.drawable.ic_dialog_info)
-                    .setContentIntent(pendingIntent)
-                    .setAutoCancel(true)
-                    .setPriority(Notification.PRIORITY_HIGH)
-                    .build();
+            // Route through the shared notification layer. The old code built the
+            // notification inline against channel "orbit_messages", which nothing
+            // ever created — Android silently drops a notification whose channel is
+            // missing, so this path never showed anything on API 26+. It also used
+            // android.R.drawable.ic_dialog_info, the generic info icon.
+            boolean isMention = false;
+            org.json.JSONArray mentions = payload.optJSONArray("mentions");
+            if (mentions != null && mentions.length() > 0 && _selfId != null && !_selfId.isEmpty()) {
+                for (int i = 0; i < mentions.length(); i++) {
+                    org.json.JSONObject m = mentions.optJSONObject(i);
+                    if (m != null && _selfId.equals(m.optString("userId", ""))) { isMention = true; break; }
+                }
             }
 
-            int notifId = (int) (System.currentTimeMillis() & 0x7FFFFFFF);
-            nm.notify(notifId, notification);
-            Log.d(TAG, "Posted native notification from " + fromName);
+            // Group key = the chat, so several messages from one chat collapse into a
+            // single notification instead of stacking.
+            String groupKey = !chatId.isEmpty() ? chatId : groupId;
+
+            com.orbit.app.OrbitNotifications.post(
+                    ctx,
+                    isMention ? com.orbit.app.OrbitNotifications.Kind.MENTION
+                              : com.orbit.app.OrbitNotifications.Kind.MESSAGE,
+                    fromName, text, groupKey, intent);
+            Log.d(TAG, "Posted native notification from " + fromName + (isMention ? " (mention)" : ""));
         } catch (Exception e) {
             Log.e(TAG, "Failed to post native notification", e);
         }
@@ -215,11 +219,337 @@ public class OrbitP2PPlugin extends Plugin {
     public void load() {
         super.load();
         Log.d(TAG, "Plugin load");
+        registerLifecycle();
+    }
+
+    /**
+     * Track foreground/background from the activity lifecycle, natively.
+     *
+     * This used to depend on JS: the app's appStateChange listener (from the
+     * Capacitor App plugin) called setForeground(). But that plugin is not installed,
+     * so the listener was never registered, _isForeground stayed true forever, and
+     * the background notification path — gated on !_isForeground — never ran.
+     * Watching the lifecycle here removes the dependency, and is strictly more
+     * reliable: the whole point is to keep working while the WebView is paused.
+     */
+    private void registerLifecycle() {
+        try {
+            final android.app.Application app = getActivity().getApplication();
+            _lifecycle = new android.app.Application.ActivityLifecycleCallbacks() {
+                @Override public void onActivityStarted(android.app.Activity activity) {
+                    _startedActivities++;
+                    if (_startedActivities == 1) setForegroundState(true);
+                }
+                @Override public void onActivityStopped(android.app.Activity activity) {
+                    _startedActivities = Math.max(0, _startedActivities - 1);
+                    if (_startedActivities == 0) setForegroundState(false);
+                }
+                @Override public void onActivityCreated(android.app.Activity a, android.os.Bundle b) {}
+                @Override public void onActivityResumed(android.app.Activity a) {}
+                @Override public void onActivityPaused(android.app.Activity a) {}
+                @Override public void onActivitySaveInstanceState(android.app.Activity a, android.os.Bundle b) {}
+                @Override public void onActivityDestroyed(android.app.Activity a) {}
+            };
+            app.registerActivityLifecycleCallbacks(_lifecycle);
+        } catch (Exception e) {
+            Log.w(TAG, "Could not register lifecycle callbacks", e);
+        }
+    }
+
+    private void setForegroundState(boolean fg) {
+        if (_isForeground == fg) return;
+        _isForeground = fg;
+        Log.d(TAG, "Foreground -> " + fg);
+        // Keep JS in sync without needing the Capacitor App plugin.
+        JSObject data = new JSObject();
+        data.put("isForeground", fg);
+        notifyListeners("foreground", data);
+    }
+
+    /**
+     * Hands a downloaded APK to the system installer.
+     *
+     * Orbit is sideloaded, so this is the only way an update can be applied. Android
+     * requires the user to have allowed "install unknown apps" for Orbit; on API 26+
+     * we check that up front and send them to the right settings screen rather than
+     * letting the install fail with no explanation. JS tells the two failure modes
+     * apart by the rejection code.
+     */
+    @PluginMethod
+    public void installApk(PluginCall call) {
+        try {
+            String path = call.getString("path", "");
+            if (path == null || path.isEmpty()) { call.reject("path is required"); return; }
+
+            Context ctx = getContext();
+            if (ctx == null) { call.reject("no context"); return; }
+
+            java.io.File file = new java.io.File(ctx.getCacheDir(), path);
+            if (!file.exists()) { call.reject("APK not found: " + path); return; }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                    && !ctx.getPackageManager().canRequestPackageInstalls()) {
+                Intent settings = new Intent(
+                        android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        android.net.Uri.parse("package:" + ctx.getPackageName()));
+                settings.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                ctx.startActivity(settings);
+                call.reject("Allow Orbit to install updates, then try again.",
+                            "NEED_INSTALL_PERMISSION");
+                return;
+            }
+
+            android.net.Uri uri = androidx.core.content.FileProvider.getUriForFile(
+                    ctx, ctx.getPackageName() + ".fileprovider", file);
+
+            Intent install = new Intent(Intent.ACTION_VIEW);
+            install.setDataAndType(uri, "application/vnd.android.package-archive");
+            install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+                           | Intent.FLAG_ACTIVITY_NEW_TASK);
+            ctx.startActivity(install);
+            call.resolve();
+        } catch (Exception e) {
+            Log.e(TAG, "installApk failed", e);
+            call.reject("Could not start the installer: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Zips a vault directory into a single file in the cache dir.
+     *
+     * The v2 vault is a DIRECTORY of chunk files (see components/vault.js), which is
+     * what makes a large account backable-up at all — but a directory cannot be shared
+     * or moved off the device as-is. Zipping it here, natively, gets real DEFLATE from
+     * the platform instead of a hand-rolled JS encoder, and produces one artifact the
+     * share sheet can hand to Drive, Files, or another device.
+     */
+    @PluginMethod
+    public void zipVault(PluginCall call) {
+        try {
+            String srcDir = call.getString("srcDir", "");
+            if (srcDir == null || srcDir.isEmpty()) { call.reject("srcDir is required"); return; }
+
+            Context ctx = getContext();
+            if (ctx == null) { call.reject("no context"); return; }
+
+            java.io.File src = new java.io.File(ctx.getFilesDir(), srcDir);
+            if (!src.isDirectory()) { call.reject("vault not found: " + srcDir); return; }
+
+            String name = src.getName();
+            java.io.File out = new java.io.File(ctx.getCacheDir(), name + ".zip");
+            if (out.exists() && !out.delete()) { /* overwrite anyway */ }
+
+            int count = 0;
+            long bytes = 0;
+            java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(
+                    new java.io.BufferedOutputStream(new java.io.FileOutputStream(out)));
+            try {
+                zos.setLevel(java.util.zip.Deflater.BEST_SPEED);
+                java.io.File[] children = src.listFiles();
+                if (children == null) { call.reject("vault is empty"); return; }
+
+                byte[] buf = new byte[64 * 1024];
+                for (java.io.File child : children) {
+                    if (child.isDirectory()) {
+                        java.io.File[] inner = child.listFiles();
+                        if (inner == null) continue;
+                        for (java.io.File f : inner) {
+                            java.io.FileInputStream in = new java.io.FileInputStream(f);
+                            try {
+                                zos.putNextEntry(new java.util.zip.ZipEntry(
+                                        child.getName() + "/" + f.getName()));
+                                int n;
+                                while ((n = in.read(buf)) > 0) { zos.write(buf, 0, n); bytes += n; }
+                                zos.closeEntry();
+                                count++;
+                            } finally {
+                                in.close();
+                            }
+                        }
+                    } else {
+                        java.io.FileInputStream in = new java.io.FileInputStream(child);
+                        try {
+                            zos.putNextEntry(new java.util.zip.ZipEntry(child.getName()));
+                            int n;
+                            while ((n = in.read(buf)) > 0) { zos.write(buf, 0, n); bytes += n; }
+                            zos.closeEntry();
+                            count++;
+                        } finally {
+                            in.close();
+                        }
+                    }
+                }
+            } finally {
+                zos.close();
+            }
+
+            JSObject res = new JSObject();
+            res.put("path", out.getName());          // relative to the cache dir
+            res.put("size", out.length());
+            res.put("entries", count);
+            res.put("sourceBytes", bytes);
+            call.resolve(res);
+        } catch (Exception e) {
+            Log.e(TAG, "zipVault failed", e);
+            call.reject("Could not zip the backup: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Shares a file from the cache dir through the system share sheet.
+     *
+     * This is how a backup gets off the device. On Android 10+ an app cannot simply
+     * write into a browsable public folder, so handing a content:// URI to the share
+     * sheet is both the correct pattern and the more useful one — the user picks where
+     * it goes (Files, Drive, another device over Orbit itself).
+     */
+    @PluginMethod
+    public void shareFile(PluginCall call) {
+        try {
+            String path = call.getString("path", "");
+            String mime = call.getString("mime", "application/octet-stream");
+            String title = call.getString("title", "Share");
+            if (path == null || path.isEmpty()) { call.reject("path is required"); return; }
+
+            Context ctx = getContext();
+            if (ctx == null) { call.reject("no context"); return; }
+
+            java.io.File file = new java.io.File(ctx.getCacheDir(), path);
+            if (!file.exists()) { call.reject("file not found: " + path); return; }
+
+            android.net.Uri uri = androidx.core.content.FileProvider.getUriForFile(
+                    ctx, ctx.getPackageName() + ".fileprovider", file);
+
+            Intent send = new Intent(Intent.ACTION_SEND);
+            send.setType(mime);
+            send.putExtra(Intent.EXTRA_STREAM, uri);
+            send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+            Intent chooser = Intent.createChooser(send, title);
+            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            ctx.startActivity(chooser);
+            call.resolve();
+        } catch (Exception e) {
+            Log.e(TAG, "shareFile failed", e);
+            call.reject("Could not share the file: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Copies a file from the cache dir into the public Downloads folder.
+     *
+     * This is the better default for a large backup: the share sheet works, but
+     * email and most chat apps will refuse a 500 MB attachment, whereas Downloads is
+     * exactly where someone goes looking for a backup file afterwards.
+     *
+     * On Android 10+ MediaStore is the only way to write somewhere a file manager can
+     * see without asking for a storage permission. On API 24-28 it falls back to the
+     * public directory plus a media scan — that path needs WRITE_EXTERNAL_STORAGE at
+     * runtime, so if it is refused we reject and JS falls back to sharing instead of
+     * failing with no explanation.
+     */
+    @PluginMethod
+    public void saveToDownloads(PluginCall call) {
+        try {
+            String path = call.getString("path", "");
+            String mime = call.getString("mime", "application/zip");
+            String displayName = call.getString("displayName", "orbit-backup.zip");
+            if (path == null || path.isEmpty()) { call.reject("path is required"); return; }
+
+            Context ctx = getContext();
+            if (ctx == null) { call.reject("no context"); return; }
+
+            java.io.File src = new java.io.File(ctx.getCacheDir(), path);
+            if (!src.exists()) { call.reject("file not found: " + path); return; }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                android.content.ContentValues cv = new android.content.ContentValues();
+                cv.put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, displayName);
+                cv.put(android.provider.MediaStore.MediaColumns.MIME_TYPE, mime);
+                cv.put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH,
+                       android.os.Environment.DIRECTORY_DOWNLOADS);
+
+                android.net.Uri item = ctx.getContentResolver().insert(
+                        android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv);
+                if (item == null) { call.reject("Could not create the Downloads entry"); return; }
+
+                java.io.InputStream in = new java.io.FileInputStream(src);
+                java.io.OutputStream os = ctx.getContentResolver().openOutputStream(item);
+                if (os == null) { in.close(); call.reject("Could not open Downloads for writing"); return; }
+                try {
+                    byte[] buf = new byte[64 * 1024];
+                    int n;
+                    while ((n = in.read(buf)) > 0) os.write(buf, 0, n);
+                } finally {
+                    try { in.close(); } catch (Exception e) {}
+                    try { os.close(); } catch (Exception e) {}
+                }
+                JSObject res = new JSObject();
+                res.put("uri", item.toString());
+                res.put("displayName", displayName);
+                res.put("location", "Downloads");
+                call.resolve(res);
+                return;
+            }
+
+            // API 24-28
+            java.io.File dir = android.os.Environment.getExternalStoragePublicDirectory(
+                    android.os.Environment.DIRECTORY_DOWNLOADS);
+            if (dir == null || (!dir.exists() && !dir.mkdirs())) {
+                call.reject("NEED_SHARE", "Downloads is not writable on this device");
+                return;
+            }
+            java.io.File out = new java.io.File(dir, displayName);
+            java.io.InputStream in = new java.io.FileInputStream(src);
+            java.io.OutputStream os = new java.io.FileOutputStream(out);
+            try {
+                byte[] buf = new byte[64 * 1024];
+                int n;
+                while ((n = in.read(buf)) > 0) os.write(buf, 0, n);
+            } finally {
+                try { in.close(); } catch (Exception e) {}
+                try { os.close(); } catch (Exception e) {}
+            }
+            android.media.MediaScannerConnection.scanFile(
+                    ctx, new String[]{ out.getAbsolutePath() }, null, null);
+
+            JSObject res = new JSObject();
+            res.put("uri", android.net.Uri.fromFile(out).toString());
+            res.put("displayName", displayName);
+            res.put("location", "Downloads");
+            call.resolve(res);
+        } catch (Exception e) {
+            Log.w(TAG, "saveToDownloads failed", e);
+            call.reject("NEED_SHARE", "Could not save to Downloads: " + e.getMessage());
+        }
+    }
+
+    /** Closes the app so a freshly installed update can take effect. */
+    @PluginMethod
+    public void exitApp(PluginCall call) {
+        try {
+            android.app.Activity activity = getActivity();
+            call.resolve();
+            if (activity != null) {
+                activity.finishAffinity();
+                new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+                    @Override public void run() { System.exit(0); }
+                }, 300);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "exitApp failed", e);
+        }
     }
 
     @Override
     protected void handleOnDestroy() {
         super.handleOnDestroy();
+        try {
+            if (_lifecycle != null && getActivity() != null) {
+                getActivity().getApplication().unregisterActivityLifecycleCallbacks(_lifecycle);
+                _lifecycle = null;
+            }
+        } catch (Exception e) { /* activity already gone */ }
         Log.d(TAG, "handleOnDestroy — stopping service drain only, service keeps running");
         stopDraining();
         try {
@@ -232,6 +562,42 @@ public class OrbitP2PPlugin extends Plugin {
     }
 
     // ── Plugin methods ──
+
+    /** JS tells us who the local user is, so the native path can spot @mentions. */
+    @PluginMethod
+    public void setIdentity(PluginCall call) {
+        _selfId = call.getString("userId", "");
+        call.resolve();
+    }
+
+    /**
+     * Posts any Orbit notification from JS. This is how the app surfaces events the
+     * native layer cannot see on its own — @mentions, incoming calls, update
+     * availability, background work — using the same channels and icons as the
+     * native path.
+     *
+     * kind: MESSAGE | MENTION | CALL | VIDEO_CALL | UPDATE | PROGRESS | ERROR | SUCCESS
+     */
+    @PluginMethod
+    public void notify(PluginCall call) {
+        try {
+            String kindName = call.getString("kind", "MESSAGE");
+            com.orbit.app.OrbitNotifications.Kind kind;
+            try {
+                kind = com.orbit.app.OrbitNotifications.Kind.valueOf(kindName);
+            } catch (IllegalArgumentException bad) {
+                kind = com.orbit.app.OrbitNotifications.Kind.MESSAGE;
+            }
+            com.orbit.app.OrbitNotifications.post(
+                    getContext(), kind,
+                    call.getString("title", "Orbit"),
+                    call.getString("text", ""),
+                    call.getString("groupKey", null));
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("notify failed: " + e.getMessage());
+        }
+    }
 
     @PluginMethod
     public void setForeground(PluginCall call) {

@@ -14,7 +14,19 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.5.3-beta', 'Latest', [
+        versionBlock('0.6.0-beta', 'Latest', [
+          ['Fixed', [
+            'Profile Frames Sit Correctly Now — Frames were drawn at 100% of the avatar, so the wreath art hugged the edge instead of wrapping around it. They are now drawn at 125%, centred, so the artwork surrounds the avatar the way it was designed to. This was wrong on mobile too, and both platforms are now the same.'
+          ]],
+          ['Platform Note', [
+            'Everything else in this release is Android work: system notifications, an offline send queue, the Local Vault, and updates that install from inside the app. There is nothing else new to try on desktop.'
+          ]],
+          ['Technical', [
+            'Version: Bumped to v0.6.0-beta across all three package.json files.',
+            'Unit tests 267/267. The desktop E2E suite is 34/34 and was unaffected by this release.'
+          ]]
+        ]) +
+        versionBlock('0.5.3-beta', '', [
           ['Features', [
             'Voice & Video Calling on Android — Android had the call protocol but no way to use it. You can now call someone directly: outgoing calls, an incoming ring you can accept or decline, mute, speaker and camera toggles, a call timer, and a picture-in-picture view of yourself. Calls work between a phone and a computer, and the signalling travels over the same encrypted connection as your messages.',
             'A Real Ringtone — Calls now ring with an actual sound for up to a minute and a half, on both desktop and Android. Desktop was completely silent before this.',

@@ -73,21 +73,13 @@ public class MainActivity extends BridgeActivity {
     }
 
     private void createNotificationChannels() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            try {
-                var serviceChannel = new NotificationChannel(
-                    OrbitForegroundService.CHANNEL_ID,
-                    "Orbit P2P Service",
-                    NotificationManager.IMPORTANCE_LOW
-                );
-                serviceChannel.setDescription("Keeps Orbit connected in the background");
-                var manager = getSystemService(NotificationManager.class);
-                if (manager != null) {
-                    manager.createNotificationChannel(serviceChannel);
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+        // All channels live in OrbitNotifications. Creating only the service channel
+        // here is what left "orbit_messages" undefined — and Android silently drops
+        // a notification posted to a channel that does not exist.
+        try {
+            OrbitNotifications.ensureChannels(this);
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 

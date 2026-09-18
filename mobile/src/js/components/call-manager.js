@@ -563,6 +563,18 @@
       // Ring for 1m30. If it expires the caller has already given up (their own
       // window is the same length), so dismiss rather than leaving a stuck ring
       // screen behind if their CALL_END never arrives.
+      // If the app is not on screen, the full-screen call UI is invisible — raise a
+      // real system notification so the call is not silently missed. When the app
+      // IS on screen the ring UI is the alert, so a notification would double-alert.
+      if (window.orbitNotify && window.orbitIsBackground && window.orbitIsBackground()) {
+        window.orbitNotify(
+          this.incoming.isVideo ? 'VIDEO_CALL' : 'CALL',
+          this.incoming.callerName || 'Incoming call',
+          this.incoming.isVideo ? 'Incoming video call' : 'Incoming voice call',
+          'call_' + fromId
+        );
+      }
+
       var self = this;
       Ringer.start(function() {
         if (self.incoming) {

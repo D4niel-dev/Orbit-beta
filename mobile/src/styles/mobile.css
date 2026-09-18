@@ -4245,13 +4245,6 @@ textarea#chat-input {
   font-weight: bold;
   background: var(--bg-hover);
 }
-/* Profile card sheet frame — 5% smaller than default (114px = 95% of 120px) */
-.profile-avatar-wrapper img.pfp-frame {
-  width: 113px !important;
-  height: 113px !important;
-  top: -9px !important;
-  left: -9px !important;
-}
 .profile-hero .profile-name {
   font-size: 26px;
   font-weight: 800;
@@ -4471,14 +4464,6 @@ textarea#chat-input {
   background: var(--bg-surface);
 }
 
-/* Scoped override for pfp-frame in profile pill — explicit px avoids percentage-resolution bug (was resolving against pill's 328px flex width instead of 56px avatar) */
-.profile-pill-avatar img.pfp-frame {
-  width: 69px !important;
-  height: 69px !important;
-  top: -7px !important;
-  left: -7px !important;
-  object-fit: fill !important;
-}
 
 .profile-pill-info {
   flex: 1;
@@ -4998,14 +4983,6 @@ textarea#chat-input {
   height: 100%;
   object-fit: cover;
   clip-path: circle(50%);
-}
-.chat-header-avatar .pfp-frame,
-.chat-row-avatar .pfp-frame,
-.online-friend-avatar .pfp-frame {
-  z-index: 5;
-  width: 125%;
-  height: 125%;
-  max-width: none;
 }
 .chat-header-info {
   flex: 1;
@@ -7090,3 +7067,98 @@ textarea#chat-input {
 }
 .call-log-again i { width: 14px; height: 14px; }
 .call-log-again:active { transform: scale(0.97); opacity: 0.88; }
+
+/* Queued message waiting for the peer to come back (see js/components/outbox.js).
+   Deliberately quiet — it should read as "on its way", not as an error. */
+
+/* Queued message waiting for the peer to come back (see js/components/outbox.js).
+   Deliberately quiet — it should read as "on its way", not as an error. */
+.msg-pending-indicator {
+  opacity: 0.65;
+  margin-right: 4px;
+  font-size: 0.9em;
+}
+
+/* Vault picker rows — the restore target plus save and delete actions.
+   Nothing prunes old backups, so this is the only way to reclaim app storage. The
+   row owns the divider and each button keeps its own tap target, so a stray tap can
+   never restore when you meant to save, or save when you meant to delete. */
+.vault-file-row {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.vault-file-row .vault-file-item {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  border-bottom: none;
+}
+.vault-file-save,
+.vault-file-delete {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.vault-file-save i,
+.vault-file-delete i {
+  width: 17px;
+  height: 17px;
+}
+.vault-file-save:active {
+  background: var(--bg-hover);
+  color: var(--accent-primary);
+}
+.vault-file-delete:active {
+  background: var(--bg-hover);
+  color: var(--danger, #FF453A);
+}
+
+/* Diagnostics rows (see renderDiagnostics in app.js). A dot carries the state, and
+   the hint line only appears when something is actually wrong — a wall of advice on
+   a healthy connection is noise. */
+.diag-list {
+  margin: 4px 0 16px;
+}
+.diag-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 4px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.diag-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--success, #30D158);
+}
+.diag-row-bad .diag-dot {
+  background: var(--danger, #FF453A);
+}
+.diag-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.diag-value {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: right;
+  flex-shrink: 0;
+}
+.diag-hint {
+  padding: 0 4px 12px 22px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}

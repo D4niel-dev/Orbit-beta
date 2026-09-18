@@ -1156,7 +1156,7 @@ window.Frames = {
     if (!src) return avatarHtml;
     return '<div style="position:relative;display:inline-block;">' +
       avatarHtml +
-      '<img src="' + src + '" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' +
+      '<img src="' + src + '" style="position:absolute;top:-12.5%;left:-12.5%;width:125%;height:125%;pointer-events:none;object-fit:contain;border-radius:0;" draggable="false" alt="">' +
     '</div>';
   },
   wrapAvatarContainer(container, frameNum) {
@@ -1168,7 +1168,11 @@ window.Frames = {
     var img = document.createElement('img');
     img.className = 'frame-overlay';
     img.src = src;
-    img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;object-fit:contain;';
+    // 125% centred, not inset:0/100%. The frame art is a wreath authored to wrap
+    // AROUND the avatar circle; at 100% it is crushed against the edge and overlaps
+    // the avatar. A 125%-wide overlay needs -12.5% to stay centred — the same
+    // geometry mobile uses. See the frame-geometry note in the mobile stylesheet.
+    img.style.cssText = 'position:absolute;top:-12.5%;left:-12.5%;width:125%;height:125%;pointer-events:none;object-fit:contain;border-radius:0;';
     img.draggable = false;
     img.alt = 'frame';
     container.style.position = 'relative';

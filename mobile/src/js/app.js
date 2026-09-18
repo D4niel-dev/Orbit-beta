@@ -187,6 +187,53 @@ document.addEventListener('DOMContentLoaded', function() {
         });
       });
     },
+    // Walk a store one record at a time, awaiting the handler between records, so a
+    // caller that streams each value straight out to a file keeps peak memory at a
+    // single record. That matters: a real account holds 500 MB+, and loading the
+    // store in one go is exactly what made the v1 vault unable to back it up.
+    //
+    // Deliberately NOT a cursor. An IndexedDB transaction auto-commits as soon as
+    // the microtask queue drains with no pending request, so awaiting a slow handler
+    // (sealing and writing an 8 MB chunk) before cursor.continue() throws
+    // "The transaction is not active". Reading the key list first and then fetching
+    // each value in its own short transaction keeps memory bounded while still
+    // letting the handler be async.
+    eachKey: function(storeName, handler) {
+      var self = this;
+      return this._open().then(function() {
+        return new Promise(function(resolve, reject) {
+          try {
+            var tx = self._db.transaction(storeName, 'readonly');
+            var req = tx.objectStore(storeName).getAllKeys();
+            req.onsuccess = function(e) { resolve(e.target.result || []); };
+            req.onerror = function(e) { reject(e.target.error); };
+          } catch(e) { reject(e); }
+        });
+      }).then(function(keys) {
+        var chain = Promise.resolve();
+        keys.forEach(function(key) {
+          chain = chain.then(function() {
+            return self._getOne(storeName, key).then(function(value) {
+              return handler(key, value);
+            });
+          });
+        });
+        return chain;
+      });
+    },
+    _getOne: function(storeName, key) {
+      var self = this;
+      return this._open().then(function() {
+        return new Promise(function(resolve, reject) {
+          try {
+            var tx = self._db.transaction(storeName, 'readonly');
+            var req = tx.objectStore(storeName).get(key);
+            req.onsuccess = function(e) { resolve(e.target.result); };
+            req.onerror = function(e) { reject(e.target.error); };
+          } catch(e) { reject(e); }
+        });
+      });
+    },
     'delete': function(key) {
       var self = this;
       return this._open().then(function() {
@@ -566,7 +613,7 @@ document.addEventListener('DOMContentLoaded', function() {
             var cf = MStore.friends.find(function(f) { return f.id === c.id; });
             var cfNum = cf ? getProfileFrame(cf) : 0;
             if (cfNum > 0) {
-              chatFrameHtml = '<img src="icons/frames/pfp_frame_' + cfNum + '.png" class="pfp-frame" style="position:absolute;top:-13%;left:-13%;width:120%;height:120%;pointer-events:none;object-fit:contain;" draggable="false" alt="">';
+              chatFrameHtml = '<img src="icons/frames/pfp_frame_' + cfNum + '.png" class="pfp-frame" draggable="false" alt="">';
             }
           }
         }
@@ -802,7 +849,6 @@ document.addEventListener('DOMContentLoaded', function() {
             frameEl.className = 'pfp-frame';
             frameEl.draggable = false;
             frameEl.alt = '';
-            frameEl.style.cssText = 'position:absolute;top:-15%;left:-15%;pointer-events:none;';
             _avatarEl.appendChild(frameEl);
             oldFrame = frameEl;
           }
@@ -2159,7 +2205,7 @@ document.addEventListener('DOMContentLoaded', function() {
           callLogHtml +
           reactionsHtml +
           threadChipHtml +
-          '<div class="message-time">' + (_getDisappearTimer(chatId) !== 'off' ? '<span class="msg-disappear-indicator" title="Auto-deletes after ' + _getDisappearTimer(chatId) + '">⏱</span>' : '') + formatTime(m.time) + '</div>' +
+          '<div class="message-time">' + (m.pending ? '<span class="msg-pending-indicator" title="Waiting for them to come back — sends automatically">⏳</span>' : '') + (_getDisappearTimer(chatId) !== 'off' ? '<span class="msg-disappear-indicator" title="Auto-deletes after ' + _getDisappearTimer(chatId) + '">⏱</span>' : '') + formatTime(m.time) + '</div>' +
           (MStore.settings.showMessageIds ? '<div style="font-size:9px;color:var(--text-muted);opacity:0.5;margin-top:2px;">' + m.id + '</div>' : '') +
         '</div>' +
       '</div>';
@@ -2717,6 +2763,106 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
+  /**
+   * Deliver a message packet, queueing it when the peer is not reachable.
+   *
+   * Every send used to be fire-and-forget: if the peer happened to be offline the
+   * call did nothing and the message was gone. On a LAN that is constant — a laptop
+   * lid closes, a phone leaves Wi-Fi — so the outbox holds the packet until they are
+   * back. Falls back to a direct send if the module is missing, so an older cached
+   * bundle cannot lose messages outright.
+   */
+  function _deliverOrQueue(peerId, packet, msgId) {
+    if (window.OrbitOutbox && typeof OrbitOutbox.send === 'function') {
+      var sent = OrbitOutbox.send(peerId, packet, { chatId: peerId, msgId: msgId });
+      if (!sent) _markMessagePending(peerId, msgId);
+      return sent;
+    }
+    try { Orbit.P2P.send(peerId, packet); } catch (e) { console.warn('[Outbox] send failed', e); }
+    return true;
+  }
+
+  /** Flag a queued message so it does not look delivered. */
+  function _markMessagePending(chatId, msgId) {
+    try {
+      var msgs = MStore.getMessages(chatId);
+      for (var i = 0; i < msgs.length; i++) {
+        if (String(msgs[i].id) === String(msgId)) {
+          msgs[i].pending = true;
+          msgs[i].pendingSince = Date.now();
+          break;
+        }
+      }
+      MStore.save();
+      if (activeChatId === chatId) renderMessages();
+    } catch (e) { /* the queue itself already succeeded */ }
+    showToast('Waiting for them to come back — it will send automatically', 'info');
+  }
+
+  /**
+   * A short, human-comparable fingerprint of a public key.
+   * SHA-256 truncated to 8 bytes and grouped in fours, so two people can read it
+   * aloud to each other. Not the whole digest — this is for eyeball comparison, not
+   * for a cryptographic proof.
+   */
+  function _keyFingerprint(key) {
+    try {
+      return window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(key)))
+        .then(function (d) {
+          var b = new Uint8Array(d);
+          var out = '';
+          for (var i = 0; i < 8; i++) out += ('0' + b[i].toString(16)).slice(-2);
+          return out.toUpperCase().replace(/(.{4})(?=.)/g, '$1 ');
+        });
+    } catch (e) {
+      return Promise.resolve('');
+    }
+  }
+
+  /**
+   * Record a peer's public key — and shout if it has changed.
+   *
+   * Keys are pinned on first use (that is what QR pairing establishes). But pinning
+   * without ever checking again is only half the job: if a key changes later, the
+   * app previously just accepted the new one silently. That is the classic
+   * man-in-the-middle gap, and for an app whose whole pitch is that your
+   * conversations stay yours, accepting a swapped key without a word undermines the
+   * claim. A peer's key legitimately changes when they reinstall, so this does not
+   * block the chat — it tells you, and leaves a mark on the contact.
+   *
+   * Called from every site that learns a peer key: QR pairing, the connection
+   * handshake, and the two discovery paths.
+   */
+  function _setPeerKey(friend, key) {
+    if (!friend || !key) return;
+    if (friend.publicKey === key) return;          // unchanged — nothing to do
+
+    var hadKey = !!friend.publicKey;
+    friend.publicKey = key;                        // set synchronously; callers save
+
+    _keyFingerprint(key).then(function (fp) {
+      var previous = friend.keyFingerprint;
+      friend.keyFingerprint = fp;
+
+      if (hadKey && previous && previous !== fp) {
+        friend.keyChanged = true;
+        friend.keyChangedAt = Date.now();
+        MStore.save();
+        showToast((friend.name || 'This contact') +
+          '’s security key has changed — confirm it with them before trusting this chat',
+          'error');
+        console.warn('[E2EE] peer key changed for ' + friend.id + ': ' + previous + ' -> ' + fp);
+        if (window.orbitNotify) {
+          window.orbitNotify('ERROR', 'Security key changed',
+            (friend.name || 'A contact') + '’s key is not the one you pinned.',
+            'keychange_' + friend.id);
+        }
+      } else {
+        MStore.save();
+      }
+    });
+  }
+
   async function sendMessage() {
     var input = document.getElementById('chat-input');
     var text = input.value.trim();
@@ -3140,10 +3286,20 @@ document.addEventListener('DOMContentLoaded', function() {
           type: att.type || '', mimeType: att.mimeType || ''
         };
         if (isGroup) ftStartPayload.chatId = activeChatId;
-        Orbit.P2P.send(peerId, Orbit.Protocol.createPacket(
+        // Route the transfer's START through the outbox so an attachment sent to a
+        // peer who is briefly away waits instead of failing on its own — the message
+        // was already queued, and without this the receiver got metadata for a file
+        // it never received.
+        //
+        // Only the START is queued, and only metadata: the chunk body streams over the
+        // connection once it exists. Caveat worth knowing: the file bytes live in
+        // memory (att._arrayBuffer), so a queued START does not survive an app
+        // restart. It covers the common case — a peer who is momentarily offline
+        // while the app is running — not a transfer resumed the next day.
+        _deliverOrQueue(peerId, Orbit.Protocol.createPacket(
           Orbit.Protocol.Types.FILE_TRANSFER_START, myId, peerId,
           ftStartPayload
-        ));
+        ), null);
 
         // CROSS-4: send-session map so an incoming FILE_TRANSFER_RESUME can
         // rewind/advance progress. Keyed fileId + '::' + peerId — a group
@@ -3262,10 +3418,10 @@ document.addEventListener('DOMContentLoaded', function() {
           // Include large file metadata so receiver can merge text+file into one message (CRIT-4)
           var e2eeAttachments = inlineAttachments.length > 0 ? inlineAttachments.slice() : [];
           largeFiles.forEach(function(lf) { e2eeAttachments.push({ id: lf.id, _fileId: lf.id, name: lf.name, type: lf.type, _poster: lf._poster || undefined, _pending: true }); });
-          Orbit.P2P.send(activeChatId, Orbit.Protocol.createPacket(
+          _deliverOrQueue(activeChatId, Orbit.Protocol.createPacket(
             Orbit.Protocol.Types.MESSAGE, myId, activeChatId,
             { e2ee: true, ciphertext: encrypted.ciphertext, nonce: encrypted.nonce, msgId: newMsg.id, replyTo: newMsg.replyTo, attachments: e2eeAttachments.length > 0 ? e2eeAttachments : undefined, fromName: newMsg.fromName, poll: newMsg.poll || undefined }
-          ));
+          ), newMsg.id);
           // Attachments ride with a message that actually went out, so they are
           // sent only on the success path.
           if (largeFiles.length > 0) {
@@ -3278,10 +3434,10 @@ document.addEventListener('DOMContentLoaded', function() {
       // Include large file metadata so receiver can merge text+file into one message (CRIT-4)
       var msgAttachments = inlineAttachments.length > 0 ? inlineAttachments.slice() : [];
       largeFiles.forEach(function(lf) { msgAttachments.push({ id: lf.id, _fileId: lf.id, name: lf.name, type: lf.type, _poster: lf._poster || undefined, _pending: true }); });
-      Orbit.P2P.send(activeChatId, Orbit.Protocol.createPacket(
+      _deliverOrQueue(activeChatId, Orbit.Protocol.createPacket(
         Orbit.Protocol.Types.MESSAGE, myId, activeChatId,
         { text: text, msgId: newMsg.id, replyTo: newMsg.replyTo, attachments: msgAttachments.length > 0 ? msgAttachments : undefined, fromName: newMsg.fromName, poll: newMsg.poll || undefined }
-      ));
+      ), newMsg.id);
       if (largeFiles.length > 0) {
         largeFiles.forEach(function(att) { _sendLargeFileToPeer(att, activeChatId, false); });
       }
@@ -3424,7 +3580,7 @@ document.addEventListener('DOMContentLoaded', function() {
             var rm = document.createElement('button');
             rm.type = 'button';
             rm.className = 'poll-opt-remove';
-            rm.textContent = '\u00D7';
+            rm.textContent = '×';
             rm.style.cssText = 'width:30px;height:36px;border:none;background:var(--bg-hover);border-radius:8px;color:var(--text-muted);font-size:18px;cursor:pointer;flex-shrink:0;';
             rm.addEventListener('click', function() {
               row.remove();
@@ -3770,10 +3926,10 @@ document.addEventListener('DOMContentLoaded', function() {
         // Schedule toast ticks for live feedback (non-blocking)
         for (var ci = seconds; ci >= 1; ci--) {
           (function(tick) {
-            setTimeout(function() { showToast('\u23F3 ' + tick + '...', 'info'); }, (seconds - tick) * 1000);
+            setTimeout(function() { showToast('⏳ ' + tick + '...', 'info'); }, (seconds - tick) * 1000);
           })(ci);
         }
-        newMsg.text = '\u23F3 Countdown ' + seconds + 's: ' + message;
+        newMsg.text = '⏳ Countdown ' + seconds + 's: ' + message;
         // Replace text after countdown elapsed with final shout (best-effort local update)
         // The sent message stays as the countdown line; ticks are toasts only — keeps protocol simple.
         return { handled: true, msg: newMsg };
@@ -4396,7 +4552,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var initial = f.name ? f.name.charAt(0).toUpperCase() : '?';
       var fAvatarSrc = safeAvatarSrc(f.avatar);
       var fPfNum = getProfileFrame(f);
-      var fPfHtml = fPfNum > 0 ? '<img src="icons/frames/pfp_frame_' + fPfNum + '.png" class="pfp-frame" style="position:absolute;top:-16%;left:-16%;pointer-events:none;" draggable="false" alt="">' : '';
+      var fPfHtml = fPfNum > 0 ? '<img src="icons/frames/pfp_frame_' + fPfNum + '.png" class="pfp-frame" draggable="false" alt="">' : '';
       html += '<div class="list-row friend-row" data-friend="' + escapeAttr(f.id) + '" data-user-id="' + escapeAttr(f.id) + '">' +
         '<div class="chat-row-avatar-wrapper" style="width:44px;height:44px;">' +
           '<div class="chat-row-avatar" style="width:44px;height:44px;font-size:16px;">' + (fAvatarSrc ? '<img src="' + fAvatarSrc + '">' : escapeHtml(initial)) + '</div>' +
@@ -4436,7 +4592,6 @@ document.addEventListener('DOMContentLoaded', function() {
           navFrame.className = 'pfp-frame';
           navFrame.draggable = false;
           navFrame.alt = '';
-          navFrame.style.cssText = 'position:absolute;top:-1px;left:-1px;pointer-events:none;';
           navEl.parentNode.appendChild(navFrame);
         }
         navFrame.src = 'icons/frames/pfp_frame_' + navPf + '.png';
@@ -4452,6 +4607,139 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   /* ─── Settings Panel (simplified main view) ─── */
+  /**
+   * Diagnostics — the screen that answers "why can't I see anyone?".
+   *
+   * A LAN app fails for reasons that are invisible from inside the app: AP isolation
+   * on the router, a host firewall, two devices on different subnets, a port already
+   * taken. From the user's side they all look identical — nobody shows up — and each
+   * one needs a different fix. This reports what the app can actually observe and
+   * names the likely cause, instead of leaving someone to guess.
+   */
+  function _diagRows() {
+    var P2P = (window.Orbit && Orbit.P2P) || null;
+    var rows = [];
+
+    var transport = P2P && typeof P2P.isAvailable === 'function' ? !!P2P.isAvailable() : false;
+    rows.push({
+      ok: transport,
+      label: 'Networking',
+      value: transport ? 'available' : 'unavailable',
+      hint: transport ? '' : 'The native networking plugin did not start. Reinstall, or check that Orbit has not been restricted in Android settings.'
+    });
+
+    var discovery = false;
+    try { discovery = !!(P2P && typeof P2P.isDiscoveryActive === 'function' && P2P.isDiscoveryActive()); } catch (e) {}
+    rows.push({
+      ok: discovery,
+      label: 'Peer discovery',
+      value: discovery ? 'running' : 'stopped',
+      hint: discovery ? '' : 'Orbit is not announcing itself, so nearby peers cannot find you. Toggle it from the home screen, and check that Wi-Fi is on.'
+    });
+
+    var port = (MStore.settings && MStore.settings.tcpPort) || 0;
+    rows.push({
+      ok: !!port,
+      label: 'Listening port',
+      value: port ? String(port) : 'not set',
+      hint: port ? '' : 'No port configured. Messages can still be sent, but nobody can reach you first.'
+    });
+
+    var friends = (MStore.friends || []).length;
+    var online = 0;
+    try {
+      online = (MStore.friends || []).filter(function(f) {
+        return f.status === 'online' || f.online || (P2P && P2P.isPeerConnected && P2P.isPeerConnected(f.id));
+      }).length;
+    } catch (e) {}
+    rows.push({
+      ok: friends === 0 || online > 0,
+      label: 'Peers',
+      value: online + ' of ' + friends + ' reachable',
+      hint: (friends > 0 && online === 0)
+        ? 'None of your contacts are reachable. On a home or office network the usual causes are wireless isolation on the router (devices cannot see each other), a firewall on the other machine, or the two devices being on different subnets.'
+        : ''
+    });
+
+    var conns = 0;
+    try { conns = (P2P && typeof P2P.getConnections === 'function' ? (P2P.getConnections() || []).length : 0); } catch (e) {}
+    rows.push({ ok: conns > 0, label: 'Open connections', value: String(conns), hint: '' });
+
+    var queued = (window.OrbitOutbox && typeof OrbitOutbox.count === 'function') ? OrbitOutbox.count() : 0;
+    rows.push({
+      ok: queued === 0,
+      label: 'Waiting to send',
+      value: queued ? queued + ' message' + (queued === 1 ? '' : 's') : 'nothing queued',
+      hint: queued ? 'These will go out as soon as the recipient is reachable.' : ''
+    });
+
+    return rows;
+  }
+
+  function renderDiagnostics() {
+    var rows = _diagRows();
+    var html = '';
+
+    var problem = null;
+    for (var i = 0; i < rows.length; i++) {
+      if (!rows[i].ok && rows[i].hint) { problem = rows[i]; break; }
+    }
+
+    html += '<div class="settings-section-title">Diagnostics</div>';
+    html += '<div class="settings-item-card" data-search="Diagnostics connection health network">' +
+      '<div class="settings-item-body">' +
+        '<span class="settings-item-title">Connection health</span>' +
+        '<span class="settings-item-desc">' +
+          (problem
+            ? escapeHtml('Something looks wrong: ' + problem.label.toLowerCase() + '.')
+            : 'Everything Orbit can check looks healthy.') +
+        '</span>' +
+      '</div></div>';
+
+    html += '<div class="diag-list">';
+    for (var j = 0; j < rows.length; j++) {
+      var r = rows[j];
+      html += '<div class="diag-row' + (r.ok ? '' : ' diag-row-bad') + '">' +
+        '<span class="diag-dot" aria-hidden="true"></span>' +
+        '<span class="diag-label">' + escapeHtml(r.label) + '</span>' +
+        '<span class="diag-value">' + escapeHtml(r.value) + '</span>' +
+      '</div>';
+      if (r.hint) {
+        html += '<div class="diag-hint">' + escapeHtml(r.hint) + '</div>';
+      }
+    }
+    html += '</div>';
+
+    html += '<div class="settings-item-card" data-search="Diagnostics report share">' +
+      '<div class="settings-item-body">' +
+        '<span class="settings-item-title">Share a report</span>' +
+        '<span class="settings-item-desc">Copy the values above so they can be pasted into a bug report.</span>' +
+      '</div>' +
+      '<div class="settings-item-action">' +
+        '<button class="settings-action-btn" id="diag-copy">Copy</button>' +
+      '</div></div>';
+
+    return html;
+  }
+
+  function _diagCopy() {
+    var rows = _diagRows();
+    var lines = ['Orbit diagnostics', 'version=' + (window.APP_VERSION || '?'),
+                 'platform=' + (window.Capacitor ? 'android' : 'web')];
+    rows.forEach(function(r) { lines.push(r.label + '=' + r.value); });
+    lines.push('friends=' + ((MStore.friends || []).length));
+    lines.push('chats=' + ((MStore.chats || []).length));
+    var text = lines.join('\n');
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function() { showToast('Diagnostics copied', 'success'); },
+                                                 function() { showToast('Could not copy', 'error'); });
+        return;
+      }
+    } catch (e) {}
+    showToast('Copy is unavailable in this WebView', 'warning');
+  }
+
   function renderSettings() {
     try { updateNavAvatar(); } catch(e) { console.error('[Orbit] updateNavAvatar error:', e); }
     
@@ -4467,7 +4755,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var sPfNum = 0;
     try { sPfNum = getProfileFrame(MStore.settings); } catch(e) {}
     
-    var sPfHtml = sPfNum > 0 ? '<img src="icons/frames/pfp_frame_' + sPfNum + '.png" class="pfp-frame" style="position:absolute;top:-16%;left:-16%;pointer-events:none;" draggable="false" alt="">' : '';
+    var sPfHtml = sPfNum > 0 ? '<img src="icons/frames/pfp_frame_' + sPfNum + '.png" class="pfp-frame" draggable="false" alt="">' : '';
     
     container.innerHTML =
       '<div class="settings-profile-card" id="settings-profile-card">' +
@@ -4504,6 +4792,7 @@ document.addEventListener('DOMContentLoaded', function() {
     { key: 'privacy', icon: 'shield', title: 'Privacy & Security', desc: 'Encryption, auto-delete' },
     { key: 'network', icon: 'wifi', title: 'Network', desc: 'Ports, file size, add friend' },
     { key: 'vault', icon: 'database-backup', title: 'Local Vault', desc: 'Encrypted local backup & restore' },
+    { key: 'diagnostics', icon: 'activity', title: 'Diagnostics', desc: 'Connection health and what might be blocking it' },
     { key: 'about', icon: 'info', title: 'About', desc: 'Version, statistics' },
     { key: 'advanced', icon: 'terminal', title: 'Advanced', desc: 'Developer tools, experimental features' }
   ];
@@ -4822,7 +5111,8 @@ document.addEventListener('DOMContentLoaded', function() {
       {
         label: 'System',
         items: [
-          { key: 'about', icon: 'info', title: 'About', desc: 'Version, statistics' },
+          { key: 'diagnostics', icon: 'activity', title: 'Diagnostics', desc: 'Connection health and what might be blocking it' },
+    { key: 'about', icon: 'info', title: 'About', desc: 'Version, statistics' },
           { key: 'advanced', icon: 'terminal', title: 'Advanced', desc: 'Developer tools, experimental features' }
         ]
       }
@@ -5000,6 +5290,8 @@ document.addEventListener('DOMContentLoaded', function() {
             '<i data-lucide="chevron-right" style="width:18px;height:18px;color:var(--text-muted);"></i>' +
           '</div>' +
         '</div>';
+      case 'diagnostics':
+        return renderDiagnostics();
       case 'about':
         var friendsCount = MStore ? MStore.friends.length : 0;
         var chatsCount = MStore ? MStore.chats.length : 0;
@@ -5443,6 +5735,13 @@ document.addEventListener('DOMContentLoaded', function() {
           }
         }, s.experimentalPerformanceMode);
         break;
+      case 'diagnostics':
+        // Bind only. The render case (which returns the markup) lives in the render
+        // switch above — putting innerHTML here referenced an undefined container and
+        // threw, leaving the screen blank.
+        var diagCopy = document.getElementById('diag-copy');
+        if (diagCopy) diagCopy.addEventListener('click', _diagCopy);
+        break;
       case 'about':
         var changelogBtn = document.getElementById('row-show-changelog');
         if (changelogBtn) changelogBtn.addEventListener('click', showChangelog);
@@ -5655,133 +5954,116 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  /**
+   * Export the whole account using the v2 chunked format (see components/vault.js).
+   *
+   * The v1 implementation built one in-memory object, stringified it and wrote it in
+   * a single call, which is why it needed a byte budget and could never include all
+   * of a real account's attachments. v2 writes a directory of chunk files instead, so
+   * peak memory is one chunk rather than the whole account.
+   */
   function runVaultExport(showUI) {
-    var fs = _vaultFilesystem();
-    if (!fs) {
+    var F = _vaultFilesystem();
+    if (!F) {
       if (showUI !== false) showToast('Vault: Filesystem plugin unavailable', 'error');
       return Promise.resolve(null);
     }
     if (window._vaultExportRunning) return Promise.resolve(null);
+    if (!window.OrbitVault) {
+      if (showUI !== false) showToast('Vault: exporter unavailable', 'error');
+      return Promise.resolve(null);
+    }
     window._vaultExportRunning = true;
 
-    function finish(res) { window._vaultExportRunning = false; return res; }
+    if (showUI !== false && window.orbitNotify) {
+      window.orbitNotify('PROGRESS', 'Backing up your vault',
+        'Exporting your account data…', 'orbit_vault');
+    }
 
-    // Set by the blob reader when attachment data exceeded the export budget.
-    var vaultTruncated = false;
-    var vaultDropped = { blobs: 0, partials: 0 };
-    var vaultBudget = _vaultExportBudget(false);
-
-    return Promise.resolve().then(function() {
-      var data = {};
-      for (var i = 0; i < localStorage.length; i++) {
-        var k = localStorage.key(i);
-        if (k && k.indexOf('orbit_') === 0) data[k] = localStorage.getItem(k);
+    // Passphrase comes from the settings field. Auto-backup runs on app-background with
+    // no UI, so it usually has none — and it must then SKIP, not downgrade. Writing an
+    // unencrypted backup on a timer for someone who deliberately enabled encryption is
+    // the exact failure encryption is meant to prevent.
+    var passphrase = null;
+    if (MStore.settings.vaultEncrypt) {
+      var input = document.getElementById('vault-passphrase');
+      passphrase = (input && input.value) ? input.value : null;
+      if (!passphrase) {
+        if (showUI !== false) {
+          showToast('Encryption is on but no passphrase is set — backup cancelled', 'warning');
+        } else {
+          console.warn('[Vault] auto-backup skipped: encryption is on but no passphrase is available');
+        }
+        return Promise.resolve(null);
       }
-      var _settings = MStore.settings || {};
-      var needsEnc = !!_settings.vaultEncrypt;
-      // Computed before the read so the encrypted path can use a smaller budget.
-      vaultBudget = _vaultExportBudget(needsEnc);
-      return _vaultReadBlobStore(vaultBudget).then(function(blobData) {
-        vaultTruncated = !!blobData.truncated;
-        vaultDropped = { blobs: blobData.droppedBlobs || 0, partials: blobData.droppedPartials || 0 };
-        var s = _settings;
-        var pass = null;
-        if (needsEnc && !_vaultCrypto()) {
-          // Say so plainly instead of dying later on a cryptic TypeError.
-          if (showUI !== false) showToast('Vault export failed: encryption is unavailable in this build.', 'error');
-          return null;
-        }
-        if (needsEnc) {
-          var passEl = document.getElementById('vault-passphrase');
-          pass = passEl && passEl.value ? passEl.value : null;
-          if (!pass) {
-            if (showUI === false) return null; // auto-backup: no passphrase available — skip silently
-            pass = prompt('Enter a passphrase to encrypt this vault export:');
+    }
+
+    var statusEl = document.getElementById('vault-status');
+    if (statusEl) statusEl.textContent = 'Backing up…';
+
+    return window.OrbitVault.exportVault({ passphrase: passphrase })
+      .then(function (res) {
+        try { localStorage.setItem('orbit_vault_lastbackup', new Date().toISOString()); } catch (e) {}
+        // Total the whole backup, not just the blob store. Attachments small enough
+        // to live inline as data URLs sit in the localStorage payload, so counting
+        // only blobs reported "0 attachments · 0.0 MB" on an account full of
+        // images. Showing the split also makes it obvious where the weight is.
+        var blobBytes = res.counts.bytes || 0;
+        var dataBytes = res.counts.dataBytes || 0;
+        var totalBytes = blobBytes + dataBytes;
+        var summary = res.counts.blobs + ' attachment' + (res.counts.blobs === 1 ? '' : 's') +
+                      ' · ' + _vaultFmtBytes(totalBytes) +
+                      (dataBytes > 0 ? ' (' + _vaultFmtBytes(dataBytes) + ' of messages & settings)' : '');
+        if (showUI !== false) {
+          showToast('Vault exported: ' + summary, 'success');
+          if (statusEl) statusEl.textContent = 'Last backup: ' + new Date().toLocaleString();
+          if (window.orbitNotify) {
+            window.orbitNotify('SUCCESS', 'Vault backed up', summary, 'orbit_vault');
           }
-          if (!pass) return null;
+          // The backup currently lives in app-private storage, which a file manager
+          // cannot see and a reinstall would wipe. Offer to get a copy out now, while
+          // the user is thinking about backups at all.
+          if (confirm('Backup complete (' + summary + ').\n\n' +
+                      'Save a copy to Downloads now? Until it leaves this device ' +
+                      'it is not a real backup.')) {
+            _shareVault(res.dir);
+          }
         }
-        var payload = { data: data, blobs: blobData.blobs, partials: blobData.partials };
-        var base = {
-          app: 'Orbit',
-          version: window.APP_VERSION || '0.5.0-beta',
-          createdAt: new Date().toISOString()
-        };
-        if (vaultTruncated) {
-          // Recorded in the file itself so a restore can explain the gap rather
-          // than silently appearing to have lost attachments.
-          base.attachmentsExcluded = true;
-          base.attachmentsExcludedReason = 'Attachment and in-progress transfer data exceeded the ' +
-            _vaultFmtBytes(vaultBudget) + ' export budget';
-          base.attachmentsExcludedCounts = {
-            attachments: vaultDropped.blobs,
-            partialTransfers: vaultDropped.partials
-          };
+        return res;
+      })
+      .catch(function (err) {
+        var msg = (err && err.message) ? err.message : String(err);
+        console.warn('[Vault] export error:', err);
+        if (showUI !== false) {
+          showToast('Vault export failed: ' + msg, 'error');
+          if (window.orbitNotify) window.orbitNotify('ERROR', 'Vault backup failed', msg, 'orbit_vault');
         }
-        if (needsEnc) {
-          return _vaultEncryptPayload(payload, pass).then(function(enc) {
-            return Object.assign({}, base, { encrypted: true }, enc);
-          });
-        }
-        return Object.assign({}, base, { encrypted: false }, payload);
-      }).then(function(vaultObj) {
-        if (!vaultObj) return null;
-        var json = JSON.stringify(vaultObj);
-        // Release the object graph now that it has been flattened. Without this
-        // the multi-megabyte object tree stays alive on top of the string, and
-        // the Capacitor bridge then serialises the string a second time.
-        vaultObj = null;
-        var d = new Date();
-        var stamp = d.getFullYear().toString() + _vaultPad2(d.getMonth() + 1) + _vaultPad2(d.getDate()) +
-          '-' + _vaultPad2(d.getHours()) + _vaultPad2(d.getMinutes());
-        var fileName = 'OrbitVault-' + stamp + '.json';
-        // json.length, not new Blob([json]).size: the payload is ASCII-dominant
-        // base64, so the character count is a good byte proxy — and unlike a
-        // Blob it does not allocate another full copy of the string at exactly
-        // the moment we are trying not to run out of memory.
-        var size = json.length;
-        return fs.mkdir({ path: 'vault', directory: 'DATA', recursive: true })
-          .catch(function() { /* dir exists — continue */ })
-          .then(function() {
-            return fs.writeFile({ path: 'vault/' + fileName, data: json, directory: 'DATA', encoding: 'utf8' });
-          })
-          .then(function() {
-            json = null;
-            try { localStorage.setItem('orbit_vault_lastbackup', new Date().toISOString()); } catch(e) {}
-            if (showUI !== false) {
-              if (vaultTruncated) {
-                var leftOut = [];
-                if (vaultDropped.blobs) leftOut.push(vaultDropped.blobs + ' attachment' + (vaultDropped.blobs === 1 ? '' : 's'));
-                if (vaultDropped.partials) leftOut.push(vaultDropped.partials + ' in-progress transfer' + (vaultDropped.partials === 1 ? '' : 's'));
-                showToast('Vault exported: ' + fileName + ' (' +
-                  _vaultFmtBytes(size) + '). Left out ' + (leftOut.join(' and ') || 'oversized data') +
-                  ' to stay within the ' + _vaultFmtBytes(vaultBudget) +
-                  ' export limit and avoid running out of memory.', 'info');
-              } else {
-                showToast('Vault exported: ' + fileName + ' (' + _vaultFmtBytes(size) + ')', 'success');
-              }
-              var statusEl = document.getElementById('vault-status');
-              if (statusEl) statusEl.textContent = 'Last backup: ' + new Date().toLocaleString();
-            }
-            return { fileName: fileName, size: size };
-          });
-      });
-    }).catch(function(err) {
-      if (showUI !== false) showToast('Vault export failed: ' + (err && err.message ? err.message : String(err)), 'error');
-      console.warn('[Vault] export error:', err);
-      return null;
-    }).then(finish);
+        return null;
+      })
+      .then(function (r) { window._vaultExportRunning = false; return r; });
   }
 
   function runVaultRestore() {
     var fs = _vaultFilesystem();
     if (!fs) { showToast('Vault: Filesystem plugin unavailable', 'error'); return; }
-    fs.readdir({ path: 'vault', directory: 'DATA' }).then(function(res) {
-      var files = (res.files || []).filter(function(f) {
-        return f && f.name && f.name.toLowerCase().slice(-5) === '.json';
+    // v2 backups are directories; v1 backups are single .json files. Offer both so
+    // an older backup can still be restored after upgrading.
+    Promise.all([
+      (window.OrbitVault ? window.OrbitVault.listVaults() : Promise.resolve([])),
+      fs.readdir({ path: 'vault', directory: 'DATA' }).then(function(res) {
+        return (res.files || []).filter(function(f) {
+          return f && f.name && f.name.toLowerCase().slice(-5) === '.json';
+        }).map(function(f) {
+          return { kind: 'legacy', name: f.name, path: 'vault/' + f.name, size: f.size, mtime: f.mtime };
+        });
+      }).catch(function() { return []; })
+    ]).then(function(both) {
+      var dirs = (both[0] || []).map(function(p) {
+        return { kind: 'v2', name: p.split('/').pop(), path: p };
       });
-      if (!files.length) { showToast('No vault backups found', 'warning'); return; }
-      files.sort(function(a, b) { return (b.mtime || 0) - (a.mtime || 0); });
-      _showVaultPicker(files);
+      var all = dirs.concat(both[1] || []);
+      if (!all.length) { showToast('No vault backups found', 'warning'); return; }
+      _showVaultPicker(all);
     }).catch(function(err) {
       var msg = err && err.message ? err.message : String(err);
       if (msg.toLowerCase().indexOf('does not exist') !== -1 || msg.toLowerCase().indexOf('no such') !== -1) {
@@ -5794,19 +6076,38 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function _showVaultPicker(files) {
     if (!window.OrbitSheet) { showToast('Vault: picker unavailable', 'error'); return; }
-    var html = '<div class="vault-picker-title">Select a vault backup to restore</div>';
+    var html = '<div class="vault-picker-title">Select a backup to restore' +
+      (files.length > 1 ? ' · ' + files.length + ' stored' : '') + '</div>';
     html += '<div class="vault-file-list">';
     for (var i = 0; i < files.length; i++) {
       var f = files[i];
       var metaParts = [];
+      if (f.kind === 'v2') metaParts.push('chunked backup');
       if (typeof f.size === 'number') metaParts.push(_vaultFmtBytes(f.size));
-      var timeTxt = _vaultFmtDate(f.mtime);
+      // v2 backups are directories, and readdir returns a name with no mtime, so the
+      // timestamp has to come from the folder name (OrbitVault-YYYYMMDD-HHMM).
+      var stampMs = f.mtime;
+      if (!stampMs && f.kind === 'v2') {
+        var m = /OrbitVault-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})/.exec(f.name || '');
+        if (m) stampMs = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime();
+      }
+      var timeTxt = _vaultFmtDate(stampMs);
       if (timeTxt) metaParts.push(timeTxt);
-      html += '<button class="vault-file-item" data-vault-idx="' + i + '">' +
-        '<i data-lucide="database-backup"></i>' +
-        '<span class="vault-file-name">' + escapeHtml(f.name) + '</span>' +
-        '<span class="vault-file-meta">' + escapeHtml(metaParts.join(' · ')) + '</span>' +
-        '</button>';
+      html += '<div class="vault-file-row">' +
+        '<button class="vault-file-item" data-vault-idx="' + i + '">' +
+          '<i data-lucide="database-backup"></i>' +
+          '<span class="vault-file-name">' + escapeHtml(f.name) + '</span>' +
+          '<span class="vault-file-meta">' + escapeHtml(metaParts.join(' · ')) + '</span>' +
+        '</button>' +
+        '<button class="vault-file-save" data-vault-save="' + i + '"' +
+          ' title="Save a copy to Downloads" aria-label="Save a copy to Downloads">' +
+          '<i data-lucide="download"></i>' +
+        '</button>' +
+        '<button class="vault-file-delete" data-vault-del="' + i + '"' +
+          ' title="Delete this backup" aria-label="Delete this backup">' +
+          '<i data-lucide="trash-2"></i>' +
+        '</button>' +
+      '</div>';
     }
     html += '</div>';
     window.OrbitSheet.showCustom(html);
@@ -5816,10 +6117,154 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.addEventListener('click', function() {
           var idx = parseInt(btn.getAttribute('data-vault-idx'), 10);
           window.OrbitSheet.hide();
-          if (files[idx]) _confirmVaultRestore(files[idx]);
+          if (!files[idx]) return;
+          if (files[idx].kind === 'v2') _confirmVaultRestoreV2(files[idx]);
+          else _confirmVaultRestore(files[idx]);
         });
       })(btns[j]);
     }
+
+    // Saving an existing backup matters as much as saving a fresh one — without it,
+    // declining the post-export prompt meant no second chance short of exporting again.
+    var saveBtns = document.querySelectorAll('.vault-file-save');
+    for (var m = 0; m < saveBtns.length; m++) {
+      (function(btn) {
+        btn.addEventListener('click', function(ev) {
+          ev.stopPropagation();
+          var idx = parseInt(btn.getAttribute('data-vault-save'), 10);
+          if (files[idx]) _shareVault(files[idx].path);
+        });
+      })(saveBtns[m]);
+    }
+
+    var delBtns = document.querySelectorAll('.vault-file-delete');
+    for (var k = 0; k < delBtns.length; k++) {
+      (function(btn) {
+        btn.addEventListener('click', function(ev) {
+          ev.stopPropagation();
+          var idx = parseInt(btn.getAttribute('data-vault-del'), 10);
+          if (files[idx]) _deleteVault(files[idx]);
+        });
+      })(delBtns[k]);
+    }
+  }
+
+  /**
+   * Delete one stored backup.
+   *
+   * Nothing ever pruned old backups, so every export left a full copy in app storage —
+   * at a few hundred MB each, that fills a phone quickly. This is the only way to
+   * reclaim the space.
+   *
+   * Deliberately explicit: a confirm that names the backup, and no automatic cleanup.
+   * Silently deleting someone's backups is a worse failure than using disk.
+   */
+  function _deleteVault(entry) {
+    var fs = _vaultFilesystem();
+    if (!fs) { showToast('Vault: Filesystem plugin unavailable', 'error'); return; }
+
+    if (!confirm('Delete the backup\n\n' + entry.name + '\n\nThis cannot be undone.')) return;
+
+    // v2 backups are directories (manifest + chunk files), so they need a recursive
+    // remove; v1 backups are a single .json.
+    var op = (entry.kind === 'v2')
+      ? fs.rmdir({ path: entry.path, directory: 'DATA', recursive: true })
+      : fs.deleteFile({ path: entry.path, directory: 'DATA' });
+
+    return op.then(function() {
+      showToast('Deleted ' + entry.name, 'success');
+      if (window.OrbitSheet) window.OrbitSheet.hide();
+      // Re-open the picker so the list reflects reality straight away.
+      setTimeout(function() { runVaultRestore(); }, 250);
+      return true;
+    }).catch(function(err) {
+      var msg = (err && err.message) ? err.message : String(err);
+      console.warn('[Vault] delete failed:', err);
+      showToast('Could not delete that backup: ' + msg, 'error');
+      return false;
+    });
+  }
+
+  /**
+   * Zip a vault and hand it to the Android share sheet.
+   *
+   * The vault is a directory of chunk files in app-private storage, so without this
+   * a backup could never actually leave the device — which rather defeats the point.
+   * Zipping natively gets real DEFLATE from the platform, and the share sheet is the
+   * correct way to move a file out on Android 10+, where an app cannot simply write
+   * into a browsable public folder. The user decides where it goes.
+   */
+  function _shareVault(dirPath) {
+    var plugins = (window.Capacitor && window.Capacitor.Plugins) || {};
+    var P2P = plugins.OrbitP2P;
+    if (!P2P || typeof P2P.zipVault !== 'function') {
+      showToast('Sharing a backup needs a newer Android build', 'warning');
+      return Promise.resolve(null);
+    }
+    showToast('Preparing the backup…', 'info');
+    return P2P.zipVault({ srcDir: dirPath }).then(function (z) {
+      // Prefer Downloads over the share sheet. A real account produces a backup far
+      // too large for most share targets (email will simply refuse it), whereas
+      // Downloads is where someone actually goes looking for the file afterwards.
+      var save = (typeof P2P.saveToDownloads === 'function')
+        ? P2P.saveToDownloads({ path: z.path, mime: 'application/zip', displayName: z.path })
+        : Promise.reject(new Error('unsupported'));
+
+      return save.then(function (r) {
+        showToast('Saved to ' + (r.location || 'Downloads') + ': ' + (r.displayName || z.path) +
+                  ' (' + _vaultFmtBytes(z.size) + ', ' + z.entries + ' files)', 'success');
+        return z;
+      }).catch(function () {
+        // Fall back to sharing — works on every device, just less convenient for a
+        // large file, and the user still gets a copy off the phone.
+        return P2P.shareFile({
+          path: z.path,
+          mime: 'application/zip',
+          title: 'Orbit backup'
+        }).then(function () {
+          showToast('Backup ready to share — ' + _vaultFmtBytes(z.size) +
+                    ', ' + z.entries + ' files', 'success');
+          return z;
+        });
+      });
+    }).catch(function (err) {
+      var msg = (err && err.message) ? err.message : String(err);
+      console.warn('[Vault] share failed:', err);
+      showToast('Could not prepare the backup to share: ' + msg, 'error');
+      return null;
+    });
+  }
+
+  /** Restore a v2 vault directory (chunked, per-chunk sealed). */
+  function _confirmVaultRestoreV2(entry) {
+    if (!window.OrbitVault) { showToast('Vault: restore unavailable', 'error'); return; }
+    if (!confirm('Restore vault "' + entry.name + '"? This will overwrite your current local data.')) return;
+
+    var pass = null;
+    return window.OrbitVault.readManifest(entry.path).then(function(man) {
+      if (!man.encrypted) return null;
+      pass = prompt('Enter the vault passphrase:');
+      if (!pass) return Promise.reject(new Error('A passphrase is required for this backup'));
+      return null;
+    }).then(function() {
+      showToast('Restoring vault…', 'info');
+      if (window.orbitNotify) window.orbitNotify('PROGRESS', 'Restoring vault', 'Putting your data back…', 'orbit_vault');
+      return window.OrbitVault.restoreVault(entry.path, pass, {
+        writeBlob: function(key, buf) { return BlobStoreDB.put(key, buf); },
+        writePartial: function(key, rec) { return BlobStoreDB.partialPut(key, rec); }
+      });
+    }).then(function(res) {
+      var msg = res.stats.keys + ' settings, ' + res.stats.blobs + ' attachment' +
+                (res.stats.blobs === 1 ? '' : 's');
+      showToast('Vault restored (' + msg + ') — restart the app to apply fully', 'success');
+      if (window.orbitNotify) window.orbitNotify('SUCCESS', 'Vault restored', msg, 'orbit_vault');
+      return res;
+    }).catch(function(err) {
+      var msg = (err && err.message) ? err.message : String(err);
+      console.warn('[Vault] v2 restore failed:', err);
+      showToast('Vault restore failed: ' + msg, 'error');
+      return null;
+    });
   }
 
   function _confirmVaultRestore(file) {
@@ -5951,7 +6396,41 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button id="changelog-close-mobile" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;font-size:20px;">✕</button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
-        vBlock('0.5.3-beta', 'Latest', [
+        vBlock('0.6.0-beta', 'Latest', [
+          ['Notifications', [
+            'Real system notifications — Orbit now tells you about messages, @mentions, incoming calls, available updates and background work even when it is closed. Each type has its own icon and its own notification channel, so you can set different behaviour for calls and for quiet background work in Android settings.',
+            'Messages group by chat, so a burst from one person collapses into a single notification instead of stacking up.'
+          ]],
+          ['Reliability', [
+            'Messages now wait for people who are offline — Sending to someone who is not reachable used to drop the message silently, which on a local network happens constantly (a laptop closes, a phone leaves Wi-Fi). Orbit now holds the message and sends it the moment they are back, with an hourglass on the bubble so nothing ever looks delivered when it is not.',
+            'You are told when someone’s security key changes — Keys are pinned the first time you connect, but a changed key used to be accepted silently. Orbit now fingerprints each contact’s key and warns you clearly if it is not the one you pinned, so a swapped key cannot pass unnoticed. It does not block the chat — people do reinstall — it tells you.',
+            'This release fixes notifications properly. They had never actually appeared in the background — for three separate reasons, any one of which was enough to lose them. Every notification also used Android’s built-in info icon, which is why they all looked like the same generic "i".'
+          ]],
+          ['Local Vault', [
+            'Your backup can now hold a full account — The old export built the whole backup in memory and could only ever save part of it. It now writes in 8 MB chunks, so a large account backs up without running out of memory.',
+            'You can finally get the backup off your phone — Saving a copy to Downloads, or sharing it, so it is not trapped in the app.',
+            'Delete old backups — Each backup in the list has a delete button, with a confirmation naming the file. Nothing is removed automatically.',
+            'Save or share an older backup too — Not just the one you just made: any backup in the list can be saved to Downloads or shared.',
+            'If you use encryption, auto-backup no longer silently writes an unencrypted copy when no passphrase is set — it skips instead.'
+          ]],
+          ['Updates', [
+            'Update from inside the app — Orbit downloads the new version, opens the installer, and then offers to close itself so the update takes effect. If Android needs permission to install, it takes you straight to the right setting.'
+          ]],
+          ['Fixes', [
+            'Profile frames are fixed — they were drawn at six different sizes and offsets depending on where they appeared, and were off-centre. They now sit correctly everywhere.',
+            'The backup size readout was wrong — it reported 0.0 MB on a full account because it only counted one of the two places your data lives.',
+            'A backup list date showed "invalid date" for newer backups.'
+          ]],
+          ['Diagnostics', [
+            'New: Settings \u2192 Diagnostics \u2014 When nobody shows up it is almost never obvious why. This reports what Orbit can actually see about your network \u2014 whether discovery is running, your listening port, how many contacts are reachable \u2014 and tells you the likely cause when something is wrong, including the usual suspects like wireless isolation on the router or a firewall. You can copy it out for a bug report.',
+            'Attachments to someone offline now wait too \u2014 previously only the message queued, so the file itself could still fail.'
+          ]],
+          ['Technical', [
+            'Version: Bumped to v0.6.0-beta; Android bundle resynced.',
+            'Unit tests 267/267. This release is Android-only — the desktop app is unchanged.'
+          ]]
+        ]) +
+        vBlock('0.5.3-beta', '', [
           ['Features', [
             'Voice & Video Calling — You can call someone from a chat now. Open a chat, tap the ⋯ button and choose Voice Call or Video Call. They get a ring with Accept and Decline, and once connected you both see the call screen with mute, speaker and camera buttons and a running timer. Video calls show the other person full screen with a small picture-in-picture view of yourself. Signalling travels over the same encrypted connection as your messages.',
             'A Real Ringtone — Calls ring with an actual sound for up to a minute and a half before giving up. If the ring runs out, the call is logged as a missed call instead of leaving you on a stuck screen.',
@@ -6875,7 +7354,7 @@ document.addEventListener('DOMContentLoaded', function() {
       try { storeSize = new Blob([JSON.stringify(MStore.settings)]).size; } catch(e) {}
       lines.push('store=' + (storeSize / 1024).toFixed(1) + 'KB theme=' + (MStore.settings.theme || 'dark'));
     }
-    el.textContent = lines.join(' \u2022 ');
+    el.textContent = lines.join(' • ');
   }
 
   function updateDebugStats() {
@@ -6926,7 +7405,7 @@ document.addEventListener('DOMContentLoaded', function() {
       : '';
 
     var pfNum = getProfileFrame(MStore.settings);
-    var selfFrameHtml = pfNum > 0 ? '<img src="icons/frames/pfp_frame_' + pfNum + '.png" class="pfp-frame" style="position:absolute;top:-16%;left:-16%;pointer-events:none;" draggable="false" alt="">' : '';
+    var selfFrameHtml = pfNum > 0 ? '<img src="icons/frames/pfp_frame_' + pfNum + '.png" class="pfp-frame" draggable="false" alt="">' : '';
 
     container.innerHTML =
       '<div class="profile-hero" style="' + bannerStyle + '">' +
@@ -7186,7 +7665,7 @@ document.addEventListener('DOMContentLoaded', function() {
       ? 'background-image:url(' + escapeHtml(bannerUrl) + ');background-size:cover;background-position:center;'
       : 'background:linear-gradient(135deg,var(--accent-primary),#EC4899);';
 
-    var frameHtml = frameNum > 0 ? '<img src="icons/frames/pfp_frame_' + frameNum + '.png" class="pfp-frame" style="position:absolute;top:-16%;left:-16%;pointer-events:none;" draggable="false" alt="">' : '';
+    var frameHtml = frameNum > 0 ? '<img src="icons/frames/pfp_frame_' + frameNum + '.png" class="pfp-frame" draggable="false" alt="">' : '';
     var fAvatarSrc = safeAvatarSrc(friend.avatar);
     var avatarEl = fAvatarSrc
       ? '<img src="' + fAvatarSrc + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">'
@@ -7460,7 +7939,7 @@ document.addEventListener('DOMContentLoaded', function() {
       ? 'background-image:url(' + escapeHtml(u.banner) + ');background-size:cover;background-position:center;'
       : '';
     var pfNum = getProfileFrame(MStore.settings);
-    var frameHtml = pfNum > 0 ? '<img src="icons/frames/pfp_frame_' + pfNum + '.png" class="pfp-frame" style="position:absolute;top:-13%;left:-13%;width:120%;height:120%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '';
+    var frameHtml = pfNum > 0 ? '<img src="icons/frames/pfp_frame_' + pfNum + '.png" class="pfp-frame" draggable="false" alt="">' : '';
 
     // Build profile content HTML (hero + edit form)
     var contentHtml =
@@ -7547,7 +8026,6 @@ document.addEventListener('DOMContentLoaded', function() {
           pillFrame.className = 'pfp-frame';
           pillFrame.draggable = false;
           pillFrame.alt = '';
-          pillFrame.style.cssText = 'position:absolute;top:-1px;left:-1px;pointer-events:none;';
           if (pillAvatar) {
             pillAvatar.appendChild(pillFrame);
           }
@@ -7927,7 +8405,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (aw) {
                   var newFrame = document.createElement('img');
                   newFrame.className = 'pfp-frame';
-                  newFrame.style.cssText = 'position:absolute;top:-16%;left:-16%;width:125%;height:125%;pointer-events:none;object-fit:contain;';
                   newFrame.draggable = false;
                   newFrame.alt = '';
                   newFrame.src = 'icons/frames/pfp_frame_' + frameNum + '.png';
@@ -7947,7 +8424,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 pillFrame.className = 'pfp-frame';
                 pillFrame.draggable = false;
                 pillFrame.alt = '';
-                pillFrame.style.cssText = 'position:absolute;top:-1px;left:-1px;pointer-events:none;';
                 if (pillAvatar) pillAvatar.appendChild(pillFrame);
               }
               pillFrame.src = 'icons/frames/pfp_frame_' + framePill + '.png';
@@ -8509,7 +8985,7 @@ document.addEventListener('DOMContentLoaded', function() {
         ? ({ online: 'var(--accent-success)', away: 'var(--accent-warning)', busy: 'var(--accent-danger)', offline: 'var(--text-muted)' }[friend.status] || 'var(--text-muted)')
         : 'var(--text-muted)';
       var mPfNum = mid === myId ? getProfileFrame(MStore.settings) : (friend ? getProfileFrame(friend) : 0);
-      var mPfHtml = mPfNum > 0 ? '<img src="icons/frames/pfp_frame_' + mPfNum + '.png" class="pfp-frame" style="position:absolute;top:-16%;left:-16%;pointer-events:none;" draggable="false" alt="">' : '';
+      var mPfHtml = mPfNum > 0 ? '<img src="icons/frames/pfp_frame_' + mPfNum + '.png" class="pfp-frame" draggable="false" alt="">' : '';
 
       var canManage = isOwner || _isGroupAdmin(group, myId);
       var isSelf = mid === myId;
@@ -9234,6 +9710,8 @@ document.addEventListener('DOMContentLoaded', function() {
           var friend = MStore.friends.find(function(f) { return f.id === peerId; });
           if (friend) {
             friend.status = 'online';
+            // A peer just became reachable — drain anything queued for them.
+            if (window.OrbitOutbox) setTimeout(function() { OrbitOutbox.flush(); }, 500);
             MStore.save();
             renderFriends();
             renderChatList();
@@ -9344,7 +9822,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (existing) {
       if (ip) existing.ip = ip;
       if (data.port) existing.tcpPort = data.port;
-      if (publicKey) existing.publicKey = publicKey;
+      if (publicKey) _setPeerKey(existing, publicKey);
       MStore.save();
       renderFriends();
       showToast(peerName + ' updated', 'info');
@@ -9419,16 +9897,40 @@ document.addEventListener('DOMContentLoaded', function() {
     return url && (typeof url === 'string') && (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:') || url.startsWith('blob:'));
   }
 
-  function showNativeNotification(title, body, data) {
+  // Mirrors OrbitNotifications.Kind on the Android side — keep the two in step.
+  var NOTIFY_KINDS = ['MESSAGE', 'MENTION', 'CALL', 'VIDEO_CALL', 'UPDATE', 'PROGRESS', 'ERROR', 'SUCCESS'];
+
+  function showNativeNotification(title, body, data, kind) {
+    if (NOTIFY_KINDS.indexOf(kind) === -1) kind = 'MESSAGE';
     try {
-      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications) {
-        window.Capacitor.Plugins.LocalNotifications.schedule({
+      var plugins = (window.Capacitor && window.Capacitor.Plugins) || {};
+
+      // Preferred: Orbit's own notification layer, which owns the channels and the
+      // per-type icons (see OrbitNotifications.java). Using it means a message, a
+      // mention and a call each get their own channel and their own icon.
+      if (plugins.OrbitP2P && typeof plugins.OrbitP2P.notify === 'function') {
+        var p = plugins.OrbitP2P.notify({
+          kind: kind,
+          title: title,
+          text: body,
+          groupKey: (data && (data.groupKey || data.chatId)) || null
+        });
+        if (p && p.catch) p.catch(function () {});
+        return;
+      }
+
+      // Fallback for an older native build. This used to reference channel
+      // 'orbit_messages' (which nothing ever created) and smallIcon
+      // 'ic_stat_icon' (which never existed) — either one alone is enough for
+      // Android to drop the notification, so this path never worked.
+      if (plugins.LocalNotifications) {
+        plugins.LocalNotifications.schedule({
           notifications: [{
             id: Date.now(),
             title: title,
             body: body,
             channelId: 'orbit_messages',
-            smallIcon: 'ic_stat_icon',
+            smallIcon: 'ic_notify_message',
             data: data || {}
           }]
         });
@@ -9437,6 +9939,38 @@ document.addEventListener('DOMContentLoaded', function() {
       console.log('[Notifications] Native notification error:', e);
     }
   }
+
+  /**
+   * Public entry point for the rest of the app. Components (call manager, update
+   * notice, vault) live outside this closure and cannot reach showNativeNotification
+   * directly, so they go through here.
+   *
+   * kind: one of NOTIFY_KINDS — MESSAGE | MENTION | CALL | VIDEO_CALL | UPDATE |
+   *       PROGRESS | ERROR | SUCCESS
+   */
+  // The outbox tells us when it has drained, so pending bubbles can clear.
+  window.addEventListener('orbit-outbox-changed', function () {
+    try {
+      var still = window.OrbitOutbox ? OrbitOutbox.pendingFor(null) : {};
+      var touched = false;
+      (MStore.chats || []).forEach(function (c) {
+        var msgs = MStore.getMessages(c.id);
+        msgs.forEach(function (m) {
+          if (m.pending && !still[String(m.id)]) { m.pending = false; touched = true; }
+        });
+      });
+      if (touched) { MStore.save(); if (activeChatId) renderMessages(); }
+    } catch (e) { /* non-fatal */ }
+  });
+
+  window.orbitNotify = function (kind, title, text, groupKey) {
+    showNativeNotification(title, text, groupKey ? { groupKey: groupKey } : null, kind);
+  };
+
+  /** True when the app is not on screen — either signal alone is unreliable. */
+  window.orbitIsBackground = function () {
+    return window._appIsBackgrounded === true || document.hidden === true;
+  };
 
   function requestNotificationPermission() {
     try {
@@ -9506,11 +10040,13 @@ document.addEventListener('DOMContentLoaded', function() {
     if (MStore.settings.mutedChats && MStore.settings.mutedChats[chatId]) return;
     var friend = MStore.friends.find(function(f) { return f.id === fromId; });
     var name = friend ? friend.name : (fromId || 'Someone');
-    // Group mention check
+    // Group mention check — also decides which native channel/icon this uses.
     var isGroup = MStore.groups.some(function(g) { return g.id === chatId; });
-    if (isGroup && MStore.settings.notifyGroupMentions) {
+    var isMention = false;
+    if (isGroup) {
       var myName = MStore.user ? MStore.user.name : '';
-      if (myName && text.indexOf('@' + myName) === -1) return;
+      isMention = !!(myName && text.indexOf('@' + myName) !== -1);
+      if (MStore.settings.notifyGroupMentions && !isMention) return;
     }
     var preview = MStore.settings.notifyPreview !== false ? text : 'New message';
     
@@ -9526,7 +10062,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // have their own internal permission/availability checks, so it's safe to always call them.
     // The OS will suppress duplicates if the user is actively using the app.
     showWebNotification(name, preview, { chatId: chatId, fromId: fromId });
-    showNativeNotification(name, preview, { chatId: chatId, fromId: fromId });
+    showNativeNotification(name, preview, { chatId: chatId, fromId: fromId },
+                           isMention ? 'MENTION' : 'MESSAGE');
     
     // Also push to pending notification queue for foreground recovery
     // (handles the case where the WebView was paused and onMessage didn't fire)
@@ -9722,7 +10259,7 @@ document.addEventListener('DOMContentLoaded', function() {
       .replace(/"/g, '\\"')
       .replace(/\n/g, '\\n')
       .replace(/\r/g, '\\r')
-      .replace(/</g, '\\u003C');
+      .replace(/</g, '\<');
   }
 
   function safeAvatarSrc(url) {
@@ -12069,7 +12606,7 @@ document.addEventListener('DOMContentLoaded', function() {
             connFriend.tag = peerTag;
             connFriend.status = bp.status || 'online';
             if (bp.avatar !== undefined) connFriend.avatar = bp.avatar;
-            if (bp.publicKey) connFriend.publicKey = bp.publicKey;
+            if (bp.publicKey) _setPeerKey(connFriend, bp.publicKey);
             if (bp.tcpPort) connFriend.tcpPort = bp.tcpPort;
             if (data.connectionId) connFriend.connectionId = data.connectionId;
             existing = connFriend;
@@ -13283,7 +13820,7 @@ document.addEventListener('DOMContentLoaded', function() {
           ipFriend.lastSeen = Date.now();
           ipFriend.ip = data.host;
           if (pPayload.avatar) ipFriend.avatar = pPayload.avatar;
-          if (pPayload.publicKey) ipFriend.publicKey = pPayload.publicKey;
+          if (pPayload.publicKey) _setPeerKey(ipFriend, pPayload.publicKey);
           if (pPayload.tcpPort) ipFriend.tcpPort = pPayload.tcpPort;
           existing = ipFriend;
         }
@@ -13314,7 +13851,7 @@ document.addEventListener('DOMContentLoaded', function() {
         existing.ip = data.host;
         if (pPayload.avatar !== undefined) existing.avatar = pPayload.avatar;
         if (pPayload.bio !== undefined) existing.bio = pPayload.bio;
-        if (pPayload.publicKey) existing.publicKey = pPayload.publicKey;
+        if (pPayload.publicKey) _setPeerKey(existing, pPayload.publicKey);
         if (pPayload.profileFrame !== undefined) existing.profileFrame = pPayload.profileFrame;
         if (pPayload.banner !== undefined) existing.banner = pPayload.banner;
         if (pPayload.tcpPort) existing.tcpPort = pPayload.tcpPort;
@@ -13535,6 +14072,32 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
 
+    // Foreground/background, straight from the native plugin.
+    //
+    // This is the primary signal now. The block below relies on the Capacitor App
+    // plugin, which is NOT installed — so its guard was always false, the listener
+    // never registered, and _appIsBackgrounded stayed false forever. That also meant
+    // the native side was never told we had backgrounded, which is what gated its
+    // background notification path. OrbitP2PPlugin.registerLifecycle() now watches
+    // the activity lifecycle itself and emits this event.
+    try {
+      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.OrbitP2P
+          && typeof window.Capacitor.Plugins.OrbitP2P.addListener === 'function') {
+        window.Capacitor.Plugins.OrbitP2P.addListener('foreground', function(data) {
+          var active = !!(data && data.isForeground);
+          window._appIsBackgrounded = !active;
+          if (active) {
+            _foregroundRecovery();
+            flushPendingNotifications();
+            // Anything queued while we were away may be deliverable now.
+            if (window.OrbitOutbox) OrbitOutbox.flush();
+          }
+        });
+      }
+    } catch (e) {
+      console.log('[Lifecycle] native foreground listener unavailable:', e && e.message);
+    }
+
     // Handle Capacitor appStateChange — this is the RELIABLE way to detect
     // foreground/background on Android (unlike document.hidden)
     if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
@@ -13546,6 +14109,9 @@ document.addEventListener('DOMContentLoaded', function() {
           try {
             if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.OrbitP2P) {
               window.Capacitor.Plugins.OrbitP2P.setForeground({ isForeground: state.isActive });
+              // Let the native side identify us, so it can tell an @mention apart
+              // from an ordinary message even while the WebView is paused.
+              window.Capacitor.Plugins.OrbitP2P.setIdentity({ userId: (MStore.user && MStore.user.id) || '' });
             }
           } catch(e2) { console.log('[Lifecycle] setForeground error', e2.message); }
           if (state.isActive) {
@@ -13717,7 +14283,6 @@ document.addEventListener('DOMContentLoaded', function() {
     if (sendBtn) {
       var badge = document.createElement('span');
       badge.id = 'scheduled-badge';
-      badge.style.cssText = 'position:absolute;top:-4px;right:-4px;background:var(--accent-primary);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:none;align-items:center;justify-content:center;padding:0 4px;box-sizing:border-box;pointer-events:none;z-index:5;';
       sendBtn.style.position = 'relative';
       sendBtn.appendChild(badge);
     }

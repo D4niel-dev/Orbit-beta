@@ -44,7 +44,8 @@ import java.util.concurrent.Executors;
 public class OrbitForegroundService extends Service {
 
     private static final String TAG = "OrbitFgService";
-    public static final String CHANNEL_ID = "orbit_service";
+    // Single source of truth — OrbitNotifications owns every channel id.
+    public static final String CHANNEL_ID = com.orbit.app.OrbitNotifications.CH_SERVICE;
     public static final String ACTION_START = "com.orbit.app.START_FOREGROUND";
     public static final String ACTION_STOP = "com.orbit.app.STOP_FOREGROUND";
     private static final int NOTIFICATION_ID = 1;
@@ -572,16 +573,9 @@ public class OrbitForegroundService extends Service {
     // ── Foreground notification ──
 
     private void createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(
-                CHANNEL_ID, "Orbit Service",
-                NotificationManager.IMPORTANCE_LOW
-            );
-            channel.setDescription("Keeps Orbit running in the background");
-            channel.setShowBadge(false);
-            NotificationManager nm = getSystemService(NotificationManager.class);
-            if (nm != null) nm.createNotificationChannel(channel);
-        }
+        // Delegated: OrbitNotifications creates every channel in one place, so a
+        // channel can never be missing when something posts to it.
+        com.orbit.app.OrbitNotifications.ensureChannels(this);
     }
 
     private Notification buildNotification() {
@@ -594,7 +588,7 @@ public class OrbitForegroundService extends Service {
         return new Notification.Builder(this, CHANNEL_ID)
             .setContentTitle("Orbit")
             .setContentText("Connected")
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(com.orbit.app.R.drawable.ic_notify_service)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setPriority(Notification.PRIORITY_LOW)
