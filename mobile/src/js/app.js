@@ -1897,8 +1897,24 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function renderMessages(chatId) {
+    // Never render without a chat.
+    //
+    // MStore.getMessages(undefined) does not fail — it lazily creates
+    // `this.messages[undefined] = []` and returns that, so the feed renders EMPTY. A
+    // caller that forgot the argument therefore looked exactly like "the chat was
+    // wiped": the message list vanished and the old conversation appeared gone until
+    // the chat was reopened.
+    //
+    // _markMessagePending() did exactly that (`renderMessages()` with no argument), so
+    // the "Waiting for them to come back" toast cleared the visible chat every time it
+    // fired. Guarding here rather than at the call site means every present and future
+    // caller is safe.
+    if (!chatId) chatId = activeChatId;
+    if (!chatId) return;
+
     // Blob URL lifecycle managed by browser — no eager revocation here
     var feed = document.getElementById('message-feed');
+    if (!feed) return;
     var msgs = MStore.getMessages(chatId);
     // Resolve attachment URLs without mutating store objects (avoids silent data loss)
     window._dataUrlCache = window._dataUrlCache || {};
@@ -2794,6 +2810,21 @@ document.addEventListener('DOMContentLoaded', function() {
    *
    * This now just reports what happened. No second queue.
    */
+  /**
+   * Coerce a stored chunk to bytes.
+   *
+   * Chunks are ArrayBuffers now (decoded on arrival). Partials written by older builds
+   * still hold base64 strings, so both shapes must be accepted — but an ArrayBuffer must
+   * never be re-decoded, which would allocate a second copy of the whole file.
+   */
+  function _chunkToBytes(c) {
+    if (!c) return new ArrayBuffer(0);
+    if (typeof c === 'string') return window.orbitBase64ToArrayBuffer(c);
+    if (typeof c.byteLength === 'number') return c;          // ArrayBuffer
+    if (c.buffer) return c.buffer;                            // typed array view
+    return new ArrayBuffer(0);
+  }
+
   function _deliverOrQueue(peerId, packet, msgId) {
     var result;
     try {
@@ -2828,7 +2859,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       }
       MStore.save();
-      if (activeChatId === chatId) renderMessages();
+      if (activeChatId === chatId) renderMessages(chatId);
     } catch (e) { /* the queue itself already succeeded */ }
     showToast('Waiting for them to come back — it will send automatically', 'info');
   }
@@ -3179,7 +3210,6 @@ document.addEventListener('DOMContentLoaded', function() {
         var memberKey = memberFriend ? memberFriend.publicKey : (typeof m !== 'string' ? m.publicKey : null);
         var memberLabel = memberFriend ? memberFriend.name : memberId;
         var grpAttachments = inlineAttachments.length > 0 ? inlineAttachments.slice() : [];
-        largeFiles.forEach(function(lf) { grpAttachments.push({ id: lf.id, _fileId: lf.id, name: lf.name, type: lf.type, _poster: lf._poster || undefined, _pending: true }); });
         var payload = {
           text: textToSend, groupId: groupId, msgId: newMsg.id, replyTo: newMsg.replyTo,
           attachments: grpAttachments.length > 0 ? grpAttachments : undefined,
@@ -3449,9 +3479,14 @@ document.addEventListener('DOMContentLoaded', function() {
             showToast('Not sent — encryption failed', 'info');
             return;
           }
-          // Include large file metadata so receiver can merge text+file into one message (CRIT-4)
+          // Large files are deliberately NOT referenced in this message any more.
+          // They used to ride along as `_pending` attachments so the receiver could
+          // merge text+file into one bubble (CRIT-4) — which is what produced a
+          // message captioned "Receiving Video...". The text now goes as its own
+          // message and the file arrives as its own when the transfer completes,
+          // which is both simpler and honest about what has actually arrived.
+          // Inline (small) attachments still ride along as before.
           var e2eeAttachments = inlineAttachments.length > 0 ? inlineAttachments.slice() : [];
-          largeFiles.forEach(function(lf) { e2eeAttachments.push({ id: lf.id, _fileId: lf.id, name: lf.name, type: lf.type, _poster: lf._poster || undefined, _pending: true }); });
           _deliverOrQueue(activeChatId, Orbit.Protocol.createPacket(
             Orbit.Protocol.Types.MESSAGE, myId, activeChatId,
             { e2ee: true, ciphertext: encrypted.ciphertext, nonce: encrypted.nonce, msgId: newMsg.id, replyTo: newMsg.replyTo, attachments: e2eeAttachments.length > 0 ? e2eeAttachments : undefined, fromName: newMsg.fromName, poll: newMsg.poll || undefined }
@@ -3465,9 +3500,14 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
 
-      // Include large file metadata so receiver can merge text+file into one message (CRIT-4)
+      // Large files are deliberately NOT referenced in this message any more.
+      // They used to ride along as `_pending` attachments so the receiver could
+      // merge text+file into one bubble (CRIT-4) — which is what produced a
+      // message captioned "Receiving Video...". The text now goes as its own
+      // message and the file arrives as its own when the transfer completes,
+      // which is both simpler and honest about what has actually arrived.
+      // Inline (small) attachments still ride along as before.
       var msgAttachments = inlineAttachments.length > 0 ? inlineAttachments.slice() : [];
-      largeFiles.forEach(function(lf) { msgAttachments.push({ id: lf.id, _fileId: lf.id, name: lf.name, type: lf.type, _poster: lf._poster || undefined, _pending: true }); });
       _deliverOrQueue(activeChatId, Orbit.Protocol.createPacket(
         Orbit.Protocol.Types.MESSAGE, myId, activeChatId,
         { text: text, msgId: newMsg.id, replyTo: newMsg.replyTo, attachments: msgAttachments.length > 0 ? msgAttachments : undefined, fromName: newMsg.fromName, poll: newMsg.poll || undefined }
@@ -4699,12 +4739,15 @@ document.addEventListener('DOMContentLoaded', function() {
     try { conns = (P2P && typeof P2P.getConnections === 'function' ? (P2P.getConnections() || []).length : 0); } catch (e) {}
     rows.push({ ok: conns > 0, label: 'Open connections', value: String(conns), hint: '' });
 
-    var queued = (window.OrbitOutbox && typeof OrbitOutbox.count === 'function') ? OrbitOutbox.count() : 0;
+    // "Waiting to send" used to report the outbox, which is no longer in the send path
+    // — the transport owns queueing. The row could therefore only ever read zero, which
+    // is worse than not showing it. The receive limit is the genuinely useful number
+    // here: it is what refuses a large file.
     rows.push({
-      ok: queued === 0,
-      label: 'Waiting to send',
-      value: queued ? queued + ' message' + (queued === 1 ? '' : 's') : 'nothing queued',
-      hint: queued ? 'These will go out as soon as the recipient is reachable.' : ''
+      ok: true,
+      label: 'Largest file it will accept',
+      value: '~150 MB',
+      hint: ''
     });
 
     return rows;
@@ -4720,8 +4763,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     html += '<div class="settings-section-title">Diagnostics</div>';
+    // `.settings-item-info` is the real class — it is `flex-direction: column`, which is
+    // what stacks the title above the description. I had invented `settings-item-body`,
+    // which has no rule at all, so both spans rendered inline and ran together as
+    // "Connection healthEverything Orbit can check looks healthy."
     html += '<div class="settings-item-card" data-search="Diagnostics connection health network">' +
-      '<div class="settings-item-body">' +
+      '<div class="settings-item-icon"><i data-lucide="activity"></i></div>' +
+      '<div class="settings-item-info">' +
         '<span class="settings-item-title">Connection health</span>' +
         '<span class="settings-item-desc">' +
           (problem
@@ -4745,9 +4793,9 @@ document.addEventListener('DOMContentLoaded', function() {
     html += '</div>';
 
     html += '<div class="settings-item-card" data-search="Diagnostics report share">' +
-      '<div class="settings-item-body">' +
+      '<div class="settings-item-info">' +
         '<span class="settings-item-title">Share a report</span>' +
-        '<span class="settings-item-desc">Copy the values above so they can be pasted into a bug report.</span>' +
+        '<span class="settings-item-desc">Copy these values to paste into a bug report.</span>' +
       '</div>' +
       '<div class="settings-item-action">' +
         '<button class="settings-action-btn" id="diag-copy">Copy</button>' +
@@ -5907,7 +5955,12 @@ document.addEventListener('DOMContentLoaded', function() {
         var size = 0;
         if (rec && rec.chunks) {
           for (var ck in rec.chunks) {
-            if (Object.prototype.hasOwnProperty.call(rec.chunks, ck)) size += (rec.chunks[ck] || '').length;
+            if (Object.prototype.hasOwnProperty.call(rec.chunks, ck)) {
+              var _sc = rec.chunks[ck];
+              // Chunks are ArrayBuffers now — `.length` is undefined on those, which
+              // would have made this total NaN.
+              size += (typeof _sc === 'string') ? _sc.length : ((_sc && _sc.byteLength) || 0);
+            }
           }
         }
         if (size > remaining()) { acc.truncated = true; acc.droppedPartials++; return; }
@@ -6430,7 +6483,27 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button id="changelog-close-mobile" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;font-size:20px;">✕</button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
-        vBlock('0.6.0-beta', 'Latest', [
+        vBlock('0.6.1-beta', 'Latest', [
+          ['Notifications', [
+            'Notifications now actually appear \u2014 This is the fix that matters. Android requires your permission before an app can post a notification, and Orbit was never asking for it, so the system was discarding every notification before it reached the status bar. Orbit now asks on first launch. If you denied it, you can turn it back on in Android\u2019s app settings.',
+            'This is also why the notification work in 0.6.0 seemed to do nothing \u2014 those fixes were real, but nothing could get past the door.'
+          ]],
+          ['Transfers', [
+            'Large files no longer run out of memory \u2014 Sending a big video used to exhaust the phone\u2019s memory, which killed the connection and restarted the transfer over and over, so it never finished. Chunks are now handled as raw bytes instead of text, which uses roughly a third of the memory it did before.',
+            'You are told when a file is too large \u2014 If something is beyond what Orbit can receive, you get a clear message instead of a transfer that hangs forever.'
+          ]],
+          ['Messages', [
+            'Text and files are separate messages now \u2014 A message used to appear captioned "Receiving Video..." before the video had arrived. Your text now lands on its own, and the file arrives as its own message when it is actually here.'
+          ]],
+          ['Fixes', [
+            'The gallery no longer resets the sidebar to DMs when you change its display style.'
+          ]],
+          ['Technical', [
+            'Version: Bumped to v0.6.1-beta; Android bundle resynced.',
+            'Unit tests 267/267.'
+          ]]
+        ]) +
+        vBlock('0.6.0-beta', '', [
           ['Notifications', [
             'Real system notifications — Orbit now tells you about messages, @mentions, incoming calls, available updates and background work even when it is closed. Each type has its own icon and its own notification channel, so you can set different behaviour for calls and for quiet background work in Android settings.',
             'Messages group by chat, so a burst from one person collapses into a single notification instead of stacking up.'
@@ -9993,7 +10066,7 @@ document.addEventListener('DOMContentLoaded', function() {
           if (m.pending && !still[String(m.id)]) { m.pending = false; touched = true; }
         });
       });
-      if (touched) { MStore.save(); if (activeChatId) renderMessages(); }
+      if (touched) { MStore.save(); if (activeChatId) renderMessages(activeChatId); }
     } catch (e) { /* non-fatal */ }
   });
 
@@ -12483,7 +12556,10 @@ document.addEventListener('DOMContentLoaded', function() {
         var _rLen = 0;
         var _rBufs = [];
         for (var _r = 0; _r < n; _r++) {
-          var _rCb = window.orbitBase64ToArrayBuffer(tx.chunks[_r]);
+          // No decode — chunks are already bytes. (This loop used to rebuild the whole
+          // prefix as fresh buffers on every retry, which is a second full copy of the
+          // file at exactly the moment the transfer is already struggling.)
+          var _rCb = _chunkToBytes(tx.chunks[_r]);
           _rBufs.push(_rCb);
           _rLen += _rCb.byteLength;
         }
@@ -12949,11 +13025,25 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       if (packet.type === Orbit.Protocol.Types.FILE_TRANSFER_START) {
         if (!packet.payload || !packet.payload.fileId) return;
-        // F3: receivers buffer whole files in RAM, so the 5000-chunk cap is a
-        // real limit — but a >5000-chunk file must not be silently saved as a
-        // truncated 312.5MB blob. Reject it explicitly instead.
-        if ((packet.payload.totalChunks || 0) > 5000) {
-          console.warn('[P2P] Rejecting oversized transfer', packet.payload.fileId, '—', packet.payload.totalChunks, 'chunks exceed the 5000 cap');
+        // F3: receivers buffer whole files in RAM, so a chunk cap is a real limit.
+        //
+        // The old cap was 5000 chunks — 320 MB at 64 KB/chunk — which was set as if the
+        // receiver only needed one copy. It needs about two: the received chunks plus the
+        // contiguous buffer the merge step builds, so the real footprint is ~2x the file.
+        // A 133 MB video (2,081 chunks) sailed under the old cap and then OOMed the
+        // WebView, which is what killed the connection and produced ECONNRESET on the
+        // sender. Rejecting up front is the honest outcome: a clear message beats a
+        // transfer that will never finish.
+        //
+        // MAX_RECEIVE_CHUNKS is deliberately tunable — raise it if a target device has
+        // heap to spare. Removing the need for a cap at all means streaming chunks
+        // straight to storage instead of merging them, which is the real fix.
+        var MAX_RECEIVE_CHUNKS = 2400;   // ~150 MB at 64 KB/chunk
+        if ((packet.payload.totalChunks || 0) > MAX_RECEIVE_CHUNKS) {
+          var _tooBigMb = Math.round((packet.payload.totalChunks * 65536) / (1024 * 1024));
+          console.warn('[P2P] Rejecting oversized transfer', packet.payload.fileId, '—',
+                       packet.payload.totalChunks, 'chunks (~' + _tooBigMb + ' MB) exceed the cap of', MAX_RECEIVE_CHUNKS);
+          try { showToast('That file is too large to receive (' + _tooBigMb + ' MB)', 'warning'); } catch(e) {}
           try {
             Orbit.P2P.send(msgFrom, Orbit.Protocol.createPacket(
               Orbit.Protocol.Types.FILE_TRANSFER_REJECT, MStore.user ? MStore.user.id : '', msgFrom,
@@ -12966,7 +13056,7 @@ document.addEventListener('DOMContentLoaded', function() {
           }
           return;
         }
-        var totalChunks = Math.min(packet.payload.totalChunks || 0, 5000);
+        var totalChunks = Math.min(packet.payload.totalChunks || 0, MAX_RECEIVE_CHUNKS);
         if (totalChunks <= 0) return;
         window.activeTransfers = window.activeTransfers || {};
         var _startFileId = packet.payload.fileId;
@@ -13031,7 +13121,25 @@ document.addEventListener('DOMContentLoaded', function() {
           var chunkIdx = parseInt(packet.payload.chunkIndex, 10);
           if (!isNaN(chunkIdx) && chunkIdx >= 0 && chunkIdx < tx.chunks.length) {
             if (tx.chunks[chunkIdx] === undefined) {
-              tx.chunks[chunkIdx] = packet.payload.data; tx.received++;
+              // Decode ON ARRIVAL and keep bytes, not base64 text.
+              //
+              // Holding base64 strings cost roughly 2.7x the binary size: base64 inflates
+              // 33%, and a JS string is UTF-16, so 133 MB of video sat in the heap as
+              // ~356 MB of characters. The merge step at FILE_TRANSFER_END then decoded
+              // every chunk into a second full copy and wrote a third. Peak was ~620 MB
+              // in an Android WebView heap, which OOMs — the renderer dies, the socket
+              // resets, and the sender sees ECONNRESET and retries forever.
+              //
+              // Storing ArrayBuffers also makes the periodic checkpoint a shallow
+              // REFERENCE copy instead of duplicating every string, and removes the
+              // decode loop at END entirely.
+              try {
+                tx.chunks[chunkIdx] = window.orbitBase64ToArrayBuffer(packet.payload.data);
+              } catch (e) {
+                console.warn('[P2P] chunk decode failed at', chunkIdx, e && e.message);
+                tx.chunks[chunkIdx] = window.orbitBase64ToArrayBuffer(''); // keep the slot defined
+              }
+              tx.received++;
               // CROSS-RESTART: checkpoint the partial to IndexedDB every 50
               // newly received chunks (non-fatal on failure — resume stays
               // best-effort). The chunks object map (index→base64 for defined
@@ -13067,7 +13175,9 @@ document.addEventListener('DOMContentLoaded', function() {
           if (bwLimit > 0 && tx.received < tx.total) {
             tx._lastChunkTime = tx._lastChunkTime || 0;
             var elapsed = Date.now() - tx._lastChunkTime;
-            var chunkSize = (packet.payload.data || '').length;
+            var _cdata = tx.chunks[chunkIdx];
+            var chunkSize = (_cdata && _cdata.byteLength) ? _cdata.byteLength
+                          : ((packet.payload.data || '').length * 3 / 4);
             var minInterval = Math.max(50, (chunkSize / (bwLimit * 1024)) * 1000);
             if (elapsed < minInterval && !tx._throttleScheduled) {
               tx._throttleScheduled = true;
@@ -13114,18 +13224,21 @@ document.addEventListener('DOMContentLoaded', function() {
           // CRIT-1: Decode each chunk independently and concatenate ArrayBuffers
           // Desktop independently btoa()'s each 64KB binary chunk — joining as strings
           // produces corrupted base64 at every padding boundary
+          // Chunks are ArrayBuffers already (decoded on arrival). Older partials
+          // restored from IndexedDB may still hold base64 strings, so accept both —
+          // but never build a second full copy of an ArrayBuffer chunk.
           var _totalByteLen = 0;
-          var _chunkBufs = [];
+          var _chunkBufs = new Array(txEnd.chunks.length);
           for (var _c = 0; _c < txEnd.chunks.length; _c++) {
-            var _cb = window.orbitBase64ToArrayBuffer(txEnd.chunks[_c]);
-            _chunkBufs.push(_cb);
+            var _cb = _chunkToBytes(txEnd.chunks[_c]);
+            _chunkBufs[_c] = _cb;
             _totalByteLen += _cb.byteLength;
           }
           var _mergedBuf = new Uint8Array(_totalByteLen);
           var _off = 0;
-          for (var _c = 0; _c < _chunkBufs.length; _c++) {
-            _mergedBuf.set(new Uint8Array(_chunkBufs[_c]), _off);
-            _off += _chunkBufs[_c].byteLength;
+          for (var _c2 = 0; _c2 < _chunkBufs.length; _c2++) {
+            _mergedBuf.set(new Uint8Array(_chunkBufs[_c2]), _off);
+            _off += _chunkBufs[_c2].byteLength;
           }
           // N5: verify the sender's full-file hash against the assembled bytes.
           // Non-fatal — a mismatch only warns and the file is still saved

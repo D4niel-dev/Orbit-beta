@@ -2871,7 +2871,7 @@ window.ChatPanel = {
       }
     }));
 
-    // ---- Send MESSAGE with text + small file data URLs (+ large file markers for CRIT-4) ----
+    // ---- Send MESSAGE with text + small file data URLs (large files follow separately) ----
     var msgId = Date.now() + 2;
     if (text || inlineAttachments.length > 0 || largeFiles.length > 0) {
       var payload = {
@@ -2890,10 +2890,12 @@ window.ChatPanel = {
       if (inlineAttachments.length > 0) {
         inlineAttachments.forEach(function(a) { payload.attachments.push(a); });
       }
-      // Add _fileId markers for large files so receiver can merge (CRIT-4)
-      largeFiles.forEach(function(lf) {
-        payload.attachments.push({ _fileId: lf._fileId, name: lf.staged.name, type: lf.staged.type, _poster: lf.staged._poster || undefined, _pending: true });
-      });
+      // Large files are deliberately NOT marked on this message any more. They used to
+      // ride along as `_pending` attachments so the receiver could merge text+file into
+      // one bubble (CRIT-4) — which is what produced a message captioned
+      // "Receiving Video...". The text now goes as its own message and the file arrives
+      // as its own when the transfer completes. Inline (small) attachments still ride
+      // along above, unchanged.
       // Attach slash-command extras (poll/spoiler) if any — mirrors mobile payload
       if (this._pendingSlashPoll) {
         payload.poll = this._pendingSlashPoll;

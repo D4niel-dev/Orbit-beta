@@ -97,7 +97,10 @@ Orbit.UpdateCheck = (function() {
 
   // Sections in the CI-generated body that are install/verify boilerplate
   // rather than "what changed".
-  var SKIP_SECTION = /^(downloads?|installation|installation notes|verify|verify your download|security|links|assets|checksums?)$/i;
+  // Sections whose bullets are NOT user-facing. "Technical" matters: without it the
+  // update dialog fills its six slots with internal notes ("Chunk storage changed
+  // shape...") ahead of things a user would actually recognise.
+  var SKIP_SECTION = /^(downloads?|installation|installation notes|verify|verify your download|security|links|assets|checksums?|technical|internal|notes?|migration)$/i;
 
   function stripMarkdown(s) {
     return String(s)

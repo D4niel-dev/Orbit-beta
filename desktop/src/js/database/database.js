@@ -48,7 +48,7 @@ class OrbitDatabase {
       // Messages
       getMessages: this.db.prepare('SELECT * FROM messages WHERE chatId = ? ORDER BY timestamp ASC'),
       getAllMessagesRaw: this.db.prepare('SELECT * FROM messages'),
-      addMessage: this.db.prepare('INSERT INTO messages (id, chatId, sender, text, timestamp, replyTo) VALUES (@id, @chatId, @sender, @text, @timestamp, @replyTo)'),
+      addMessage: this.db.prepare('INSERT INTO messages (id, chatId, sender, text, timestamp, replyTo, call) VALUES (@id, @chatId, @sender, @text, @timestamp, @replyTo, @call)'),
       editMessage: this.db.prepare('UPDATE messages SET text = ? WHERE id = ? AND chatId = ?'),
       deleteMessage: this.db.prepare('DELETE FROM messages WHERE id = ? AND chatId = ?'),
       
@@ -327,12 +327,16 @@ class OrbitDatabase {
         url: a.localPath ? `orbit-file://${encodeURIComponent(a.localPath)}` : `orbit-db://attachment/${a.id}`
       }));
       
+      var callObj;
+      if (m.call) { try { callObj = JSON.parse(m.call); } catch (e) { callObj = undefined; } }
+
       return {
         id: m.id,
         sender: m.sender,
         text: m.text,
         timestamp: m.timestamp,
         replyTo: m.replyTo != null ? m.replyTo : undefined,
+        call: callObj,
         attachments: attachments.length > 0 ? attachments : undefined
       };
     });
@@ -403,7 +407,10 @@ class OrbitDatabase {
           sender: msg.sender,
           text: msg.text || '',
           timestamp: msg.timestamp || new Date().toISOString(),
-          replyTo: msg.replyTo != null ? String(msg.replyTo) : null
+          replyTo: msg.replyTo != null ? String(msg.replyTo) : null,
+          // Call history rides as JSON — a finished call is a message with a `call`
+          // object and no text, so without this it persisted as a blank line.
+          call: msg.call ? JSON.stringify(msg.call) : null
         });
       } catch (e) {
         if (e.code !== 'SQLITE_CONSTRAINT_PRIMARYKEY') throw e;
@@ -1072,7 +1079,7 @@ class OrbitDatabase {
 
         // Restore messages
         if (data.messages) {
-          const stmt = this.db.prepare('INSERT OR REPLACE INTO messages (id, chatId, sender, text, timestamp, replyTo) VALUES (@id, @chatId, @sender, @text, @timestamp, @replyTo)');
+          const stmt = this.db.prepare('INSERT OR REPLACE INTO messages (id, chatId, sender, text, timestamp, replyTo, call) VALUES (@id, @chatId, @sender, @text, @timestamp, @replyTo, @call)');
           data.messages.forEach(m => stmt.run({
             id: m.id,
             chatId: m.chatId,

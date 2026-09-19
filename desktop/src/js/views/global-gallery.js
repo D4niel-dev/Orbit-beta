@@ -11,6 +11,21 @@ window.GlobalGallery = {
     this.displayMode = (window.store.getState().settings || {}).galleryViewMode || 'grid';
 
     this.unsubscribe = window.store.subscribe((state, changedState) => {
+      // Re-read the saved display mode whenever settings change.
+      //
+      // This is what made the setting look like it never saved. The constructor reads
+      // `galleryViewMode` once, but GlobalGallery.init() runs on DOMContentLoaded —
+      // before the settings are hydrated from the database — so that read always saw
+      // the default 'grid'. The mode WAS being written correctly; nothing ever read it
+      // back, so every launch started on Grid again.
+      //
+      // When the user picks a mode this is a no-op: displayMode is already set to the
+      // same value before setState fires, so the comparison below matches.
+      var savedMode = (state.settings || {}).galleryViewMode;
+      if (savedMode && savedMode !== this.displayMode) {
+        this.displayMode = savedMode;
+      }
+
       var relevant = ['friends', 'messages', 'activeChatId', 'activeTab', 'settings'];
       if (!changedState || relevant.some(function(k) { return k in changedState; })) {
         this.render(state);
@@ -334,12 +349,28 @@ window.GlobalGallery = {
         var state = window.store.getState();
         var newSettings = { ...(state.settings || {}), galleryViewMode: mode };
         window.store.setState({ settings: newSettings });
-        if (window.orbitAPI) {
-          window.orbitAPI.dbSetSetting('settings', newSettings);
-        } else if (window.Storage) {
-          window.Storage.set('settings', newSettings);
+        // Delegate to the store's own persist rather than writing a store directly.
+        //
+        // This used `if (orbitAPI) { ... } else if (Storage) { ... }` — so in the real
+        // app it wrote SQLite ONLY. But the DB constructor re-runs
+        // migrateFromElectronStore(true) on every launch, and that bypasses its own
+        // "already migrated" guard, copying electron-store's `settings` over SQLite each
+        // boot. A SQLite-only write is therefore reverted on the next launch whenever
+        // electron-store still holds an older snapshot — which is why a renderer reload
+        // showed the chosen mode and a full restart did not. settings-modal.js already
+        // writes both stores for exactly this reason; the gallery never did.
+        //
+        // Routing through store._persistSettings() means there is one implementation of
+        // "save settings" and this cannot drift out of sync with it again.
+        if (typeof window.store._persistSettings === 'function') {
+          window.store._persistSettings();
+        } else {
+          if (window.Storage) window.Storage.set('settings', newSettings);
+          if (window.orbitAPI && window.orbitAPI.dbSetSetting) window.orbitAPI.dbSetSetting('settings', newSettings);
         }
-        self.render(state);
+        // `state` here is the pre-change snapshot — pass the live one so the new mode
+        // is what actually renders.
+        self.render(window.store.getState());
       });
     });
 

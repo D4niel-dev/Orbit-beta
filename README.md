@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v060-beta">v0.6.0-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v061-beta">v0.6.1-beta</a>
 </p>
 
 <p align="center">
@@ -26,12 +26,11 @@
 
 ## Release Status
 
-| Channel           | Version     | Status                                                                                                                                  |
-| ----------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| **Latest**        | v0.6.0-beta | Reliability release — notifications that work, an offline send queue, a vault you can back up and take with you, in-app Android updates |
-| Previous          | v0.5.3-beta | Calling release — Android voice/video calls, ringtone, call log, encrypted vault fixed                                                  |
-| **Stable**        | v0.5.0-beta | Stable release                                                                                                                          |
-| Legacy **Stable** | v0.1.1-beta | Legacy stable release                                                                                                                   |
+| Channel           | Version     | Status                                                                                                                                                         |
+| ----------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Latest**        | v0.6.1-beta | Bug-fix release — notifications that actually appear, large transfers that no longer exhaust memory, messages that no longer announce a file before it arrives |
+| **Stable**        | v0.6.0-beta | Reliability release — notification plumbing, an offline send queue, a vault you can back up and take with you, in-app Android updates                          |
+| Legacy **Stable** | v0.1.1-beta | Legacy stable release                                                                                                                                          |
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
 
@@ -91,18 +90,13 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage app for desktop and Android** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
-## Highlights (v0.6.0-beta)
+## Highlights (v0.6.1-beta)
 
-> **Platform note:** this release is almost entirely mobile — notifications, the offline send queue, the Local Vault and in-app updates are all Android work. The one desktop change is the profile-frame geometry fix, below.
-
-* **Notifications That Actually Appear** — Background notifications had never worked, for three independent reasons, each of which alone was enough to lose them: a channel that was never created, an icon that never existed, and a foreground listener from a plugin that is not installed. All three are fixed, and notifications now cover messages, @mentions, calls, updates and background work — each on its own channel with its own icon.
-* **A Message to Someone Offline Now Waits** — Orbit had no send queue at all, so sending to a peer who was not currently connected silently dropped the message. On a LAN that happens constantly. Messages now queue and deliver the moment the peer reconnects, with an hourglass on the bubble so nothing ever looks delivered when it is not. The queue is in memory, so it survives a peer going away but not an app restart.
-* **The Vault Can Back Up a Real Account** — v1 built the whole backup in memory and could only ever produce a partial one. v2 writes a small manifest plus one file per 8 MB chunk, so a 500 MB+ account backs up with peak memory of a single chunk.
-* **…And the Backup Can Leave the Device** — A backup you cannot retrieve is not a backup. Exports now save to Downloads, or share via the system sheet, as a single zip.
-* **Updates Install From Inside the App** — Android is sideloaded, so Orbit now streams the APK with progress, hands it to the installer, and offers to close itself so the update takes effect.
-* **Avatar Frames, Finally Consistent** — Six different sets of magic numbers across fifteen mobile surfaces became one rule, and desktop — which drew frames at 100% and so hugged the avatar edge — was brought in line too. The art is a wreath authored to wrap around the circle; it now sits at the right scale, centred, on both platforms.
-* **Diagnostics (Mobile)** — Settings → Diagnostics reports what Orbit can actually observe about the network and names the likely cause when something is wrong, because a LAN app fails for reasons that are invisible from inside it.
-* **Key-Change Warnings** — Keys were pinned on first use but never checked again, so a changed key was accepted silently — the classic man-in-the-middle gap. Orbit now fingerprints each peer key and says so loudly when it changes. It does not block the chat (people do reinstall), it tells you.
+* **Notifications Now Actually Appear** — The permission Android requires in order to post a notification was never declared, so on Android 13+ it could not be granted, the failure was swallowed, and every notification was dropped before it reached the status bar. This is why the three notification bugs fixed in v0.6.0 produced nothing visible: they were real, but nothing could get past the door. Declared, and requested at runtime.
+* **Large Transfers No Longer Exhaust the Phone** — A 133 MB video needed roughly 620 MB of WebView heap: the file sat in memory as base64 text, was decoded into a second copy, then merged into a third. It OOMed, the socket reset, and the sender retried forever. Chunks are now held as bytes and merged without the extra copies — about 266 MB for the same file.
+* **An Honest Size Limit** — The old cap allowed 320 MB, sized as if the receiver needed one copy of the file. It needs two. Now ~150 MB, refused up front with a clear message rather than accepted and hung.
+* **Messages That Do Not Lie** — A bubble used to appear captioned "Receiving Video..." before any video had arrived. Text and files are now separate messages: the text lands, and the file lands when it actually lands.
+* **Smaller Fixes** — The gallery no longer resets the sidebar to DMs when you change its display style.
 
 ## Version History
 
@@ -603,7 +597,7 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Test Suites** — Unit assertions remain **267/267**; the desktop Playwright E2E suite remains **34/34** (run sharded). This release additionally verified mobile voice and video calls end to end, decline and busy handling, the call log across all eight outcome variants on both platforms, and a full encrypted vault round trip.
 
 </details>
-<details open>
+<details>
 <summary>v0.6.0-beta (Stable)</summary>
 
 * **Android Notifications** — Six channels (messages, mentions, calls, updates, background, service) and nine icons generated from the Lucide set the app already vendors. Messages group by chat so a burst collapses into one entry.
@@ -622,6 +616,18 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Test Suites** — Unit assertions remain **267/267**; the desktop Playwright E2E suite remains **34/34**.
 
 </details>
+  <details open>
+<summary>v0.6.1-beta</summary>
+
+* **Notifications Never Appeared** — `POST_NOTIFICATIONS` was never declared in the manifest, so on Android 13+ the permission could not be granted, the `SecurityException` was swallowed with a comment asserting the user had declined, and the system discarded every notification before it reached the status bar. Declared, and requested at runtime on API 33+ from `MainActivity`.
+* **Large Transfers Exhausted Memory** — Chunks arrived as base64 strings (~356 MB of heap for a 133 MB file), were decoded into a second full copy at the end, then merged into a third. Peak ~620 MB, which OOMs a WebView. Chunks are now decoded on arrival and held as bytes; the periodic checkpoint became a reference copy; the decode-and-merge step is gone. Peak ~266 MB.
+* **The Chunk Shape Change Touched Every Consumer** — `_chunkToBytes()` accepts an `ArrayBuffer` or a legacy base64 string, because the resume path, the merge loop and a size readout all assumed strings and would have broken. Older partials still hold strings, so both shapes must work mid-upgrade.
+* **Receive Cap Corrected** — 5000 chunks (320 MB) to 2400 (~150 MB), named and documented as tunable, with a user-facing message when a transfer is refused.
+* **Text and Files Split Into Separate Messages** — The large-file marker was removed from the text message on all four send paths (mobile group, mobile DM encrypted, mobile DM plain, desktop). Both receivers already did find-or-create, so no receive-side change was needed. Inline attachments are unaffected.
+* **Gallery Sidebar Fix** — The nav buttons were built from `activeView === 'folders'` alone, so DMs lit up everywhere else including the gallery, and the gallery button had no active logic of its own. Any re-render stole the gallery's highlight. Both now derive from state.
+* **Test Suites** — Unit assertions remain **267/267**.
+
+</details>
 
 See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
@@ -634,6 +640,7 @@ Pre-built Windows installers are published on [GitHub Releases](https://github.c
 | Release                                                                          | Platform                    | Notes                                                                |
 | -------------------------------------------------------------------------------- | --------------------------- | -------------------------------------------------------------------- |
 | [All releases](https://github.com/D4niel-dev/Orbit-beta/releases)                | Win / Mac / Linux / Android | Most recent build first                                              |
+| [v0.6.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.1-beta) | Win / Mac / Linux / Android | Notification permission, transfer memory, message/file split         |
 | [v0.6.0-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.0-beta) | Win / Mac / Linux / Android | Notifications, offline send queue, vault v2, in-app updates          |
 | [v0.5.3-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.5.3-beta) | Win / Mac / Linux / Android | Android voice/video calls, ringtone, call log, encrypted vault fixed |
 | [v0.0.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.2-beta) | Windows                     | SQLite storage, privacy mode, large file transfers                   |
@@ -871,7 +878,7 @@ Transparency matters in beta. Current constraints include:
 | **Third-party data egress**                       | Message Translate sends the message text to MyMemory (`api.mymemory.translated.net`); GIF search queries Giphy. Both are user-initiated and optional, but **neither is covered by Orbit's E2EE** — that content leaves your device in plaintext.                                           |
 | **Calls are LAN-only**                            | Like messaging, a call needs both peers on the same network. Media is peer-to-peer with STUN for address discovery — there is no relay and no NAT traversal, so calling across the internet is not supported.                                                                              |
 | **Group calls are desktop-only**                  | Desktop has mesh group calls; mobile handles 1:1 calls, and a group call offer is declined as busy rather than half-joined.                                                                                                                                                                |
-| **Queued messages do not survive a restart**|A send that fails is queued and re-sent when the peer reconnects, but that queue lives in memory — killing the app loses anything still waiting. File bytes are held in memory too, so an interrupted transfer needs the app to stay open.|
+| **Queued messages do not survive a restart**      | A send that fails is queued and re-sent when the peer reconnects, but that queue lives in memory — killing the app loses anything still waiting. File bytes are held in memory too, so an interrupted transfer needs the app to stay open.                                                 |
 | **No key-change warning**                         | Peer keys are pinned on first use (QR pairing), but Orbit does not yet warn if a peer’s key later changes, and there is no fingerprint to compare out of band. For an app built on E2EE that is a real gap.                                                                                |
 | **No iOS support**                                | Android is the only mobile platform — iOS/iPadOS is not planned.                                                                                                                                                                                                                           |
 
@@ -888,7 +895,15 @@ Transparency matters in beta. Current constraints include:
 
 ## Roadmap
 
-### Shipped (v0.6.0-beta)
+### Shipped (v0.6.1-beta)
+
+* **Notifications Actually Appear** — `POST_NOTIFICATIONS` was never declared, so Android silently dropped every notification on API 33+. Declared, and requested at runtime
+* **Large Transfers No Longer Exhaust Memory** — chunks held as bytes instead of base64 text; peak for a 133 MB file dropped from ~620 MB to ~266 MB
+* **An Honest Receive Cap** — lowered from 320 MB to ~150 MB to match the real memory footprint, with a clear message instead of a silent hang
+* **Text and Files Are Separate Messages** — no more bubble captioned "Receiving Video..." before anything has arrived
+* **Gallery No Longer Resets the Sidebar**
+
+### Earlier Shipped (v0.6.0-beta)
 
 * **Android Notifications** — Per-type channels and icons for messages, mentions, calls, updates and background work; three separate bugs that had stopped background notifications working at all
 * **Offline Send Queue** — Queued delivery for unreachable peers, persisted across app kills, with a pending indicator
@@ -898,18 +913,6 @@ Transparency matters in beta. Current constraints include:
 * **Backup Management** — Per-backup delete from the restore list
 * **Avatar Frame Geometry** — One rule replacing six inconsistent sets
 * **Reliability Fixes** — Vault chunk-name collision, plaintext auto-backup, misleading size reporting, restore batching
-
-### Earlier Shipped (v0.5.3-beta)
-
-* **Voice & Video Calling (Android)** — Full 1:1 calling stack: outgoing, incoming ring, mute/speaker/camera, duration timer, PiP self-view; signalling over the existing encrypted P2P transport
-* **Real Ringtone (Both Platforms)** — `shared/sounds/Call-ring-1.mp3` looping for 1m30, doubling as the no-answer timeout; desktop had no ringtone at all before
-* **Call Log in the Chat** — Each finished call leaves an entry with the call kind, duration and a Call again button, on both platforms
-* **Encrypted Vault Export Fixed** — `getRandomValues` was called on `crypto.subtle`, so every encrypted export failed before encrypting anything
-* **Vault Budget, Properly Bounded** — One budget spanning attachments and in-progress transfer data, measured by serialised size, tuned to the device's heap ceiling and halved for the encrypted path
-* **Vault Restore Batching** — Blobs decode and write in small batches instead of all at once
-* **Bottom Sheet Close/Scroll** — Cancel pill pinned outside the scroll area, drag transforms reset on open/close, `touchcancel` handled, and `max-height` tracking the visible viewport
-* **Group Avatar Parity (Mobile)** — One shared member-avatar grid used by five mobile surfaces
-* **Robustness** — Desktop no-answer timeout, and ringtones stop the moment the callee answers
 
 ### In Progress / Planned
 
@@ -999,3 +1002,5 @@ Bug *reports* and *feature ideas* are welcome via [GitHub Issues](https://github
   <strong>Orbit Team</strong> · Lead developer <a href="https://github.com/D4niel-dev">D4niel-dev</a><br>
   Local-first communication for private networks
 </p>
+
+

@@ -14,7 +14,20 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.6.0-beta', 'Latest', [
+        versionBlock('0.6.1-beta', 'Latest', [
+          ['Fixed', [
+            'Gallery no longer resets the sidebar \u2014 Changing the gallery display style used to snap the first sidebar button back to DMs, because the nav buttons were built from one signal that did not know about the gallery. They now follow the real state.',
+            'Text and files arrive as separate messages \u2014 A message used to appear captioned "Receiving Video..." before any video had arrived. Text now lands on its own, and the file follows as its own message when the transfer actually completes.'
+          ]],
+          ['Platform Note', [
+            'Everything else in this release is Android: the notification permission, and the memory work that stopped large transfers from exhausting the phone. Nothing else to try on desktop.'
+          ]],
+          ['Technical', [
+            'Version: Bumped to v0.6.1-beta across all three package.json files.',
+            'Unit tests 267/267. The desktop E2E suite is unaffected by this release.'
+          ]]
+        ]) +
+        versionBlock('0.6.0-beta', '', [
           ['Fixed', [
             'Profile Frames Sit Correctly Now — Frames were drawn at 100% of the avatar, so the wreath art hugged the edge instead of wrapping around it. They are now drawn at 125%, centred, so the artwork surrounds the avatar the way it was designed to. This was wrong on mobile too, and both platforms are now the same.'
           ]],

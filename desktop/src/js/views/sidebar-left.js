@@ -45,17 +45,25 @@ window.SidebarLeft = {
     var showStorage = s.storage !== false;
     var showFolders = (window.store.getState().settings || {}).enableExperimental === true;
     var activeView = window.store.getState().activeView;
+    var activeTab = window.store.getState().activeTab;
+    // The gallery is tracked by activeTab, not activeView — and the old template only
+    // asked "are we in folders?", so DMs lit up whenever you were anywhere else
+    // (including the gallery). Any re-render then stole the gallery's highlight and
+    // handed it back to DMs, which is why changing the gallery display style reset the
+    // sidebar to DMs.
+    var inGallery = activeTab === 'gallery';
+    var inFolders = activeView === 'folders';
 
     this.container.innerHTML = `
       <div class="sidebar-top">
         <!-- Logo -->
-        <button class="icon-btn ${activeView === 'folders' ? '' : 'active'}" id="btn-nav-dms" title="Direct Messages">
+        <button class="icon-btn ${(!inGallery && !inFolders) ? 'active' : ''}" id="btn-nav-dms" title="Direct Messages">
           <i data-lucide="message-circle"></i>
         </button>
         <div class="sidebar-separator" style="width:24px;height:1px;background:var(--border-subtle);margin-top:8px;margin-bottom:8px;margin-left:auto;margin-right:12px;"></div>
-        ${showFolders ? '<button class="icon-btn' + (activeView === 'folders' ? ' active' : '') + '" id="btn-nav-folders" title="Folders"><i data-lucide="folder"></i></button>' : ''}
+        ${showFolders ? '<button class="icon-btn' + (inFolders ? ' active' : '') + '" id="btn-nav-folders" title="Folders"><i data-lucide="folder"></i></button>' : ''}
         ${showActivity ? '<button class="icon-btn" id="btn-nav-activity" title="Activity Center"><i data-lucide="bell"></i></button>' : ''}
-        ${showGallery ? '<button class="icon-btn" id="btn-nav-gallery" title="Gallery"><i data-lucide="archive"></i></button>' : ''}
+        ${showGallery ? '<button class="icon-btn' + (inGallery ? ' active' : '') + '" id="btn-nav-gallery" title="Gallery"><i data-lucide="archive"></i></button>' : ''}
         ${showStorage ? '<button class="icon-btn" id="btn-nav-storage" title="Storage"><i data-lucide="hard-drive"></i></button>' : ''}
       </div>
       

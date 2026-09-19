@@ -203,6 +203,19 @@ const migrations = [
     if (!cols.some(function(c) { return c.name === 'replyTo'; })) {
       try { db.exec('ALTER TABLE messages ADD COLUMN replyTo TEXT'); } catch(e) {}
     }
+  },
+  // v15 - Call history: persist the `call` object on a message, as JSON.
+  //
+  // A finished call is stored as a message carrying a `call` object and no text. Neither
+  // the INSERT nor the SELECT mentioned that column, so the card was written as an empty
+  // text message and came back after a restart as an empty bubble — the call was in the
+  // database as a blank line. Exactly the class of bug v14 fixed for replyTo.
+  (db) => {
+    var cols;
+    try { cols = db.pragma('table_info(messages)'); } catch(e) { cols = []; }
+    if (!cols.some(function(c) { return c.name === 'call'; })) {
+      try { db.exec('ALTER TABLE messages ADD COLUMN call TEXT'); } catch(e) {}
+    }
   }
 ];
 

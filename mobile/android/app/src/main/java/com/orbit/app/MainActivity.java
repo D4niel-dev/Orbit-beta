@@ -28,6 +28,13 @@ public class MainActivity extends BridgeActivity {
 
         super.onCreate(savedInstanceState);
 
+        // API 33+ requires the runtime POST_NOTIFICATIONS permission before any
+        // notification can be posted. The manifest entry alone is not enough, and
+        // without the request the permission is never granted — so the notification
+        // path caught a SecurityException and quietly did nothing. Asking here means
+        // the prompt appears the first time Orbit runs.
+        requestNotificationPermissionIfNeeded();
+
         enableImmersiveMode();
         createNotificationChannels();
         startForegroundService();
@@ -108,6 +115,20 @@ public class MainActivity extends BridgeActivity {
             }
         } catch (Exception e) {
             e.printStackTrace();
+        }
+    }
+
+    /** Ask for POST_NOTIFICATIONS on API 33+, once, if it is not already granted. */
+    private void requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT < 33) return;   // Build.VERSION_CODES.TIRAMISU
+        try {
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                    == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                return;
+            }
+            requestPermissions(new String[]{ android.Manifest.permission.POST_NOTIFICATIONS }, 9001);
+        } catch (Exception e) {
+            android.util.Log.w("MainActivity", "notification permission request failed", e);
         }
     }
 }
