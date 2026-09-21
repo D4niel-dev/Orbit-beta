@@ -80,7 +80,18 @@ window.UpdateNotice = {
       .then(function () { return fetch(url); })
       .then(function (resp) {
         if (!resp.ok) throw new Error('Download failed (HTTP ' + resp.status + ')');
-        var total = parseInt(resp.headers.get('content-length') || '0', 10);
+
+        // Don't assume the Response is a full implementation. CapacitorHttp's patched
+        // fetch constructs a real Response, but a partial one would make
+        // resp.headers.get(...) throw and turn a working download into
+        // "Cannot read properties of undefined". Length is only used for the progress
+        // readout, so treat it as optional.
+        var total = 0;
+        try {
+          if (resp.headers && typeof resp.headers.get === 'function') {
+            total = parseInt(resp.headers.get('content-length') || '0', 10) || 0;
+          }
+        } catch (e) { total = 0; }
 
         // CapacitorHttp (enabled in capacitor.config.json so the update CHECK can
         // reach GitHub without hitting WebView CORS) patches window.fetch to run
