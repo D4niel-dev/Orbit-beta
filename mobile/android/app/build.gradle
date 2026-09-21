@@ -31,7 +31,10 @@ android {
         release {
             signingConfig signingConfigs.debug
             minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // Gradle 9 dropped 'proguard-android.txt' (it implies -dontoptimize).
+            // minifyEnabled is false here so this is inert, but the line still has to
+            // be one Gradle accepts.
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 }

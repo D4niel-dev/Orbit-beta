@@ -81,9 +81,31 @@ window.UpdateNotice = {
       .then(function (resp) {
         if (!resp.ok) throw new Error('Download failed (HTTP ' + resp.status + ')');
         var total = parseInt(resp.headers.get('content-length') || '0', 10);
+
+        // CapacitorHttp (enabled in capacitor.config.json so the update CHECK can
+        // reach GitHub without hitting WebView CORS) patches window.fetch to run
+        // through native code — and the patched Response buffers the whole body, so
+        // there is no ReadableStream and body.getReader() is unavailable.
+        //
+        // Stream when we can: it keeps peak memory to one chunk and gives real
+        // progress. Fall back to a buffered write when we cannot, rather than
+        // refusing the download — the updater has to work under both transports.
         if (!resp.body || typeof resp.body.getReader !== 'function') {
-          throw new Error('Streaming download is not supported in this WebView');
+          setLabel('Downloading\u2026');
+          return resp.arrayBuffer().then(function (ab) {
+            var bytes = new Uint8Array(ab);
+            if (!bytes.length) throw new Error('The download came back empty');
+            // base64 via a chunked String.fromCharCode to avoid blowing the argument
+            // limit on a large APK.
+            var bin = '';
+            for (var i = 0; i < bytes.length; i += 0x8000) {
+              bin += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(bytes.length, i + 0x8000)));
+            }
+            return FS.writeFile({ path: APK_PATH, directory: 'CACHE', data: btoa(bin) })
+              .then(function () { return bytes.length; });
+          });
         }
+
         var reader = resp.body.getReader();
         var received = 0;
         var carry = new Uint8Array(0);
