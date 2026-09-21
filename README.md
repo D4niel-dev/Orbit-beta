@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v061-beta">v0.6.1-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v062-beta">v0.6.2-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@
 
 | Channel           | Version     | Status                                                                                                                                                         |
 | ----------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Latest**        | v0.6.1-beta | Bug-fix release — notifications that actually appear, large transfers that no longer exhaust memory, messages that no longer announce a file before it arrives |
+| **Latest**        | v0.6.2-beta | Fix release — notification icons that were invalid rather than missing, and an in-app update check that could not fetch       |
 | **Stable**        | v0.6.0-beta | Reliability release — notification plumbing, an offline send queue, a vault you can back up and take with you, in-app Android updates                          |
 | Legacy **Stable** | v0.1.1-beta | Legacy stable release                                                                                                                                          |
 
@@ -90,13 +90,12 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage app for desktop and Android** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
-## Highlights (v0.6.1-beta)
+## Highlights (v0.6.2-beta)
 
-* **Notifications Now Actually Appear** — The permission Android requires in order to post a notification was never declared, so on Android 13+ it could not be granted, the failure was swallowed, and every notification was dropped before it reached the status bar. This is why the three notification bugs fixed in v0.6.0 produced nothing visible: they were real, but nothing could get past the door. Declared, and requested at runtime.
-* **Large Transfers No Longer Exhaust the Phone** — A 133 MB video needed roughly 620 MB of WebView heap: the file sat in memory as base64 text, was decoded into a second copy, then merged into a third. It OOMed, the socket reset, and the sender retried forever. Chunks are now held as bytes and merged without the extra copies — about 266 MB for the same file.
-* **An Honest Size Limit** — The old cap allowed 320 MB, sized as if the receiver needed one copy of the file. It needs two. Now ~150 MB, refused up front with a clear message rather than accepted and hung.
-* **Messages That Do Not Lie** — A bubble used to appear captioned "Receiving Video..." before any video had arrived. Text and files are now separate messages: the text lands, and the file lands when it actually lands.
-* **Smaller Fixes** — The gallery no longer resets the sidebar to DMs when you change its display style.
+* **Notification Icons Were Invalid, Not Missing** — Notifications appeared in the shade with nothing beside the clock. The generated VectorDrawables set their paint attributes on a `<group>`, which only accepts transform attributes — an invalid drawable fails to inflate, so `setSmallIcon` was handed something broken. Paint attributes now sit on the `<path>`, and all nine icons were re-rendered at 24px and 72px to confirm each still reads.
+* **The In-App Update Check Could Not Fetch** — The transport looks for `Capacitor.Plugins.CapacitorHttp`, but the plugin was not installed and `CapacitorHttp` was not enabled, so it fell through to `window.fetch` and hit WebView CORS. Enabling it routes fetch through native code.
+* **…And That Briefly Broke the Download** — CapacitorHttp buffers response bodies, so the APK download's `body.getReader()` was unavailable. It now streams when it can and falls back to a buffered write when it cannot.
+* **Builds Under Gradle 9** — `proguard-android.txt` was removed in Gradle 9 and failed at configuration time.
 
 ## Version History
 
@@ -597,6 +596,16 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Test Suites** — Unit assertions remain **267/267**; the desktop Playwright E2E suite remains **34/34** (run sharded). This release additionally verified mobile voice and video calls end to end, decline and busy handling, the call log across all eight outcome variants on both platforms, and a full encrypted vault round trip.
 
 </details>
+<details open>
+<summary>v0.6.2-beta</summary>
+
+* **Notification Icons Fixed** — paint attributes sat on a VectorDrawable `<group>`, which only takes transforms, so the drawable was invalid and failed to inflate. Moved onto the `<path>`. All nine re-rendered and checked at 24px and 72px.
+* **In-App Update Check Fixed** — `CapacitorHttp` was neither installed nor enabled, so the check fell through to `window.fetch` and hit WebView CORS.
+* **Update Download Fixed** — enabling CapacitorHttp buffers response bodies, so the download's stream reader was unavailable. Streams when possible, buffers when not.
+* **`content-length` Is Optional** — a missing header could fail the whole download; it only drives the progress readout.
+* **Gradle 9** — `proguard-android.txt` removed; switched to `proguard-android-optimize.txt`.
+
+</details>
 <details>
 <summary>v0.6.0-beta (Stable)</summary>
 
@@ -616,7 +625,7 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Test Suites** — Unit assertions remain **267/267**; the desktop Playwright E2E suite remains **34/34**.
 
 </details>
-  <details open>
+  <details>
 <summary>v0.6.1-beta</summary>
 
 * **Notifications Never Appeared** — `POST_NOTIFICATIONS` was never declared in the manifest, so on Android 13+ the permission could not be granted, the `SecurityException` was swallowed with a comment asserting the user had declined, and the system discarded every notification before it reached the status bar. Declared, and requested at runtime on API 33+ from `MainActivity`.
@@ -640,6 +649,7 @@ Pre-built Windows installers are published on [GitHub Releases](https://github.c
 | Release                                                                          | Platform                    | Notes                                                                |
 | -------------------------------------------------------------------------------- | --------------------------- | -------------------------------------------------------------------- |
 | [All releases](https://github.com/D4niel-dev/Orbit-beta/releases)                | Win / Mac / Linux / Android | Most recent build first                                              |
+| [v0.6.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.2-beta) | Win / Mac / Linux / Android | Notification icon and in-app update fixes                             |
 | [v0.6.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.1-beta) | Win / Mac / Linux / Android | Notification permission, transfer memory, message/file split         |
 | [v0.6.0-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.0-beta) | Win / Mac / Linux / Android | Notifications, offline send queue, vault v2, in-app updates          |
 | [v0.5.3-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.5.3-beta) | Win / Mac / Linux / Android | Android voice/video calls, ringtone, call log, encrypted vault fixed |
@@ -895,7 +905,7 @@ Transparency matters in beta. Current constraints include:
 
 ## Roadmap
 
-### Shipped (v0.6.1-beta)
+### Shipped (v0.6.2-beta)
 
 * **Notifications Actually Appear** — `POST_NOTIFICATIONS` was never declared, so Android silently dropped every notification on API 33+. Declared, and requested at runtime
 * **Large Transfers No Longer Exhaust Memory** — chunks held as bytes instead of base64 text; peak for a 133 MB file dropped from ~620 MB to ~266 MB

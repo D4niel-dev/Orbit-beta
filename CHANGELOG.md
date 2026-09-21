@@ -1,5 +1,22 @@
 # Orbit Changelog
 
+## v0.6.2-beta
+
+> **Note:** A fix release. Notifications were arriving in the shade with nothing beside the clock, and the in-app update check could not reach GitHub at all.
+
+### Bug Fixes
+
+- **Notification Icons Were Invalid, Not Just Missing** — The generated VectorDrawables set their paint attributes on a `<group>`, which only accepts transform attributes. An invalid drawable fails to inflate, so `setSmallIcon` was handed something broken: the notification appeared in the shade while the status bar stayed empty. Paint attributes now sit on the `<path>`, where they are valid, and the nine icons were re-rendered at 24px and 72px to confirm each still reads — tick-in-circle, @, speech bubble, wifi arcs, refresh arrows, cloud-download, camera, handset, warning triangle.
+- **The In-App Update Check Could Not Fetch** — The mobile transport looks for `Capacitor.Plugins.CapacitorHttp`, but the plugin was not installed and `CapacitorHttp` was not enabled in `capacitor.config.json`, so it fell through to `window.fetch` and hit WebView CORS from the `https://localhost` origin. Enabling `CapacitorHttp` routes fetch through native code.
+- **…And That Fix Broke the Download** — CapacitorHttp buffers response bodies, so `body.getReader()` is unavailable and the APK download threw "Streaming download is not supported in this WebView" — the change that fixed the update *check* broke the update *download*. It now streams when it can and falls back to a buffered write when it cannot.
+- **The Download No Longer Requires `content-length`** — A Response without headers turned a working download into "Cannot read properties of undefined". The length only drives the progress readout, so it is now optional.
+- **Builds Under Gradle 9** — `getDefaultProguardFile('proguard-android.txt')` was removed in Gradle 9 and failed at configuration time. Switched to `proguard-android-optimize.txt` as Gradle's own error directs; `minifyEnabled` is false, so the line is inert either way.
+
+### Technical
+
+- **`CapacitorHttp` Is Not a Local Change** — Enabling it patches `window.fetch` and `XMLHttpRequest` for the entire app. Every `fetch(` in mobile was audited: one streamed consumer (the updater), one `arrayBuffer()`, the rest `.json()`, and no XHR at all — and both bugs it introduced were in the same function.
+- **Version:** Bumped to v0.6.2-beta across all three `package.json` files.
+
 ## v0.6.1-beta
 
 > **Note:** Bug fixes for v0.6.0. The headline is that notifications never actually appeared — the permission Android requires in order to post them was never declared, so the system silently dropped every one. Large file transfers no longer exhaust the phone's memory, and a message no longer announces a video it has not received yet.

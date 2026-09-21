@@ -6483,7 +6483,18 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button id="changelog-close-mobile" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;font-size:20px;">✕</button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
-        vBlock('0.6.1-beta', 'Latest', [
+        vBlock('0.6.2-beta', 'Latest', [
+          ['Fixes', [
+            'Notification icons show in the status bar now \u2014 they were appearing in the shade with nothing next to the clock, because the icons themselves were invalid rather than missing. All nine were rebuilt and checked.',
+            'The update check works \u2014 it could not reach GitHub at all, so Orbit never saw that a new version existed.',
+            'The update download works \u2014 and if a download has to be buffered rather than streamed, it still finishes instead of failing.'
+          ]],
+          ['Technical', [
+            'Version: Bumped to v0.6.2-beta.',
+            'Android-only fix release; the desktop app is unchanged.'
+          ]]
+        ]) +
+        vBlock('0.6.1-beta', '', [
           ['Notifications', [
             'Notifications now actually appear \u2014 This is the fix that matters. Android requires your permission before an app can post a notification, and Orbit was never asking for it, so the system was discarding every notification before it reached the status bar. Orbit now asks on first launch. If you denied it, you can turn it back on in Android\u2019s app settings.',
             'This is also why the notification work in 0.6.0 seemed to do nothing \u2014 those fixes were real, but nothing could get past the door.'

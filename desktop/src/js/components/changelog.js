@@ -14,7 +14,16 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.6.1-beta', 'Latest', [
+        versionBlock('0.6.2-beta', 'Latest', [
+          ['Platform Note', [
+            'This is an Android fix release. Nothing changed on desktop apart from the version number.'
+          ]],
+          ['Fixed on Android', [
+            'Notifications showed in the shade with nothing beside the clock. The icons were invalid rather than missing \u2014 their paint attributes sat on a vector <group>, which only accepts transforms, so the drawable failed to load. All nine were rebuilt and checked at 24px and 72px.',
+            'The in-app update check could not reach GitHub, and the fix for that briefly broke the download itself. Both are resolved: the check now goes through native networking, and the download completes whether or not the response can be streamed.'
+          ]]
+        ]) +
+        versionBlock('0.6.1-beta', '', [
           ['Fixed', [
             'Gallery no longer resets the sidebar \u2014 Changing the gallery display style used to snap the first sidebar button back to DMs, because the nav buttons were built from one signal that did not know about the gallery. They now follow the real state.',
             'Text and files arrive as separate messages \u2014 A message used to appear captioned "Receiving Video..." before any video had arrived. Text now lands on its own, and the file follows as its own message when the transfer actually completes.'
