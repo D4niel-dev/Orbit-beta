@@ -13,6 +13,9 @@
     },
     "SystemBars": {
       "hidden": true
+    },
+    "CapacitorHttp": {
+      "enabled": true
     }
   }
 }

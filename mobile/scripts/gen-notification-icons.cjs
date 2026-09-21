@@ -77,7 +77,11 @@ function xml(name, iconName, nodes) {
     .map(([tag, a]) => {
       const d = toPathData(tag, a);
       if (!d) { console.warn(`  ! ${name}: unsupported element <${tag}> skipped`); return null; }
-      return `    <path\n        android:pathData="${d}" />`;
+      // FILLED, not stroked. Android renders a notification small icon as an alpha
+      // silhouette that it then tints, and a stroke-only VectorDrawable comes out
+      // blank in the status bar. evenOdd keeps holes (a bell's clapper, a tick inside
+      // a circle) from filling solid.
+      return `    <path\n        android:fillColor="#FFFFFFFF"\n        android:fillType="evenOdd"\n        android:pathData="${d}" />`;
     })
     .filter(Boolean)
     .join('\n');
@@ -94,14 +98,7 @@ function xml(name, iconName, nodes) {
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-  <group
-      android:fillColor="#00000000"
-      android:strokeColor="#FFFFFFFF"
-      android:strokeWidth="2"
-      android:strokeLineCap="round"
-      android:strokeLineJoin="round">
 ${paths}
-  </group>
 </vector>
 `;
 }
