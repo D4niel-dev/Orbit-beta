@@ -77,11 +77,13 @@ function xml(name, iconName, nodes) {
     .map(([tag, a]) => {
       const d = toPathData(tag, a);
       if (!d) { console.warn(`  ! ${name}: unsupported element <${tag}> skipped`); return null; }
-      // FILLED, not stroked. Android renders a notification small icon as an alpha
-      // silhouette that it then tints, and a stroke-only VectorDrawable comes out
-      // blank in the status bar. evenOdd keeps holes (a bell's clapper, a tick inside
-      // a circle) from filling solid.
-      return `    <path\n        android:fillColor="#FFFFFFFF"\n        android:fillType="evenOdd"\n        android:pathData="${d}" />`;
+      // Stroke attributes belong on <path>. Putting fillColor/strokeColor on a
+      // <group> is invalid (groups only take transforms), and an invalid
+      // VectorDrawable fails to inflate — which is what made the status-bar icon
+      // vanish. Do NOT "fix" this by filling the paths instead: Lucide is authored
+      // for stroking, and filling collapses the tick inside CircleCheck, the bang
+      // inside TriangleAlert and the inner ring of AtSign into solid blobs.
+      return `    <path\n        android:fillColor="#00000000"\n        android:strokeColor="#FFFFFFFF"\n        android:strokeWidth="2"\n        android:strokeLineCap="round"\n        android:strokeLineJoin="round"\n        android:pathData="${d}" />`;
     })
     .filter(Boolean)
     .join('\n');
