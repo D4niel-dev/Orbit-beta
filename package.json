@@ -12,6 +12,6 @@
     "mobile:sync": "cd mobile && npm run shared:sync && npm run version:sync && npx cap sync android",
     "mobile:build": "cd mobile && powershell -File build-android.ps1",
     "mobile:open": "cd mobile && npx cap open android",
-    "test:unit": "node tests/unit/qr-pairing.test.js && node tests/unit/e2ee-key.test.js && node tests/unit/e2ee-interop.test.js && node tests/unit/update-check.test.js"
+    "test:unit": "node tests/unit/qr-pairing.test.js && node tests/unit/e2ee-key.test.js && node tests/unit/e2ee-interop.test.js && node tests/unit/update-check.test.js && node tests/unit/audio-cover.test.js"
   }
 }

@@ -114,7 +114,18 @@
       timeEl.className = 'oap-time';
       timeEl.textContent = '0:00 / 0:00';
 
-      // Controls layout: [timeEl] [vol] .......... [⋮]
+      // Cover-art slot — shows the "sound track image" embedded in the file, and
+      // falls back to a plain music note when the file carries no artwork.
+      // Populated asynchronously by _loadCoverArt() so it never delays playback.
+      var artEl = document.createElement('div');
+      artEl.className = 'oap-art';
+      artEl.innerHTML = '<span class="oap-art-icon">' +
+        '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>' +
+      '</span>';
+
+      // Controls layout: [art] [timeEl] [vol] .......... [⋮]
+      ctrl.appendChild(artEl);
       ctrl.appendChild(timeEl);
       ctrl.appendChild(volBtn);
       ctrl.appendChild(volSlider);
@@ -158,6 +169,10 @@
       wrapper.appendChild(ctrl);
       container.appendChild(wrapper);
       updTime(); // paint initial seek fill once the full DOM (incl. timeEl) exists
+
+      // Extract cover art once the player is in the document. Deferred so the
+      // read never competes with audio setup on the critical path.
+      setTimeout(_loadCoverArt, 0);
 
       var analyser = null;
       var srcNode = null;
@@ -253,6 +268,53 @@
         var pct = dur ? Math.min(100, audio.currentTime / dur * 100) : 0;
         seekFill.style.width = pct + '%';
         seekThumb.style.left = pct + '%';
+      }
+
+      // ---- Embedded cover art ------------------------------------------------
+      // Reads a bounded slice of the file rather than the whole thing: artwork
+      // lives at the head for MP3 (ID3v2) and FLAC, and may sit at the tail for a
+      // non-faststart MP4/M4A, so a head+tail pair covers every container without
+      // ever pulling a 100MB file into memory.
+      var _ART_SLICE = 2 * 1024 * 1024;
+      var _coverTried = false;
+
+      function _applyCover(res) {
+        if (!res || !res.url || dead) return;
+        artEl.classList.add('has-art');
+        artEl.style.backgroundImage = 'url("' + res.url + '")';
+        var icon = artEl.querySelector('.oap-art-icon');
+        if (icon) icon.remove();
+        try { container.setAttribute('data-oap-cover', res.url); } catch (e) {}
+      }
+
+      function _loadCoverArt() {
+        if (_coverTried) return;
+        _coverTried = true;
+        if (dead || !window.OrbitAudioCover || typeof fetch !== 'function') return;
+
+        // A cover the renderer already knows about wins — nothing to parse.
+        var preset = container.getAttribute('data-oap-cover');
+        if (preset) { _applyCover({ url: preset }); return; }
+
+        // For a data: URL, `fetch` has to materialise the whole base64 string;
+        // for anything sizeable that is not worth it purely for artwork.
+        if (typeof url === 'string' && url.indexOf('data:') === 0 && url.length > 4 * 1024 * 1024) return;
+
+        fetch(url)
+          .then(function(r) { return r.blob(); })
+          .then(function(blob) {
+            if (dead || !blob || blob.size < 64) return null;
+            return blob.slice(0, Math.min(blob.size, _ART_SLICE)).arrayBuffer()
+              .then(function(head) {
+                var res = window.OrbitAudioCover.extract(head);
+                if (res) return res;
+                if (blob.size <= _ART_SLICE) return null;
+                return blob.slice(Math.max(0, blob.size - _ART_SLICE)).arrayBuffer()
+                  .then(function(tail) { return window.OrbitAudioCover.extract(tail); });
+              });
+          })
+          .then(_applyCover)
+          .catch(function() { /* artwork is optional — never surface an error */ });
       }
 
       function _initAudio(srcUrl) {

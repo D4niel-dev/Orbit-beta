@@ -307,6 +307,15 @@
       videoBox.className = 'ovp-video-box';
       videoBox.style.touchAction = 'manipulation';
       videoBox.appendChild(loadingOverlay);
+
+      // First-frame poster — shown until the video is actually played, so an
+      // unplayed bubble shows a real preview instead of a black rectangle.
+      // Sits above the <video> (positioned + z-index) but below the overlays.
+      var posterEl = document.createElement('div');
+      posterEl.className = 'ovp-poster';
+      posterEl.style.display = 'none';
+      videoBox.appendChild(posterEl);
+
       // Center overlay controls (backward, play/pause, forward) — fade in/out on click
       var centerOverlay = document.createElement('div');
       centerOverlay.className = 'ovp-center-overlay';
@@ -362,6 +371,64 @@
         );
       }
 
+      // ---- First-frame poster -------------------------------------------------
+      var _posterLocked = false; // a poster supplied by the renderer wins
+      var _everPlayed = false;
+
+      function _setPoster(src) {
+        if (!src || dead) return;
+        posterEl.style.backgroundImage = 'url("' + src + '")';
+        posterEl.style.display = 'block';
+        try { container.setAttribute('data-ovp-poster', src); } catch (e) {}
+      }
+
+      function _captureFirstFrame() {
+        // Needs decoded pixels: drawing before `loadeddata` yields a blank frame.
+        if (!video || !video.videoWidth || !video.videoHeight) return null;
+        if (video.readyState < 2) return null;
+        try {
+          var c = document.createElement('canvas');
+          c.width = video.videoWidth;
+          c.height = video.videoHeight;
+          c.getContext('2d').drawImage(video, 0, 0, c.width, c.height);
+          return c.toDataURL('image/jpeg', 0.72);
+        } catch (e) {
+          return null; // tainted canvas or no 2d context — simply no poster
+        }
+      }
+
+      // Capture the opening frame once, and only while the video is still untouched.
+      function _ensurePoster() {
+        if (dead || _posterLocked || _everPlayed) return;
+        if (posterEl.style.display === 'block') return;
+        if (!video || video.currentTime > 0.01) return;
+        var src = _captureFirstFrame();
+        if (!src) return;
+        _setPoster(src);
+        // Let the host persist it (galleries already reuse `_poster`) without this
+        // module needing to know anything about the store.
+        try {
+          container.dispatchEvent(new CustomEvent('orbit:video-poster', {
+            detail: {
+              url: src,
+              msgId: container.getAttribute('data-msg-id'),
+              attId: container.getAttribute('data-att-id')
+            }
+          }));
+        } catch (e) {}
+      }
+
+      function _showPoster() {
+        if (posterEl.style.backgroundImage) posterEl.style.display = 'block';
+      }
+      function _hidePoster() {
+        posterEl.style.display = 'none';
+      }
+
+      // A poster handed down by the renderer is authoritative — never overwrite it.
+      var _presetPoster = container.getAttribute('data-ovp-poster');
+      if (_presetPoster) { _posterLocked = true; _setPoster(_presetPoster); }
+
       function _initVideo(srcUrl) {
         video = document.createElement('video');
         video.className = 'ovp-video';
@@ -375,6 +442,8 @@
         dbg('[' + _logId + '] _initVideo src=' + (srcUrl ? srcUrl.slice(0, 20) : 'null'));
 
         video.addEventListener('timeupdate', updTime);
+        // The opening frame is only drawable from `loadeddata` onwards.
+        video.addEventListener('loadeddata', _ensurePoster);
         video.addEventListener('loadedmetadata', function() {
           if (video.videoWidth && video.videoHeight) {
             videoBox.style.aspectRatio = video.videoWidth + ' / ' + video.videoHeight;
@@ -399,7 +468,12 @@
           setTimeout(updTime, 10);
         }
 
-        video.addEventListener('play', function() { dbg('[' + _logId + '] PLAY  currentTime=' + video.currentTime); });
+        video.addEventListener('play', function() {
+          dbg('[' + _logId + '] PLAY  currentTime=' + video.currentTime);
+          // Once played, the <video> itself is the truth — drop the poster.
+          _everPlayed = true;
+          _hidePoster();
+        });
         video.addEventListener('playing', function() { dbg('[' + _logId + '] PLAYING  currentTime=' + video.currentTime + '  paused=' + video.paused); });
         video.addEventListener('pause', function() {
           dbg('[' + _logId + '] PAUSE  currentTime=' + video.currentTime + '  readyState=' + video.readyState);
@@ -738,6 +812,9 @@
         _iconToggle(playBtn, false, _pauseSvg, _playSvg);
         _updateCenterPlayBtn();
         updTime();
+        // Back at the start, so the opening-frame poster is accurate again.
+        // (Deliberately not on `ended` — there the last frame is the truth.)
+        _showPoster();
       }
 
       playBtn.addEventListener('click', function(e) { e.stopPropagation(); if (!video || video.paused) doPlay(); else doPause(); });

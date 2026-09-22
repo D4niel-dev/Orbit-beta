@@ -516,6 +516,34 @@ button:active,
 }
 
 /* ── Audio Player (OrbitAudioPlayer) ── */
+/* Embedded cover art — the "sound track image" if the file has one, else a
+   music note. Sized to match the 28px control buttons in the row. */
+.oap-art {
+  width: 56px;
+  height: 56px;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  background-color: rgba(127,127,127,0.16);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: var(--text-muted, rgba(255,255,255,0.55));
+}
+
+.oap-art.has-art {
+  background-color: transparent;
+}
+
+.oap-art-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .oap-wrap {
   display: flex;
   flex-direction: column;
@@ -683,6 +711,23 @@ button:active,
   display: block;
   border-radius: 8px 8px 0 0;
   background: var(--accent-primary);
+}
+
+/* First-frame poster — covers the <video> until it is played, so an unplayed
+   video shows a real preview instead of a black rectangle. Sits above the video
+   (positioned, z-index 0) but under the bottom fade (z-index 1) and the
+   loading/center overlays (5/6). */
+.ovp-poster {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: none;
+  background-color: #000;
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 8px 8px 0 0;
+  pointer-events: none;
 }
 
 .ovp-video-box {

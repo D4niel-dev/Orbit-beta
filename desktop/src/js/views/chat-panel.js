@@ -966,7 +966,10 @@ window.ChatPanel = {
           const deleteBtn = '<button class="att-delete-btn" data-att-id="' + safeAttId + '" data-msg-id="' + msg.id + '" style="position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,0.6);border:none;color:white;cursor:pointer;align-items:center;justify-content:center;font-size:14px;line-height:1;z-index:2;" title="Delete">×</button>';
           if (att.type === 'video' || (att.mimeType && att.mimeType.startsWith('video/'))) {
             const safeUrl = window.Sanitize.escapeHtml(att.url);
-            largeHtml += '<div class="att-thumb ovp-placeholder" data-ovp-url="' + safeUrl + '" style="position:relative;border-radius: 8px; border: 1px solid var(--border-subtle); background: var(--bg-hover); overflow: hidden; max-width:720px;">' +
+            // Pass a known poster down to the player (mobile does the same). When
+            // there is none, the player captures the first frame itself.
+            const posterAttr = att._poster ? ' data-ovp-poster="' + window.Sanitize.escapeHtml(att._poster) + '"' : '';
+            largeHtml += '<div class="att-thumb ovp-placeholder" data-ovp-url="' + safeUrl + '"' + posterAttr + ' data-msg-id="' + msg.id + '" style="position:relative;border-radius: 8px; border: 1px solid var(--border-subtle); background: var(--bg-hover); overflow: hidden; max-width:720px;">' +
               deleteBtn +
             '</div>';
           } else if (att.type === 'audio' || (att.mimeType && att.mimeType.startsWith('audio/'))) {
