@@ -1,6 +1,18 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('orbitAPI', {
+  // Electron 32 REMOVED File.path. Anything reading it now gets undefined, and a
+  // filename with no directory is not something the transfer can open — which is
+  // why attaching a file silently produced nothing. webUtils.getPathForFile is the
+  // documented replacement, and it has to be called here in the renderer via the
+  // preload rather than from the main process.
+  getPathForFile: (file) => {
+    try {
+      return webUtils.getPathForFile(file) || '';
+    } catch (e) {
+      return '';
+    }
+  },
   send:     (channel, data)   => ipcRenderer.send(channel, data),
   sendSync: (channel, ...args)=> ipcRenderer.sendSync(channel, ...args),
   on:       (channel, cb)     => ipcRenderer.on(channel, (e, data) => cb(data)),

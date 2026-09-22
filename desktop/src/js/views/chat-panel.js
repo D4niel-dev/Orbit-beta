@@ -1685,7 +1685,12 @@ window.ChatPanel = {
           const isAudio = file.type.startsWith('audio/') || audExts.indexOf(ext) !== -1;
           var entry = {
             file: file,
-            path: file.path || file.name,
+            // Electron 32 removed File.path, so this used to fall through to
+            // file.name — a bare filename with no directory, which the transfer
+            // cannot open. That is why attaching anything produced no message.
+            path: (window.orbitAPI && window.orbitAPI.getPathForFile
+                     ? window.orbitAPI.getPathForFile(file)
+                     : '') || file.path || file.name,
             name: file.name,
             size: file.size,
             mimeType: file.type,
@@ -1804,7 +1809,11 @@ window.ChatPanel = {
         var isAudio = file.type.startsWith('audio/') || audExts.indexOf(ext) !== -1;
         self.stagedFiles.push({
           file: file,
-          path: file.path || file.name,
+          // Same Electron 32 issue as the file-input path above: File.path is gone,
+          // so this fell through to a bare filename the transfer cannot open.
+          path: (window.orbitAPI && window.orbitAPI.getPathForFile
+                   ? window.orbitAPI.getPathForFile(file)
+                   : '') || file.path || file.name,
           name: file.name,
           size: file.size,
           mimeType: file.type,
