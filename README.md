@@ -628,7 +628,17 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Test Suites** — Unit assertions remain **267/267**.
 
 </details>
- <details open>
+<details>
+<summary>v0.6.2-beta</summary>
+
+* **Notification Icons Fixed** — paint attributes sat on a VectorDrawable `<group>`, which only takes transforms, so the drawable was invalid and failed to inflate. Moved onto the `<path>`. All nine re-rendered and checked at 24px and 72px.
+* **In-App Update Check Fixed** — `CapacitorHttp` was neither installed nor enabled, so the check fell through to `window.fetch` and hit WebView CORS.
+* **Update Download Fixed** — enabling CapacitorHttp buffers response bodies, so the download's stream reader was unavailable. Streams when possible, buffers when not.
+* **`content-length` Is Optional** — a missing header could fail the whole download; it only drives the progress readout.
+* **Gradle 9** — `proguard-android.txt` removed; switched to `proguard-android-optimize.txt`.
+
+</details>
+<details open>
 <summary>v0.6.3-beta</summary>
 
 * **Desktop: Every File Send Threw** — `CHUNK_SIZE` was a local `var` inside `sendMessage()` but used in `_sendFileChunks()`, a separate method. Out of scope, so the first chunk threw and nothing ever appeared. Hoisted to module scope.
@@ -638,17 +648,6 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Playing Media Stopped on Re-render** — Both shared players looked the feed up as `#chat-message-feed`; mobile's is `#message-feed`. The lookup returned `null`, so a detached player was never re-attached and the rebuild produced a fresh paused one — your audio stopped when a new message arrived.
 * **Text and File Arranged Differently Per Platform** — Desktop composed attachment-then-text, mobile text-then-attachment. Desktop now matches mobile.
 * **Test Suites** — Unit assertions now **289** across 6 suites, including 13 new cases for the desktop chunk/ACK/RESUME state machine.
-
-</details>
-
- <details>
-<summary>v0.6.2-beta</summary>
-
-* **Notification Icons Fixed** — paint attributes sat on a VectorDrawable `<group>`, which only takes transforms, so the drawable was invalid and failed to inflate. Moved onto the `<path>`. All nine re-rendered and checked at 24px and 72px.
-* **In-App Update Check Fixed** — `CapacitorHttp` was neither installed nor enabled, so the check fell through to `window.fetch` and hit WebView CORS.
-* **Update Download Fixed** — enabling CapacitorHttp buffers response bodies, so the download's stream reader was unavailable. Streams when possible, buffers when not.
-* **`content-length` Is Optional** — a missing header could fail the whole download; it only drives the progress readout.
-* **Gradle 9** — `proguard-android.txt` removed; switched to `proguard-android-optimize.txt`.
 
 </details>
 
