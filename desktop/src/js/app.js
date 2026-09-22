@@ -1022,6 +1022,64 @@ document.addEventListener('DOMContentLoaded', () => {
       window.orbitAPI.on('state-invalidate', () => {
         window.location.reload();
       });
+
+      // ---- Tray menu --------------------------------------------------------
+      // The tray lives in the main process and delegates every stateful action
+      // here. The renderer stays the single writer for presence and mute, then
+      // reports the result back so the tray's radio/checkbox items reflect what
+      // actually happened instead of what main assumed would happen.
+      function pushTrayState() {
+        try {
+          var st = window.store.getState();
+          var cu = st.currentUser || {};
+          window.orbitAPI.send('tray-state', {
+            status: cu.status || 'online',
+            muted: !!(st.settings && st.settings.notifyDnd),
+            name: cu.username || '',
+            tag: cu.usertag || ''
+          });
+        } catch (e) { /* the tray is optional — never let it break boot */ }
+      }
+
+      window.orbitAPI.on('tray-action', (data) => {
+        if (!data || !data.action) return;
+        try {
+          if (data.action === 'set-status') {
+            var cu = window.store.getState().currentUser;
+            if (!cu) return;
+            var updated = { ...cu, status: data.value };
+            window.store.setState({ currentUser: updated });
+            window.orbitAPI.dbSaveUser(updated);
+            // Tell connected peers immediately rather than waiting for the next beacon.
+            if (window.orbitAPI.broadcastBeacon) window.orbitAPI.broadcastBeacon(updated);
+          } else if (data.action === 'toggle-mute') {
+            var s = { ...window.store.getState().settings };
+            s.notifyDnd = !s.notifyDnd;
+            window.store.setState({ settings: s });
+            // _persistSettings dual-writes Storage AND the SQLite settings table,
+            // which is the table dbGetAllStartupData() reads at startup.
+            if (window.store._persistSettings) window.store._persistSettings();
+            if (window.App && window.App.applySettings) window.App.applySettings(s);
+            if (window.Toast) {
+              window.Toast.show(s.notifyDnd ? 'Muted' : 'Unmuted',
+                s.notifyDnd ? 'Notifications muted' : 'Notifications enabled');
+            }
+          } else if (data.action === 'check-updates') {
+            if (window.UpdateNotice && window.UpdateNotice.checkManual) window.UpdateNotice.checkManual();
+          } else if (data.action === 'lock') {
+            if (window.PinLockScreen) window.PinLockScreen.show(function() {});
+          }
+        } catch (e) {
+          console.warn('[Tray] action failed:', data.action, e);
+        }
+      });
+
+      // Any writer of settings/currentUser keeps the tray truthful — including the
+      // Settings UI, which knows nothing about the tray.
+      window.store.subscribe(function (state, changed) {
+        if (changed && ('settings' in changed || 'currentUser' in changed)) pushTrayState();
+      });
+      pushTrayState();
     }
 
     if (window.SidebarLeft) window.SidebarLeft.init();

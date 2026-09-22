@@ -680,13 +680,114 @@ app.whenReady().then(() => {
   const iconPath = path.join(__dirname, 'src/icons/app/orbit.ico');
   const icon = nativeImage.createFromPath(iconPath);
   tray = new Tray(icon);
-  const contextMenu = Menu.buildFromTemplate([
-    { label: 'Open Orbit', click: () => mainWindow.show() },
-    { type: 'separator' },
-    { label: 'Quit Orbit', click: () => app.quit() }
-  ]);
+
+  // The tray menu mirrors live app state, so it is rebuilt rather than built
+  // once. The RENDERER is the single writer for presence and mute — main only
+  // reflects what it is told and asks the renderer to act, which keeps one owner
+  // per setting instead of two places racing to write it.
+  const trayState = {
+    status: 'online',
+    muted: false,
+    name: '',
+    tag: ''
+  };
+
+  function traySend(action, value) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('tray-action', { action, value });
+    }
+  }
+
+  function showMainWindow() {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    if (!mainWindow.isVisible()) mainWindow.show();
+    mainWindow.focus();
+  }
+
+  // Electron fires no "menu is about to open" event for a tray, so the menu is
+  // rebuilt whenever the renderer reports a state change.
+  const TRAY_STATUSES = [
+    { id: 'online', label: 'Online' },
+    { id: 'away', label: 'Away' },
+    { id: 'busy', label: 'Busy' },
+    { id: 'offline', label: 'Invisible' }
+  ];
+
+  function buildTrayMenu() {
+    const pinEnabled = persistentStore.get('pin_enabled', false);
+    const handle = trayState.name
+      ? (trayState.name + (trayState.tag ? '#' + trayState.tag : ''))
+      : '';
+
+    const template = [
+      { label: 'Open Orbit', click: showMainWindow },
+      { type: 'separator' },
+      {
+        label: handle ? ('Copy My Orbit ID  —  ' + handle) : 'Copy My Orbit ID',
+        enabled: !!handle,
+        click: () => {
+          try {
+            clipboard.writeText(handle);
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('toast', 'Orbit ID copied to clipboard', 'success');
+            }
+          } catch (e) { /* clipboard unavailable — nothing to do */ }
+        }
+      },
+      {
+        label: 'My Status',
+        submenu: TRAY_STATUSES.map(s => ({
+          label: s.label,
+          type: 'radio',
+          checked: trayState.status === s.id,
+          click: () => traySend('set-status', s.id)
+        }))
+      },
+      {
+        label: 'Mute Notifications',
+        type: 'checkbox',
+        checked: !!trayState.muted,
+        click: () => traySend('toggle-mute')
+      },
+      { type: 'separator' },
+      {
+        label: 'Check for Updates',
+        click: () => { showMainWindow(); traySend('check-updates'); }
+      }
+    ];
+
+    if (pinEnabled) {
+      template.push({ label: 'Lock Orbit', click: () => traySend('lock') });
+    }
+
+    template.push({ type: 'separator' }, { label: 'Quit Orbit', click: () => app.quit() });
+
+    return Menu.buildFromTemplate(template);
+  }
+
+  function refreshTrayMenu() {
+    if (!tray) return;
+    try {
+      tray.setContextMenu(buildTrayMenu());
+    } catch (e) {
+      // Log rather than swallow: a broken menu would otherwise be invisible.
+      console.warn('[Tray] failed to build context menu:', e && e.message);
+    }
+  }
+
+  // The renderer reports presence / mute / identity changes here.
+  ipcMain.on('tray-state', (event, patch) => {
+    if (!patch || typeof patch !== 'object') return;
+    if (typeof patch.status === 'string') trayState.status = patch.status;
+    if (typeof patch.muted === 'boolean') trayState.muted = patch.muted;
+    if (typeof patch.name === 'string') trayState.name = patch.name;
+    if (typeof patch.tag === 'string') trayState.tag = patch.tag;
+    refreshTrayMenu();
+  });
+
   tray.setToolTip('Orbit');
-  tray.setContextMenu(contextMenu);
+  refreshTrayMenu();
   tray.on('click', () => {
     if (mainWindow.isVisible()) {
       mainWindow.hide();
