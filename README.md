@@ -26,11 +26,11 @@
 
 ## Release Status
 
-| Channel           | Version     | Status                                                                                                                                                         |
-| ----------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Latest**        | v0.6.2-beta | Fix release — notification icons that were invalid rather than missing, and an in-app update check that could not fetch       |
-| **Stable**        | v0.6.0-beta | Reliability release — notification plumbing, an offline send queue, a vault you can back up and take with you, in-app Android updates                          |
-| Legacy **Stable** | v0.1.1-beta | Legacy stable release                                                                                                                                          |
+| Channel           | Version     | Status                                                                                                                                |
+| ----------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **Latest**        | v0.6.2-beta | Fix release — notification icons that were invalid rather than missing, and an in-app update check that could not fetch               |
+| **Stable**        | v0.6.0-beta | Reliability release — notification plumbing, an offline send queue, a vault you can back up and take with you, in-app Android updates |
+| Legacy **Stable** | v0.1.1-beta | Legacy stable release                                                                                                                 |
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
 
@@ -596,16 +596,6 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Test Suites** — Unit assertions remain **267/267**; the desktop Playwright E2E suite remains **34/34** (run sharded). This release additionally verified mobile voice and video calls end to end, decline and busy handling, the call log across all eight outcome variants on both platforms, and a full encrypted vault round trip.
 
 </details>
-<details open>
-<summary>v0.6.2-beta</summary>
-
-* **Notification Icons Fixed** — paint attributes sat on a VectorDrawable `<group>`, which only takes transforms, so the drawable was invalid and failed to inflate. Moved onto the `<path>`. All nine re-rendered and checked at 24px and 72px.
-* **In-App Update Check Fixed** — `CapacitorHttp` was neither installed nor enabled, so the check fell through to `window.fetch` and hit WebView CORS.
-* **Update Download Fixed** — enabling CapacitorHttp buffers response bodies, so the download's stream reader was unavailable. Streams when possible, buffers when not.
-* **`content-length` Is Optional** — a missing header could fail the whole download; it only drives the progress readout.
-* **Gradle 9** — `proguard-android.txt` removed; switched to `proguard-android-optimize.txt`.
-
-</details>
 <details>
 <summary>v0.6.0-beta (Stable)</summary>
 
@@ -637,6 +627,16 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Test Suites** — Unit assertions remain **267/267**.
 
 </details>
+ <details open>
+<summary>v0.6.2-beta</summary>
+
+* **Notification Icons Fixed** — paint attributes sat on a VectorDrawable `<group>`, which only takes transforms, so the drawable was invalid and failed to inflate. Moved onto the `<path>`. All nine re-rendered and checked at 24px and 72px.
+* **In-App Update Check Fixed** — `CapacitorHttp` was neither installed nor enabled, so the check fell through to `window.fetch` and hit WebView CORS.
+* **Update Download Fixed** — enabling CapacitorHttp buffers response bodies, so the download's stream reader was unavailable. Streams when possible, buffers when not.
+* **`content-length` Is Optional** — a missing header could fail the whole download; it only drives the progress readout.
+* **Gradle 9** — `proguard-android.txt` removed; switched to `proguard-android-optimize.txt`.
+
+</details>
 
 See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
@@ -646,15 +646,13 @@ See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
 Pre-built Windows installers are published on [GitHub Releases](https://github.com/D4niel-dev/Orbit-beta/releases).
 
-| Release                                                                          | Platform                    | Notes                                                                |
-| -------------------------------------------------------------------------------- | --------------------------- | -------------------------------------------------------------------- |
-| [All releases](https://github.com/D4niel-dev/Orbit-beta/releases)                | Win / Mac / Linux / Android | Most recent build first                                              |
-| [v0.6.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.2-beta) | Win / Mac / Linux / Android | Notification icon and in-app update fixes                             |
-| [v0.6.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.1-beta) | Win / Mac / Linux / Android | Notification permission, transfer memory, message/file split         |
-| [v0.6.0-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.0-beta) | Win / Mac / Linux / Android | Notifications, offline send queue, vault v2, in-app updates          |
-| [v0.5.3-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.5.3-beta) | Win / Mac / Linux / Android | Android voice/video calls, ringtone, call log, encrypted vault fixed |
-| [v0.0.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.2-beta) | Windows                     | SQLite storage, privacy mode, large file transfers                   |
-| [v0.0.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.1-beta) | Windows                     | Original release                                                     |
+| Release                                                                          | Platform                    | Notes                                                        |
+| -------------------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------------ |
+| [All releases](https://github.com/D4niel-dev/Orbit-beta/releases)                | Win / Mac / Linux / Android | Most recent build first                                      |
+| [v0.6.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.2-beta) | Win / Mac / Linux / Android | Notification icon and in-app update fixes                    |
+| [v0.6.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.1-beta) | Win / Mac / Linux / Android | Notification permission, transfer memory, message/file split |
+| [v0.0.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.2-beta) | Windows                     | SQLite storage, privacy mode, large file transfers           |
+| [v0.0.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.1-beta) | Windows                     | Original release                                             |
 
 > The **Releases** page is the source of truth — every current release is a prerelease (`-beta`), and GitHub's `releases/latest` shortcut deliberately skips prereleases, so it will not resolve to an Orbit build.
 
@@ -913,17 +911,6 @@ Transparency matters in beta. Current constraints include:
 * **Text and Files Are Separate Messages** — no more bubble captioned "Receiving Video..." before anything has arrived
 * **Gallery No Longer Resets the Sidebar**
 
-### Earlier Shipped (v0.6.0-beta)
-
-* **Android Notifications** — Per-type channels and icons for messages, mentions, calls, updates and background work; three separate bugs that had stopped background notifications working at all
-* **Offline Send Queue** — Queued delivery for unreachable peers, persisted across app kills, with a pending indicator
-* **Local Vault v2** — Chunked, streamed, per-chunk encrypted; backs up a full 500 MB+ account where v1 could only manage a partial one
-* **Backup Export Off-Device** — Native zip, then MediaStore save to Downloads or the share sheet
-* **In-App Android Updates** — Streaming download, installer hand-off, restart prompt, and the unknown-apps settings redirect
-* **Backup Management** — Per-backup delete from the restore list
-* **Avatar Frame Geometry** — One rule replacing six inconsistent sets
-* **Reliability Fixes** — Vault chunk-name collision, plaintext auto-backup, misleading size reporting, restore batching
-
 ### In Progress / Planned
 
 * **Mobile Account Switcher** — Multi-account support on Android (desktop done in v0.1.5-beta)
@@ -1012,5 +999,3 @@ Bug *reports* and *feature ideas* are welcome via [GitHub Issues](https://github
   <strong>Orbit Team</strong> · Lead developer <a href="https://github.com/D4niel-dev">D4niel-dev</a><br>
   Local-first communication for private networks
 </p>
-
-

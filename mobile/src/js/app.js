@@ -3350,20 +3350,24 @@ document.addEventListener('DOMContentLoaded', function() {
           type: att.type || '', mimeType: att.mimeType || ''
         };
         if (isGroup) ftStartPayload.chatId = activeChatId;
-        // Route the transfer's START through the outbox so an attachment sent to a
-        // peer who is briefly away waits instead of failing on its own — the message
-        // was already queued, and without this the receiver got metadata for a file
-        // it never received.
+        // START goes out DIRECTLY, never through the outbox.
         //
-        // Only the START is queued, and only metadata: the chunk body streams over the
-        // connection once it exists. Caveat worth knowing: the file bytes live in
-        // memory (att._arrayBuffer), so a queued START does not survive an app
-        // restart. It covers the common case — a peer who is momentarily offline
-        // while the app is running — not a transfer resumed the next day.
-        _deliverOrQueue(peerId, Orbit.Protocol.createPacket(
+        // It was routed through the outbox once, to let an attachment to a briefly
+        // offline peer wait instead of failing. That broke transfers: the outbox
+        // enqueues and then flushes ASYNCHRONOUSLY, while the chunk driver below
+        // (sendNext) starts synchronously — so chunks reached the receiver before the
+        // START that gives them context, and the transfer died. Worse, if a flush was
+        // already in flight the START was deferred by the outbox's rerun flag while
+        // chunks kept streaming.
+        //
+        // Ordering here is a hard requirement, not a nicety: the receiver cannot
+        // interpret a chunk without its START. Delivery is attempted synchronously so
+        // the ordering holds; if the peer is genuinely unreachable the send throws and
+        // the caller's normal failure path applies.
+        Orbit.P2P.send(peerId, Orbit.Protocol.createPacket(
           Orbit.Protocol.Types.FILE_TRANSFER_START, myId, peerId,
           ftStartPayload
-        ), null);
+        ));
 
         // CROSS-4: send-session map so an incoming FILE_TRANSFER_RESUME can
         // rewind/advance progress. Keyed fileId + '::' + peerId — a group
