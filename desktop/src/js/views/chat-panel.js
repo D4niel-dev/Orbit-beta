@@ -1061,7 +1061,7 @@ window.ChatPanel = {
             senderName +
             '<div class="message-bubble" data-msg-id="' + msg.id + '" data-debug="Bubble: ' + msg.id + '" style="position:relative;' + bubbleBgMine + ' ' + bubblePadding + ' border-radius: 16px 16px 0 16px; line-height: 1.4; font-size: 14px; cursor:context-menu; max-width: 100%;">' +
               '<div class="message-id" style="display:none;font-size:9px;font-family:monospace;color:rgba(255,255,255,0.4);margin-bottom:2px;">#' + String(msg.id).substring(0, 8) + '</div>' +
-            actionsBar + replyHtml + attachmentsHtml + textWrapHtml + callLogHtml + linkPreviewHtml + editedBadge +
+            actionsBar + replyHtml + textWrapHtml + attachmentsHtml + callLogHtml + linkPreviewHtml + editedBadge +
             (reactionsHtml ? '<div style="border-top:1px solid rgba(255,255,255,0.15);margin-top:8px;padding-top:6px;">' + reactionsHtml + '</div>' : '') +
           '</div>' +
           threadChipHtml +
@@ -1100,7 +1100,7 @@ window.ChatPanel = {
             '<div style="font-size: 11px; color: var(--text-secondary); font-weight: 500; margin-bottom: 2px; margin-left: 4px;">' + senderName + '</div>' +
             '<div class="message-bubble" data-msg-id="' + msg.id + '" data-debug="Bubble: ' + msg.id + '" style="position:relative;' + bubbleBgOther + ' ' + bubblePadding + ' border-radius: 0 16px 16px 16px; line-height: 1.4; font-size: 14px; cursor:context-menu; max-width: 100%;">' +
               '<div class="message-id" style="display:none;font-size:9px;font-family:monospace;color:var(--text-muted);margin-bottom:2px;">#' + String(msg.id).substring(0, 8) + '</div>' +
-              actionsBar + replyHtml + attachmentsHtml + textWrapHtml + callLogHtml + linkPreviewHtml + editedBadgeOther +
+              actionsBar + replyHtml + textWrapHtml + attachmentsHtml + callLogHtml + linkPreviewHtml + editedBadgeOther +
               (reactionsHtml ? '<div style="border-top:1px solid var(--border-subtle);margin-top:8px;padding-top:6px;">' + reactionsHtml + '</div>' : '') +
             '</div>' +
             threadChipHtml +
