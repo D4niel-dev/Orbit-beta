@@ -6487,7 +6487,25 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button id="changelog-close-mobile" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;font-size:20px;">✕</button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
-        vBlock('0.6.2-beta', 'Latest', [
+        vBlock('0.6.3-beta', 'Latest', [
+          ['File Transfer', [
+            'Sending a file works now. The pieces of a file could reach the other side before the note that explains them, which is what made transfers stall or arrive broken.',
+            'Attachments are also more resilient: a transfer that gets interrupted can carry on from where it stopped.'
+          ]],
+          ['New', [
+            'Audio messages show their album art \u2014 if the file carries a cover image, Orbit shows it beside the controls. If it does not, you get a music note.',
+            'Videos show their first frame \u2014 an unplayed video is no longer a black rectangle. Press play and the preview steps aside; press stop and it comes back.',
+            'Text and files now sit in the same order as on desktop. Mobile always put the message first; both platforms agree now.'
+          ]],
+          ['Fixed', [
+            'Audio no longer stops when a new message arrives \u2014 if you were listening to a voice message and someone messaged you, the player was rebuilt from scratch and went silent. It keeps playing now.'
+          ]],
+          ['Technical', [
+            'Version: Bumped to v0.6.3-beta.',
+            'Unit test suite grew to 289 assertions, including new coverage for the file-transfer state machine.'
+          ]]
+        ]) +
+        vBlock('0.6.2-beta', '', [
           ['Fixes', [
             'Notification icons show in the status bar now \u2014 they were appearing in the shade with nothing next to the clock, because the icons themselves were invalid rather than missing. All nine were rebuilt and checked.',
             'The update check works \u2014 it could not reach GitHub at all, so Orbit never saw that a new version existed.',

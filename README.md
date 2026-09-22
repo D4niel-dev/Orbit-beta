@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v062-beta">v0.6.2-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v063-beta">v0.6.3-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@
 
 | Channel           | Version     | Status                                                                                                                                |
 | ----------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| **Latest**        | v0.6.2-beta | Fix release — notification icons that were invalid rather than missing, and an in-app update check that could not fetch               |
+| **Latest**        | v0.6.3-beta | File-transfer release — sending a file actually works on both platforms, plus album art, video first frames and a real tray menu      |
 | **Stable**        | v0.6.0-beta | Reliability release — notification plumbing, an offline send queue, a vault you can back up and take with you, in-app Android updates |
 | Legacy **Stable** | v0.1.1-beta | Legacy stable release                                                                                                                 |
 
@@ -90,12 +90,13 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage app for desktop and Android** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
-## Highlights (v0.6.2-beta)
+## Highlights (v0.6.3-beta)
 
-* **Notification Icons Were Invalid, Not Missing** — Notifications appeared in the shade with nothing beside the clock. The generated VectorDrawables set their paint attributes on a `<group>`, which only accepts transform attributes — an invalid drawable fails to inflate, so `setSmallIcon` was handed something broken. Paint attributes now sit on the `<path>`, and all nine icons were re-rendered at 24px and 72px to confirm each still reads.
-* **The In-App Update Check Could Not Fetch** — The transport looks for `Capacitor.Plugins.CapacitorHttp`, but the plugin was not installed and `CapacitorHttp` was not enabled, so it fell through to `window.fetch` and hit WebView CORS. Enabling it routes fetch through native code.
-* **…And That Briefly Broke the Download** — CapacitorHttp buffers response bodies, so the APK download's `body.getReader()` was unavailable. It now streams when it can and falls back to a buffered write when it cannot.
-* **Builds Under Gradle 9** — `proguard-android.txt` was removed in Gradle 9 and failed at configuration time.
+* **Sending a File Works on Both Platforms** — It did not, for a different reason on each. Desktop threw a `ReferenceError` before the first chunk ever went out: `CHUNK_SIZE` was declared inside `sendMessage()` but used in `_sendFileChunks()`, a separate class method, so it was out of scope. Attaching a file also produced no message at all, because Electron 32 removed `File.path` and the `|| file.name` fallback silently yielded a filename with no directory that the transfer could not open. On mobile, chunks could overtake the transfer's own `FILE_TRANSFER_START` — which the receiver needs in order to interpret them at all.
+* **Audio Attachments Show Their Album Art** — The cover image embedded in an audio file is now read out and shown beside the controls, falling back to a music note when there is none. Handles ID3v2 `APIC` (MP3), the `covr` atom (MP4/M4A) and the FLAC `PICTURE` block, reading at most 4MB rather than pulling the whole file into memory, and never letting a malformed tag break playback.
+* **Video Attachments Show Their First Frame** — An unplayed video is no longer a black rectangle with a play button. The opening frame is captured from the video itself, hides when you press play, and comes back when you press Stop.
+* **A Tray Menu Worth Opening** — Copy My Orbit ID, a **My Status** submenu (Online / Away / Busy / Invisible) that broadcasts the change to peers immediately, Mute Notifications, Check for Updates, and Lock Orbit — the last only when a PIN is actually set. Open Orbit now restores and focuses the window instead of just showing it.
+* **Text Sits in the Same Place on Both Platforms** — Mobile composed a bubble as text-then-attachment, desktop as attachment-then-text, so the same message read one way on desktop and the other way on mobile. Desktop now matches mobile — which is also the only order that can be consistent with the receiver, where the text necessarily arrives above the file.
 
 ## Version History
 
@@ -628,6 +629,19 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 
 </details>
  <details open>
+<summary>v0.6.3-beta</summary>
+
+* **Desktop: Every File Send Threw** — `CHUNK_SIZE` was a local `var` inside `sendMessage()` but used in `_sendFileChunks()`, a separate method. Out of scope, so the first chunk threw and nothing ever appeared. Hoisted to module scope.
+* **Desktop: Attaching a File Produced No Message** — `File.path` was removed in Electron 32, so `file.path || file.name` fell through to a bare filename the transfer could not open. Now uses `webUtils.getPathForFile` through the preload, at both the file-input and drag-and-drop sites.
+* **Mobile: Chunks Could Overtake the Transfer Start** — `FILE_TRANSFER_START` went through the outbox, which flushes asynchronously, while the chunk driver runs synchronously — so chunks could arrive before the START that explains them. Reverted to a direct synchronous send.
+* **Desktop: Reading Attachment Bytes Was Blocked by the CSP** — `connect-src` listed no `blob:`, `orbit-db:` or `orbit-file:`, so the renderer refused to read its own attachments and album art silently never appeared. `orbit-db:`/`orbit-file:` also cover attachments restored after a restart.
+* **Playing Media Stopped on Re-render** — Both shared players looked the feed up as `#chat-message-feed`; mobile's is `#message-feed`. The lookup returned `null`, so a detached player was never re-attached and the rebuild produced a fresh paused one — your audio stopped when a new message arrived.
+* **Text and File Arranged Differently Per Platform** — Desktop composed attachment-then-text, mobile text-then-attachment. Desktop now matches mobile.
+* **Test Suites** — Unit assertions now **289** across 6 suites, including 13 new cases for the desktop chunk/ACK/RESUME state machine.
+
+</details>
+
+ <details>
 <summary>v0.6.2-beta</summary>
 
 * **Notification Icons Fixed** — paint attributes sat on a VectorDrawable `<group>`, which only takes transforms, so the drawable was invalid and failed to inflate. Moved onto the `<path>`. All nine re-rendered and checked at 24px and 72px.
@@ -646,13 +660,14 @@ See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
 Pre-built Windows installers are published on [GitHub Releases](https://github.com/D4niel-dev/Orbit-beta/releases).
 
-| Release                                                                          | Platform                    | Notes                                                        |
-| -------------------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------------ |
-| [All releases](https://github.com/D4niel-dev/Orbit-beta/releases)                | Win / Mac / Linux / Android | Most recent build first                                      |
-| [v0.6.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.2-beta) | Win / Mac / Linux / Android | Notification icon and in-app update fixes                    |
-| [v0.6.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.1-beta) | Win / Mac / Linux / Android | Notification permission, transfer memory, message/file split |
-| [v0.0.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.2-beta) | Windows                     | SQLite storage, privacy mode, large file transfers           |
-| [v0.0.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.1-beta) | Windows                     | Original release                                             |
+| Release                                                                          | Platform                    | Notes                                                                           |
+| -------------------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------- |
+| [All releases](https://github.com/D4niel-dev/Orbit-beta/releases)                | Win / Mac / Linux / Android | Most recent build first                                                         |
+| [v0.6.3-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.3-beta) | Win / Mac / Linux / Android | File transfer fixed on both platforms, album art, video first frames, tray menu |
+| [v0.6.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.2-beta) | Win / Mac / Linux / Android | Notification icon and in-app update fixes                                       |
+| [v0.6.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.1-beta) | Win / Mac / Linux / Android | Notification permission, transfer memory, message/file split                    |
+| [v0.0.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.2-beta) | Windows                     | SQLite storage, privacy mode, large file transfers                              |
+| [v0.0.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.1-beta) | Windows                     | Original release                                                                |
 
 > The **Releases** page is the source of truth — every current release is a prerelease (`-beta`), and GitHub's `releases/latest` shortcut deliberately skips prereleases, so it will not resolve to an Orbit build.
 
@@ -903,13 +918,14 @@ Transparency matters in beta. Current constraints include:
 
 ## Roadmap
 
-### Shipped (v0.6.2-beta)
+### Shipped (v0.6.3-beta)
 
-* **Notifications Actually Appear** — `POST_NOTIFICATIONS` was never declared, so Android silently dropped every notification on API 33+. Declared, and requested at runtime
-* **Large Transfers No Longer Exhaust Memory** — chunks held as bytes instead of base64 text; peak for a 133 MB file dropped from ~620 MB to ~266 MB
-* **An Honest Receive Cap** — lowered from 320 MB to ~150 MB to match the real memory footprint, with a clear message instead of a silent hang
-* **Text and Files Are Separate Messages** — no more bubble captioned "Receiving Video..." before anything has arrived
-* **Gallery No Longer Resets the Sidebar**
+* **File Transfer Works on Both Platforms** — desktop's `CHUNK_SIZE` scope bug threw before the first chunk, and Electron 32's removal of `File.path` meant attaching a file produced no message at all; on mobile, chunks could overtake their own `FILE_TRANSFER_START`
+* **Album Art on Audio Attachments** — ID3v2 `APIC`, MP4/M4A `covr` and FLAC `PICTURE`, read from a bounded slice so a large track is never pulled into memory, with a music note when there is none
+* **Video First Frames** — an unplayed video shows its opening frame instead of a black rectangle
+* **A Tray Menu Worth Opening** — copy your Orbit ID, set presence, mute notifications, check for updates, lock
+* **Consistent Text/File Order** — desktop now arranges a bubble the same way mobile does
+* **Playback Survives a Re-render** — a playing voice message no longer stops when a new message arrives
 
 ### In Progress / Planned
 

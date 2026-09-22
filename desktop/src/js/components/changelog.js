@@ -14,7 +14,25 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.6.2-beta', 'Latest', [
+        versionBlock('0.6.3-beta', 'Latest', [
+          ['File Transfer', [
+            'Sending a file works now. Two separate bugs stopped it: the size constant for each piece of the file was declared in one function and used in another, so the very first send threw an error and nothing was ever sent; and attaching a file produced no message at all, because Electron 32 removed the API Orbit used to locate the file on disk, and the fallback quietly produced a filename with no folder \u2014 which cannot be opened. Both are fixed, at the file picker and the drag-and-drop target alike.'
+          ]],
+          ['New', [
+            'Audio messages show their album art \u2014 read out of the file itself (MP3, M4A and FLAC). No cover image, and you get a music note instead.',
+            'Videos show their first frame instead of a black rectangle. Press play and the preview steps aside; press Stop and it comes back.',
+            'The tray menu is worth right-clicking now: copy your Orbit ID, set your status (Online, Away, Busy, Invisible) and have it reach your contacts straight away, mute notifications, check for updates, and lock Orbit if you have a PIN set. Open Orbit also brings the window back properly instead of merely showing it.',
+            'Text and files sit in the same order as on mobile now \u2014 the file used to sit above the message here and below it there.'
+          ]],
+          ['Fixed', [
+            'Audio no longer stops when a new message arrives \u2014 the player was rebuilt from scratch on every re-render and went silent.',
+            'Reading a file\u2019s own data was blocked by the app\u2019s security policy, which is why album art worked on mobile but never appeared here. It also covers attachments restored from the database after a restart.'
+          ]],
+          ['Technical', [
+            'Version: Bumped to v0.6.3-beta.'
+          ]]
+        ]) +
+        versionBlock('0.6.2-beta', '', [
           ['Platform Note', [
             'This is an Android fix release. Nothing changed on desktop apart from the version number.'
           ]],
