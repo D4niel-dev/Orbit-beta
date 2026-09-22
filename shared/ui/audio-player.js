@@ -42,6 +42,23 @@
     el.innerHTML = isActive ? filledSvg : outlinedSvg;
   }
 
+  // Desktop renders the message feed as #chat-message-feed, mobile as
+  // #message-feed. Resolve both — hardcoding the desktop id silently broke
+  // playback restoration on mobile.
+  function _feedEl() {
+    return document.getElementById('chat-message-feed') || document.getElementById('message-feed');
+  }
+
+  // Removing a media element from the document pauses it, so a player that was
+  // mid-playback has to be nudged back into playing once it is re-attached.
+  function _resumeAfterReattach(p) {
+    if (!p || !p._a) return;
+    try {
+      var pr = p._a.play();
+      if (pr && pr.catch) pr.catch(function() {});
+    } catch (e) {}
+  }
+
   var _playSvg = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>';
   var _pauseSvg = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
   var _centerPlaySvg = '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>';
@@ -684,29 +701,35 @@
     },
     restorePlaying: function(saved) {
       if (!saved || !saved.length) return;
-      var feed = document.getElementById('chat-message-feed');
+      var feed = _feedEl();
       saved.forEach(function(p) {
-        if (feed && p._msgId) {
-          var row = feed.querySelector('.message-row[data-msg-id="' + p._msgId + '"]');
-          if (row) {
-            var ph = row.querySelector('.oap-placeholder');
-            if (ph) {
-              var dup = ph.querySelector('.oap-wrap');
-              if (dup) {
-                for (var j = _players.length - 1; j >= 0; j--) {
-                  if (_players[j]._w === dup) { _players[j].destroy(); break; }
-                }
-                dup.remove();
+        // Look the row up document-wide instead of via the feed element, so this
+        // works whichever id the platform gave the feed.
+        var row = null;
+        if (p._msgId) {
+          try { row = document.querySelector('.message-row[data-msg-id="' + p._msgId + '"]'); } catch (e) { row = null; }
+        }
+        if (row) {
+          var ph = row.querySelector('.oap-placeholder');
+          if (ph) {
+            var dup = ph.querySelector('.oap-wrap');
+            if (dup) {
+              for (var j = _players.length - 1; j >= 0; j--) {
+                if (_players[j]._w === dup) { _players[j].destroy(); break; }
               }
-              ph.appendChild(p._w);
-              ph._oapInited = true;
-              _players.push(p);
-              return;
+              dup.remove();
             }
+            ph.appendChild(p._w);
+            ph._oapInited = true;
+            _players.push(p);
+            _resumeAfterReattach(p);
+            return;
           }
         }
+        // Nothing to re-attach to. Only park it in the feed if there is one.
         if (feed) feed.appendChild(p._w);
         _players.push(p);
+        _resumeAfterReattach(p);
       });
     },
 

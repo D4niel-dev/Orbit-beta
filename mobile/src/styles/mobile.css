@@ -4147,13 +4147,11 @@ textarea#chat-input {
   0% { opacity: 0; }
   100% { opacity: 1; }
 }
-.message-row[data-msg-anim="slide"] {
-  animation: msg-slide-in 0.25s ease-out;
-}
-@keyframes msg-slide-in {
-  0% { opacity: 0; bottom: 24px; }
-  100% { opacity: 1; transform: translateY(0); }
-}
+/* NOTE: msg-slide-in is defined once, further down this file (search for
+   "Message row entrance animation"). A second definition used to live here and
+   animated `bottom: 24px` on a position:relative row — it never applied, because
+   the later @keyframes with the same name wins outright, but it was a trap for
+   anyone editing the animation. */
 
 /* Hide status indicators when dev mode is on */
 [data-dev-mode="true"] #chat-header-info div:last-child,

@@ -190,6 +190,23 @@
     return finalDur;
   }
 
+  // Desktop renders the message feed as #chat-message-feed, mobile as
+  // #message-feed. Resolve both — hardcoding the desktop id silently broke
+  // playback restoration on mobile.
+  function _feedEl() {
+    return document.getElementById('chat-message-feed') || document.getElementById('message-feed');
+  }
+
+  // Removing a media element from the document pauses it, so a player that was
+  // mid-playback has to be nudged back into playing once it is re-attached.
+  function _resumeAfterReattach(p) {
+    if (!p || !p._v) return;
+    try {
+      var pr = p._v.play();
+      if (pr && pr.catch) pr.catch(function() {});
+    } catch (e) {}
+  }
+
   var _players = [];
 
   window.OrbitVideoPlayer = {
@@ -1241,29 +1258,35 @@
     },
     restorePlaying: function(saved) {
       if (!saved || !saved.length) return;
-      var feed = document.getElementById('chat-message-feed');
+      var feed = _feedEl();
       saved.forEach(function(p) {
-        if (feed && p._msgId) {
-          var row = feed.querySelector('.message-row[data-msg-id="' + p._msgId + '"]');
-          if (row) {
-            var ph = row.querySelector('.ovp-placeholder');
-            if (ph) {
-              var dup = ph.querySelector('.ovp-wrap');
-              if (dup) {
-                for (var j = _players.length - 1; j >= 0; j--) {
-                  if (_players[j]._w === dup) { _players[j].destroy(); break; }
-                }
-                dup.remove();
+        // Look the row up document-wide instead of via the feed element, so this
+        // works whichever id the platform gave the feed.
+        var row = null;
+        if (p._msgId) {
+          try { row = document.querySelector('.message-row[data-msg-id="' + p._msgId + '"]'); } catch (e) { row = null; }
+        }
+        if (row) {
+          var ph = row.querySelector('.ovp-placeholder');
+          if (ph) {
+            var dup = ph.querySelector('.ovp-wrap');
+            if (dup) {
+              for (var j = _players.length - 1; j >= 0; j--) {
+                if (_players[j]._w === dup) { _players[j].destroy(); break; }
               }
-              ph.appendChild(p._w);
-              ph._ovpInited = true;
-              _players.push(p);
-              return;
+              dup.remove();
             }
+            ph.appendChild(p._w);
+            ph._ovpInited = true;
+            _players.push(p);
+            _resumeAfterReattach(p);
+            return;
           }
         }
+        // Nothing to re-attach to. Only park it in the feed if there is one.
         if (feed) feed.appendChild(p._w);
         _players.push(p);
+        _resumeAfterReattach(p);
       });
     },
 
