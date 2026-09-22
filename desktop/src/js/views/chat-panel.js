@@ -1,5 +1,13 @@
 // src/js/views/chat-panel.js
 
+/* ---- File transfer chunk size ----
+   Shared by sendMessage (which computes totalChunks) and _sendFileChunks (which
+   slices the buffer). Those are SEPARATE class methods, so this must live at module
+   scope: it used to be a local `var` inside sendMessage, which left _sendFileChunks
+   throwing "ReferenceError: CHUNK_SIZE is not defined" on the very first chunk.
+   Every file send died there — which is why attaching anything produced no message. */
+var CHUNK_SIZE = 64 * 1024; // 64 KB
+
 /* ---- Slash Command Registry (mirrors mobile/src/js/app.js:14-26) ---- */
 var CHAT_COMMANDS = [
   { name: '/help', desc: 'Show all available commands', usage: '/help', handler: 'help' },
@@ -2751,7 +2759,7 @@ window.ChatPanel = {
 
     // Limit: files over this size use chunked FILE_TRANSFER instead of inline base64
     var INLINE_LIMIT = 1.5 * 1024 * 1024; // 1.5 MB
-    var CHUNK_SIZE = 64 * 1024; // 64 KB
+    // CHUNK_SIZE is module-scope now — see the note above.
 
     var localAttachments = [];
     var inlineAttachments = [];
