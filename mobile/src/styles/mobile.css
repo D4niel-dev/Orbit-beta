@@ -1000,6 +1000,51 @@ html, body {
   z-index: 10;
 }
 
+/* Custom track + thumb. The native accent-color fill stops at the content-box
+   edge while the track bleeds into the horizontal padding, leaving an unfilled
+   gray tail at 100%. A gradient track driven by --oap-fill (set from JS on the
+   slider) fills edge to edge at every value. Firefox paints
+   ::-moz-range-progress natively, so no var is needed there. */
+.oap-vol-slider {
+  -webkit-appearance: none;
+  appearance: none;
+}
+.oap-vol-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right,
+    var(--accent-primary) 0%,
+    var(--accent-primary) var(--oap-fill, 100%),
+    rgba(128, 128, 128, 0.35) var(--oap-fill, 100%));
+}
+.oap-vol-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  border: none;
+}
+.oap-vol-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(128, 128, 128, 0.35);
+}
+.oap-vol-slider::-moz-range-progress {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--accent-primary);
+}
+.oap-vol-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  border: none;
+}
+
 /* ── Seek Bar (mobile) ── */
 /* The seek row carries the volume icon at its right end and the progress
    track takes the remaining width. The slider is a popover above the icon. */

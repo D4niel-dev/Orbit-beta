@@ -167,6 +167,10 @@
       volSlider.min = 0;
       volSlider.max = 100;
       volSlider.value = 100;
+      // Drives the gradient fill of the custom-styled track (see .oap-vol-slider
+      // CSS): the native accent-color fill leaves an unfilled tail at 100% when
+      // the input has horizontal padding, so the track is painted manually.
+      volSlider.style.setProperty('--oap-fill', '100%');
       volSlider.title = 'Volume';
       volSlider.style.display = 'none';
       seek.appendChild(volSlider);
@@ -730,6 +734,7 @@
         if (!audio) return;
         audio.volume = this.value / 100;
         if (this.value > 0 && audio.muted) audio.muted = false;
+        this.style.setProperty('--oap-fill', this.value + '%');
         _updateVolIcon();
       });
 
