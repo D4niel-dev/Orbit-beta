@@ -29,7 +29,8 @@ window.Changelog = {
           ]],
           ['Technical', [
             'Version: Bumped to v0.6.4-beta.',
-            'Mobile: removed a dead wire that looked up a non-existent button id \u2014 harmless now, but renaming the id would have double-opened the quick-add sheet.'
+            'Mobile: removed a dead wire that looked up a non-existent button id \u2014 harmless now, but renaming the id would have double-opened the quick-add sheet.',
+            'Mobile: removed a second dead wire (#btn-new-chat) that looked up a button that never existed in the HTML.'
           ]]
         ]) +
         versionBlock('0.6.3-beta', '', [

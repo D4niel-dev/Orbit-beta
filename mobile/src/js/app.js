@@ -11713,14 +11713,11 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // New chat button
-  var _elbtn_new_chat = document.getElementById('btn-new-chat');
-  if (_elbtn_new_chat) {
-    _elbtn_new_chat.addEventListener('click', function() {
-    showToast('Add friends from the Friends tab', 'info');
-    document.querySelector('.nav-btn[data-view="friends"]').click();
-  });
-  }
+  // The "New chat" button (#btn-new-chat) never existed in the HTML — the
+  // wire resolved to null, so the if-guard swallowed it. The handler would
+  // have shown a toast and navigated to the Friends tab, but no element
+  // triggers it. Removed to avoid a future edit "fixing" the dead wire by
+  // adding the element and getting an unexpected toast + navigation.
 
   // Modal buttons
   document.getElementById('btn-close-modal').addEventListener('click', function() {

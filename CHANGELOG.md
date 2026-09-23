@@ -25,6 +25,7 @@
 - **`@keyframes msg-slide-in` was removed in v0.6.3** — the duplicate had already been cleaned up; no further work needed.
 - **Version:** Bumped to v0.6.4-beta across all three `package.json` files and the lockfiles; `mobile/src/js/version.js` regenerated.
 - **Mobile Quick-Add Dead Wire Removed** — `home-screen.js` had a DOMContentLoaded listener that looked up `#btn-add-quick`, an id that does not exist in the DOM. The real quick-add button is `.btn-add-quick-online` in the online-friends row, wired via the delegated click listener on `#online-friends-row`. The dead wire resolved to `null` harmlessly, but a future edit "fixing" it by renaming the id or adding the missing element would have opened the quick sheet twice. Removed with a comment pointing at the real wiring.
+- **Mobile "New Chat" Dead Wire Removed** — `app.js` looked up `#btn-new-chat`, an id that never existed in the HTML or any dynamic injection. The handler would have shown a toast and navigated to the Friends tab, but no element ever triggered it. Same class of dead wire as `#btn-add-quick` above — harmless now, a trap later. Removed with an explanatory comment.
 
 ## v0.6.3-beta
 
