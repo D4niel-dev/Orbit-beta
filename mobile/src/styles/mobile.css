@@ -979,17 +979,30 @@ html, body {
   line-height: 1.2;
 }
 
-.oap-vol-slider {
-  width: 60px;
-  height: 4px;
-  accent-color: var(--accent-primary);
-  cursor: pointer;
+.oap-vol {
   flex-shrink: 0;
 }
 
+.oap-vol-slider {
+  position: absolute;
+  right: 10px;
+  bottom: 100%;
+  margin-bottom: 6px;
+  width: 80px;
+  height: 28px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  accent-color: var(--accent-primary);
+  cursor: pointer;
+  z-index: 10;
+}
+
 /* ── Seek Bar (mobile) ── */
-/* The seek row carries the volume slider at its right end, so it is a flex row:
-   the progress track takes the remaining width and the slider keeps its own. */
+/* The seek row carries the volume icon at its right end and the progress
+   track takes the remaining width. The slider is a popover above the icon. */
 .oap-seek {
   position: relative;
   display: flex;

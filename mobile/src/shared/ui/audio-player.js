@@ -152,20 +152,25 @@
       seek.appendChild(seekTrack);
       seek.appendChild(seekTip);
 
-      // Volume lives on the seek row, always visible, at the right end. It used to
-      // be a speaker button in the control row that revealed the slider on click —
-      // the control people most want at hand was the one hidden behind a click. It
-      // cannot stay in the control row: at phone width that row is already full
-      // with play, art, name/timer and the menu, and when the slider joined them
-      // the name and timer were squeezed to zero width.
+      // Volume: a speaker icon on the seek row. Click reveals a small slider
+      // popover above it; click outside dismisses it. The slider used to be
+      // always visible, but at phone width even 60px steals space the progress
+      // bar needs, and Dan preferred the compact icon → popover pattern.
+      var volBtn = document.createElement('button');
+      volBtn.className = 'oap-btn oap-vol';
+      volBtn.title = 'Volume';
+      volBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14" stroke="currentColor" stroke-width="2" fill="none"/></svg>';
+
       var volSlider = document.createElement('input');
       volSlider.type = 'range';
-      volSlider.className = 'oap-vol-slider';
+      volSlider.className = 'oap-vol-slider oap-vol-popover';
       volSlider.min = 0;
       volSlider.max = 100;
       volSlider.value = 100;
       volSlider.title = 'Volume';
+      volSlider.style.display = 'none';
       seek.appendChild(volSlider);
+      seek.appendChild(volBtn);
 
       var ctrl = document.createElement('div');
       ctrl.className = 'oap-ctrl';
@@ -216,15 +221,16 @@
         '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>' +
       '</span>';
 
-      // Controls layout: [play] [art] [name / time] [vol] .......... [⋮]
+      // Controls layout: [art] [name / time] .......... [⋮]
       //
-      // playBtn used to be built, styled and wired but never appended, so the
-      // only way to play was the centre overlay — which fades in on hover, and
-      // mobile has no hover. Leading edge, where compact players put it.
-      ctrl.appendChild(playBtn);
+      // The centre overlay (play / stop / ±10s) is the play control — it
+      // appears on hover/tap over the waveform. playBtn was briefly appended
+      // here at the leading edge but Dan asked for it removed: the overlay is
+      // already visible in his screenshot, so the row button was redundant.
+      // playBtn is still created and its icon is still maintained in state
+      // changes below, but it is not in the DOM — harmless.
       ctrl.appendChild(artEl);
       ctrl.appendChild(metaEl);
-      // The volume slider is on the seek row — see the note at its creation.
       var _ctrlR = document.createElement('div'); _ctrlR.style.cssText = 'flex:1;min-width:4px';
       ctrl.appendChild(_ctrlR);
       ctrl.appendChild(moreBtn);
@@ -685,16 +691,47 @@
         if (e.key === ' ' || e.key === 'k') { e.preventDefault(); if (!audio || audio.paused) doPlay(); else doPause(); }
         if (e.key === 'ArrowLeft') { e.preventDefault(); seekRelative(-10); _showCenterOverlay(); }
         if (e.key === 'ArrowRight') { e.preventDefault(); seekRelative(10); _showCenterOverlay(); }
-        if (e.key === 'm') { e.preventDefault(); if (audio) { audio.muted = !audio.muted; } }
+        if (e.key === 'm') { e.preventDefault(); if (audio) { audio.muted = !audio.muted; _updateVolIcon(); } }
       });
 
-      // The slider on the seek row IS the volume control. Dragging it to zero is
-      // mute; there is no separate speaker button any more, because at phone width
-      // the control row could not fit it alongside the name and timer.
+      // Speaker icon reveals the slider; the slider is the volume control.
+      // Dragging to zero is silence; the 'm' key still toggles mute.
+      var _volMutedSvg = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>';
+      var _volLoudSvg = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14" stroke="currentColor" stroke-width="2" fill="none"/></svg>';
+
+      function _updateVolIcon() {
+        var silent = !audio || audio.muted || audio.volume === 0;
+        volBtn.innerHTML = silent ? _volMutedSvg : _volLoudSvg;
+      }
+
+      volBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        closeAnyMenu();
+        var showing = volSlider.style.display !== 'none';
+        if (showing) { volSlider.style.display = 'none'; return; }
+        volSlider.style.display = 'block';
+        // Dismiss on the next outside mousedown.
+        setTimeout(function() {
+          function hide(ev) {
+            if (!volSlider.contains(ev.target) && !volBtn.contains(ev.target)) {
+              volSlider.style.display = 'none';
+              document.removeEventListener('mousedown', hide);
+            }
+          }
+          document.addEventListener('mousedown', hide);
+        }, 0);
+      });
+
       volSlider.addEventListener('input', function() {
         if (!audio) return;
         audio.volume = this.value / 100;
         if (this.value > 0 && audio.muted) audio.muted = false;
+        _updateVolIcon();
+      });
+
+      volSlider.addEventListener('change', function() {
+        // Auto-dismiss after the user finishes dragging.
+        setTimeout(function() { volSlider.style.display = 'none'; }, 400);
       });
 
       var speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
@@ -832,6 +869,7 @@
 
       moreBtn.addEventListener('click', function(e) {
         e.stopPropagation();
+        volSlider.style.display = 'none';
         if (_anyMenu) { closeAnyMenu(); return; }
         showMenu(moreBtn.getBoundingClientRect());
       });
