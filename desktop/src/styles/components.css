@@ -608,13 +608,38 @@ button:active,
   opacity: 0.7;
 }
 
+/* File name above the timer. The wrapper owns margin-left:auto (it used to sit on
+   .oap-time) so the pair still rests at the right of the control row, and the
+   wrapper is what shrinks — so a long name ellipsises instead of shoving the
+   volume button off the row. */
+.oap-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  max-width: 260px;
+  margin-left: auto;
+}
+
+.oap-name {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-primary);
+  line-height: 1.2;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .oap-time {
   font-size: 11px;
   font-family: var(--font-mono);
   color: var(--text-muted);
-  margin-left: auto;
   white-space: nowrap;
   padding-right: 2px;
+  line-height: 1.2;
 }
 
 .oap-vol-slider {

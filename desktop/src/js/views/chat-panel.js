@@ -974,7 +974,7 @@ window.ChatPanel = {
             '</div>';
           } else if (att.type === 'audio' || (att.mimeType && att.mimeType.startsWith('audio/'))) {
             const safeUrl = window.Sanitize.escapeHtml(att.url);
-            largeHtml += '<div class="att-thumb oap-placeholder" data-oap-url="' + safeUrl + '" style="position:relative;border-radius: 8px; border: 1px solid var(--border-subtle); background: var(--bg-hover); overflow: hidden; max-width:720px;">' +
+            largeHtml += '<div class="att-thumb oap-placeholder" data-oap-url="' + safeUrl + '" data-oap-name="' + window.Sanitize.escapeHtml(att.name || '') + '" style="position:relative;border-radius: 8px; border: 1px solid var(--border-subtle); background: var(--bg-hover); overflow: hidden; max-width:720px;">' +
               deleteBtn +
             '</div>';
           } else if (att.type === 'image') {

@@ -2109,7 +2109,7 @@ document.addEventListener('DOMContentLoaded', function() {
               }
             } else if (a.type === 'audio') {
               if (attUrl) {
-                largeHtml += '<div class="att-large-cell att-audio-cell oap-placeholder" data-oap-url="' + escapeHtml(attUrl) + '"></div>';
+                largeHtml += '<div class="att-large-cell att-audio-cell oap-placeholder" data-oap-url="' + escapeHtml(attUrl) + '" data-oap-name="' + escapeHtml(String(a.name || '')) + '"></div>';
               } else if (a._pending) {
                 largeHtml += '<div class="att-large-cell att-audio-cell" style="display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg-panel);color:var(--text-muted);border:1px solid var(--border-subtle);border-radius:8px;height:120px;">' +
                   '<i data-lucide="music" style="width:28px;height:28px;margin-bottom:8px;opacity:0.5;"></i><div style="font-size:13px;font-weight:500;">Receiving Audio...</div></div>';

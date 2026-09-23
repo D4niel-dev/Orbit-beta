@@ -131,6 +131,24 @@
       timeEl.className = 'oap-time';
       timeEl.textContent = '0:00 / 0:00';
 
+      // File name sits above the timer. Both renderers pass it as data-oap-name;
+      // when it is missing (an older message, or a nameless attachment) the
+      // element is dropped and the row collapses to exactly what it showed
+      // before, so nothing regresses for existing history.
+      var metaEl = document.createElement('div');
+      metaEl.className = 'oap-meta';
+      var nameEl = document.createElement('div');
+      nameEl.className = 'oap-name';
+      var _attName = '';
+      try { _attName = (container.getAttribute('data-oap-name') || '').trim(); } catch (e) {}
+      if (_attName) {
+        nameEl.textContent = _attName;
+        nameEl.title = _attName; // full name on hover when the row truncates it
+        metaEl.classList.add('has-name');
+        metaEl.appendChild(nameEl);
+      }
+      metaEl.appendChild(timeEl);
+
       // Cover-art slot — shows the "sound track image" embedded in the file, and
       // falls back to a plain music note when the file carries no artwork.
       // Populated asynchronously by _loadCoverArt() so it never delays playback.
@@ -141,9 +159,9 @@
         '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>' +
       '</span>';
 
-      // Controls layout: [art] [timeEl] [vol] .......... [⋮]
+      // Controls layout: [art] [name / time] [vol] .......... [⋮]
       ctrl.appendChild(artEl);
-      ctrl.appendChild(timeEl);
+      ctrl.appendChild(metaEl);
       ctrl.appendChild(volBtn);
       ctrl.appendChild(volSlider);
       var _ctrlR = document.createElement('div'); _ctrlR.style.cssText = 'flex:1;min-width:4px';
@@ -195,6 +213,62 @@
       var srcNode = null;
       var animId = null;
       var hue = Math.random() * 360;
+      // Visualiser style and time readout — both exposed as settings in the ⋮ menu.
+      var _vizMode = 'bars';     // 'bars' | 'wave' | 'off'
+      var _timeMode = 'elapsed'; // 'elapsed' | 'remaining'
+
+      // The analyser runs at fftSize 64, so there are 32 frequency bins; the
+      // resting state reuses that geometry so idle and playing look like the
+      // same visualiser.
+      var _BAR_COUNT = 32;
+      var _REST_RATIO = 0.06;
+
+      // Paint the resting visualiser immediately, so an unplayed bubble shows the
+      // visualiser at rest instead of a large empty rectangle.
+      //
+      // This must stay BELOW the constants above. `var` hoists the declaration but
+      // not the assignment, so calling it earlier left _BAR_COUNT undefined, the
+      // bar width came out NaN, and fillRect silently drew nothing — a blank
+      // canvas with no error anywhere.
+      _drawRest();
+
+      function _timeText(cur, dur) {
+        if (_timeMode === 'remaining' && dur > 0) {
+          return fmt(cur) + ' / -' + fmt(Math.max(0, dur - cur));
+        }
+        return fmt(cur) + ' / ' + fmt(dur);
+      }
+
+      function _stopDraw() {
+        if (animId) { cancelAnimationFrame(animId); animId = null; }
+      }
+
+      // Switch visualiser style. Restarts the loop if a track is playing, and
+      // otherwise just repaints the resting state.
+      function _setViz(mode) {
+        _vizMode = mode;
+        _stopDraw();
+        if (playing) draw(); else _drawRest();
+      }
+
+      // Resting state: the same bar row at a low, even height. Drawn once while
+      // idle so the box reads as "stopped" rather than as an empty rectangle.
+      // It is deliberately the visualiser's own resting geometry rather than an
+      // invented waveform — nothing here pretends to be audio data.
+      function _drawRest() {
+        if (dead) return;
+        try {
+          var c = canvas.getContext('2d');
+          c.clearRect(0, 0, canvas.width, canvas.height);
+          if (_vizMode === 'off') return;
+          var w = canvas.width / _BAR_COUNT;
+          var h = Math.max(2, canvas.height * _REST_RATIO);
+          c.fillStyle = 'rgba(255,255,255,0.10)';
+          for (var i = 0; i < _BAR_COUNT; i++) {
+            c.fillRect(i * w + 1, canvas.height - h, Math.max(w - 2, 1), h);
+          }
+        } catch (e) {}
+      }
       var dead = false;
       var srcConnected = false;
       var playing = false;
@@ -249,15 +323,40 @@
         }
       }
 
+      // Runs ONLY while actually playing. It used to re-request a frame even when
+      // paused, so every player that had ever been played kept a 60fps callback
+      // alive for the rest of its life — in a feed full of audio messages that is a
+      // lot of wasted frames and battery. It now stops on pause/stop and doPlay()
+      // restarts it.
       function draw() {
-        if (dead || !playing) { animId = requestAnimationFrame(draw); return; }
-        if (!analyser) { animId = requestAnimationFrame(draw); return; }
+        animId = null;
+        if (dead || !playing || !analyser || _vizMode === 'off') {
+          _drawRest();
+          return; // leave the loop stopped
+        }
         var data = new Uint8Array(analyser.frequencyBinCount);
-        analyser.getByteFrequencyData(data);
         var c = canvas.getContext('2d');
         c.clearRect(0, 0, canvas.width, canvas.height);
         var len = data.length;
         var w = canvas.width / len;
+
+        if (_vizMode === 'wave') {
+          // Time-domain trace — one centred line instead of a spectrum.
+          analyser.getByteTimeDomainData(data);
+          c.beginPath();
+          c.lineWidth = 2;
+          c.strokeStyle = 'hsl(' + hue + ', 80%, 60%)';
+          for (var j = 0; j < len; j++) {
+            var y = (data[j] / 255) * canvas.height;
+            if (j === 0) c.moveTo(0, y); else c.lineTo(j * w, y);
+          }
+          c.stroke();
+          hue = (hue + 0.5) % 360;
+          animId = requestAnimationFrame(draw);
+          return;
+        }
+
+        analyser.getByteFrequencyData(data);
         for (var i = 0; i < len; i++) {
           var h = (data[i] / 255) * canvas.height;
           var barHue = (hue + i * 12) % 360;
@@ -281,7 +380,7 @@
             }
           } catch(e) {}
         }
-        timeEl.textContent = fmt(audio.currentTime) + ' / ' + fmt(dur);
+        timeEl.textContent = _timeText(audio.currentTime, dur);
         var pct = dur ? Math.min(100, audio.currentTime / dur * 100) : 0;
         seekFill.style.width = pct + '%';
         seekThumb.style.left = pct + '%';
@@ -463,6 +562,8 @@
         _updateCenterPlayBtn();
         if (audio) audio.pause();
         _iconToggle(playBtn, false, _pauseSvg, _playSvg);
+        _stopDraw();
+        _drawRest();
       }
 
       function doStop() {
@@ -472,9 +573,9 @@
         if (audio) audio.currentTime = 0;
         _iconToggle(playBtn, false, _pauseSvg, _playSvg);
         updTime();
-        var c = canvas.getContext('2d');
-        c.clearRect(0, 0, canvas.width, canvas.height);
+        _stopDraw();
         hue = Math.random() * 360;
+        _drawRest();
       }
 
       playBtn.addEventListener('click', function(e) { e.stopPropagation(); if (!audio || audio.paused) doPlay(); else doPause(); });
@@ -591,11 +692,44 @@
           function() { looping = !looping; }, false, looping
         );
 
-        mi('Playback Speed', '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>', function() {
+        mi('Visualiser', '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M9 20V4M14 20v-7M19 20V8"/></svg>', function() {
+          subMenu('Visualiser', [
+            { label: 'Bars', active: _vizMode === 'bars', action: function() { _setViz('bars'); } },
+            { label: 'Wave', active: _vizMode === 'wave', action: function() { _setViz('wave'); } },
+            { label: 'Off', active: _vizMode === 'off', action: function() { _setViz('off'); } }
+          ]);
+        });
+
+        mi('Time', '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>', function() {
+          subMenu('Time', [
+            { label: 'Elapsed', active: _timeMode === 'elapsed', action: function() { _timeMode = 'elapsed'; updTime(); } },
+            { label: 'Remaining', active: _timeMode === 'remaining', action: function() { _timeMode = 'remaining'; updTime(); } }
+          ]);
+        });
+
+        mi('Playback Speed', '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3.34 19a10 10 0 1 1 17.32 0"/><line x1="12" y1="14" x2="16" y2="10"/></svg>', function() {
           subMenu('Playback Speed', speeds.map(function(spd) {
             return { label: spd + 'x', active: spd === currentSpeed, action: function() { currentSpeed = spd; if (audio) audio.playbackRate = spd; } };
           }));
         });
+
+        // Copying the file name only makes sense when there is one to copy.
+        if (_attName) {
+          var _sep = document.createElement('div');
+          _sep.style.cssText = 'height:1px;background:var(--border-color,#333);margin:4px 0;';
+          menu.appendChild(_sep);
+          mi('Copy file name', '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>', function() {
+            try {
+              // Desktop has no secure-context clipboard, so it goes through IPC;
+              // mobile runs on https://localhost where the async API works.
+              if (window.orbitAPI && window.orbitAPI.writeClipboard) {
+                window.orbitAPI.writeClipboard(_attName);
+              } else if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(_attName);
+              }
+            } catch (e) {}
+          });
+        }
 
         positionAndShow(menu, rect);
         _anyMenu = menu;
