@@ -17,7 +17,7 @@ window.Changelog = {
         versionBlock('0.6.4-beta', 'Latest', [
           ['Audio', [
             'The audio visualiser now draws the track\u2019s real waveform \u2014 fetched and decoded once per file, cached so re-renders never re-decode. Oversized files fall back to a flat row. The \u2630 menu lets you switch between Bars, Wave, and Off; "Off" used to show nothing and now shows the same decoded shape.',
-            'The file name sits above the timer, with the volume icon at the right end of the progress bar. Click the icon for a slider popover; click outside or finish dragging to dismiss it.'
+            'The file name sits above the timer, with the volume icon at the right end of the progress bar. Click the icon for a slider popover; click outside or finish dragging to dismiss it. The icon doubles as a level meter: crossed out when muted or at 0%, one wave at 1\u201350%, two waves above 50%.'
           ]],
           ['Onboarding', [
             'The chat panel\u2019s empty state shows a 7-slide tour of what Orbit does \u2014 networking, encryption, media, calls, groups, storage, theming. Dots and Back/Next, arrow keys, position remembered. "Done" collapses to the plain empty state.'

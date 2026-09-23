@@ -624,7 +624,7 @@
           return;
         }
         if (!audio) { timeEl.textContent = 'Error'; return; }
-        if (audio.muted && audio.volume > 0) audio.muted = false;
+        if (audio.muted && audio.volume > 0) { audio.muted = false; _updateVolIcon(); }
         if (audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) {
           var onReady = function() {
             audio.removeEventListener('canplaythrough', onReady);
@@ -696,12 +696,16 @@
 
       // Speaker icon reveals the slider; the slider is the volume control.
       // Dragging to zero is silence; the 'm' key still toggles mute.
+      // The icon mirrors the slider position in three states: muted or 0%
+      // shows the crossed-out speaker, 1–50% shows one wave, 51–100% two.
       var _volMutedSvg = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>';
+      var _volLowSvg = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07" stroke="currentColor" stroke-width="2" fill="none"/></svg>';
       var _volLoudSvg = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14" stroke="currentColor" stroke-width="2" fill="none"/></svg>';
 
       function _updateVolIcon() {
         var silent = !audio || audio.muted || audio.volume === 0;
-        volBtn.innerHTML = silent ? _volMutedSvg : _volLoudSvg;
+        var low = !silent && audio.volume <= 0.5;
+        volBtn.innerHTML = silent ? _volMutedSvg : (low ? _volLowSvg : _volLoudSvg);
       }
 
       volBtn.addEventListener('click', function(e) {
