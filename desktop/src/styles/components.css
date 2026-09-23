@@ -651,8 +651,13 @@ button:active,
 }
 
 /* ── Seek Bar ── */
+/* The seek row carries the volume slider at its right end, so it is a flex row:
+   the progress track takes the remaining width and the slider keeps its own. */
 .oap-seek {
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   height: 20px;
   padding: 0 12px;
   cursor: pointer;
@@ -660,7 +665,8 @@ button:active,
 
 .oap-seek-track {
   position: relative;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   height: 100%;
   display: flex;
   align-items: center;

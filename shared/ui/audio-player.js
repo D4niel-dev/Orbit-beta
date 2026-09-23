@@ -20,6 +20,60 @@
     return _audioCtx;
   }
 
+  // Visualiser geometry, shared by the live spectrum and the static waveform so
+  // the two read as the same player. The analyser runs at fftSize 64, which is 32
+  // frequency bins — hence 32 bars.
+  var _BAR_COUNT = 32;
+  var _REST_RATIO = 0.06;
+
+  // ---- Static waveform ----------------------------------------------------
+  // A real waveform can only come from the decoded PCM, which means a full decode
+  // of the file. That is bounded and cached on purpose:
+  //   - files above the cap are skipped — the peaks are a visual aid, and they are
+  //     not worth an out-of-memory on a phone
+  //   - one decode per URL, memoised, so a feed re-render never re-decodes
+  //   - it never touches the playback path, same deference as the cover art
+  // A 12MB MP3 decodes to roughly 30-60MB of transient PCM, which is freed as soon
+  // as the peaks are computed.
+  var _WAVE_MAX_BYTES = 12 * 1024 * 1024;
+  var _waveCache = new Map();
+
+  window.OrbitAudioWaveform = {
+    peaksFor: function (url) {
+      if (_waveCache.has(url)) return _waveCache.get(url);
+      var job = (async function () {
+        try {
+          if (typeof fetch !== 'function') return null;
+          var ctx = getCtx();
+          if (!ctx) return null;
+          var res = await fetch(url);
+          if (!res.ok) return null;
+          var raw = await res.arrayBuffer();
+          if (raw.byteLength > _WAVE_MAX_BYTES) return null;
+          var decoded = await ctx.decodeAudioData(raw);
+          var ch = decoded.getChannelData(0);
+          var peaks = new Float32Array(_BAR_COUNT);
+          var step = Math.max(1, Math.floor(ch.length / _BAR_COUNT));
+          for (var i = 0; i < _BAR_COUNT; i++) {
+            var start = i * step;
+            var end = Math.min(ch.length, start + step);
+            var max = 0;
+            for (var j = start; j < end; j++) {
+              var v = Math.abs(ch[j]);
+              if (v > max) max = v;
+            }
+            peaks[i] = max;
+          }
+          return peaks;
+        } catch (e) {
+          return null; // unsupported codec, decode failure — fall back to bars
+        }
+      })();
+      _waveCache.set(url, job);
+      return job;
+    }
+  };
+
   function fmt(s) {
     if (!s || !isFinite(s)) return '0:00';
     var m = Math.floor(s / 60);
@@ -98,6 +152,21 @@
       seek.appendChild(seekTrack);
       seek.appendChild(seekTip);
 
+      // Volume lives on the seek row, always visible, at the right end. It used to
+      // be a speaker button in the control row that revealed the slider on click —
+      // the control people most want at hand was the one hidden behind a click. It
+      // cannot stay in the control row: at phone width that row is already full
+      // with play, art, name/timer and the menu, and when the slider joined them
+      // the name and timer were squeezed to zero width.
+      var volSlider = document.createElement('input');
+      volSlider.type = 'range';
+      volSlider.className = 'oap-vol-slider';
+      volSlider.min = 0;
+      volSlider.max = 100;
+      volSlider.value = 100;
+      volSlider.title = 'Volume';
+      seek.appendChild(volSlider);
+
       var ctrl = document.createElement('div');
       ctrl.className = 'oap-ctrl';
 
@@ -109,18 +178,6 @@
       stopBtn.className = 'oap-center-btn';
       stopBtn.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg>';
       stopBtn.title = 'Stop';
-
-      var volBtn = document.createElement('button');
-      volBtn.className = 'oap-btn oap-vol';
-      volBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14" stroke="currentColor" stroke-width="2" fill="none"/></svg>';
-
-      var volSlider = document.createElement('input');
-      volSlider.type = 'range';
-      volSlider.className = 'oap-vol-slider';
-      volSlider.min = 0;
-      volSlider.max = 100;
-      volSlider.value = 100;
-      volSlider.style.display = 'none';
 
       var moreBtn = document.createElement('button');
       moreBtn.className = 'oap-btn oap-more';
@@ -167,8 +224,7 @@
       ctrl.appendChild(playBtn);
       ctrl.appendChild(artEl);
       ctrl.appendChild(metaEl);
-      ctrl.appendChild(volBtn);
-      ctrl.appendChild(volSlider);
+      // The volume slider is on the seek row — see the note at its creation.
       var _ctrlR = document.createElement('div'); _ctrlR.style.cssText = 'flex:1;min-width:4px';
       ctrl.appendChild(_ctrlR);
       ctrl.appendChild(moreBtn);
@@ -214,6 +270,9 @@
       // read never competes with audio setup on the critical path.
       setTimeout(_loadCoverArt, 0);
 
+      // Same for the waveform: a full decode, deferred off the critical path.
+      setTimeout(_loadWaveform, 0);
+
       var analyser = null;
       var srcNode = null;
       var animId = null;
@@ -222,19 +281,14 @@
       var _vizMode = 'bars';     // 'bars' | 'wave' | 'off'
       var _timeMode = 'elapsed'; // 'elapsed' | 'remaining'
 
-      // The analyser runs at fftSize 64, so there are 32 frequency bins; the
-      // resting state reuses that geometry so idle and playing look like the
-      // same visualiser.
-      var _BAR_COUNT = 32;
-      var _REST_RATIO = 0.06;
+      // Static waveform peaks for this track — null until loaded, and null
+      // forever if the file was too big to decode or the decode failed.
+      var _wavePeaks = null;
+      var _waveTried = false;
 
-      // Paint the resting visualiser immediately, so an unplayed bubble shows the
-      // visualiser at rest instead of a large empty rectangle.
-      //
-      // This must stay BELOW the constants above. `var` hoists the declaration but
-      // not the assignment, so calling it earlier left _BAR_COUNT undefined, the
-      // bar width came out NaN, and fillRect silently drew nothing — a blank
-      // canvas with no error anywhere.
+      // Paint the idle state immediately, so an unplayed bubble shows the
+      // visualiser instead of a large empty rectangle. The real waveform redraws
+      // over this once it has been decoded.
       _drawRest();
 
       function _timeText(cur, dur) {
@@ -249,27 +303,43 @@
       }
 
       // Switch visualiser style. Restarts the loop if a track is playing, and
-      // otherwise just repaints the resting state.
+      // otherwise just repaints the idle state.
       function _setViz(mode) {
         _vizMode = mode;
         _stopDraw();
         if (playing) draw(); else _drawRest();
       }
 
-      // Resting state: the same bar row at a low, even height. Drawn once while
-      // idle so the box reads as "stopped" rather than as an empty rectangle.
-      // It is deliberately the visualiser's own resting geometry rather than an
-      // invented waveform — nothing here pretends to be audio data.
+      // Load the real waveform off the playback path, exactly the way the cover
+      // art is loaded. Redraws once it lands.
+      function _loadWaveform() {
+        if (_waveTried || _wavePeaks) return;
+        _waveTried = true;
+        if (dead || !window.OrbitAudioWaveform) return;
+        window.OrbitAudioWaveform.peaksFor(url).then(function (peaks) {
+          if (dead || !peaks || !peaks.length) return;
+          _wavePeaks = peaks;
+          if (!playing) _drawRest();
+        }).catch(function () {});
+      }
+
+      // Idle state: the track's own waveform when it could be decoded, otherwise
+      // the visualiser's resting bar row. Both are dimmed, so playback visibly
+      // takes over from them. When the peaks are unavailable the flat row is
+      // geometry rather than data — it never pretends to be the track's shape.
       function _drawRest() {
         if (dead) return;
         try {
           var c = canvas.getContext('2d');
           c.clearRect(0, 0, canvas.width, canvas.height);
-          if (_vizMode === 'off') return;
-          var w = canvas.width / _BAR_COUNT;
-          var h = Math.max(2, canvas.height * _REST_RATIO);
-          c.fillStyle = 'rgba(255,255,255,0.10)';
-          for (var i = 0; i < _BAR_COUNT; i++) {
+          if (_vizMode === 'off' && !_wavePeaks) return;
+          var peaks = _wavePeaks;
+          var count = peaks ? peaks.length : _BAR_COUNT;
+          var w = canvas.width / count;
+          var flat = Math.max(2, canvas.height * _REST_RATIO);
+          c.fillStyle = 'rgba(255,255,255,0.12)';
+          for (var i = 0; i < count; i++) {
+            var h = peaks ? Math.max(2, peaks[i] * canvas.height * 0.86) : flat;
             c.fillRect(i * w + 1, canvas.height - h, Math.max(w - 2, 1), h);
           }
         } catch (e) {}
@@ -618,18 +688,13 @@
         if (e.key === 'm') { e.preventDefault(); if (audio) { audio.muted = !audio.muted; } }
       });
 
-      volBtn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        closeAnyMenu();
-        volSlider.style.display = volSlider.style.display === 'none' ? 'block' : 'none';
-      });
+      // The slider on the seek row IS the volume control. Dragging it to zero is
+      // mute; there is no separate speaker button any more, because at phone width
+      // the control row could not fit it alongside the name and timer.
       volSlider.addEventListener('input', function() {
         if (!audio) return;
         audio.volume = this.value / 100;
-        _iconToggle(volBtn, this.value == 0,
-          '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>',
-          '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14" stroke="currentColor" stroke-width="2" fill="none"/></svg>'
-        );
+        if (this.value > 0 && audio.muted) audio.muted = false;
       });
 
       var speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
@@ -767,7 +832,6 @@
 
       moreBtn.addEventListener('click', function(e) {
         e.stopPropagation();
-        volSlider.style.display = 'none';
         if (_anyMenu) { closeAnyMenu(); return; }
         showMenu(moreBtn.getBoundingClientRect());
       });
