@@ -669,12 +669,14 @@ window.ChatPanel = {
     this.container.style.height = '100%';
 
     this.container.innerHTML = `
-      <!-- Initial Empty State -->
-      <div style="flex:1; display:flex; align-items:center; justify-content:center; color: var(--text-muted); flex-direction:column; gap:16px;">
-        <i data-lucide="message-circle" style="width:48px;height:48px;opacity:0.3;"></i>
-        <span>Select a friend to start chatting</span>
-      </div>
+      <!-- Initial Empty State. The feature slides render in here (shared/ui/welcome-slides.js):
+           the third panel is the first thing you see on a cold start, so it is the
+           honest place to explain what Orbit does. -->
+      <div id="chat-welcome-host" style="flex:1; display:flex; align-items:center; justify-content:center; padding:20px; box-sizing:border-box;"></div>
     `;
+    if (window.OrbitWelcome) {
+      window.OrbitWelcome.render(document.getElementById('chat-welcome-host'));
+    }
     lucide.createIcons({ root: this.container });
   },
 

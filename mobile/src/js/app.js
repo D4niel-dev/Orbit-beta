@@ -559,6 +559,16 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     if (filtered.length === 0) {
+      // The feature slides live here when the list is genuinely empty (not when a
+      // search simply found nothing). The list is the first thing you see on a
+      // cold start, so this is mobile's equivalent of the desktop chat panel's
+      // welcome surface — see shared/ui/welcome-slides.js.
+      if (!searchFilter && window.OrbitWelcome) {
+        container.innerHTML = '<div id="mobile-welcome-host" style="display:flex;align-items:center;justify-content:center;padding:24px 0;box-sizing:border-box;"></div>';
+        window.OrbitWelcome.render(document.getElementById('mobile-welcome-host'));
+        renderLucide({ root: container });
+        return;
+      }
       container.innerHTML =
         '<div class="empty-state"><i data-lucide="message-circle"></i>' +
         '<div class="empty-state-text">' + (searchFilter ? 'No matching chats' : 'No conversations yet') + '</div>' +

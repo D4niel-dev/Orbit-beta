@@ -1837,3 +1837,112 @@ button:active,
 .call-log-again i { width: 14px; height: 14px; }
 .call-log-again:hover { opacity: 0.9; }
 .call-log-again:active { transform: scale(0.98); opacity: 0.85; }
+
+
+/* ─── First-run feature slides (shared/ui/welcome-slides.js) ────────────────
+   Rendered into the chat panel's empty state on desktop and the conversation
+   list's empty state on mobile, so it is sized to sit comfortably in a narrow
+   column as well as a wide one. */
+.ows-root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+  max-width: 460px;
+  padding: 0 20px;
+  box-sizing: border-box;
+}
+
+.ows-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 26px 22px;
+  min-height: 190px;
+  border-radius: 16px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+}
+
+.ows-icon {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: var(--bg-hover);
+  color: var(--accent-primary);
+}
+.ows-icon svg { width: 22px; height: 22px; }
+
+.ows-title {
+  font-size: 16px;
+  font-weight: 650;
+  color: var(--text-primary);
+}
+
+.ows-body {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  max-width: 380px;
+}
+
+.ows-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.ows-dots { display: flex; gap: 6px; }
+
+.ows-dot {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--border-subtle);
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+}
+.ows-dot.is-active {
+  background: var(--accent-primary);
+  transform: scale(1.25);
+}
+
+.ows-btn {
+  padding: 7px 14px;
+  border-radius: 9px;
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ows-btn:hover { background: var(--bg-hover); }
+
+.ows-btn-primary {
+  border-color: transparent;
+  background: var(--accent-primary);
+  color: #fff;
+}
+.ows-btn-primary:hover { filter: brightness(1.08); }
+
+.ows-done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  color: var(--text-muted);
+}
+.ows-done svg { width: 48px; height: 48px; opacity: 0.3; }
