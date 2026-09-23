@@ -14,7 +14,23 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.6.3-beta', 'Latest', [
+        versionBlock('0.6.4-beta', 'Latest', [
+          ['Audio', [
+            'The audio visualiser now draws the track\u2019s real waveform \u2014 fetched and decoded once per file, cached so re-renders never re-decode. Oversized files fall back to a flat row. The \u2630 menu lets you switch between Bars, Wave, and Off; "Off" used to show nothing and now shows the same decoded shape.',
+            'The file name sits above the timer, with the volume icon at the right end of the progress bar. Click the icon for a slider popover; click outside or finish dragging to dismiss it.'
+          ]],
+          ['Onboarding', [
+            'The chat panel\u2019s empty state shows a 7-slide tour of what Orbit does \u2014 networking, encryption, media, calls, groups, storage, theming. Dots and Back/Next, arrow keys, position remembered. "Done" collapses to the plain empty state.'
+          ]],
+          ['Fixed', [
+            'An unplayed audio bubble was a large blank rectangle. It now shows the track\u2019s real waveform in the Bars and Off modes, and the resting bar row in the Wave mode.',
+            'The audio draw loop used to spin forever after pause \u2014 a player that had ever been played held a 60fps callback alive for the rest of its life. It stops on pause and restarts on play.'
+          ]],
+          ['Technical', [
+            'Version: Bumped to v0.6.4-beta.'
+          ]]
+        ]) +
+        versionBlock('0.6.3-beta', '', [
           ['File Transfer', [
             'Sending a file works now. Two separate bugs stopped it: the size constant for each piece of the file was declared in one function and used in another, so the very first send threw an error and nothing was ever sent; and attaching a file produced no message at all, because Electron 32 removed the API Orbit used to locate the file on disk, and the fallback quietly produced a filename with no folder \u2014 which cannot be opened. Both are fixed, at the file picker and the drag-and-drop target alike.'
           ]],

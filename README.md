@@ -28,7 +28,7 @@
 
 | Channel           | Version     | Status                                                                                                                                |
 | ----------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| **Latest**        | v0.6.3-beta | File-transfer release — sending a file actually works on both platforms, plus album art, video first frames and a real tray menu      |
+| **Latest**        | v0.6.4-beta | Audio polish release — real waveform in the visualiser, file name above the timer, a richer ⋮ settings menu, and first-run feature slides |
 | **Stable**        | v0.6.0-beta | Reliability release — notification plumbing, an offline send queue, a vault you can back up and take with you, in-app Android updates |
 | Legacy **Stable** | v0.1.1-beta | Legacy stable release                                                                                                                 |
 
@@ -90,13 +90,13 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage app for desktop and Android** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
-## Highlights (v0.6.3-beta)
+## Highlights (v0.6.4-beta)
 
-* **Sending a File Works on Both Platforms** — It did not, for a different reason on each. Desktop threw a `ReferenceError` before the first chunk ever went out: `CHUNK_SIZE` was declared inside `sendMessage()` but used in `_sendFileChunks()`, a separate class method, so it was out of scope. Attaching a file also produced no message at all, because Electron 32 removed `File.path` and the `|| file.name` fallback silently yielded a filename with no directory that the transfer could not open. On mobile, chunks could overtake the transfer's own `FILE_TRANSFER_START` — which the receiver needs in order to interpret them at all.
-* **Audio Attachments Show Their Album Art** — The cover image embedded in an audio file is now read out and shown beside the controls, falling back to a music note when there is none. Handles ID3v2 `APIC` (MP3), the `covr` atom (MP4/M4A) and the FLAC `PICTURE` block, reading at most 4MB rather than pulling the whole file into memory, and never letting a malformed tag break playback.
-* **Video Attachments Show Their First Frame** — An unplayed video is no longer a black rectangle with a play button. The opening frame is captured from the video itself, hides when you press play, and comes back when you press Stop.
-* **A Tray Menu Worth Opening** — Copy My Orbit ID, a **My Status** submenu (Online / Away / Busy / Invisible) that broadcasts the change to peers immediately, Mute Notifications, Check for Updates, and Lock Orbit — the last only when a PIN is actually set. Open Orbit now restores and focuses the window instead of just showing it.
-* **Text Sits in the Same Place on Both Platforms** — Mobile composed a bubble as text-then-attachment, desktop as attachment-then-text, so the same message read one way on desktop and the other way on mobile. Desktop now matches mobile — which is also the only order that can be consistent with the receiver, where the text necessarily arrives above the file.
+* **A Real Waveform in the Audio Player** — Visualiser → Off used to show nothing at all; the other modes showed a flat decorative row even on an unplayed bubble. All three modes now draw the track's actual decoded waveform, fetched and decoded once per file so re-renders never re-decode. Oversized files (>12 MB) skip the decode and fall back to the flat row — a typical track peaks around 30–60 MB of transient PCM, freed the moment the peaks are computed.
+* **The Audio Player's File Name, Above the Timer** — Both renderers had the file name; neither renderer was passing it to the player. The file name now sits above the timer, a long name ellipsises instead of shoving the volume button off the row, and when the attachment has no name (older history, nameless attachments) the row collapses to exactly what it showed before.
+* **More Settings in the ⋮ Menu** — Loop and Playback Speed were the whole menu. It now also carries **Visualiser** (Bars / Wave / Off — Off is now the real decoded waveform), **Time** (Elapsed / Remaining → `0:12 / -2:32`), and **Copy file name**.
+* **First-Run Feature Slides in the Chat Panel** — The third panel was a bare icon and "Select a friend to start chatting". It now carries a 7-slide carousel describing what Orbit actually does — peer-to-peer with no server, end-to-end encryption with key-change warnings, file/photo/video sharing, calls and voice notes, groups, local-first storage and backup, and theming. The position is remembered so a store re-render doesn't snap you back to slide one, and "Done" collapses to the plain empty state rather than pretending the carousel is a gate.
+* **An Unplayed Audio Bubble No Longer Shows a Void** — The visualiser only drew while playing, so an unplayed bubble was a large blank rectangle. It now shows the track's real waveform, and the draw loop no longer spins forever when paused — it stops the moment you pause and restarts on play, so a feed of audio messages no longer holds a 60fps callback alive for the life of each one.
 
 ## Version History
 
@@ -639,6 +639,17 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 
 </details>
 <details open>
+<summary>v0.6.4-beta</summary>
+
+* **Real waveform** — Visualiser → Off draws the track's actual decoded shape; oversized files fall back to the flat row; cached per URL so re-renders never re-decode
+* **File name above the timer** — both renderers now pass the attachment name; long names ellipsise so they never shove the volume button off the row
+* **⋮ menu expanded** — Visualiser (Bars / Wave / Off), Time (Elapsed / Remaining), Copy file name, on top of the existing Loop and Playback Speed
+* **First-run feature slides** — 7 slides in the chat panel describing Orbit, shared by desktop and mobile; position remembered across re-renders; "Done" collapses to the plain empty state
+* **Idle audio bubbles** — unplayed bubbles show the track's waveform instead of a void; the draw loop stops on pause and restarts on play
+
+</details>
+
+<details>
 <summary>v0.6.3-beta</summary>
 
 * **Desktop: Every File Send Threw** — `CHUNK_SIZE` was a local `var` inside `sendMessage()` but used in `_sendFileChunks()`, a separate method. Out of scope, so the first chunk threw and nothing ever appeared. Hoisted to module scope.
@@ -662,6 +673,7 @@ Pre-built Windows installers are published on [GitHub Releases](https://github.c
 | Release                                                                          | Platform                    | Notes                                                                           |
 | -------------------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------- |
 | [All releases](https://github.com/D4niel-dev/Orbit-beta/releases)                | Win / Mac / Linux / Android | Most recent build first                                                         |
+| [v0.6.4-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.4-beta) | Win / Mac / Linux / Android | Real audio waveform, file name above the timer, richer ⋮ menu, first-run feature slides |
 | [v0.6.3-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.3-beta) | Win / Mac / Linux / Android | File transfer fixed on both platforms, album art, video first frames, tray menu |
 | [v0.6.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.2-beta) | Win / Mac / Linux / Android | Notification icon and in-app update fixes                                       |
 | [v0.6.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.1-beta) | Win / Mac / Linux / Android | Notification permission, transfer memory, message/file split                    |
