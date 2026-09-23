@@ -159,7 +159,12 @@
         '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>' +
       '</span>';
 
-      // Controls layout: [art] [name / time] [vol] .......... [⋮]
+      // Controls layout: [play] [art] [name / time] [vol] .......... [⋮]
+      //
+      // playBtn used to be built, styled and wired but never appended, so the
+      // only way to play was the centre overlay — which fades in on hover, and
+      // mobile has no hover. Leading edge, where compact players put it.
+      ctrl.appendChild(playBtn);
       ctrl.appendChild(artEl);
       ctrl.appendChild(metaEl);
       ctrl.appendChild(volBtn);
