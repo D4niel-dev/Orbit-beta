@@ -24,10 +24,12 @@ window.Changelog = {
           ]],
           ['Fixed', [
             'An unplayed audio bubble was a large blank rectangle. It now shows the track\u2019s real waveform in the Bars and Off modes, and the resting bar row in the Wave mode.',
-            'The audio draw loop used to spin forever after pause \u2014 a player that had ever been played held a 60fps callback alive for the rest of its life. It stops on pause and restarts on play.'
+            'The audio draw loop used to spin forever after pause \u2014 a player that had ever been played held a 60fps callback alive for the rest of its life. It stops on pause and restarts on play.',
+            'Release checksums for macOS and Linux carried a "dist/" path prefix in the filename, so "sha256sum --check SHA256SUMS.txt --ignore-missing" silently skipped them \u2014 your download was never actually verified. All platforms now use the bare filename.'
           ]],
           ['Technical', [
-            'Version: Bumped to v0.6.4-beta.'
+            'Version: Bumped to v0.6.4-beta.',
+            'Mobile: removed a dead wire that looked up a non-existent button id \u2014 harmless now, but renaming the id would have double-opened the quick-add sheet.'
           ]]
         ]) +
         versionBlock('0.6.3-beta', '', [

@@ -1214,13 +1214,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }, { passive: true });
   })();
   
-  // Wire quick-add button — open tabbed sheet
-  var addQuick = document.getElementById('btn-add-quick');
-  if (addQuick) {
-    addQuick.addEventListener('click', function() {
-      OrbitHome.showQuickSheet();
-    });
-  }
+  // The quick-add button is the `.btn-add-quick-online` tile in the online
+  // friends row, wired via the delegated click listener on
+  // #online-friends-row above (search for "btn-add-quick-online"). It used to
+  // also be wired here against an id `btn-add-quick` that does not exist in
+  // the DOM, so the second wire resolved to null and was a trap: a future
+  // edit "fixing" the dead wire by renaming the id (or adding the missing
+  // element) would have opened the quick sheet twice. Removed.
 
   // Wire search button toggle
   var searchBtn = document.getElementById('btn-search-home');

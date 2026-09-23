@@ -81,8 +81,14 @@ jobs:
 
       - name: Generate SHA256 (macOS)
         run: |
+          # Use basename (not the raw $f path) so the checksum line says
+          # "Orbit-0.6.4-x64.dmg", not "dist/Orbit-0.6.4-x64.dmg".
+          # A user downloads the bare filename and runs
+          # "sha256sum --check SHA256SUMS.txt --ignore-missing"; if the entry
+          # carries the dist/ prefix it is silently skipped (--ignore-missing)
+          # and verification passes without actually checking anything.
           for f in dist/*.dmg; do
-            [ -f "$f" ] && shasum -a 256 "$f" >> dist/SHA256SUMS_macOS.txt
+            [ -f "$f" ] && echo "$(shasum -a 256 "$f" | awk '{print $1}')  $(basename "$f")" >> dist/SHA256SUMS_macOS.txt
           done
 
       - name: Upload macOS artifacts
@@ -120,8 +126,10 @@ jobs:
 
       - name: Generate SHA256 (Linux)
         run: |
+          # Same basename fix as macOS above — without it the entry carries
+          # "dist/Orbit-0.6.4.AppImage" and --ignore-missing silently skips it.
           for f in dist/*.AppImage dist/*.deb; do
-            [ -f "$f" ] && shasum -a 256 "$f" >> dist/SHA256SUMS_Linux.txt
+            [ -f "$f" ] && echo "$(shasum -a 256 "$f" | awk '{print $1}')  $(basename "$f")" >> dist/SHA256SUMS_Linux.txt
           done
 
       - name: Upload Linux artifacts
@@ -290,7 +298,8 @@ jobs:
             done <<< "$PER_PLATFORM" > release-artifacts/SHA256SUMS.txt
           else
             while IFS= read -r f; do
-              shasum -a 256 "$f" >> release-artifacts/SHA256SUMS.txt
+              # basename, not the raw path — see the macOS/Linux steps above.
+              echo "$(shasum -a 256 "$f" | awk '{print $1}')  $(basename "$f")" >> release-artifacts/SHA256SUMS.txt
             done < <(find release-artifacts -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.apk" \) | sort)
           fi
 
