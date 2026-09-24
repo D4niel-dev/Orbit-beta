@@ -96,6 +96,7 @@ var OrbitSheet = {
     
     // Add cancel pill
     OrbitSheet._addCancelPill();
+    OrbitSheet._addCloseButton();
     
     // Show
     overlay.classList.add('active');
@@ -121,6 +122,7 @@ var OrbitSheet = {
     if (backdrop) {
       backdrop.onclick = function() { OrbitSheet.hide(); };
     }
+    requestAnimationFrame(function() { OrbitSheet._syncScrollHint(); });
   },
 
   /** Show a bottom sheet with custom HTML content */
@@ -138,12 +140,14 @@ var OrbitSheet = {
     content.innerHTML = html;
     content.scrollTop = 0;
     OrbitSheet._addCancelPill();
+    OrbitSheet._addCloseButton();
     overlay.classList.add('active');
     if (window.lucide) lucide.createIcons();
     
     if (backdrop) {
       backdrop.onclick = function() { OrbitSheet.hide(); };
     }
+    requestAnimationFrame(function() { OrbitSheet._syncScrollHint(); });
   },
 
   /** Hide bottom sheet */
@@ -172,6 +176,44 @@ var OrbitSheet = {
     sheet.appendChild(cancelBtn);
   },
 
+  /**
+   * Add a close (X) button to the sheet.
+   *
+   * The Cancel pill lives at the BOTTOM of the sheet, so on a long list — /help
+   * carries 19 commands — it sits below the fold and a user who does not think
+   * to scroll has no visible way out at all. This puts a dismiss affordance at
+   * the top-right, where it is always on screen. Same inline-SVG approach as the
+   * player controls: no lucide pass needed, so it cannot be lost to icon timing.
+   */
+  _addCloseButton: function() {
+    var existing = document.querySelector('.bottom-sheet-close');
+    if (existing) existing.remove();
+    var sheet = document.getElementById('bottom-sheet');
+    if (!sheet) return;
+    var btn = document.createElement('button');
+    btn.className = 'bottom-sheet-close';
+    btn.setAttribute('aria-label', 'Close');
+    btn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>';
+    btn.addEventListener('click', function(e) { e.stopPropagation(); OrbitSheet.hide(); });
+    sheet.appendChild(btn);
+  },
+
+  /**
+   * Flag whether there is more content below the fold, for the fade affordance.
+   *
+   * Android WebView renders an overlay scrollbar that is invisible until the
+   * content is already being scrolled, so a clipped list looks like it simply
+   * ends — which is exactly how /help read. The class drives a mask that fades
+   * the last visible line while more remains.
+   */
+  _syncScrollHint: function() {
+    var sheet = document.getElementById('bottom-sheet');
+    var content = document.getElementById('bottom-sheet-content');
+    if (!sheet || !content) return;
+    var more = (content.scrollHeight - content.clientHeight - content.scrollTop) > 8;
+    sheet.classList.toggle('has-more', more);
+  },
+
   /** Set callbacks for actions */
   _callbacks: {}
 };
@@ -185,9 +227,16 @@ var OrbitSheet = {
   var _rafPending = false, _lastDy = 0;
 
   function canStartDrag(target) {
-    // Handle-only grabbing: dragging anywhere else conflicts with content
-    // scrolling and horizontal swipes.
-    return !!(target && target.closest && target.closest('.bottom-sheet-handle'));
+    // The handle is always a grab. So is the sheet body itself while the list is
+    // scrolled to the top: there the gesture cannot scroll (the content has
+    // overscroll-behavior: contain and nothing above it), so dragging down
+    // closes the sheet instead of doing nothing. Requiring the 4px handle was
+    // why the panel read as "not draggable" — the body is the obvious thing to
+    // grab. Once the list is scrolled, the body scrolls as normal.
+    if (!target || !target.closest) return false;
+    if (target.closest('.bottom-sheet-handle')) return true;
+    var content = document.getElementById('bottom-sheet-content');
+    return !!(content && content.contains(target) && content.scrollTop <= 0);
   }
 
   function endDrag() {
@@ -248,8 +297,18 @@ if (window.visualViewport) {
   window.visualViewport.addEventListener('resize', function () {
     var overlay = document.getElementById('bottom-sheet-overlay');
     if (overlay && overlay.classList.contains('active')) OrbitSheet._syncViewport();
+    // Rotating or the keyboard opening changes what fits, so re-evaluate the
+    // "more below" fade too.
+    OrbitSheet._syncScrollHint();
   });
 }
+
+/* Re-evaluate the fade as the content scrolls (passive: never blocks scrolling). */
+(function () {
+  var content = document.getElementById('bottom-sheet-content');
+  if (!content) return;
+  content.addEventListener('scroll', function () { OrbitSheet._syncScrollHint(); }, { passive: true });
+})();
 
 /* ---- Reusable drag-close for bespoke sheets ---- */
 OrbitSheet.enableDragClose = function (opts) {

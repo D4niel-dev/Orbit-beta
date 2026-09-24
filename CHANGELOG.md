@@ -1,5 +1,23 @@
 # Orbit Changelog
 
+## v0.6.5-beta
+
+> **Note:** The panels-and-playback release. Leaving a chat while audio was playing could strand the player outside its own bubble, in whatever chat you opened next — and once stranded it could never find its way home. The `/help` sheet and the emoji picker both had working machinery underneath but no visible way in or out. All three are addressed here.
+
+### Bug Fixes
+
+- **A Playing Player Could Escape Its Bubble — and Never Get Back** — Switching chats mid-playback detached the playing audio player and then re-attached it by appending it straight into whatever feed was open. When the new chat did not contain that message there was nothing to attach to, so it was dumped into the feed as a bare full-width block outside any bubble, while the real message row re-rendered a fresh paused placeholder at 0:00. Worse, the next save read the row from that stray wrapper, got `null`, and wrote `null` over the remembered message id — so the player could never locate its row again, in any chat, for the rest of its life. Fixed in two parts: the message id is only re-read while the wrapper is actually inside a `.message-row` (a parked player keeps the id it had), and a player with no row to attach to is parked in a hidden but still-connected container rather than the feed — detaching it would pause playback, and it re-attaches by itself the next time its own chat is rendered. Same fix applied to the video player, which had the identical code path. Reproduced against the real app before and after: the pre-fix build fails 3 of 9 checks (stray player in the feed, not parked, never returns to its row); after the fix, 9/9, with playback position preserved across both switches.
+
+### Features
+
+- **The `/help` Sheet Finally Has a Way Out and a Draggable Body** — The sheet's content was already a scroller and the handle already dragged, but nothing said so: Android WebView paints no scrollbar until you are already scrolling, the drag only started on a 4px handle, and the only close control was a Cancel pill pinned *below* the fold — 19 commands down, invisible on open. Now: a close (X) button sits at the top-right where it is always on screen; the sheet body itself is draggable when the list is at the top (there the gesture cannot scroll, so a downward drag closes the sheet) and scrolls normally once you have scrolled; a thin persistent scrollbar plus a fade on the last visible line make the overflow obvious, and the fade clears at the bottom. Verified in the real app: 9 sheet checks pass, including that a body drag closes at the top and does *not* close while scrolled.
+- **The Emoji Picker Grew a Header** — Same treatment as the sheets: a grab handle and a close button across the top, and swipe-down on the handle to dismiss, wired through the same `enableDragClose` helper so both panels gesture alike. Its height is now capped against the *visible* area (`min(320px, 42% of visualViewport)`) instead of a flat 320px, which on a short screen left no room for the composer once the picker's own search field raised the keyboard.
+- **The Emoji Picker Remembers Your Skin Tone** — `emoji-picker-element` keeps the chosen tone only for the session, so every launch silently reset it. The picker now persists it in `localStorage` and restores it on init. Verified across a real page reload.
+
+### Technical
+
+- **`ELECTRON_RUN_AS_NODE` Is the Second Half of the Local E2E Trap** — The desktop suite failing with a bare `Process failed to launch!` and no stderr is not the app: the host shell sets `ELECTRON_RUN_AS_NODE=1`, which makes the Electron binary start as plain Node, so no app code ever runs. It sits alongside the already-documented `NODE_OPTIONS` trap (which produces the more specific `bad option: --remote-debugging-port=0`). Both must be cleared: `env -u NODE_OPTIONS -u ELECTRON_RUN_AS_NODE npx playwright test --shard=1/2`. Recorded in AGENTS.md with the two symptoms distinguished, since the unhelpful one costs an hour.
+
 ## v0.6.4-beta
 
 > **Note:** The audio polish release. The visualiser was drawing frequency bars on a timer but had no sense of the track itself: Visualiser → Off showed nothing, the other modes showed a flat decorative row, and neither renderer was passing the file name to the player even though both knew it. The ⋮ menu had two items. The third panel of the app was a bare icon and a placeholder line. All five are addressed here.

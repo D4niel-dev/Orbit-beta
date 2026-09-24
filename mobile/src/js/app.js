@@ -4216,10 +4216,53 @@ document.addEventListener('DOMContentLoaded', function() {
   /* -- Emoji Picker -- */
   var emojiPickerOpen = false;
 
+  function closeEmojiPicker() {
+    var container = document.getElementById('emoji-picker-container');
+    if (container) container.style.display = 'none';
+    emojiPickerOpen = false;
+    window._emojiPickerReactMode = null;
+  }
+
+  // Size the picker against the VISIBLE area rather than a fixed 320px: that
+  // constant ate most of a short screen, and the picker carries its own search
+  // field, so once the keyboard is up a fixed height pushes the composer out of
+  // reach. Mirrors OrbitSheet._syncViewport, which does the same for sheets.
+  function _syncEmojiHeight() {
+    var container = document.getElementById('emoji-picker-container');
+    if (!container) return;
+    var vv = window.visualViewport;
+    var h = (vv && vv.height) ? vv.height : window.innerHeight;
+    container.style.setProperty('--emoji-picker-vh', h + 'px');
+  }
+
   function initEmojiPicker() {
     var container = document.getElementById('emoji-picker-container');
     if (!container) return;
+
+    // Header: the same grab handle and close button the bottom sheets use. The
+    // panel used to have no dismiss affordance of its own — the only ways out
+    // were the composer's emoji button and a tap on the chat behind it.
+    var header = document.createElement('div');
+    header.className = 'emoji-picker-header';
+    header.innerHTML = '<div class="bottom-sheet-handle"></div>' +
+      '<button class="emoji-picker-close" type="button" aria-label="Close">' +
+      '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>' +
+      '</button>';
+    container.appendChild(header);
+    header.querySelector('.emoji-picker-close').addEventListener('click', closeEmojiPicker);
+
     var picker = document.createElement('emoji-picker');
+
+    // emoji-picker-element only remembers the chosen skin tone for the session,
+    // so persist it — otherwise every launch silently resets to the default.
+    try {
+      var savedTone = localStorage.getItem('orbit_emoji_skin_tone');
+      if (savedTone) picker.skinToneEmoji = savedTone;
+    } catch (e) { /* storage blocked — the picker keeps its default tone */ }
+    picker.addEventListener('skin-tone-change', function(e) {
+      try { localStorage.setItem('orbit_emoji_skin_tone', e.detail.skinToneEmoji); } catch (e2) {}
+    });
+
     picker.addEventListener('emoji-click', function(e) {
       // Reaction mode — emoji is for reacting to a message, not for input
       if (window._emojiPickerReactMode) {
@@ -4229,8 +4272,7 @@ document.addEventListener('DOMContentLoaded', function() {
           applyReactionLocally(mode.chatId, mode.msgId, e.detail.unicode, 'add');
           sendReaction(mode.chatId, mode.msgId, e.detail.unicode, 'add');
         }
-        var container = document.getElementById('emoji-picker-container');
-        if (container) { container.style.display = 'none'; emojiPickerOpen = false; }
+        closeEmojiPicker();
         return;
       }
       // Normal mode — insert emoji into chat input
@@ -4244,25 +4286,37 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
     container.appendChild(picker);
+
+    // Swipe down on the handle to dismiss — the same gesture as the sheets, via
+    // the same helper, so the two panels behave alike.
+    if (window.OrbitSheet && typeof OrbitSheet.enableDragClose === 'function') {
+      OrbitSheet.enableDragClose({ sheet: container, onClose: closeEmojiPicker });
+    }
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', function() {
+        if (emojiPickerOpen) _syncEmojiHeight();
+      });
+    }
+  }
+
+  function openEmojiPicker() {
+    var container = document.getElementById('emoji-picker-container');
+    if (!container) return;
+    var theme = document.documentElement.getAttribute('data-theme') || 'dark';
+    var picker = container.querySelector('emoji-picker');
+    if (picker) {
+      picker.classList.remove('light', 'dark');
+      picker.classList.add(theme);
+    }
+    _syncEmojiHeight();
+    container.style.display = 'block';
+    emojiPickerOpen = true;
   }
 
   function toggleEmojiPicker() {
-    var container = document.getElementById('emoji-picker-container');
-    if (!container) return;
-    if (emojiPickerOpen) {
-      container.style.display = 'none';
-      emojiPickerOpen = false;
-      window._emojiPickerReactMode = null;
-    } else {
-      var theme = document.documentElement.getAttribute('data-theme') || 'dark';
-      var picker = container.querySelector('emoji-picker');
-      if (picker) {
-        picker.classList.remove('light', 'dark');
-        picker.classList.add(theme);
-      }
-      container.style.display = 'block';
-      emojiPickerOpen = true;
-    }
+    if (emojiPickerOpen) closeEmojiPicker();
+    else openEmojiPicker();
   }
 
   /* -- File Upload -- */
@@ -11573,9 +11627,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (emojiPickerOpen) {
       var container = document.getElementById('emoji-picker-container');
       if (container && !container.contains(e.target) && !e.target.closest('#btn-emoji')) {
-        container.style.display = 'none';
-        emojiPickerOpen = false;
-        window._emojiPickerReactMode = null;
+        closeEmojiPicker();
       }
     }
   });
@@ -12058,11 +12110,7 @@ document.addEventListener('DOMContentLoaded', function() {
               var picker = container.querySelector('emoji-picker');
               if (!picker) return;
               window._emojiPickerReactMode = { chatId: chatId, msgId: mId };
-              var theme = document.documentElement.getAttribute('data-theme') || 'dark';
-              picker.classList.remove('light', 'dark');
-              picker.classList.add(theme);
-              container.style.display = 'block';
-              emojiPickerOpen = true;
+              openEmojiPicker();
             }, 300);
             return;
           }
@@ -14130,9 +14178,7 @@ document.addEventListener('DOMContentLoaded', function() {
     e.preventDefault();
     // Close overlays in reverse priority
     if (emojiPickerOpen) {
-      document.getElementById('emoji-picker-container').style.display = 'none';
-      emojiPickerOpen = false;
-      window._emojiPickerReactMode = null;
+      closeEmojiPicker();
       return;
     }
     if (_settingsOverlayOpen) {
