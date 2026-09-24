@@ -4100,22 +4100,29 @@ textarea#chat-input {
 }
 
 /* Header strip: the same grab handle + close button the bottom sheets use, so
-   the picker has its own visible way out and the same swipe-down gesture. */
+   the picker has its own visible way out and the same swipe-down gesture.
+   Needs a REAL height (44px), not just the handle's: at 12px the 32px button
+   hung 24px below the strip, and the picker element — a later sibling with a
+   painted background — covered it, which is why the X was invisible. */
 .emoji-picker-header {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
+  height: 44px;
+  flex-shrink: 0;
   background: var(--bg-surface);
   border-radius: 16px 16px 0 0;
 }
 .emoji-picker-header .bottom-sheet-handle {
-  margin: 6px auto 2px;
+  margin: 0;
 }
 .emoji-picker-close {
   position: absolute;
-  top: 4px;
+  top: 6px;
   right: 10px;
+  /* Above the picker below, independent of the header's height. */
+  z-index: 2;
   width: 32px;
   height: 32px;
   padding: 0;
