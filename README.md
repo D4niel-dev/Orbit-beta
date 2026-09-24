@@ -686,8 +686,6 @@ Pre-built Windows installers are published on [GitHub Releases](https://github.c
 | [v0.6.5-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.5-beta) | Win / Mac / Linux / Android | In-app update download with checksum verification, correct installer per OS/CPU, playback that survives a chat switch, mobile panel affordances |
 | [v0.6.4-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.4-beta) | Win / Mac / Linux / Android | Real audio waveform, file name above the timer, richer ⋮ menu, first-run feature slides |
 | [v0.6.3-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.3-beta) | Win / Mac / Linux / Android | File transfer fixed on both platforms, album art, video first frames, tray menu |
-| [v0.6.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.2-beta) | Win / Mac / Linux / Android | Notification icon and in-app update fixes                                       |
-| [v0.6.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.1-beta) | Win / Mac / Linux / Android | Notification permission, transfer memory, message/file split                    |
 | [v0.0.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.2-beta) | Windows                     | SQLite storage, privacy mode, large file transfers                              |
 | [v0.0.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.1-beta) | Windows                     | Original release                                                                |
 
