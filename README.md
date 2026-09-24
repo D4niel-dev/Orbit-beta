@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v063-beta">v0.6.3-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v065-beta">v0.6.5-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@
 
 | Channel           | Version     | Status                                                                                                                                |
 | ----------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| **Latest**        | v0.6.4-beta | Audio polish release — real waveform in the visualiser, file name above the timer, a richer ⋮ settings menu, and first-run feature slides |
+| **Latest**        | v0.6.5-beta | Update-delivery release — desktop fetches and checksum-verifies the installer itself, the notice picks the right build for your OS and CPU, playback no longer escapes its bubble, and the mobile panels gained real affordances |
 | **Stable**        | v0.6.0-beta | Reliability release — notification plumbing, an offline send queue, a vault you can back up and take with you, in-app Android updates |
 | Legacy **Stable** | v0.1.1-beta | Legacy stable release                                                                                                                 |
 
@@ -90,13 +90,13 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage app for desktop and Android** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
-## Highlights (v0.6.4-beta)
+## Highlights (v0.6.5-beta)
 
-* **A Real Waveform in the Audio Player** — Visualiser → Off used to show nothing at all; the other modes showed a flat decorative row even on an unplayed bubble. All three modes now draw the track's actual decoded waveform, fetched and decoded once per file so re-renders never re-decode. Oversized files (>12 MB) skip the decode and fall back to the flat row — a typical track peaks around 30–60 MB of transient PCM, freed the moment the peaks are computed.
-* **The Audio Player's File Name, Above the Timer** — Both renderers had the file name; neither renderer was passing it to the player. The file name now sits above the timer, a long name ellipsises instead of shoving the volume button off the row, and when the attachment has no name (older history, nameless attachments) the row collapses to exactly what it showed before.
-* **More Settings in the ⋮ Menu** — Loop and Playback Speed were the whole menu. It now also carries **Visualiser** (Bars / Wave / Off — Off is now the real decoded waveform), **Time** (Elapsed / Remaining → `0:12 / -2:32`), and **Copy file name**.
-* **First-Run Feature Slides in the Chat Panel** — The third panel was a bare icon and "Select a friend to start chatting". It now carries a 7-slide carousel describing what Orbit actually does — peer-to-peer with no server, end-to-end encryption with key-change warnings, file/photo/video sharing, calls and voice notes, groups, local-first storage and backup, and theming. The position is remembered so a store re-render doesn't snap you back to slide one, and "Done" collapses to the plain empty state rather than pretending the carousel is a gate.
-* **An Unplayed Audio Bubble No Longer Shows a Void** — The visualiser only drew while playing, so an unplayed bubble was a large blank rectangle. It now shows the track's real waveform, and the draw loop no longer spins forever when paused — it stops the moment you pause and restarts on play, so a feed of audio messages no longer holds a 60fps callback alive for the life of each one.
+* **Desktop Downloads and Verifies the Update Itself** — The update notice used to hand the installer to your browser. It now fetches it into `Downloads/Orbit Updates`, shows progress with a cancel, checks the file against the release's published `SHA256SUMS.txt`, and offers **Open installer** / **Show in folder**. A mismatch deletes the file rather than leaving something wrong on disk. Nothing installs itself — these are unsigned builds — and only a file the app downloaded may be opened, so the new plumbing cannot be used as a general "run anything" primitive.
+* **The Update Notice Offered the Wrong Installer on macOS and Linux** — GitHub returns release assets in *alphabetical* order, not upload order, so "first match" was luck: an **Intel Mac was handed the Apple-silicon build** (which will not launch) and Linux was never offered the AppImage, only a `.deb`. Selection now considers the CPU architecture and prefers the format that runs anywhere. Windows checksum verification was also broken in a way that would have silently never matched — the manifest keeps CI's filename with spaces (`Orbit Setup 0.6.4-beta.exe`) while GitHub rewrites the asset to dots.
+* **A Playing Player No Longer Escapes Its Bubble** — Leave a chat mid-playback and the player used to be dumped into whatever chat you opened next as a bare block outside any bubble, then lose the ability to find its own message again. It stays with its message now, keeps playing while you are elsewhere, and re-attaches where it left off when you come back.
+* **The `/help` Sheet Has a Way Out and a Draggable Body** — The content always scrolled and the handle always dragged, but nothing said so: no visible scrollbar, a 4px grab target, and a Cancel pill pinned below the fold on a 19-command list. There is now a close button that is always on screen, the sheet body itself drags to dismiss when the list is at the top, and a fade on the last visible line shows there is more.
+* **The Emoji Picker Is Actually Themed** — It never was: the stylesheet set variable names the library does not read, so it rendered its own defaults the whole time — a `#444` hairline and a stray white focus box on whichever emoji held focus. Now themed to Orbit, with a grab handle, swipe-to-dismiss, a height that respects short screens, and your skin tone remembered between launches.
 
 ## Version History
 
@@ -650,7 +650,7 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Test Suites** — Unit assertions now **289** across 6 suites, including 13 new cases for the desktop chunk/ACK/RESUME state machine.
 
 </details>
-<details open>
+<details>
 <summary>v0.6.4-beta</summary>
 
 * **Real waveform** — Visualiser → Off draws the track's actual decoded shape; oversized files fall back to the flat row; cached per URL so re-renders never re-decode
@@ -658,6 +658,17 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **⋮ menu expanded** — Visualiser (Bars / Wave / Off), Time (Elapsed / Remaining), Copy file name, on top of the existing Loop and Playback Speed
 * **First-run feature slides** — 7 slides in the chat panel describing Orbit, shared by desktop and mobile; position remembered across re-renders; "Done" collapses to the plain empty state
 * **Idle audio bubbles** — unplayed bubbles show the track's waveform instead of a void; the draw loop stops on pause and restarts on play
+
+</details>
+<details open>
+<summary>v0.6.5-beta</summary>
+
+* **In-app update download (desktop)** — the notice fetches the installer into `Downloads/Orbit Updates` with progress and a cancel, verifies it against the release's `SHA256SUMS.txt`, and offers Open installer / Show in folder; a mismatch is deleted
+* **Right installer per OS and CPU** — assets come back alphabetically, so an Intel Mac used to be offered the arm64 `.dmg` and Linux was never offered the AppImage; architecture and format preference are now explicit
+* **Windows checksum verification fixed** — the manifest keeps CI's spaced filename while GitHub rewrites the asset to dots, so the lookup never matched
+* **Playback no longer escapes its bubble** — a player left mid-playback stayed in the wrong chat forever; it now keeps playing, stays hidden, and re-attaches to its own message
+* **`/help` sheet affordances** — always-visible close button, draggable body, and a scroll fade so a 19-command list does not look like it simply ends
+* **Emoji picker actually themed** — it had been rendering the library's defaults (stray outline included) because the CSS used variable names the library does not read; skin tone is remembered now
 
 </details>
 
@@ -672,6 +683,7 @@ Pre-built Windows installers are published on [GitHub Releases](https://github.c
 | Release                                                                          | Platform                    | Notes                                                                           |
 | -------------------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------- |
 | [All releases](https://github.com/D4niel-dev/Orbit-beta/releases)                | Win / Mac / Linux / Android | Most recent build first                                                         |
+| [v0.6.5-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.5-beta) | Win / Mac / Linux / Android | In-app update download with checksum verification, correct installer per OS/CPU, playback that survives a chat switch, mobile panel affordances |
 | [v0.6.4-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.4-beta) | Win / Mac / Linux / Android | Real audio waveform, file name above the timer, richer ⋮ menu, first-run feature slides |
 | [v0.6.3-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.3-beta) | Win / Mac / Linux / Android | File transfer fixed on both platforms, album art, video first frames, tray menu |
 | [v0.6.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.2-beta) | Win / Mac / Linux / Android | Notification icon and in-app update fixes                                       |
@@ -913,7 +925,7 @@ Transparency matters in beta. Current constraints include:
 | **LAN-focused**                                   | Peers must be reachable on the local network. NAT traversal is not implemented.                                                                                                                                                                                                            |
 | **E2EE needs both peers on v0.5.2-beta or newer** | The unified scheme shipped in v0.5.2-beta. A peer running an older build still advertises the legacy key format, so encrypted DMs fall back to the legacy path — desktop↔Android encryption only works once **both** sides are updated.                                                    |
 | **Unsigned builds**                               | Installers are not code-signed; Windows SmartScreen warnings are expected.                                                                                                                                                                                                                 |
-| **Update checks contact GitHub**                  | At most once every 6 hours the app asks `api.github.com` for the newest release and, if the release body has no notes, reads `CHANGELOG.md` from `raw.githubusercontent.com`. Nothing about you, your identity or your chats is sent, and the check can be turned off in Settings → About. |
+| **Update checks contact GitHub**                  | At most once every 6 hours the app asks `api.github.com` for the newest release and, if the release body has no notes, reads `CHANGELOG.md` from `raw.githubusercontent.com`. Downloading an update (desktop: the installer; Android: the APK) additionally fetches that file and `SHA256SUMS.txt` from `github.com`. Nothing about you, your identity or your chats is sent, and the check can be turned off in Settings → About. |
 | **Third-party data egress**                       | Message Translate sends the message text to MyMemory (`api.mymemory.translated.net`); GIF search queries Giphy. Both are user-initiated and optional, but **neither is covered by Orbit's E2EE** — that content leaves your device in plaintext.                                           |
 | **Calls are LAN-only**                            | Like messaging, a call needs both peers on the same network. Media is peer-to-peer with STUN for address discovery — there is no relay and no NAT traversal, so calling across the internet is not supported.                                                                              |
 | **Group calls are desktop-only**                  | Desktop has mesh group calls; mobile handles 1:1 calls, and a group call offer is declined as busy rather than half-joined.                                                                                                                                                                |
@@ -934,14 +946,13 @@ Transparency matters in beta. Current constraints include:
 
 ## Roadmap
 
-### Shipped (v0.6.3-beta)
+### Shipped (v0.6.5-beta)
 
-* **File Transfer Works on Both Platforms** — desktop's `CHUNK_SIZE` scope bug threw before the first chunk, and Electron 32's removal of `File.path` meant attaching a file produced no message at all; on mobile, chunks could overtake their own `FILE_TRANSFER_START`
-* **Album Art on Audio Attachments** — ID3v2 `APIC`, MP4/M4A `covr` and FLAC `PICTURE`, read from a bounded slice so a large track is never pulled into memory, with a music note when there is none
-* **Video First Frames** — an unplayed video shows its opening frame instead of a black rectangle
-* **A Tray Menu Worth Opening** — copy your Orbit ID, set presence, mute notifications, check for updates, lock
-* **Consistent Text/File Order** — desktop now arranges a bubble the same way mobile does
-* **Playback Survives a Re-render** — a playing voice message no longer stops when a new message arrives
+* **Desktop Downloads and Verifies Updates** — the installer lands in `Downloads/Orbit Updates` with progress and a cancel, is checked against the release's published `SHA256SUMS.txt`, and is deleted outright if it does not match
+* **The Update Notice Picks the Right Build** — assets arrive alphabetically from GitHub, which had been handing Intel Macs the Apple-silicon `.dmg` and Linux a `.deb` instead of the AppImage
+* **Playback Survives a Chat Switch** — a player left mid-playback no longer strands itself outside its bubble, in the wrong chat, permanently
+* **The `/help` Sheet Is Closable and Draggable** — an always-visible close button, a body that drags to dismiss, and a fade that admits there are more commands below
+* **The Emoji Picker Is Themed and Remembers Your Skin Tone** — it had been rendering the library's own defaults, stray focus outline included
 
 ### In Progress / Planned
 
