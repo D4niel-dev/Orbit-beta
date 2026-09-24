@@ -199,9 +199,7 @@ Orbit.UpdateCheck = (function() {
     return 'win32';
   }
 
-  // Asset globs from electron-builder.yml / build.yml. Linux prefers AppImage
-  // (runs anywhere) — the CI uploads AppImage before deb, and we take the first
-  // match, so keep this order.
+  // Asset globs from electron-builder.yml / build.yml.
   var ASSET_MATCHERS = {
     android: /\.apk$/i,
     darwin: /\.dmg$/i,
@@ -209,20 +207,80 @@ Orbit.UpdateCheck = (function() {
     win32: /\.exe$/i
   };
 
-  function pickAsset(release, platform) {
-    var assets = (release && release.assets) || [];
+  function _hasToken(name, tokens) {
+    var lower = String(name).toLowerCase();
+    for (var i = 0; i < tokens.length; i++) {
+      if (lower.indexOf(tokens[i]) !== -1) return true;
+    }
+    return false;
+  }
+
+  // Arch tokens as they appear in electron-builder artifact names. Note x64
+  // must NOT match "arm64": "arm64".indexOf("x64") is -1, so it does not.
+  function _archTokens(arch) {
+    var a = String(arch || '').toLowerCase();
+    if (!a) return [];
+    if (a === 'arm64' || a === 'aarch64') return ['arm64', 'aarch64'];
+    if (a === 'x64' || a === 'amd64') return ['x64', 'x86_64', 'amd64'];
+    if (a === 'ia32' || a === 'x86') return ['ia32', 'x86'];
+    return [a];
+  }
+
+  // The format to prefer when a platform ships more than one.
+  function _isPreferredFormat(name, platform) {
+    // AppImage runs anywhere; a .deb needs dpkg and the matching distro.
+    if (platform === 'linux') return /\.appimage$/i.test(name);
+    return true;
+  }
+
+  // With no arch to go on, prefer the build that runs on BOTH kinds of Mac:
+  // Rosetta 2 runs an x64 app on Apple Silicon, but an arm64 app will not run
+  // on an Intel Mac at all.
+  function _fallbackArchTokens(platform) {
+    return platform === 'darwin' ? ['x64', 'x86_64', 'amd64'] : [];
+  }
+
+  // Pick the installer to hand the user.
+  //
+  // GitHub returns release assets in ALPHABETICAL order, not the order CI
+  // uploaded them, so "first match wins" was never a preference — it was luck,
+  // and it picked wrong against real releases:
+  //   macOS -> arm64.dmg sorts before x64.dmg, so an Intel Mac was handed the
+  //            Apple-silicon build, which will not launch
+  //   Linux -> amd64.deb sorts before x86_64.AppImage, so the "runs anywhere"
+  //            AppImage was never offered
+  // Preference is explicit now: arch + preferred format, then arch, then
+  // preferred format, then anything that matches.
+  function pickAsset(release, platform, arch) {
+    var assets = ((release && release.assets) || []).filter(function (a) {
+      return a && a.name;
+    });
     var want = ASSET_MATCHERS[platform] || ASSET_MATCHERS.win32;
-    for (var i = 0; i < assets.length; i++) {
-      var name = assets[i] && assets[i].name;
-      if (name && want.test(name)) {
-        return {
-          name: name,
-          url: assets[i].browser_download_url,
-          size: assets[i].size || 0
-        };
+    var candidates = assets.filter(function (a) { return want.test(a.name); });
+    if (!candidates.length) return null;
+
+    var tokens = _archTokens(arch);
+    if (!tokens.length) tokens = _fallbackArchTokens(platform);
+    var pick = null;
+
+    if (tokens.length) {
+      pick = candidates.filter(function (a) {
+        return _hasToken(a.name, tokens) && _isPreferredFormat(a.name, platform);
+      })[0];
+      if (!pick) {
+        pick = candidates.filter(function (a) { return _hasToken(a.name, tokens); })[0];
       }
     }
-    return null;
+    if (!pick) {
+      pick = candidates.filter(function (a) { return _isPreferredFormat(a.name, platform); })[0];
+    }
+    if (!pick) pick = candidates[0];
+
+    return {
+      name: pick.name,
+      url: pick.browser_download_url,
+      size: pick.size || 0
+    };
   }
 
   /* ------------------------------------------------------------------ *
@@ -246,6 +304,16 @@ Orbit.UpdateCheck = (function() {
       if (window.orbitAPI.version) return String(window.orbitAPI.version);
     }
     return '0.0.0';
+  }
+
+  // CPU arch, used to pick the right macOS/Linux build. Electron's preload
+  // exposes it; a browser (mobile) has no equivalent, so this returns '' there
+  // and pickAsset falls back to its format preference alone.
+  function currentArch() {
+    if (typeof window !== 'undefined' && window.orbitAPI && window.orbitAPI.arch) {
+      return String(window.orbitAPI.arch);
+    }
+    return '';
   }
 
   /* ------------------------------------------------------------------ *
@@ -422,11 +490,12 @@ Orbit.UpdateCheck = (function() {
     opts = opts || {};
     var current = opts.currentVersion || currentVersion();
     var platform = opts.platform || currentPlatform();
+    var arch = opts.arch || currentArch();
     var maxHighlights = opts.maxHighlights || 6;
 
     function build(rel, highlights) {
       var latest = String(rel.tag_name || rel.name || '').replace(/^v/i, '');
-      var asset = pickAsset(rel, platform);
+      var asset = pickAsset(rel, platform, arch);
       return {
         ok: true,
         current: current,

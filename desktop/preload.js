@@ -19,6 +19,9 @@ contextBridge.exposeInMainWorld('orbitAPI', {
   invoke:   (channel, data)   => ipcRenderer.invoke(channel, data),
   log:      (...args)         => ipcRenderer.send('log', ...args),
   platform: process.platform,
+  // CPU arch, so the update check hands an Intel Mac the x64 build rather than
+  // the arm64 one (both .dmg files exist on every release).
+  arch: process.arch,
   // Legacy field: process.env.npm_package_version is only set when the app is
   // launched through an npm script, so in a packaged build this silently falls
   // back to a hardcoded string. getAppVersion() below is the real source.
