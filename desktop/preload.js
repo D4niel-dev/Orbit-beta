@@ -36,6 +36,20 @@ contextBridge.exposeInMainWorld('orbitAPI', {
   // Fetches a GitHub URL from the main process (the renderer's CSP blocks
   // direct calls). Resolves to { ok, status, body, error? }.
   updateFetch: (url) => ipcRenderer.invoke('update-fetch', url),
+  // Downloads a release asset into ~/Downloads/Orbit Updates and verifies it
+  // against the release's SHA256SUMS.txt. Resolves to
+  // { ok, path, name, size, sha256, verified } or { ok:false, error|cancelled }.
+  downloadUpdate: (payload) => ipcRenderer.invoke('update-download', payload),
+  cancelUpdateDownload: () => ipcRenderer.send('update-download-cancel'),
+  // Progress events while a download runs. Returns an unsubscribe function.
+  onUpdateDownloadProgress: (cb) => {
+    const handler = (e, data) => cb(data);
+    ipcRenderer.on('update-download-progress', handler);
+    return () => ipcRenderer.removeListener('update-download-progress', handler);
+  },
+  // Only files downloaded by the main process are accepted by these.
+  openDownloadedFile: (file) => ipcRenderer.invoke('update-open-file', file),
+  revealDownloadedFile: (file) => ipcRenderer.invoke('update-reveal-file', file),
   electronVersion: process.versions.electron,
   nodeVersion: process.versions.node,
   

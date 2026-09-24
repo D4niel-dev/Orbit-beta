@@ -496,6 +496,12 @@ Orbit.UpdateCheck = (function() {
     function build(rel, highlights) {
       var latest = String(rel.tag_name || rel.name || '').replace(/^v/i, '');
       var asset = pickAsset(rel, platform, arch);
+      // The release ships a SHA256SUMS.txt; hand its URL along so the desktop
+      // downloader can verify what it just fetched (the README tells users to
+      // check this by hand, so the app may as well do it for them).
+      var manifest = ((rel && rel.assets) || []).filter(function (a) {
+        return a && /^SHA256SUMS\.txt$/i.test(a.name);
+      })[0];
       return {
         ok: true,
         current: current,
@@ -508,6 +514,9 @@ Orbit.UpdateCheck = (function() {
         prerelease: !!rel.prerelease,
         platform: platform,
         asset: asset,
+        // Null when the release carries no manifest — the downloader then
+        // reports "not verified" rather than failing.
+        manifestUrl: manifest ? manifest.browser_download_url : null,
         // Falling back to the release page keeps the button useful even when a
         // platform artifact is missing from a build.
         downloadUrl: asset ? asset.url : (rel.html_url || RELEASES_PAGE),

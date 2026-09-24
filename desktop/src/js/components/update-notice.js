@@ -247,6 +247,9 @@ window.UpdateNotice = {
           highlightsHtml +
         '</div>' +
 
+        // Progress / result area for the in-app download, above the footer.
+        '<div id="update-download-status" style="display:none;padding:0 24px 4px;"></div>' +
+
         '<div style="padding:16px 24px 20px;border-top:1px solid var(--border-subtle);' +
           'display:flex;align-items:center;gap:10px;">' +
           '<button id="update-modal-skip" style="background:transparent;border:none;cursor:pointer;' +
@@ -288,7 +291,18 @@ window.UpdateNotice = {
       self._toast('Skipped v' + res.latest, 'You won\u2019t be reminded about this version again.', 'info');
     });
 
-    overlay.querySelector('#update-modal-download').addEventListener('click', function() {
+    // Download: fetch the installer in-app when the platform has one and the
+    // main process can do it; otherwise fall back to the browser hand-off.
+    //
+    // ONE listener, branching on an explicit mode. Attaching a second handler
+    // (or mixing addEventListener with onclick) meant the stale handler ran as
+    // well, so the "Open in browser" fallback re-entered the downloader instead
+    // of opening anything.
+    var canDownloadInApp = hasAsset && !!(window.orbitAPI && window.orbitAPI.downloadUpdate);
+    var downloadBtn = overlay.querySelector('#update-modal-download');
+    downloadBtn.dataset.mode = 'idle';
+
+    function browserFallback() {
       if (!self._openExternal(res.downloadUrl)) {
         self._toast('Could not open browser', 'Download it from github.com/D4niel-dev/Orbit-beta/releases', 'error');
         return;
@@ -302,6 +316,169 @@ window.UpdateNotice = {
       );
       self.closeModal();
       self.hideCard();
+    }
+
+    downloadBtn.addEventListener('click', function() {
+      var mode = downloadBtn.dataset.mode;
+      if (mode === 'downloading') { self._cancelDownload(downloadBtn); return; }
+      if (mode === 'failed' || !canDownloadInApp) { browserFallback(); return; }
+      self._startDownload(overlay, res, downloadBtn);
     });
+  },
+
+  /* -- in-app download -- */
+
+  _bytes(n) {
+    var v = Number(n) || 0;
+    if (v >= 1048576) return (v / 1048576).toFixed(1) + ' MB';
+    if (v >= 1024) return Math.round(v / 1024) + ' KB';
+    return v + ' B';
+  },
+
+  _statusEl(overlay) {
+    return overlay.querySelector('#update-download-status');
+  },
+
+  _paintStatus(overlay, html) {
+    var el = this._statusEl(overlay);
+    if (!el) return;
+    el.style.display = 'block';
+    el.innerHTML = html;
+  },
+
+  _cancelDownload(btn) {
+    if (btn.dataset.cancelling === '1') return;
+    btn.dataset.cancelling = '1';
+    btn.disabled = true;
+    btn.textContent = 'Cancelling\u2026';
+    window.orbitAPI.cancelUpdateDownload();
+  },
+
+  // Fetch the installer, verify it against the release manifest, then offer
+  // Open / Show in folder. Nothing is installed automatically — the builds are
+  // unsigned, so the user still runs the installer themselves.
+  _startDownload(overlay, res, btn) {
+    var self = this;
+    var api = window.orbitAPI;
+
+    btn.dataset.mode = 'downloading';
+    btn.dataset.cancelling = '0';
+    btn.textContent = 'Cancel';
+    btn.style.background = 'transparent';
+    btn.style.color = 'var(--text-secondary)';
+    btn.style.border = '1px solid var(--border-subtle)';
+
+    this._paintStatus(overlay,
+      '<div style="height:6px;border-radius:3px;background:var(--border-subtle);overflow:hidden;">' +
+        '<div id="update-download-bar" style="height:100%;width:0%;background:var(--accent-primary);transition:width .15s linear;"></div>' +
+      '</div>' +
+      '<div id="update-download-note" style="font-size:11px;color:var(--text-muted);margin-top:6px;">Starting\u2026</div>');
+
+    var unsub = null;
+    if (typeof api.onUpdateDownloadProgress === 'function') {
+      unsub = api.onUpdateDownloadProgress(function(p) {
+        var pct = (p && typeof p.percent === 'number') ? p.percent : 0;
+        var bar = overlay.querySelector('#update-download-bar');
+        if (bar) bar.style.width = pct + '%';
+        var note = overlay.querySelector('#update-download-note');
+        if (note) {
+          note.textContent = (p && p.total)
+            ? self._bytes(p.received) + ' of ' + self._bytes(p.total) + ' \u00b7 ' + pct + '%'
+            : 'Downloading\u2026';
+        }
+      });
+    }
+
+    api.downloadUpdate({
+      url: res.downloadUrl,
+      name: res.asset ? res.asset.name : 'Orbit-installer',
+      manifestUrl: res.manifestUrl || null
+    }).then(function(out) {
+      if (unsub) unsub();
+      if (out && out.ok) {
+        self._showDownloaded(overlay, out);
+        self.hideCard();
+        return;
+      }
+      if (out && out.cancelled) {
+        var el = self._statusEl(overlay);
+        if (el) el.style.display = 'none';
+        btn.disabled = false;
+        btn.dataset.mode = 'idle';
+        btn.dataset.cancelling = '0';
+        btn.textContent = 'Download for ' + self._platformLabel(res.platform);
+        btn.style.background = 'var(--accent-primary)';
+        btn.style.color = '#fff';
+        btn.style.border = 'none';
+        self._toast('Download cancelled', 'Nothing was saved.', 'info');
+        return;
+      }
+      self._downloadFailed(overlay, btn, (out && out.error) || 'unknown error');
+    }).catch(function(e) {
+      if (unsub) unsub();
+      self._downloadFailed(overlay, btn, String((e && e.message) || e));
+    });
+  },
+
+  _showDownloaded(overlay, out) {
+    var self = this;
+    var verified = out.verified === true;
+    var unknown = out.verified === null;
+    var line = verified
+      ? '<span style="color:var(--accent-success, #3fb950);">Checksum verified</span>'
+      : (unknown
+        ? 'Saved (no checksum published for this file)'
+        : 'Saved');
+    this._paintStatus(overlay,
+      '<div style="font-size:12px;color:var(--text-secondary);line-height:1.5;">' +
+        line + ' \u00b7 ' + this._esc(this._bytes(out.size)) +
+        '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;word-break:break-all;">' +
+          this._esc(out.path) + '</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;margin-top:10px;">' +
+        '<button id="update-open-file" style="padding:8px 14px;border-radius:9px;border:none;' +
+          'background:var(--accent-primary);color:#fff;font-size:13px;font-weight:600;cursor:pointer;">Open installer</button>' +
+        '<button id="update-reveal-file" style="padding:8px 14px;border-radius:9px;' +
+          'border:1px solid var(--border-subtle);background:transparent;color:var(--text-secondary);' +
+          'font-size:13px;font-weight:500;cursor:pointer;">Show in folder</button>' +
+      '</div>');
+
+    var primary = overlay.querySelector('#update-modal-download');
+    if (primary) primary.style.display = 'none';
+
+    overlay.querySelector('#update-open-file').addEventListener('click', function() {
+      window.orbitAPI.openDownloadedFile(out.path).then(function(r) {
+        if (r && r.ok) { self.closeModal(); return; }
+        self._toast('Could not open the installer', 'Open it from your Downloads folder.', 'error');
+      });
+    });
+    overlay.querySelector('#update-reveal-file').addEventListener('click', function() {
+      window.orbitAPI.revealDownloadedFile(out.path);
+    });
+  },
+
+  _downloadFailed(overlay, btn, error) {
+    var mismatch = /checksum/i.test(error);
+    this._paintStatus(overlay,
+      '<div style="font-size:12px;color:var(--danger, #f85149);line-height:1.5;">' +
+        (mismatch
+          ? 'The download did not match the published checksum, so it was deleted. Try again, or download from GitHub.'
+          : 'Download failed: ' + this._esc(error)) +
+      '</div>');
+
+    // Mode, not a second handler — see the listener in openModal.
+    btn.dataset.mode = 'failed';
+    btn.dataset.cancelling = '0';
+    btn.disabled = false;
+    btn.textContent = 'Open in browser';
+    btn.style.background = 'var(--accent-primary)';
+    btn.style.color = '#fff';
+    btn.style.border = 'none';
+
+    this._toast(
+      mismatch ? 'Download rejected' : 'Download failed',
+      mismatch ? 'The file did not match the release checksum.' : error,
+      'error'
+    );
   }
 };

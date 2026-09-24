@@ -676,6 +676,210 @@ app.whenReady().then(() => {
     }
   });
 
+  /* ---- Update download ----
+     Orbit builds are unsigned, so there is no silent self-install: electron-updater
+     needs a signed NSIS/dmg before it may replace the binary in place. What this
+     does instead is fetch the installer for the user's platform into a folder
+     they can find, verify it against the release's SHA256SUMS.txt, and then let
+     the UI offer Open / Show in folder.
+
+     GitHub serves release assets from github.com and REDIRECTS to
+     objects.githubusercontent.com, so both hosts are allowed and fetch follows
+     the redirect. Everything here treats the release payload as untrusted input. */
+  const _downloadedFiles = new Set();
+  let _activeDownload = null;
+
+  function _isAllowedUpdateHost(hostname) {
+    const h = String(hostname || '').toLowerCase();
+    return h === 'github.com' || h.endsWith('.github.com') || h.endsWith('.githubusercontent.com');
+  }
+
+  // The asset name comes from the release, so it is untrusted: basename it (no
+  // traversal), strip anything that is not filename-safe, and cap the length.
+  function _safeAssetName(name) {
+    const base = path.basename(String(name || 'Orbit-installer'));
+    const cleaned = base.replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^\.+/, '').slice(0, 120);
+    return cleaned || 'Orbit-installer';
+  }
+
+  function _updateDownloadDir() {
+    let base;
+    try {
+      base = app.getPath('downloads');
+    } catch (e) {
+      base = app.getPath('userData');
+    }
+    return path.join(base, 'Orbit Updates');
+  }
+
+  function _sha256File(file) {
+    return new Promise((resolve, reject) => {
+      const h = crypto.createHash('sha256');
+      const s = fs.createReadStream(file);
+      s.on('error', reject);
+      s.on('data', (d) => h.update(d));
+      s.on('end', () => resolve(h.digest('hex')));
+    });
+  }
+
+  // Parse a SHA256SUMS.txt manifest. Entries are "<hash>  <name>" or
+  // "<hash> *<name>", and the name may carry a path prefix — compare basenames.
+  //
+  // The name can also differ cosmetically from the asset: GitHub rewrites spaces
+  // in uploaded filenames to dots, so the manifest says
+  // "Orbit Setup 0.6.4-beta.exe" while the asset is
+  // "Orbit.Setup.0.6.4-beta.exe". Comparing normalized forms as well is what
+  // makes Windows verification actually match.
+  function _normalizeAssetName(n) {
+    return String(n || '').trim().toLowerCase().replace(/\s+/g, '.');
+  }
+
+  function _manifestHash(text, filename) {
+    const want = path.basename(String(filename || ''));
+    const wantNorm = _normalizeAssetName(want);
+    const lines = String(text || '').split(/\r?\n/);
+    for (const line of lines) {
+      const m = line.trim().match(/^([0-9a-fA-F]{64})\s+\*?(.+)$/);
+      if (!m) continue;
+      const entry = path.basename(m[2].trim());
+      if (entry === want || _normalizeAssetName(entry) === wantNorm) return m[1].toLowerCase();
+    }
+    return null;
+  }
+
+  ipcMain.handle('update-download', async (event, payload) => {
+    if (_activeDownload) return { ok: false, error: 'a download is already running' };
+
+    const url = payload && payload.url;
+    const manifestUrl = payload && payload.manifestUrl;
+    if (typeof url !== 'string' || url.length > 2048) return { ok: false, error: 'bad url' };
+    let parsed;
+    try {
+      parsed = new URL(url);
+    } catch (e) {
+      return { ok: false, error: 'bad url' };
+    }
+    if (parsed.protocol !== 'https:' || !_isAllowedUpdateHost(parsed.hostname)) {
+      return { ok: false, error: 'host not allowed' };
+    }
+    if (manifestUrl) {
+      let mp;
+      try {
+        mp = new URL(manifestUrl);
+      } catch (e) {
+        return { ok: false, error: 'bad manifest url' };
+      }
+      if (mp.protocol !== 'https:' || !_isAllowedUpdateHost(mp.hostname)) {
+        return { ok: false, error: 'host not allowed' };
+      }
+    }
+
+    const dir = _updateDownloadDir();
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+    } catch (e) {
+      return { ok: false, error: 'could not create ' + dir };
+    }
+    const name = _safeAssetName(payload && payload.name);
+    const dest = path.join(dir, name);
+    const part = dest + '.part';
+    const controller = new AbortController();
+    _activeDownload = { controller, part };
+
+    const send = (data) => {
+      try { event.sender.send('update-download-progress', data); } catch (e) { /* window gone */ }
+    };
+
+    try {
+      const res = await fetch(url, {
+        signal: controller.signal,
+        redirect: 'follow',
+        headers: { 'User-Agent': 'Orbit/' + app.getVersion() }
+      });
+      if (!res.ok) return { ok: false, error: 'GitHub responded ' + res.status };
+      if (!res.body) return { ok: false, error: 'empty response body' };
+
+      const total = Number(res.headers.get('content-length')) || 0;
+      let received = 0;
+      let lastEmit = 0;
+      const out = fs.createWriteStream(part);
+      const reader = res.body.getReader();
+      for (;;) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        received += chunk.value.length;
+        if (!out.write(Buffer.from(chunk.value))) {
+          await new Promise((r) => out.once('drain', r));
+        }
+        const now = Date.now();
+        if (now - lastEmit > 150) {
+          lastEmit = now;
+          send({ received, total, percent: total ? Math.round((received / total) * 100) : 0 });
+        }
+      }
+      await new Promise((resolve, reject) => {
+        out.on('error', reject);
+        out.end(() => resolve());
+      });
+      send({ received, total, percent: 100, done: true });
+
+      fs.renameSync(part, dest);
+      const sha256 = await _sha256File(dest);
+
+      // Verification is best-effort: a release without a manifest reports
+      // "not verified" (null) rather than blocking the user.
+      let verified = null;
+      if (manifestUrl) {
+        try {
+          const mres = await fetch(manifestUrl, { headers: { 'User-Agent': 'Orbit/' + app.getVersion() } });
+          if (mres.ok) {
+            const expected = _manifestHash(await mres.text(), name);
+            if (expected) verified = (expected === sha256);
+          }
+        } catch (e) { /* manifest is optional */ }
+      }
+
+      if (verified === false) {
+        // Never leave a file we know is wrong where it can be run by hand.
+        try { fs.unlinkSync(dest); } catch (e) { /* ignore */ }
+        return { ok: false, error: 'checksum mismatch', sha256 };
+      }
+
+      _downloadedFiles.add(dest);
+      return { ok: true, path: dest, name, size: received, sha256, verified };
+    } catch (e) {
+      try { fs.rmSync(part, { force: true }); } catch (e2) { /* ignore */ }
+      if (e && (e.name === 'AbortError' || e.code === 'ABORT_ERR')) return { ok: false, cancelled: true };
+      return { ok: false, error: String((e && e.message) || e) };
+    } finally {
+      _activeDownload = null;
+    }
+  });
+
+  ipcMain.on('update-download-cancel', () => {
+    if (_activeDownload) {
+      try { _activeDownload.controller.abort(); } catch (e) { /* ignore */ }
+    }
+  });
+
+  // Only a file this process downloaded may be opened or revealed, so a
+  // compromised renderer cannot use these as a general "run anything" primitive.
+  ipcMain.handle('update-open-file', async (event, file) => {
+    if (typeof file !== 'string' || !_downloadedFiles.has(file)) {
+      return { ok: false, error: 'not a downloaded file' };
+    }
+    const err = await shell.openPath(file);
+    return err ? { ok: false, error: err } : { ok: true };
+  });
+
+  ipcMain.handle('update-reveal-file', (event, file) => {
+    if (typeof file !== 'string' || !_downloadedFiles.has(file)) {
+      return { ok: false, error: 'not a downloaded file' };
+    }
+    shell.showItemInFolder(file);
+    return { ok: true };
+  });
+
   // Tray Setup
   const iconPath = path.join(__dirname, 'src/icons/app/orbit.ico');
   const icon = nativeImage.createFromPath(iconPath);

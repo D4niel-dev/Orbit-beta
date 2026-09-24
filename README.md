@@ -881,6 +881,12 @@ sha256sum --check SHA256SUMS.txt --ignore-missing
 
 The `--ignore-missing` flag skips checks for files you didn't download, so you can verify a single artifact without downloading everything.
 
+> **Desktop shortcut:** since v0.6.5-beta the desktop app does step 4 for you. When it downloads an
+> update it checks the file against the release's published `SHA256SUMS.txt` and reports
+> *Checksum verified* before offering **Open installer** — and deletes the file if it does not
+> match. It does not check the GPG signature, so steps 1–3 above are still worth doing if you want
+> to confirm provenance rather than just integrity.
+
 The public key is also available in the [security/](security/) directory of this repository.
 
 ## Configuration

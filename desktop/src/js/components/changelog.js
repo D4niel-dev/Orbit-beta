@@ -15,11 +15,14 @@ window.Changelog = {
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
         versionBlock('0.6.5-beta', 'Latest', [
+          ['Updates', [
+            'Orbit downloads the update for you now. Instead of handing the installer to your browser, it fetches it into your Downloads folder, shows progress (with a cancel), checks it against the checksum published with the release, and then offers Open installer or Show in folder. If the file does not match the published checksum it is deleted rather than left on your disk. Nothing installs itself \u2014 these are unsigned builds, so you still run the installer \u2014 and the update notice also picks the right file for your machine now (an Intel Mac used to be offered the Apple-silicon build).'
+          ]],
           ['Audio & Video', [
             'A playing player no longer escapes its message when you switch chats. If you left a chat mid-playback, the player was dumped into whatever chat you opened next as a bare block outside any bubble \u2014 and it could never find its way back to its own message, in any chat. It stays with its message now and picks up where it left off when you return.'
           ]],
           ['Platform Note', [
-            'Everything else in this release is mobile: a close button and a draggable body for the /help sheet, and a grab handle with swipe-to-dismiss on the emoji picker. Nothing else to try on desktop.'
+            'The rest of this release is mobile: a close button and a draggable body for the /help sheet, and a grab handle with swipe-to-dismiss on the emoji picker.'
           ]],
           ['Technical', [
             'Version: Bumped to v0.6.5-beta.'

@@ -127,7 +127,7 @@ test.describe('update notice', () => {
     await expect(page.locator('#update-notice-card')).toHaveCount(0);
   });
 
-  test('Download hands the platform installer to the browser and closes up', async () => {
+  test('Download takes the in-app path, and a failure offers the browser fallback', async () => {
     await triggerCheck(page);
     await page.click('#update-card-open');
     await expect(page.locator('#update-notice-modal')).toBeVisible();
@@ -136,10 +136,36 @@ test.describe('update notice', () => {
     await expect(page.locator('#update-modal-download')).toContainText('Download for Windows');
     await page.click('#update-modal-download');
 
+    // The in-app downloader takes over: a progress area appears and nothing is
+    // handed to a browser yet.
+    await expect(page.locator('#update-download-status')).toBeVisible();
+    expect((await page.evaluate(() => window.__openedUrls)).length).toBe(0);
+
+    // The fixture's asset URL is not a real release file, so the download fails
+    // fast and the button becomes the browser fallback — which must then work.
+    await expect(page.locator('#update-modal-download')).toContainText('Open in browser');
+    await page.click('#update-modal-download');
+
     const opened = await page.evaluate(() => window.__openedUrls);
     expect(opened.length).toBe(1);
     expect(opened[0]).toMatch(/Orbit-Setup\.exe$/);
+  });
 
+  test('with no asset for this platform, Download opens the release page', async () => {
+    // No .exe in the asset list, so win32 has nothing to fetch in-app: the
+    // button must fall back to the release page. (Deleting orbitAPI.downloadUpdate
+    // is not an option — contextBridge objects are frozen.)
+    const noExe = fakeRelease(NEW_VERSION);
+    noExe.assets = noExe.assets.filter(a => !/\.exe$/i.test(a.name));
+    await triggerCheck(page, { release: noExe });
+    await page.click('#update-card-open');
+
+    await expect(page.locator('#update-modal-download')).toContainText('Open release page');
+    await page.click('#update-modal-download');
+
+    const opened = await page.evaluate(() => window.__openedUrls);
+    expect(opened.length).toBe(1);
+    expect(opened[0]).toContain('/releases/tag/v' + NEW_VERSION);
     await expect(page.locator('#update-notice-modal')).toHaveCount(0);
     await expect(page.locator('#update-notice-card')).toHaveCount(0);
   });
