@@ -4071,13 +4071,26 @@ textarea#chat-input {
 
 /* ─── Emoji Picker ─── */
 #emoji-picker-container emoji-picker {
-  --emoji-picker-background: var(--bg-surface);
-  --emoji-picker-border: var(--border-subtle);
-  --emoji-picker-text: var(--text-primary);
-  --emoji-picker-muted: var(--text-muted);
-  --emoji-picker-search-background: var(--bg-base);
-  --emoji-picker-search-border: var(--border-subtle);
-  --emoji-picker-search-text: var(--text-primary);
+  /* emoji-picker-element reads these UNPREFIXED names. The --emoji-picker-* set
+     that used to live here was never read by the library at all, so the picker
+     had been rendering its own defaults the whole time: a #444 hairline around
+     the panel and a 2px white box on whichever emoji held focus — the stray
+     outline. Values map onto the app theme now. */
+  --background: var(--bg-surface);
+  --border-size: 0;            /* the library's own hairline outline */
+  --border-radius: 0;          /* the container already rounds the top corners */
+  --indicator-color: var(--accent-primary);
+  --indicator-height: 2px;
+  --input-border-color: var(--border-subtle);
+  --input-font-color: var(--text-primary);
+  --input-placeholder-color: var(--text-muted);
+  --category-font-color: var(--text-muted);
+  --button-hover-background: var(--bg-hover);
+  --button-active-background: var(--border-subtle);
+  /* No focus ring: the library draws it on :focus (not :focus-visible), so it
+     fires on touch too and reads as a stray rectangle on a phone. Themed
+     hover/active backgrounds carry the feedback instead. */
+  --outline-size: 0;
   width: 100%;
   /* Capped against the VISIBLE height (set from visualViewport when the picker
      opens), not a flat 320px: the flat value took most of a short screen and,

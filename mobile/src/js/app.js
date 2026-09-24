@@ -6551,7 +6551,37 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button id="changelog-close-mobile" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;font-size:20px;">✕</button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
-        vBlock('0.6.3-beta', 'Latest', [
+        vBlock('0.6.5-beta', 'Latest', [
+          ['Audio', [
+            'Audio no longer jumps out of its bubble. If you were playing a voice note and left the chat, the player used to reappear as a bare block in whatever chat you opened next \u2014 and it could not find its way home after that. It stays with its message now and carries on where it left off when you come back.'
+          ]],
+          ['Chat Commands', [
+            'The /help list has a close button at the top, can be dragged down to dismiss, and shows that there are more commands below the fold instead of just stopping.'
+          ]],
+          ['Emoji', [
+            'The emoji picker has a header with a close button and swipes down to dismiss. It remembers your skin tone between launches, fits better on shorter screens, and the stray outline around the grid is gone.'
+          ]],
+          ['Technical', [
+            'Version: Bumped to v0.6.5-beta.'
+          ]]
+        ]) +
+        vBlock('0.6.4-beta', '', [
+          ['Audio', [
+            'The audio player draws the track\u2019s real waveform now \u2014 not a decorative row of bars. It is read from the file itself and cached, so it never costs you anything twice.',
+            'The file name sits above the timer, and the speaker icon at the end of the progress bar is also a level meter: crossed out when muted or at 0%, one wave up to half, two waves above it. Tap it for the volume slider.',
+            'The \u22ee menu carries more: loop, visualiser (bars, wave, or off), elapsed or remaining time, playback speed, and copy file name.'
+          ]],
+          ['Onboarding', [
+            'The empty chat panel now shows a short tour of what Orbit actually does \u2014 no server, encrypted, files and calls, groups, local-first storage, themes. Swipe through it or press Done to skip; it remembers where you were.'
+          ]],
+          ['Fixed', [
+            'An unplayed audio message was a large blank box. It shows the track\u2019s real waveform now.'
+          ]],
+          ['Technical', [
+            'Version: Bumped to v0.6.4-beta.'
+          ]]
+        ]) +
+        vBlock('0.6.3-beta', '', [
           ['File Transfer', [
             'Sending a file works now. The pieces of a file could reach the other side before the note that explains them, which is what made transfers stall or arrive broken.',
             'Attachments are also more resilient: a transfer that gets interrupted can carry on from where it stopped.'

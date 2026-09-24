@@ -14,7 +14,18 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.6.4-beta', 'Latest', [
+        versionBlock('0.6.5-beta', 'Latest', [
+          ['Audio & Video', [
+            'A playing player no longer escapes its message when you switch chats. If you left a chat mid-playback, the player was dumped into whatever chat you opened next as a bare block outside any bubble \u2014 and it could never find its way back to its own message, in any chat. It stays with its message now and picks up where it left off when you return.'
+          ]],
+          ['Platform Note', [
+            'Everything else in this release is mobile: a close button and a draggable body for the /help sheet, and a proper header on the emoji picker. Nothing else to try on desktop.'
+          ]],
+          ['Technical', [
+            'Version: Bumped to v0.6.5-beta.'
+          ]]
+        ]) +
+        versionBlock('0.6.4-beta', '', [
           ['Audio', [
             'The audio visualiser now draws the track\u2019s real waveform \u2014 fetched and decoded once per file, cached so re-renders never re-decode. Oversized files fall back to a flat row. The \u2630 menu lets you switch between Bars, Wave, and Off; "Off" used to show nothing and now shows the same decoded shape.',
             'The file name sits above the timer, with the volume icon at the right end of the progress bar. Click the icon for a slider popover; click outside or finish dragging to dismiss it. The icon doubles as a level meter: crossed out when muted or at 0%, one wave at 1\u201350%, two waves above 50%.'
