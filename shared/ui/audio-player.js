@@ -99,8 +99,21 @@
   // Desktop renders the message feed as #chat-message-feed, mobile as
   // #message-feed. Resolve both — hardcoding the desktop id silently broke
   // playback restoration on mobile.
-  function _feedEl() {
-    return document.getElementById('chat-message-feed') || document.getElementById('message-feed');
+  // A player whose message row is not in the current feed — the user switched
+  // chats mid-playback — is parked in a hidden but still-connected container.
+  // Detaching the element pauses it, and appending it to the feed (which is what
+  // this used to do) painted a stray full-width player outside any bubble, in
+  // whatever chat happened to be open. The next render offers parked players to
+  // restorePlaying() again, so they re-attach when their row comes back.
+  var _holding = null;
+  function _park(p) {
+    if (!_holding || !_holding.isConnected) {
+      _holding = document.createElement('div');
+      _holding.id = 'oap-holding';
+      _holding.style.display = 'none';
+      document.body.appendChild(_holding);
+    }
+    _holding.appendChild(p._w);
   }
 
   // Removing a media element from the document pauses it, so a player that was
@@ -941,8 +954,13 @@
       for (var i = _players.length - 1; i >= 0; i--) {
         if (_players[i]._a && !_players[i]._a.paused) {
           var p = _players.splice(i, 1)[0];
+          // Only re-read the row while the wrapper is actually inside one. A
+          // parked player has no .message-row ancestor, and overwriting _msgId
+          // with null there is what used to lose the association for good: the
+          // player could then never find its row again and stayed a stray block
+          // in the feed for the rest of its life.
           var row = p._w.parentElement ? p._w.closest('.message-row') : null;
-          p._msgId = row ? row.getAttribute('data-msg-id') : null;
+          if (row) p._msgId = row.getAttribute('data-msg-id');
           p._w.remove();
           saved.push(p);
         }
@@ -951,10 +969,9 @@
     },
     restorePlaying: function(saved) {
       if (!saved || !saved.length) return;
-      var feed = _feedEl();
       saved.forEach(function(p) {
-        // Look the row up document-wide instead of via the feed element, so this
-        // works whichever id the platform gave the feed.
+        // Look the row up document-wide rather than through the feed element, so
+        // this works whichever id the platform gave the feed.
         var row = null;
         if (p._msgId) {
           try { row = document.querySelector('.message-row[data-msg-id="' + p._msgId + '"]'); } catch (e) { row = null; }
@@ -976,8 +993,8 @@
             return;
           }
         }
-        // Nothing to re-attach to. Only park it in the feed if there is one.
-        if (feed) feed.appendChild(p._w);
+        // Not this chat, or the row is not rendered yet. Park it hidden.
+        _park(p);
         _players.push(p);
         _resumeAfterReattach(p);
       });
