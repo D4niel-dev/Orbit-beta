@@ -19,7 +19,7 @@ window.Changelog = {
             'A playing player no longer escapes its message when you switch chats. If you left a chat mid-playback, the player was dumped into whatever chat you opened next as a bare block outside any bubble \u2014 and it could never find its way back to its own message, in any chat. It stays with its message now and picks up where it left off when you return.'
           ]],
           ['Platform Note', [
-            'Everything else in this release is mobile: a close button and a draggable body for the /help sheet, and a proper header on the emoji picker. Nothing else to try on desktop.'
+            'Everything else in this release is mobile: a close button and a draggable body for the /help sheet, and a grab handle with swipe-to-dismiss on the emoji picker. Nothing else to try on desktop.'
           ]],
           ['Technical', [
             'Version: Bumped to v0.6.5-beta.'

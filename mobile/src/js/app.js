@@ -4239,17 +4239,13 @@ document.addEventListener('DOMContentLoaded', function() {
     var container = document.getElementById('emoji-picker-container');
     if (!container) return;
 
-    // Header: the same grab handle and close button the bottom sheets use. The
-    // panel used to have no dismiss affordance of its own — the only ways out
-    // were the composer's emoji button and a tap on the chat behind it.
+    // Header: just the grab handle. Dismissal is by tapping outside (the
+    // document-level listener below) or swiping the handle down — Dan asked for
+    // the close button to go rather than have two ways out of the same panel.
     var header = document.createElement('div');
     header.className = 'emoji-picker-header';
-    header.innerHTML = '<div class="bottom-sheet-handle"></div>' +
-      '<button class="emoji-picker-close" type="button" aria-label="Close">' +
-      '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>' +
-      '</button>';
+    header.innerHTML = '<div class="bottom-sheet-handle"></div>';
     container.appendChild(header);
-    header.querySelector('.emoji-picker-close').addEventListener('click', closeEmojiPicker);
 
     var picker = document.createElement('emoji-picker');
 
@@ -6559,7 +6555,7 @@ document.addEventListener('DOMContentLoaded', function() {
             'The /help list has a close button at the top, can be dragged down to dismiss, and shows that there are more commands below the fold instead of just stopping.'
           ]],
           ['Emoji', [
-            'The emoji picker has a header with a close button and swipes down to dismiss. It remembers your skin tone between launches, fits better on shorter screens, and the stray outline around the grid is gone.'
+            'The emoji picker has a grab handle and swipes down to dismiss; tapping outside it closes it too. It remembers your skin tone between launches, fits better on shorter screens, and the stray outline around the grid is gone.'
           ]],
           ['Technical', [
             'Version: Bumped to v0.6.5-beta.'

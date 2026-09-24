@@ -4099,44 +4099,27 @@ textarea#chat-input {
   height: min(320px, calc(var(--emoji-picker-vh, 100vh) * 0.42));
 }
 
-/* Header strip: the same grab handle + close button the bottom sheets use, so
-   the picker has its own visible way out and the same swipe-down gesture.
-   Needs a REAL height (44px), not just the handle's: at 12px the 32px button
-   hung 24px below the strip, and the picker element — a later sibling with a
-   painted background — covered it, which is why the X was invisible. */
+/* Header strip: just the grab handle. The picker is dismissed by tapping
+   outside it or swiping the handle down, so there is no close button here.
+   The strip is deliberately short — with the button gone there is no absolutely
+   positioned child that could overflow it. */
 .emoji-picker-header {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 44px;
+  height: 20px;
   flex-shrink: 0;
   background: var(--bg-surface);
   border-radius: 16px 16px 0 0;
 }
+/* Bigger touch target than the 36x4 bar looks: the padding is part of the
+   element but not of the paint, so the handle is still the thing you see while
+   the grabbable area is 20px tall. It is the only in-panel way to dismiss now. */
 .emoji-picker-header .bottom-sheet-handle {
   margin: 0;
-}
-.emoji-picker-close {
-  position: absolute;
-  top: 6px;
-  right: 10px;
-  /* Above the picker below, independent of the header's height. */
-  z-index: 2;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 50%;
-  background: var(--bg-hover);
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-.emoji-picker-close:active {
-  background: var(--border-subtle);
+  padding: 8px 0;
+  background-clip: content-box;
 }
 
 /* ─── Status Dot Integration ─── */
