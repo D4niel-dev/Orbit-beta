@@ -391,13 +391,25 @@ var OrbitSheet = {
    Sheets that contain their own inputs (the /poll builder, folder rename, …)
    re-open the keyboard as soon as the user taps a field, which would cover the
    sheet again. Re-sync on every visualViewport change while a sheet is open. */
+function _resyncWhileOpen() {
+  var overlay = document.getElementById('bottom-sheet-overlay');
+  if (overlay && overlay.classList.contains('active')) OrbitSheet._syncViewport();
+  // Rotating or the keyboard opening changes what fits, so re-evaluate the
+  // "more below" fade too.
+  OrbitSheet._syncScrollHint();
+}
+
+// Both events, because they are not interchangeable on Android. Input-less sheets
+// are sized from the layout viewport (`innerHeight`, see _syncViewport), and that
+// can change with no visualViewport resize at all — which is the same class of
+// unreliability that left /help stuck at a keyboard-sized height. The settle
+// timers only cover the first 1.5s after opening, so without this a keyboard that
+// hides later would leave the sheet short until it was reopened.
+window.addEventListener('resize', _resyncWhileOpen);
+
 if (window.visualViewport) {
   window.visualViewport.addEventListener('resize', function () {
-    var overlay = document.getElementById('bottom-sheet-overlay');
-    if (overlay && overlay.classList.contains('active')) OrbitSheet._syncViewport();
-    // Rotating or the keyboard opening changes what fits, so re-evaluate the
-    // "more below" fade too.
-    OrbitSheet._syncScrollHint();
+    _resyncWhileOpen();
   });
 }
 
