@@ -580,7 +580,7 @@ var OrbitHome = {
     
     var friends = MStore.friends || [];
     if (friends.length === 0) {
-      container.innerHTML = '<div class="empty-state"><i data-lucide="users"></i><div class="empty-state-text">No friends yet</div><div class="empty-state-sub">Add friends by scanning QR or entering their IP</div></div>';
+      container.innerHTML = '<div class="empty-state"><i data-lucide="users-round"></i><div class="empty-state-text">No friends yet</div><div class="empty-state-sub">Add friends by scanning QR or entering their IP</div></div>';
       return;
     }
     
@@ -664,8 +664,8 @@ var OrbitHome = {
   showQuickSheet: function() {
     if (typeof OrbitSheet === 'undefined') return;
     OrbitSheet.show([
-      { icon: 'users', label: 'New Group', subtext: 'Create or join a group', action: 'new-group' },
-      { icon: 'user-plus', label: 'Add Contact', subtext: 'Connect with a friend', action: 'add-contact' },
+      { icon: 'users-round', label: 'New Group', subtext: 'Create or join a group', action: 'new-group' },
+      { icon: 'user-round-plus', label: 'Add Contact', subtext: 'Connect with a friend', action: 'add-contact' },
       { icon: 'scan-qr-code', label: 'Scan QR', subtext: 'Scan a QR code to connect', action: 'scan-qr' }
     ]);
     OrbitSheet._callbacks = {
@@ -838,7 +838,7 @@ var OrbitHome = {
       var ownerId = grp.ownerId || grp.owner || (grp.creator && grp.creator.id);
       var isOwner = !!ownerId && String(ownerId) === String(MStore.user ? MStore.user.id : '');
 
-      items.push({ icon: 'users', label: 'Group Info', action: 'group_info' });
+      items.push({ icon: 'users-round', label: 'Group Info', action: 'group_info' });
       items.push({ icon: 'check-check', label: 'Mark as Read', action: 'group_mark_read' });
       items.push({ icon: isMuted ? 'bell' : 'bell-off', label: isMuted ? 'Unmute Notifications' : 'Mute Notifications', action: 'group_mute' });
       items.push({ icon: isPinned ? 'pin-off' : 'pin', label: isPinned ? 'Unpin Chat' : 'Pin Chat', action: 'group_pin' });

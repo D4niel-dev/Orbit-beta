@@ -1275,7 +1275,7 @@ window.SettingsModal = {
         // Section: Group Notifications
         '<div class="settings-collapsible" style="margin-bottom:12px;border-radius:10px;border:1px solid var(--border-subtle);overflow:hidden;">' +
           '<div class="collapsible-header" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--bg-base);cursor:pointer;user-select:none;" onclick="var b=this.nextElementSibling;var i=this.querySelector(\'.collapse-icon\');if(b.style.display===\'none\'){b.style.display=\'block\';i.style.transform=\'rotate(0deg)\'}else{b.style.display=\'none\';i.style.transform=\'rotate(-90deg)\'}">' +
-            '<div style="display:flex;align-items:center;gap:8px;"><i data-lucide="users" style="width:16px;height:16px;color:var(--text-muted);"></i><span style="font-size:13px;font-weight:600;color:var(--text-primary);">Groups</span></div>' +
+            '<div style="display:flex;align-items:center;gap:8px;"><i data-lucide="users-round" style="width:16px;height:16px;color:var(--text-muted);"></i><span style="font-size:13px;font-weight:600;color:var(--text-primary);">Groups</span></div>' +
             '<i data-lucide="chevron-down" class="collapse-icon" style="width:16px;height:16px;color:var(--text-muted);transition:transform 0.2s;"></i>' +
           '</div>' +
           '<div class="collapsible-body" style="display:none;">' +
@@ -1573,7 +1573,7 @@ window.SettingsModal = {
         // Section: Experimental Features
         '<div class="settings-collapsible" style="margin-bottom:12px;border-radius:10px;border:1px solid var(--border-subtle);overflow:hidden;">' +
           '<div class="collapsible-header" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--bg-base);cursor:pointer;user-select:none;" onclick="var b=this.nextElementSibling;var i=this.querySelector(\'.collapse-icon\');if(b.style.display===\'none\'){b.style.display=\'block\';i.style.transform=\'rotate(0deg)\'}else{b.style.display=\'none\';i.style.transform=\'rotate(-90deg)\'}">' +
-            '<div style="display:flex;align-items:center;gap:8px;"><i data-lucide="flask-conical" style="width:16px;height:16px;color:var(--text-muted);"></i><span style="font-size:13px;font-weight:600;color:var(--text-primary);">Experimental Features</span></div>' +
+            '<div style="display:flex;align-items:center;gap:8px;"><i data-lucide="flask-round" style="width:16px;height:16px;color:var(--text-muted);"></i><span style="font-size:13px;font-weight:600;color:var(--text-primary);">Experimental Features</span></div>' +
             '<i data-lucide="chevron-down" class="collapse-icon" style="width:16px;height:16px;color:var(--text-muted);transition:transform 0.2s;"></i>' +
           '</div>' +
           '<div class="collapsible-body" style="display:' + (s.devMode ? 'block' : 'none') + ';">' +

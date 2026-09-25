@@ -732,7 +732,7 @@ window.ChatPanel = {
     var headerFrame = window.Frames ? window.Frames.getFrameForUser(activeFriend.userId) : 0;
     var headerAvatarInner = activeFriend.avatar
       ? '<img src="' + window.Sanitize.escapeHtml(activeFriend.avatar) + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">'
-      : '<i data-lucide="user"></i>';
+      : '<i data-lucide="user-round"></i>';
     var headerAvatarContainer = '<div style="position:relative;display:flex;align-items:center;justify-content:center;width:100%;height:100%;">' +
       headerAvatarInner +
       (headerFrame ? '<img src="icons/frames/pfp_frame_' + headerFrame + '.png" style="position:absolute;top:-14%;left:-14%;width:122%;height:122%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '') +
@@ -1043,7 +1043,7 @@ window.ChatPanel = {
         var myFrame = window.Frames.getFrameForUser(state.currentUser.userId);
         const myAvatarImg = state.currentUser.avatar
           ? '<img src="' + window.Sanitize.escapeHtml(state.currentUser.avatar) + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">'
-          : '<i data-lucide="user" style="width:14px;"></i>';
+          : '<i data-lucide="user-round" style="width:14px;"></i>';
         var myAvatarContainer = '<div style="position:relative;display:inline-block;">' + myAvatarImg + (myFrame ? '<img src="icons/frames/pfp_frame_' + myFrame + '.png" style="position:absolute;top:-14%;left:-14%;width:122%;height:122%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '') + '</div>';
         const senderName = '';
         // Check if message has been read
@@ -1094,7 +1094,7 @@ window.ChatPanel = {
         var senderFrame = window.Frames.getFrameForUser(msg.sender);
         var avatarImg = senderAvatar
           ? '<img src="' + window.Sanitize.escapeHtml(senderAvatar) + '" style="width:100%;height:100%;border-radius:50%;">'
-          : '<i data-lucide="user" style="width:14px;"></i>';
+          : '<i data-lucide="user-round" style="width:14px;"></i>';
         var otherAvatarContainer = '<div style="position:relative;display:inline-block;">' + avatarImg + (senderFrame ? '<img src="icons/frames/pfp_frame_' + senderFrame + '.png" style="position:absolute;top:-14%;left:-14%;width:122%;height:122%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '') + '</div>';
         messagesHtml += '<div class="message-row" data-msg-id="' + msg.id + '"' + _animAttr + ' data-debug="MsgID: ' + msg.id + ' Sender: ' + window.Sanitize.escapeHtml(msg.sender) + ' TS: ' + msg.timestamp + '" style="display:flex; margin-bottom: var(--spacing-md);">' +
           '<div class="avatar avatar-sm msg-avatar" data-user-id="' + msg.sender + '" style="margin-right: var(--spacing-sm); margin-top: 4px; flex-shrink: 0; cursor:pointer;' + (showAvatars ? '' : 'display:none;') + '">' + otherAvatarContainer + '</div>' +
@@ -1128,7 +1128,7 @@ window.ChatPanel = {
         '</div>';
       } else if (isGroup) {
         messagesHtml = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-muted);text-align:center;gap:8px;padding:40px;">' +
-          '<i data-lucide="users" style="width:40px;height:40px;opacity:0.3;"></i>' +
+          '<i data-lucide="users-round" style="width:40px;height:40px;opacity:0.3;"></i>' +
           '<div style="font-size:15px;font-weight:500;color:var(--text-secondary);">Welcome to ' + window.Sanitize.escapeHtml(activeGroup.groupName) + '</div>' +
           '<div style="font-size:13px;">Send the first message to the group</div>' +
         '</div>';
@@ -2500,7 +2500,7 @@ window.ChatPanel = {
       var avatarHtml = c.avatar
         ? '<img src="' + window.Sanitize.escapeHtml(c.avatar) + '" style="width:36px;height:36px;border-radius:' + (c.type === 'group' ? '10px' : '50%') + ';object-fit:cover;">'
         : '<div style="width:36px;height:36px;border-radius:' + (c.type === 'group' ? '10px' : '50%') + ';background:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-weight:700;color:white;font-size:14px;">' + initial + '</div>';
-      var typeIcon = c.type === 'group' ? '<i data-lucide="users" style="width:12px;height:12px;"></i>' : '<i data-lucide="user" style="width:12px;height:12px;"></i>';
+      var typeIcon = c.type === 'group' ? '<i data-lucide="users-round" style="width:12px;height:12px;"></i>' : '<i data-lucide="user-round" style="width:12px;height:12px;"></i>';
       contactListHtml += '<div class="forward-contact-row" data-contact-id="' + window.Sanitize.escapeHtml(c.id) + '" data-contact-type="' + c.type + '" style="display:flex;align-items:center;gap:12px;padding:10px 16px;cursor:pointer;border-radius:8px;transition:background 0.15s;">' +
         avatarHtml +
         '<div style="flex:1;min-width:0;">' +
@@ -3899,7 +3899,7 @@ window.ChatPanel = {
               var nameEsc = window.Sanitize ? window.Sanitize.escapeHtml(m.username || m.userId || 'Unknown') : (m.username || m.userId);
               var tagEsc = m.usertag ? (window.Sanitize ? window.Sanitize.escapeHtml(m.usertag) : m.usertag) : '';
               html += '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border-subtle);">' +
-                '<div style="width:32px;height:32px;border-radius:50%;background:var(--bg-hover);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;">' + (m.avatar ? '<img src="' + (window.Sanitize ? window.Sanitize.escapeHtml(m.avatar) : m.avatar) + '" style="width:100%;height:100%;object-fit:cover;">' : '<i data-lucide="user" style="width:16px;height:16px;color:var(--text-muted);"></i>') + '</div>' +
+                '<div style="width:32px;height:32px;border-radius:50%;background:var(--bg-hover);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;">' + (m.avatar ? '<img src="' + (window.Sanitize ? window.Sanitize.escapeHtml(m.avatar) : m.avatar) + '" style="width:100%;height:100%;object-fit:cover;">' : '<i data-lucide="user-round" style="width:16px;height:16px;color:var(--text-muted);"></i>') + '</div>' +
                 '<div style="flex:1;min-width:0;">' +
                   '<div style="display:flex;align-items:center;gap:6px;"><span style="font-size:13px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + nameEsc + (isSelf ? ' (you)' : '') + '</span>' + onlineDot + '</div>' +
                   (tagEsc ? '<div style="font-size:11px;color:var(--text-muted);">@' + tagEsc + '</div>' : '') +

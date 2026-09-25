@@ -32,7 +32,7 @@ window.SidebarLeft = {
     const profileBtn = this.container.querySelector('#btn-profile');
     if (!profileBtn) return;
     var frame = window.Frames.getFrameForUser(user ? user.userId : null);
-    const avatarImg = user && user.avatar ? '<img src="' + window.Sanitize.escapeHtml(user.avatar) + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">' : '<i data-lucide="user"></i>';
+    const avatarImg = user && user.avatar ? '<img src="' + window.Sanitize.escapeHtml(user.avatar) + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">' : '<i data-lucide="user-round"></i>';
     var frameHtml = frame ? '<img src="icons/frames/pfp_frame_' + frame + '.png" style="position:absolute;top:-14%;left:-14%;width:122%;height:122%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '';
     profileBtn.innerHTML = '<div class="avatar avatar-md" style="position:relative;width:40px;height:40px;">' + avatarImg + frameHtml + '<div class="status-indicator ' + (user ? user.status : 'online') + '"></div></div>';
     lucide.createIcons({ root: profileBtn });
@@ -75,7 +75,7 @@ window.SidebarLeft = {
         </button>
         <button class="icon-btn" id="btn-profile" title="Profile">
           <div class="avatar avatar-md">
-            <i data-lucide="user"></i>
+            <i data-lucide="user-round"></i>
           </div>
           <div class="status-indicator online"></div>
         </button>

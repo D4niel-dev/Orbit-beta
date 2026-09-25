@@ -35,7 +35,7 @@ var OrbitChat = {
         membersBtn = document.createElement('button');
         membersBtn.id = 'btn-chat-members';
         membersBtn.title = 'Members';
-        membersBtn.innerHTML = '<i data-lucide="users"></i>';
+        membersBtn.innerHTML = '<i data-lucide="users-round"></i>';
         galleryBtn.parentNode.insertBefore(membersBtn, moreBtn);
         membersBtn.addEventListener('click', function() { if (window.showGroupInfo) window.showGroupInfo(chatId); });
         if (window.lucide) lucide.createIcons();

@@ -35,7 +35,7 @@
       body: 'Start a voice or video call, or hold the mic and send a voice note. Group calls work across desktop peers.'
     },
     {
-      icon: 'users',
+      icon: 'users-round',
       title: 'Groups that stay private',
       body: 'Make a group, invite people with a code, and give each member a role. Group messages are encrypted pairwise, so there is no shared secret to leak.'
     },

@@ -55,7 +55,7 @@ window.AccountSwitcher = {
     var curFrame = currentUser && currentUser.profileFrame || 0;
     var curAvatar = currentUser && currentUser.avatar
       ? '<img src="' + window.Sanitize.escapeHtml(currentUser.avatar) + '" style="width:36px;height:36px;border-radius:50%;object-fit:cover;">'
-      : '<i data-lucide="user" style="width:18px;height:18px;"></i>';
+      : '<i data-lucide="user-round" style="width:18px;height:18px;"></i>';
     html += '<div style="padding:16px 16px 12px;border-bottom:1px solid var(--border-subtle);">' +
       '<div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Current Account</div>' +
       '<div style="display:flex;align-items:center;gap:12px;">' +
@@ -78,7 +78,7 @@ window.AccountSwitcher = {
         var accFrame = acc.profileFrame || 0;
         var accAvatar = acc.avatar
           ? '<img src="' + window.Sanitize.escapeHtml(acc.avatar) + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover;">'
-          : '<i data-lucide="user" style="width:16px;height:16px;"></i>';
+          : '<i data-lucide="user-round" style="width:16px;height:16px;"></i>';
         var userId = acc.userId;
         html += '<div class="as-account-row" data-user-id="' + window.Sanitize.escapeHtml(userId) + '" style="display:flex;align-items:center;gap:10px;padding:8px 16px;cursor:pointer;transition:background 0.15s;border-radius:0;">' +
           '<div style="position:relative;width:32px;height:32px;flex-shrink:0;">' + accAvatar + frameHtml(accFrame) + '</div>' +

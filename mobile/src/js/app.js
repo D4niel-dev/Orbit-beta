@@ -711,7 +711,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Groups section (only when showing groups tab)
     if (window._activeHomeTab === 'groups' && grpChats.length > 0) {
-      html += '<div class="chat-section-header"><i data-lucide="users" style="width:14px;height:14px;"></i> Groups</div>';
+      html += '<div class="chat-section-header"><i data-lucide="users-round" style="width:14px;height:14px;"></i> Groups</div>';
       html += '<div>';
       grpChats.forEach(function(c) { html += renderChatRow(c, true); });
       html += '</div>';
@@ -882,7 +882,7 @@ document.addEventListener('DOMContentLoaded', function() {
         membersBtn = document.createElement('button');
         membersBtn.id = 'btn-chat-members';
         membersBtn.title = 'Members';
-        membersBtn.innerHTML = '<i data-lucide="users"></i>';
+        membersBtn.innerHTML = '<i data-lucide="users-round"></i>';
         galleryBtn.parentNode.insertBefore(membersBtn, moreBtn);
         membersBtn.addEventListener('click', function() { showGroupInfo(); });
         renderLucide({ root: membersBtn });
@@ -4686,7 +4686,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (filtered.length === 0) {
       container.innerHTML =
-        '<div class="empty-state"><i data-lucide="users"></i>' +
+        '<div class="empty-state"><i data-lucide="users-round"></i>' +
         '<div class="empty-state-text">' + (friendsSearchFilter ? 'No matching friends' : 'No friends yet') + '</div>' +
         '<div class="empty-state-sub">' + (friendsSearchFilter ? 'Try a different search' : 'Friends will appear here when discovered on your network') + '</div></div>';
       renderLucide({ root: container });
@@ -5436,7 +5436,7 @@ document.addEventListener('DOMContentLoaded', function() {
         card('bar-chart-3', 'Bandwidth Limit', 'KB/s (0 = unlimited)',
           '<input type="number" class="settings-input" id="net-bandwidth" value="' + (s.netBandwidthLimit || 0) + '" min="0">') +
         '<div class="settings-item-card" id="row-add-friend" data-search="Add Friend Add a new friend to your network" style="cursor:pointer;">' +
-          '<div class="settings-item-icon"><i data-lucide="user-plus"></i></div>' +
+          '<div class="settings-item-icon"><i data-lucide="user-round-plus"></i></div>' +
           '<div class="settings-item-info">' +
             '<span class="settings-item-title">Add Friend</span>' +
             '<span class="settings-item-desc">Add a new friend to your network</span>' +
@@ -8038,7 +8038,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var callbacks = {};
 
     // View Profile — works for friends and group members (showProfileOverlay resolves both)
-    items.push({ icon: 'user', label: 'View Profile', subtext: u.status || '', action: 'user_view_profile' });
+    items.push({ icon: 'user-round', label: 'View Profile', subtext: u.status || '', action: 'user_view_profile' });
     callbacks['user_view_profile'] = function() {
       if (typeof showProfileOverlay === 'function') showProfileOverlay(u.id);
       else showToast(u.name + ' — ' + (u.status || 'offline'), 'info');
@@ -8072,7 +8072,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Add Friend — only when they are not already a friend
     if (!u.isFriend) {
-      items.push({ icon: 'user-plus', label: 'Add Friend', action: 'user_add_friend' });
+      items.push({ icon: 'user-round-plus', label: 'Add Friend', action: 'user_add_friend' });
       callbacks['user_add_friend'] = function() {
         var peerId = u.id;
         var existing = MStore.friends.find(function(f) { return f.id === peerId || f.peerId === peerId; });
@@ -9177,7 +9177,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!gid) return;
     var group = MStore.groups.find(function(g) { return g.id === gid; });
     if (!group) {
-      container.innerHTML = '<div class="empty-state"><i data-lucide="users"></i><div class="empty-state-text">Not a group</div></div>';
+      container.innerHTML = '<div class="empty-state"><i data-lucide="users-round"></i><div class="empty-state-text">Not a group</div></div>';
       renderLucide({ root: container });
       document.querySelector('#panel-members-overlay .overlay-panel-header h3').textContent = 'Group Info';
       return;
@@ -9360,7 +9360,7 @@ document.addEventListener('DOMContentLoaded', function() {
       '<div class="group-info-card">' +
         '<div class="group-info-members-header">' +
           'Members (' + members.length + ')' +
-          '<button class="group-info-btn" id="btn-group-add-member"><i data-lucide="user-plus" style="width:14px;height:14px;"></i> Add</button>' +
+          '<button class="group-info-btn" id="btn-group-add-member"><i data-lucide="user-round-plus" style="width:14px;height:14px;"></i> Add</button>' +
         '</div>' +
         '<div class="group-info-members-list">' + membersHtml + '</div>' +
       '</div>' +

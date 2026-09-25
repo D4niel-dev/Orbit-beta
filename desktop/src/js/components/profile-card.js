@@ -31,7 +31,7 @@ window.ProfileCard = {
 
     var avatarHtml = user.avatar
       ? '<img src="' + window.Sanitize.escapeHtml(user.avatar) + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">'
-      : '<i data-lucide="user" style="width:40px;height:40px;"></i>';
+      : '<i data-lucide="user-round" style="width:40px;height:40px;"></i>';
 
     var avatarContainerHtml = '<div style="width:80px;height:80px;border-radius:50%;background:var(--bg-surface);border:4px solid var(--bg-surface);position:absolute;top:-40px;display:flex;align-items:center;justify-content:center;overflow:visible;">' +
       avatarHtml +

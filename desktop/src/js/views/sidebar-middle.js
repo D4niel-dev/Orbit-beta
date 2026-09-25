@@ -294,7 +294,7 @@ window.SidebarMiddle = {
             '<div style="flex:1;overflow-y:auto;max-height:224px;padding:0 40px 16px;">' +
               '<div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;padding:8px 0 12px;letter-spacing:0.5px;">Select Members</div>' +
               friendOptions +
-              (friends.length === 0 ? '<div style="display:flex;flex-direction:column;align-items:center;padding:24px 0;color:var(--text-muted);gap:8px;"><i data-lucide="user-x" style="width:28px;height:28px;opacity:0.3;"></i><div style="font-size:13px;">No friends available.</div></div>' : '') +
+              (friends.length === 0 ? '<div style="display:flex;flex-direction:column;align-items:center;padding:24px 0;color:var(--text-muted);gap:8px;"><i data-lucide="user-round-x" style="width:28px;height:28px;opacity:0.3;"></i><div style="font-size:13px;">No friends available.</div></div>' : '') +
             '</div>' +
             '<div style="margin-top:auto;padding:20px 40px 28px;border-top:1px solid var(--border-subtle);display:flex;gap:12px;justify-content:flex-end;background:var(--bg-surface);">' +
               '<button id="btn-cancel-group" style="padding:11px 24px;border-radius:10px;border:1px solid var(--border-subtle);background:transparent;color:var(--text-secondary);cursor:pointer;font-weight:500;flex-shrink:0;">Cancel</button>' +
@@ -630,7 +630,7 @@ window.SidebarMiddle = {
       var frame = window.Frames ? window.Frames.getFrameForUser(f.userId) : null;
       var img = f.avatar
         ? '<img src="' + window.Sanitize.escapeHtml(f.avatar) + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">'
-        : '<i data-lucide="user"></i>';
+        : '<i data-lucide="user-round"></i>';
       return '<div style="position:relative;display:flex;align-items:center;justify-content:center;width:100%;height:100%;">' + img +
         (frame ? '<img src="icons/frames/pfp_frame_' + frame + '.png" style="position:absolute;top:-14%;left:-14%;width:122%;height:122%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '') +
       '</div>';
@@ -659,7 +659,7 @@ window.SidebarMiddle = {
 
       if (rows.length === 0) {
         listEl.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;padding:32px 20px;text-align:center;color:var(--text-muted);gap:10px;">' +
-          '<i data-lucide="users" style="width:34px;height:34px;opacity:0.3;"></i>' +
+          '<i data-lucide="users-round" style="width:34px;height:34px;opacity:0.3;"></i>' +
           '<div style="font-size:13px;">' + (friends.length === 0 ? 'No friends yet' : 'Nobody matches that') + '</div>' +
         '</div>';
         if (window.lucide) lucide.createIcons({ root: listEl });
@@ -761,7 +761,7 @@ window.SidebarMiddle = {
     var headerHtml = '<div style="padding: 0 var(--spacing-md) var(--spacing-sm) var(--spacing-md); display:flex; justify-content:space-between; align-items:center;">' +
       '<span style="font-size: 12px; font-weight:bold; color:var(--text-muted); text-transform:uppercase;">Online (' + onlineFriends.length + ')</span>' +
       '<div style="display:flex;align-items:center;gap:12px;">' +
-        '<button id="btn-all-friends" title="All friends" style="color:var(--text-secondary);cursor:pointer;background:transparent;border:none;padding:0;display:flex;align-items:center;"><i data-lucide="users" style="width:16px;height:16px;"></i></button>' +
+        '<button id="btn-all-friends" title="All friends" style="color:var(--text-secondary);cursor:pointer;background:transparent;border:none;padding:0;display:flex;align-items:center;"><i data-lucide="users-round" style="width:16px;height:16px;"></i></button>' +
         '<button id="btn-add-friend" title="Add a friend" style="color:var(--text-secondary);cursor:pointer;background:transparent;border:none;padding:0;display:flex;align-items:center;"><i data-lucide="plus" style="width:16px;height:16px;"></i></button>' +
       '</div>' +
     '</div>';
@@ -824,7 +824,7 @@ window.SidebarMiddle = {
     var frame = window.Frames.getFrameForUser(friend.userId);
     var avatarImg = friend.avatar
       ? '<img src="' + window.Sanitize.escapeHtml(friend.avatar) + '" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">'
-      : '<i data-lucide="user"></i>';
+      : '<i data-lucide="user-round"></i>';
     var avatarContainer = '<div style="position:relative;display:flex;align-items:center;justify-content:center;width:100%;height:100%;">' + avatarImg + (frame ? '<img src="icons/frames/pfp_frame_' + frame + '.png" style="position:absolute;top:-14%;left:-14%;width:122%;height:122%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '') + '</div>';
 
     var unreadCount = unreadCounts[friend.userId] || 0;
@@ -1701,7 +1701,7 @@ window.SidebarMiddle = {
             { label: (isMuted ? 'Unmute' : 'Mute') + ' Notifications', icon: isMuted ? 'bell' : 'bell-off', onClick: function() {
               window.store.toggleMute(id);
             }},
-            { label: 'View Profile', icon: 'user', onClick: function() {
+            { label: 'View Profile', icon: 'user-round', onClick: function() {
               if (window.ProfileSidebar) window.ProfileSidebar.open(friend);
             }},
             'separator',

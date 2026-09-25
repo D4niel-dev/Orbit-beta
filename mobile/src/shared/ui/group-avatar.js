@@ -83,7 +83,7 @@
     if (infos.length === 0) {
       return '<div style="width:' + size + 'px;height:' + size + 'px;border-radius:12px;' +
         'background:var(--bg-hover);display:flex;align-items:center;justify-content:center;">' +
-        '<i data-lucide="users" style="width:' + Math.round(size * 0.45) + 'px;height:' +
+        '<i data-lucide="users-round" style="width:' + Math.round(size * 0.45) + 'px;height:' +
         Math.round(size * 0.45) + 'px;color:var(--text-muted);"></i></div>';
     }
 
