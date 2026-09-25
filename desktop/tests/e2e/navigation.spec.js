@@ -21,14 +21,12 @@ test.describe('navigation', () => {
     await expect(echoRow.locator('.list-row-title')).toHaveText('Orbit Echo');
   });
 
-  test('switches between Friends and Groups, and Friends opens the directory', async () => {
+  test('switches between Friends and Groups, and the directory is one click away', async () => {
     // DMs view: friends list is rendered.
     await expect(page.locator('#friends-list-container .list-row[data-id="local-echo"]')).toBeVisible();
 
-    // Left-clicking the Friends tab opens the friends directory modal. Located by
-    // data-view: matching on the label is a trap now that "Friends" is a prefix of
-    // other things.
-    await page.locator('.tabs-container .tab[data-view="friends"]').click();
+    // The header's "All friends" button opens the directory.
+    await page.locator('#btn-all-friends').click();
     await expect(page.locator('#all-friends-modal')).toBeVisible();
     await page.locator('#afm-close').click();
     await expect(page.locator('#all-friends-modal')).toHaveCount(0);
@@ -39,10 +37,15 @@ test.describe('navigation', () => {
     await expect(page.locator('#btn-create-group')).toBeVisible();
     await expect(page.locator('#friends-list-container .list-row[data-id="local-echo"]')).toHaveCount(0);
 
-    // Back to Friends tab → friends list again. (The directory opens with it, so
-    // dismiss it before the test ends.)
+    // Back to Friends → the list, and NO modal: a plain tab switch must not demand
+    // a dismissal.
     await page.locator('.tabs-container .tab[data-view="friends"]').click();
     await expect(page.locator('#friends-list-container .list-row[data-id="local-echo"]')).toBeVisible();
+    await expect(page.locator('#all-friends-modal')).toHaveCount(0);
+
+    // Clicking Friends again, now that it is the active tab, opens the directory.
+    await page.locator('.tabs-container .tab[data-view="friends"]').click();
+    await expect(page.locator('#all-friends-modal')).toBeVisible();
     await page.locator('#afm-close').click();
     await expect(page.locator('#all-friends-modal')).toHaveCount(0);
   });

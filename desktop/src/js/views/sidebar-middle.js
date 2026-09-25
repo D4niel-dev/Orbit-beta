@@ -753,35 +753,46 @@ window.SidebarMiddle = {
       return;
     }
 
+    var onlineFriends = friends.filter(function(f) { return f.status === 'online'; });
+
+    // The header renders in BOTH states, because the friends directory button has
+    // to be reachable when nobody is online — that is exactly when you need it, to
+    // reach an offline friend or reopen a DM you closed.
+    var headerHtml = '<div style="padding: 0 var(--spacing-md) var(--spacing-sm) var(--spacing-md); display:flex; justify-content:space-between; align-items:center;">' +
+      '<span style="font-size: 12px; font-weight:bold; color:var(--text-muted); text-transform:uppercase;">Online (' + onlineFriends.length + ')</span>' +
+      '<div style="display:flex;align-items:center;gap:12px;">' +
+        '<button id="btn-all-friends" title="All friends" style="color:var(--text-secondary);cursor:pointer;background:transparent;border:none;padding:0;display:flex;align-items:center;"><i data-lucide="users" style="width:16px;height:16px;"></i></button>' +
+        '<button id="btn-add-friend" title="Add a friend" style="color:var(--text-secondary);cursor:pointer;background:transparent;border:none;padding:0;display:flex;align-items:center;"><i data-lucide="plus" style="width:16px;height:16px;"></i></button>' +
+      '</div>' +
+    '</div>';
+
+    function wireHeader() {
+      var addBtn = listContainer.querySelector('#btn-add-friend');
+      if (addBtn) addBtn.addEventListener('click', function() { self.showAddFriendModal(); });
+      var allBtn = listContainer.querySelector('#btn-all-friends');
+      if (allBtn) allBtn.addEventListener('click', function() { self.showAllFriendsModal(); });
+    }
+
     if (!friends || friends.length === 0) {
-      listContainer.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;padding:40px 20px;text-align:center;color:var(--text-muted);gap:12px;">' +
-        '<i data-lucide="wifi-off" style="width:40px;height:40px;opacity:0.3;"></i>' +
-        '<div style="font-size:14px;font-weight:500;">No friends online</div>' +
-        '<div style="font-size:12px;">Waiting for peers on the local network...</div>' +
-      '</div>';
+      listContainer.innerHTML = headerHtml +
+        '<div style="display:flex;flex-direction:column;align-items:center;padding:40px 20px;text-align:center;color:var(--text-muted);gap:12px;">' +
+          '<i data-lucide="wifi-off" style="width:40px;height:40px;opacity:0.3;"></i>' +
+          '<div style="font-size:14px;font-weight:500;">No friends online</div>' +
+          '<div style="font-size:12px;">Waiting for peers on the local network...</div>' +
+        '</div>';
+      lucide.createIcons({ root: listContainer });
+      wireHeader();
       return;
     }
 
-    var onlineFriends = friends.filter(function(f) { return f.status === 'online'; });
-    
-    var html = '<div style="padding: 0 var(--spacing-md) var(--spacing-sm) var(--spacing-md); display:flex; justify-content:space-between; align-items:center;">' +
-      '<span style="font-size: 12px; font-weight:bold; color:var(--text-muted); text-transform:uppercase;">Online (' + onlineFriends.length + ')</span>' +
-      '<button id="btn-add-friend" style="color:var(--text-secondary); cursor:pointer;"><i data-lucide="plus" style="width:16px;height:16px;"></i></button>' +
-    '</div>';
-
+    var html = headerHtml;
     friends.forEach(function(friend) {
       html += self._buildFriendRowHtml(friend, state);
     });
 
     listContainer.innerHTML = html;
     lucide.createIcons({ root: listContainer });
-    
-    var btnAddFriend = listContainer.querySelector('#btn-add-friend');
-    if (btnAddFriend) {
-      btnAddFriend.addEventListener('click', function(e) {
-        self.showAddFriendModal();
-      });
-    }
+    wireHeader();
   },
 
   _buildFriendRowHtml(friend, state, opts) {
@@ -1489,12 +1500,16 @@ window.SidebarMiddle = {
         // data-view, not the label — a label-derived name is a trap ("All Friends"
         // would have become the view "all friends").
         var view = e.target.getAttribute('data-view') || e.target.innerText.toLowerCase();
+        // Was Friends already the active view? Read BEFORE the setState below.
+        var wasFriends = window.store.getState().activeView === 'friends';
         window.store.setState({ activeView: view, activeFolder: null });
-        // Left-clicking Friends opens the friends directory: the tab lists who is
-        // online, the directory lists everyone (offline and closed DMs included),
-        // and a modal is the right home for something you consult occasionally
-        // rather than a third of the tab strip.
-        if (view === 'friends') self.showAllFriendsModal();
+        // Clicking the ALREADY-ACTIVE Friends tab opens the friends directory — the
+        // tab lists who is online, the directory lists everyone. Deliberately not
+        // on every click: switching Groups -> Friends used to pop a modal that had
+        // to be dismissed before you could reach the list you asked for. The
+        // header's "All friends" button is the discoverable way in; this is the
+        // shortcut.
+        if (view === 'friends' && wasFriends) self.showAllFriendsModal();
       });
     });
 
