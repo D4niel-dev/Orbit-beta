@@ -592,7 +592,9 @@ public class OrbitP2PPlugin extends Plugin {
                     getContext(), kind,
                     call.getString("title", "Orbit"),
                     call.getString("text", ""),
-                    call.getString("groupKey", null));
+                    call.getString("groupKey", null),
+                    new android.content.Intent(getContext(), com.orbit.app.MainActivity.class),
+                    call.getString("avatar", null));
             call.resolve();
         } catch (Exception e) {
             call.reject("notify failed: " + e.getMessage());

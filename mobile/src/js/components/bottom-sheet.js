@@ -100,8 +100,10 @@ var OrbitSheet = {
     var overlay = document.getElementById('bottom-sheet-overlay');
     var content = document.getElementById('bottom-sheet-content');
     var backdrop = document.getElementById('bottom-sheet-backdrop');
+    var sheetEl = document.getElementById('bottom-sheet');
     
     if (!overlay || !content) return;
+    if (sheetEl) sheetEl.classList.remove('bottom-sheet-tall');
 
     OrbitSheet._dismissKeyboard();
     OrbitSheet._syncViewport();
@@ -156,12 +158,16 @@ var OrbitSheet = {
     requestAnimationFrame(function() { OrbitSheet._syncScrollHint(); });
   },
 
-  /** Show a bottom sheet with custom HTML content */
-  showCustom: function(html) {
+  /** Show a bottom sheet with custom HTML content.
+   *  opts.tall — for reference lists (see .bottom-sheet-tall in mobile.css). */
+  showCustom: function(html, opts) {
     var overlay = document.getElementById('bottom-sheet-overlay');
     var content = document.getElementById('bottom-sheet-content');
     var backdrop = document.getElementById('bottom-sheet-backdrop');
+    var sheetEl = document.getElementById('bottom-sheet');
     if (!overlay || !content) return;
+    // Clear first: a tall sheet must not make the NEXT sheet tall too.
+    if (sheetEl) sheetEl.classList.toggle('bottom-sheet-tall', !!(opts && opts.tall));
 
     // Must happen BEFORE the sheet becomes visible — see _syncViewport.
     OrbitSheet._dismissKeyboard();

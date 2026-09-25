@@ -5044,6 +5044,13 @@ textarea#chat-input {
   overflow: hidden;
   box-shadow: 0 -8px 32px rgba(0,0,0,0.3);
 }
+/* Reference lists (/help) get nearly the whole screen. The 70% cap above is
+   sized for choosers — a context menu or a poll builder — where leaving the chat
+   visible matters. A 19-command reference is read, not chosen from, and at 70%
+   you saw a third of it. */
+.bottom-sheet.bottom-sheet-tall {
+  max-height: calc(var(--sheet-vh, 100vh) * 0.92);
+}
 .bottom-sheet-overlay.active .bottom-sheet {
   transform: translateY(0);
 }

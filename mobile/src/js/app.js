@@ -4149,7 +4149,8 @@ document.addEventListener('DOMContentLoaded', function() {
       html += '</div>';
     }
     html += '</div>';
-    sheet.showCustom(html);
+    // Tall: this is a reference list, not a chooser (see .bottom-sheet-tall).
+    sheet.showCustom(html, { tall: true });
     // Clear the /help input after opening modal so it does not linger
     var _helpInput = document.getElementById('chat-input');
     if (_helpInput) {
@@ -10138,6 +10139,35 @@ document.addEventListener('DOMContentLoaded', function() {
   // Mirrors OrbitNotifications.Kind on the Android side — keep the two in step.
   var NOTIFY_KINDS = ['MESSAGE', 'MENTION', 'CALL', 'VIDEO_CALL', 'UPDATE', 'PROGRESS', 'ERROR', 'SUCCESS'];
 
+  // The sender's avatar for the notification's large icon. Android puts Orbit's
+  // mark in the status bar (the small icon, OrbitNotifications.java) and the
+  // sender's face in the notification itself — the pairing Discord uses, and the
+  // reason a glance at the shade tells you who wrote without reading the title.
+  // Returns null when we have no avatar for the sender, which just leaves the
+  // large icon off.
+  function _notificationAvatar(data) {
+    try {
+      var fromId = data && data.fromId;
+      if (!fromId) return null;
+      var friends = (window.MStore && MStore.friends) || [];
+      var f = null;
+      for (var i = 0; i < friends.length; i++) {
+        var x = friends[i];
+        if (x && (x.id === fromId || x.peerId === fromId || x.userId === fromId)) { f = x; break; }
+      }
+      if (!f || !f.avatar) return null;
+      // safeAvatarSrc drops anything that is not a usable image source, so the
+      // native side never receives a value it cannot decode.
+      return (typeof safeAvatarSrc === 'function') ? safeAvatarSrc(f.avatar) : f.avatar;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Exposed alongside the other notification helpers so the avatar lookup can be
+  // exercised without a device (there is no native plugin in a browser harness).
+  window.orbitNotificationAvatar = _notificationAvatar;
+
   function showNativeNotification(title, body, data, kind) {
     if (NOTIFY_KINDS.indexOf(kind) === -1) kind = 'MESSAGE';
     try {
@@ -10151,7 +10181,8 @@ document.addEventListener('DOMContentLoaded', function() {
           kind: kind,
           title: title,
           text: body,
-          groupKey: (data && (data.groupKey || data.chatId)) || null
+          groupKey: (data && (data.groupKey || data.chatId)) || null,
+          avatar: _notificationAvatar(data)
         });
         if (p && p.catch) p.catch(function () {});
         return;

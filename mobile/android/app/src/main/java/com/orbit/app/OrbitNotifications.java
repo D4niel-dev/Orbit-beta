@@ -104,6 +104,19 @@ public final class OrbitNotifications {
      */
     public static void post(Context ctx, Kind kind, String title, String text,
                             String groupKey, Intent contentIntent) {
+        post(ctx, kind, title, text, groupKey, contentIntent, null);
+    }
+
+    /**
+     * @param avatarDataUrl optional sender avatar as a data URL. It becomes the
+     *        notification's large icon, so the status bar carries Orbit's mark
+     *        (the small icon) while the notification itself carries the face of
+     *        whoever wrote — the pairing Discord uses, and the reason a glance at
+     *        the shade tells you who it is without reading the title. Null, or
+     *        anything that will not decode, simply leaves the large icon off.
+     */
+    public static void post(Context ctx, Kind kind, String title, String text,
+                            String groupKey, Intent contentIntent, String avatarDataUrl) {
         if (ctx == null) return;
         try {
             ensureChannels(ctx);
@@ -123,6 +136,8 @@ public final class OrbitNotifications {
                     .setColor(ACCENT)
                     .setPriority(kind.priority)
                     .setAutoCancel(true);
+            android.graphics.Bitmap large = decodeAvatar(avatarDataUrl);
+            if (large != null) b.setLargeIcon(large);
             if (pi != null) b.setContentIntent(pi);
 
             int id = (groupKey == null || groupKey.isEmpty())
@@ -139,6 +154,21 @@ public final class OrbitNotifications {
 
     /** Convenience: a notification that just opens the app. */
     public static void post(Context ctx, Kind kind, String title, String text, String groupKey) {
-        post(ctx, kind, title, text, groupKey, new Intent(ctx, MainActivity.class));
+        post(ctx, kind, title, text, groupKey, new Intent(ctx, MainActivity.class), null);
+    }
+
+    /** Decode a data-URL avatar into a Bitmap. Never throws, never returns junk. */
+    private static android.graphics.Bitmap decodeAvatar(String dataUrl) {
+        if (dataUrl == null || dataUrl.isEmpty()) return null;
+        try {
+            String b64 = dataUrl;
+            int comma = b64.indexOf(',');
+            if (b64.startsWith("data:") && comma > 0) b64 = b64.substring(comma + 1);
+            byte[] bytes = android.util.Base64.decode(b64, android.util.Base64.DEFAULT);
+            if (bytes == null || bytes.length == 0) return null;
+            return android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+        } catch (Throwable t) {
+            return null;
+        }
     }
 }

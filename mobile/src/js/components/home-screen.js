@@ -302,15 +302,11 @@ var OrbitHome = {
     }
     
     if (chats.length === 0) {
-      // First-run surface on mobile: the conversation list is the first thing you
-      // see on a cold start, so the feature slides live here when it is empty.
-      // (shared/ui/welcome-slides.js — same component desktop renders in its chat
-      // panel, so the two platforms describe Orbit identically.)
-      if (window.OrbitWelcome) {
-        container.innerHTML = '<div id="mobile-welcome-host" style="display:flex;align-items:center;justify-content:center;padding:24px 0;box-sizing:border-box;"></div>';
-        window.OrbitWelcome.render(document.getElementById('mobile-welcome-host'));
-        return;
-      }
+      // Plain empty state. The feature-slide carousel is a DESKTOP surface —
+      // desktop/src/js/views/chat-panel.js renders it in the chat panel's empty
+      // state, where the panel is otherwise a bare icon. On a phone the
+      // conversation list is the first thing you see on a cold start, so a
+      // seven-slide tour sits between you and the thing you opened the app for.
       container.innerHTML = '<div class="empty-state enhanced"><i data-lucide="message-circle"></i><div class="empty-state-text">No conversations yet</div><div class="empty-state-sub">Your chats will appear here once you start a conversation</div></div>';
       return;
     }
