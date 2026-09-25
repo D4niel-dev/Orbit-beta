@@ -10,8 +10,6 @@ window.SidebarMiddle = {
       if (!changedState || relevant.some(function(k) { return k in changedState; })) {
         if (state.activeView === 'groups') {
           this.renderGroups();
-        } else if (state.activeView === 'allfriends') {
-          this.renderAllFriends();
         } else if (state.activeView === 'folders') {
           this.renderFolders();
         } else {
@@ -58,7 +56,6 @@ window.SidebarMiddle = {
       '</div>' +
       '<div class="tabs-container" style="display:flex; padding: 0 var(--spacing-md); margin-bottom: var(--spacing-md); gap: 16px;">' +
         '<button class="tab active" data-view="friends" style="flex:1; text-align:center; padding: 12px 4px; border-bottom: 3px solid var(--accent-primary); border-top: none; border-left: none; border-right: none; font-weight: 600; color: var(--text-primary); background: transparent; transition: var(--transition); cursor:pointer;">Friends</button>' +
-        '<button class="tab" data-view="allfriends" style="flex:1; text-align:center; padding: 12px 4px; border-bottom: 3px solid transparent; border-top: none; border-left: none; border-right: none; color: var(--text-muted); font-weight: 500; background: transparent; transition: var(--transition); cursor:pointer;">All Friends</button>' +
         '<button class="tab" data-view="groups" style="flex:1; text-align:center; padding: 12px 4px; border-bottom: 3px solid transparent; border-top: none; border-left: none; border-right: none; color: var(--text-muted); font-weight: 500; background: transparent; transition: var(--transition); cursor:pointer;">Groups</button>' +
       '</div>' +
       '<div class="list-container" id="friends-list-container" style="flex:1; overflow-y:auto;">' +
@@ -71,8 +68,6 @@ window.SidebarMiddle = {
     var state = window.store.getState();
     if (state.activeView === 'groups') {
       this.renderGroups();
-    } else if (state.activeView === 'allfriends') {
-      this.renderAllFriends();
     } else if (state.activeView === 'folders') {
       this.renderFolders();
     } else {
@@ -531,32 +526,27 @@ window.SidebarMiddle = {
   },
 
   /**
-   * Every friend, whether or not their DM is open.
+   * The friends directory — every friend, searchable and filterable, in a modal.
    *
-   * The Friends tab only lists who is online, and a closed DM is hidden from it
-   * entirely — so a DM closed by accident was unreachable, and there was no way to
-   * start a conversation with a friend who happens to be offline. This tab is the
-   * way back: closed DMs are listed with a hint, and clicking one reopens it.
+   * Opened by left-clicking the Friends tab. The tab itself lists who is ONLINE;
+   * this lists everyone: offline friends, and DMs that were closed (marked as
+   * such, and clicking one reopens it — which is the only way back to a closed
+   * DM now that it is filtered out of the tab).
    *
-   * `_userChatIds` is still respected — that is the per-account isolation filter,
-   * and ignoring it would leak one account's friends into another's sidebar.
+   * It respects `_userChatIds`, the per-account isolation filter: without it one
+   * account's friends would appear in another account's directory.
    */
-  renderAllFriends() {
+  showAllFriendsModal() {
+    if (document.getElementById('all-friends-modal')) return;   // already open
     var self = this;
     var state = window.store.getState();
-    var listContainer = document.getElementById('friends-list-container');
-    if (!listContainer) return;
-
-    var tabsEl = this.container.querySelector('.tabs-container');
-    if (tabsEl) tabsEl.style.display = state.activeFolder ? 'none' : 'flex';
-
     var closedDMs = state.closedDMs || {};
     var userChatIds = state._userChatIds;
+
     var friends = (state.friends || []).filter(function(f) {
       if (userChatIds && userChatIds.indexOf(f.userId) === -1) return false;
       return true;
     });
-
     friends.sort(function(a, b) {
       if (a.userId === 'local-echo') return -1;
       if (b.userId === 'local-echo') return 1;
@@ -566,28 +556,168 @@ window.SidebarMiddle = {
       return (a.username || '').localeCompare(b.username || '');
     });
 
-    var closedCount = friends.filter(function(f) { return closedDMs[f.userId]; }).length;
-    var html = '<div style="padding: 0 var(--spacing-md) var(--spacing-sm) var(--spacing-md); display:flex; justify-content:space-between; align-items:center;">' +
-      '<span style="font-size: 12px; font-weight:bold; color:var(--text-muted); text-transform:uppercase;">All Friends (' + friends.length + ')</span>' +
-      (closedCount > 0 ? '<span style="font-size:11px;color:var(--text-muted);">' + closedCount + ' closed</span>' : '') +
-    '</div>';
+    var overlay = document.createElement('div');
+    overlay.id = 'all-friends-modal';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:9999;display:flex;align-items:center;justify-content:center;';
 
-    if (friends.length === 0) {
-      listContainer.innerHTML = html +
-        '<div style="display:flex;flex-direction:column;align-items:center;padding:40px 20px;text-align:center;color:var(--text-muted);gap:12px;">' +
-          '<i data-lucide="users" style="width:40px;height:40px;opacity:0.3;"></i>' +
-          '<div style="font-size:14px;font-weight:500;">No friends yet</div>' +
-          '<div style="font-size:12px;">Add someone with the + button above</div>' +
-        '</div>';
-      if (window.lucide) lucide.createIcons({ root: listContainer });
-      return;
+    var segBtn = function(id, label, active) {
+      return '<button class="afm-filter" data-filter="' + id + '" style="flex:1;padding:6px 8px;border-radius:8px;border:none;cursor:pointer;font-size:12px;font-weight:600;' +
+        (active ? 'background:var(--accent-primary);color:white;' : 'background:transparent;color:var(--text-secondary);') +
+        'transition:all 0.15s;">' + label + '</button>';
+    };
+
+    overlay.innerHTML =
+      '<div style="width:460px;max-width:94vw;max-height:82vh;background:var(--bg-surface);border-radius:16px;overflow:hidden;box-shadow:var(--shadow-xl);border:1px solid var(--border-subtle);display:flex;flex-direction:column;">' +
+        '<div style="display:flex;align-items:flex-start;gap:10px;padding:16px 16px 12px;">' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div style="font-weight:600;color:var(--text-primary);font-size:16px;">All Friends</div>' +
+            '<div id="afm-count" style="font-size:12px;color:var(--text-muted);margin-top:2px;"></div>' +
+          '</div>' +
+          '<button id="afm-close" title="Close" style="background:transparent;border:none;cursor:pointer;color:var(--text-muted);padding:4px;border-radius:6px;flex-shrink:0;">' +
+            '<i data-lucide="x" style="width:18px;height:18px;"></i>' +
+          '</button>' +
+        '</div>' +
+        '<div style="padding:0 16px 10px;">' +
+          '<div style="position:relative;display:flex;align-items:center;">' +
+            '<i data-lucide="search" style="position:absolute;left:10px;width:14px;height:14px;color:var(--text-muted);"></i>' +
+            '<input id="afm-search" type="text" placeholder="Search friends by name, tag or ID..." autocomplete="off" style="width:100%;padding:8px 10px 8px 32px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);font-size:13px;outline:none;box-sizing:border-box;">' +
+          '</div>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;padding:0 16px 12px;">' +
+          '<div id="afm-filters" style="display:flex;background:var(--bg-base);border-radius:10px;padding:3px;flex:1;gap:2px;">' +
+            segBtn('all', 'All', true) +
+            segBtn('online', 'Online', false) +
+            segBtn('offline', 'Offline', false) +
+            segBtn('closed', 'Closed', false) +
+          '</div>' +
+          '<button id="afm-display" title="Switch between list and grid" style="background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:10px;padding:7px;cursor:pointer;color:var(--text-secondary);flex-shrink:0;display:flex;align-items:center;">' +
+            '<i data-lucide="layout-grid" style="width:15px;height:15px;"></i>' +
+          '</button>' +
+        '</div>' +
+        '<div id="afm-list" style="flex:1;overflow-y:auto;padding:0 12px 12px;min-height:120px;"></div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    if (window.lucide) lucide.createIcons({ root: overlay });
+
+    var listEl = overlay.querySelector('#afm-list');
+    var countEl = overlay.querySelector('#afm-count');
+    var searchEl = overlay.querySelector('#afm-search');
+    var displayBtn = overlay.querySelector('#afm-display');
+    var query = '';
+    var filter = 'all';
+    var display = 'list';
+
+    function close() {
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      document.removeEventListener('keydown', onKey);
+    }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+
+    function visible() {
+      return friends.filter(function(f) {
+        if (filter === 'online' && f.status !== 'online') return false;
+        if (filter === 'offline' && f.status === 'online') return false;
+        if (filter === 'closed' && !closedDMs[f.userId]) return false;
+        if (query) {
+          var hay = ((f.username || '') + ' ' + (f.usertag || '') + ' ' + (f.userId || '')).toLowerCase();
+          if (hay.indexOf(query) === -1) return false;
+        }
+        return true;
+      });
     }
 
-    friends.forEach(function(f) {
-      html += self._buildFriendRowHtml(f, state, { reopen: true, closed: !!closedDMs[f.userId] });
+    function avatarInner(f) {
+      var frame = window.Frames ? window.Frames.getFrameForUser(f.userId) : null;
+      var img = f.avatar
+        ? '<img src="' + window.Sanitize.escapeHtml(f.avatar) + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">'
+        : '<i data-lucide="user"></i>';
+      return '<div style="position:relative;display:flex;align-items:center;justify-content:center;width:100%;height:100%;">' + img +
+        (frame ? '<img src="icons/frames/pfp_frame_' + frame + '.png" style="position:absolute;top:-14%;left:-14%;width:122%;height:122%;pointer-events:none;object-fit:contain;" draggable="false" alt="">' : '') +
+      '</div>';
+    }
+
+    function openFriend(id, ev) {
+      var f = friends.filter(function(x) { return x.userId === id; })[0];
+      if (ev && ev.target.closest('.list-row-avatar') && window.ProfileSidebar && f) {
+        window.ProfileSidebar.open(f);   // the avatar still opens the profile
+        return;
+      }
+      // reopenDM clears the closed flag AND opens the chat, so this is the same
+      // action whether the DM was closed or merely not open.
+      window.store.reopenDM(id);
+      close();
+    }
+
+    function render() {
+      var rows = visible();
+      countEl.textContent = rows.length + ' of ' + friends.length + ' friend' + (friends.length === 1 ? '' : 's');
+      displayBtn.innerHTML = '<i data-lucide="' + (display === 'list' ? 'layout-grid' : 'list') + '" style="width:15px;height:15px;"></i>';
+      // The button is rewritten on every render, so its icon has to be converted
+      // here too — createIcons otherwise only runs on the list below, leaving the
+      // toggle as a blank square.
+      if (window.lucide) lucide.createIcons({ root: displayBtn });
+
+      if (rows.length === 0) {
+        listEl.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;padding:32px 20px;text-align:center;color:var(--text-muted);gap:10px;">' +
+          '<i data-lucide="users" style="width:34px;height:34px;opacity:0.3;"></i>' +
+          '<div style="font-size:13px;">' + (friends.length === 0 ? 'No friends yet' : 'Nobody matches that') + '</div>' +
+        '</div>';
+        if (window.lucide) lucide.createIcons({ root: listEl });
+        return;
+      }
+
+      if (display === 'grid') {
+        listEl.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:10px;padding:4px;">' +
+          rows.map(function(f) {
+            return '<div class="afm-tile" data-id="' + window.Sanitize.escapeHtml(f.userId) + '" title="' + window.Sanitize.escapeHtml(f.username) + '" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 6px;border-radius:12px;cursor:pointer;background:var(--bg-base);border:1px solid var(--border-subtle);">' +
+              '<div style="position:relative;width:44px;height:44px;border-radius:50%;">' + avatarInner(f) +
+                '<div class="status-indicator ' + window.Sanitize.escapeHtml(f.status || 'offline') + '" style="position:absolute;bottom:-1px;right:-1px;"></div>' +
+              '</div>' +
+              '<div style="font-size:11px;color:var(--text-primary);text-align:center;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window.Sanitize.escapeHtml(f.username) + '</div>' +
+              (closedDMs[f.userId] ? '<div style="font-size:9px;color:var(--text-muted);">Closed</div>' : '') +
+            '</div>';
+          }).join('') +
+        '</div>';
+      } else {
+        listEl.innerHTML = rows.map(function(f) {
+          return self._buildFriendRowHtml(f, state, { reopen: true, closed: !!closedDMs[f.userId] });
+        }).join('');
+      }
+
+      if (window.lucide) lucide.createIcons({ root: listEl });
+      listEl.querySelectorAll('.afm-tile').forEach(function(tile) {
+        tile.addEventListener('click', function() { openFriend(tile.getAttribute('data-id')); });
+      });
+      listEl.querySelectorAll('.list-row').forEach(function(row) {
+        row.addEventListener('click', function(e) { openFriend(row.getAttribute('data-id'), e); });
+      });
+    }
+
+    overlay.querySelector('#afm-close').addEventListener('click', close);
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) close(); });
+    document.addEventListener('keydown', onKey);
+    searchEl.addEventListener('input', function() {
+      query = this.value.trim().toLowerCase();
+      render();
     });
-    listContainer.innerHTML = html;
-    if (window.lucide) lucide.createIcons({ root: listContainer });
+    overlay.querySelectorAll('.afm-filter').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        filter = btn.getAttribute('data-filter');
+        overlay.querySelectorAll('.afm-filter').forEach(function(b) {
+          var on = b === btn;
+          b.style.background = on ? 'var(--accent-primary)' : 'transparent';
+          b.style.color = on ? 'white' : 'var(--text-secondary)';
+        });
+        render();
+      });
+    });
+    displayBtn.addEventListener('click', function() {
+      display = display === 'list' ? 'grid' : 'list';
+      render();
+    });
+
+    render();
+    setTimeout(function() { try { searchEl.focus(); } catch (e) {} }, 50);
   },
 
   renderList(state) {
@@ -1356,10 +1486,15 @@ window.SidebarMiddle = {
         e.target.style.color = 'var(--text-primary)';
         e.target.style.fontWeight = '500';
         
-        // data-view, not the label — "All Friends" would otherwise become the
-        // view name "all friends".
+        // data-view, not the label — a label-derived name is a trap ("All Friends"
+        // would have become the view "all friends").
         var view = e.target.getAttribute('data-view') || e.target.innerText.toLowerCase();
         window.store.setState({ activeView: view, activeFolder: null });
+        // Left-clicking Friends opens the friends directory: the tab lists who is
+        // online, the directory lists everyone (offline and closed DMs included),
+        // and a modal is the right home for something you consult occasionally
+        // rather than a third of the tab strip.
+        if (view === 'friends') self.showAllFriendsModal();
       });
     });
 

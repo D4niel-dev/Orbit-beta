@@ -16,29 +16,35 @@ test.describe('navigation', () => {
 
   test('boots into the DMs view with Orbit Echo in the list', async () => {
     await expect(page.locator('.tabs-container')).toBeVisible();
-    const echoRow = page.locator('.list-row[data-id="local-echo"]');
+    const echoRow = page.locator('#friends-list-container .list-row[data-id="local-echo"]');
     await expect(echoRow).toBeVisible();
     await expect(echoRow.locator('.list-row-title')).toHaveText('Orbit Echo');
   });
 
-  test('switches between Friends, All Friends and Groups tabs', async () => {
+  test('switches between Friends and Groups, and Friends opens the directory', async () => {
     // DMs view: friends list is rendered.
-    await expect(page.locator('.list-row[data-id="local-echo"]')).toBeVisible();
+    await expect(page.locator('#friends-list-container .list-row[data-id="local-echo"]')).toBeVisible();
 
-    // All Friends tab → every friend, whether or not their DM is open. Located by
-    // data-view: matching on the label would also hit "All Friends".
-    await page.locator('.tabs-container .tab[data-view="allfriends"]').click();
-    await expect(page.locator('.list-row[data-id="local-echo"]')).toBeVisible();
+    // Left-clicking the Friends tab opens the friends directory modal. Located by
+    // data-view: matching on the label is a trap now that "Friends" is a prefix of
+    // other things.
+    await page.locator('.tabs-container .tab[data-view="friends"]').click();
+    await expect(page.locator('#all-friends-modal')).toBeVisible();
+    await page.locator('#afm-close').click();
+    await expect(page.locator('#all-friends-modal')).toHaveCount(0);
 
     // Groups tab → groups view ("+ Create Group" button).
     const groupsTab = page.locator('.tabs-container .tab[data-view="groups"]');
     await groupsTab.click();
     await expect(page.locator('#btn-create-group')).toBeVisible();
-    await expect(page.locator('.list-row[data-id="local-echo"]')).toHaveCount(0);
+    await expect(page.locator('#friends-list-container .list-row[data-id="local-echo"]')).toHaveCount(0);
 
-    // Back to Friends tab → friends list again.
+    // Back to Friends tab → friends list again. (The directory opens with it, so
+    // dismiss it before the test ends.)
     await page.locator('.tabs-container .tab[data-view="friends"]').click();
-    await expect(page.locator('.list-row[data-id="local-echo"]')).toBeVisible();
+    await expect(page.locator('#friends-list-container .list-row[data-id="local-echo"]')).toBeVisible();
+    await page.locator('#afm-close').click();
+    await expect(page.locator('#all-friends-modal')).toHaveCount(0);
   });
 
   test('switches to the Folders view and back via the left nav rail', async () => {
@@ -62,6 +68,6 @@ test.describe('navigation', () => {
 
     // DM button escapes back to the friends view.
     await page.click('#btn-nav-dms');
-    await expect(page.locator('.list-row[data-id="local-echo"]')).toBeVisible();
+    await expect(page.locator('#friends-list-container .list-row[data-id="local-echo"]')).toBeVisible();
   });
 });
