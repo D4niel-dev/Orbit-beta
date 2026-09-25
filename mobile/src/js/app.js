@@ -6577,7 +6577,17 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button id="changelog-close-mobile" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;font-size:20px;">✕</button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
-        vBlock('0.7.0-beta', 'Latest', [
+        vBlock('0.7.1-beta', 'Latest', [
+          ['Fixed', [
+            'The /help list opens at full height now, with its Cancel button on screen. It was being sized to the keyboard, which left it as a short strip that would not scroll or close.',
+            'The emoji picker no longer shows a stray "undefined" across its search row.',
+            'Scrolling a long list no longer drags the panel along with your finger.'
+          ]],
+          ['Technical', [
+            'Version: Bumped to v0.7.1-beta.'
+          ]]
+        ]) +
+        vBlock('0.7.0-beta', '', [
           ['Chat Commands', [
             'The /help list opens nearly full-screen and shows ten commands at once instead of three, with a scroll indicator so it is obvious there is more to see. The rows are tighter too, so there is less to scroll through.'
           ]],

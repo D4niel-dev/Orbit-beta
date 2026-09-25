@@ -14,7 +14,15 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.7.0-beta', 'Latest', [
+        versionBlock('0.7.1-beta', 'Latest', [
+          ['Note', [
+            'This one is a mobile-only patch: the /help sheet, the emoji picker and list dragging were all phone-side, and nothing changed on desktop. It is here so the version you are running has an entry.'
+          ]],
+          ['Technical', [
+            'Version: Bumped to v0.7.1-beta.'
+          ]]
+        ]) +
+        versionBlock('0.7.0-beta', '', [
           ['Messaging', [
             'Closing a DM no longer deletes the conversation. It used to wipe the messages and the pins out of the chat it was closing \u2014 now it only hides the DM, and the history is exactly where you left it.',
             'Orbit Echo can no longer be closed. It is the one DM that is always available, and closing it used to remove it for good with no way back.'

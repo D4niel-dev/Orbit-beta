@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v070-beta">v0.7.0-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v071-beta">v0.7.1-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@
 
 | Channel           | Version     | Status                                                                                                                                |
 | ----------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| **Latest**        | v0.7.0-beta | Directory-and-details release — "Close DM" no longer deletes the conversation, a friends directory that reaches everyone (closed DMs included), a `/help` sheet that is no longer sized to the keyboard, and notifications that say who wrote |
+| **Latest**        | v0.7.1-beta | Patch release — the `/help` sheet was still sized from a keyboard-shrunken viewport (so it would not scroll or close), the emoji picker painted a persisted `"undefined"`, and a drag could take over the first swipe of a long list |
 | **Stable**        | v0.6.0-beta | Reliability release — notification plumbing, an offline send queue, a vault you can back up and take with you, in-app Android updates |
 | Legacy **Stable** | v0.1.1-beta | Legacy stable release                                                                                                                 |
 
@@ -90,14 +90,14 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage app for desktop and Android** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
-## Highlights (v0.7.0-beta)
+## Highlights (v0.7.1-beta)
 
-* **"Close DM" No Longer Destroys the Conversation** — It deleted `messages[userId]` and `pinnedMessages[userId]` out of state, and state is persisted, so closing a DM threw away its entire history and every pin it held. Closing now hides the sidebar entry and nothing else — verified in the database and across a relaunch.
-* **A Closed DM Can Be Reopened, and Orbit Echo Cannot Be Closed At All** — A closed DM is filtered out of the Friends tab, and the only way back was a context menu *on that row* — which was no longer there. Echo was the worst case: it is not a peer you can re-add, so closing it removed it permanently. Echo's Close DM is now a locked item that explains itself, and the new **friends directory** reaches everyone else.
-* **The Friends Directory** — An **All friends** button in the Friends header opens a searchable list of every friend, online or not, with DMs you have closed marked *"Closed — click to reopen"*. It filters by All / Online / Offline / Closed and switches between a list and a grid. The button is there in the empty state too — "no friends online" is exactly when you need it.
-* **The `/help` Sheet Was Sized to the Keyboard** — A slash-command sheet opens while the soft keyboard is still up, and the single viewport measurement taken at that moment was kept for the sheet's whole life: 19 commands reduced to the three that fit, below a fold that never moved. It re-measures now, opens at 92% for reference lists (ten commands at once), shows a real scroll thumb, and no longer spends a third of every row repeating the command name.
-* **Notifications Say Who Wrote** — Every notification uses the Orbit mark, so the status bar says which app it came from, and on Android the notification carries the sender's avatar. Background notifications used to have no avatar at all: that path runs when the WebView is frozen and only has the packet, so the renderer now hands the native layer its friends' avatars on the way out.
-* **Orbit Opens on Its Feature Tour** — The app used to restore your last conversation, so the chat panel's empty state — where the tour lives — was only ever seen once. A cold start now opens with no chat selected. The first-run slides are desktop-only again; on mobile they were sitting in the conversation list, between you and the thing you opened the app for.
+A patch release for three bugs found on a real device within hours of v0.7.0-beta — none of which the
+browser harness had caught.
+
+* **`/help` Opened as a Short Strip and Would Not Scroll or Close** — The sheet was still being sized from the keyboard-shrunken viewport, and on Android that measurement can stay wrong indefinitely, so re-measuring just re-read the same number. Its Cancel footer ended up below the bottom of the screen. Sheets with no text field now size against the layout viewport, which is stable, and a keyboard that hides late grows the sheet back instead of leaving it short.
+* **The Emoji Picker Drew a Giant "undefined"** — Its skin-tone button renders whatever value it is handed, and a tone event arriving without detail had persisted the literal string `"undefined"` into storage, which the picker then painted across its search row. The value is validated on both sides now, and a poisoned one is cleared on read — so a device that already carries it heals itself.
+* **A Drag Could Take Over a Scroll** — The body-drag is allowed while the list sits at the top, and that was decided at `touchstart`, before the gesture's direction was known — so the first upward swipe of any long list started a drag and the panel moved with the finger while the list tried to scroll underneath.
 
 ## Version History
 
@@ -674,7 +674,8 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 
 </details>
 
-<details open>
+
+<details>
 <summary>v0.7.0-beta</summary>
 
 * **"Close DM" keeps the conversation** — it deleted the messages and pins out of state (and state is persisted), so closing a DM destroyed its history
@@ -684,6 +685,15 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Notifications** — one Orbit icon for every kind, and the sender's avatar as the large icon (the background path had none at all)
 * **Orbit opens on the feature tour** instead of the last conversation, and the first-run slides are desktop-only again
 * **The people icons use their rounded variants** — `user`, `users`, `user-plus`, `user-x` and the Experimental flask
+
+</details>
+
+<details open>
+<summary>v0.7.1-beta</summary>
+
+* **`/help` sizing** — it was sized from the keyboard-shrunken viewport, which on Android can stay wrong indefinitely; sheets with no text field now use the layout viewport, and a late keyboard dismissal grows the sheet back
+* **The emoji picker's `"undefined"`** — a tone event with no detail had persisted the literal string, which the picker then painted across its search row; validated on both sides and cleared on read
+* **A drag could take over a scroll** — the body-drag was decided at touchstart, before the direction was known
 
 </details>
 
@@ -698,6 +708,7 @@ Pre-built Windows installers are published on [GitHub Releases](https://github.c
 | Release                                                                          | Platform                    | Notes                                                                           |
 | -------------------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------- |
 | [All releases](https://github.com/D4niel-dev/Orbit-beta/releases)                | Win / Mac / Linux / Android | Most recent build first                                                         |
+| [v0.7.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.1-beta) | Win / Mac / Linux / Android | `/help` sheet sizing, the emoji picker's "undefined", and a drag that could take over a scroll |
 | [v0.7.0-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.0-beta) | Win / Mac / Linux / Android | Close DM keeps the conversation, friends directory, `/help` sheet fix, notifications with the sender's avatar |
 | [v0.6.5-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.5-beta) | Win / Mac / Linux / Android | In-app update download with checksum verification, correct installer per OS/CPU, playback that survives a chat switch, mobile panel affordances |
 | [v0.6.4-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.4-beta) | Win / Mac / Linux / Android | Real audio waveform, file name above the timer, richer ⋮ menu, first-run feature slides |
@@ -960,14 +971,11 @@ Transparency matters in beta. Current constraints include:
 
 ## Roadmap
 
-### Shipped (v0.7.0-beta)
+### Shipped (v0.7.1-beta)
 
-* **Close DM Stops Destroying History** — it deleted the chat's messages and pins out of persisted state; it now only hides the sidebar entry
-* **Orbit Echo Is Protected** — the one DM that is always available cannot be closed, and says so instead of disappearing
-* **The Friends Directory** — every friend, searchable and filterable, with closed DMs reopenable in one click
-* **`/help` Sized to the Keyboard Fixed** — the sheet kept the viewport measurement taken while the soft keyboard was still open, and never took another
-* **Notifications Identify Themselves** — one Orbit icon per notification, and the sender's avatar on Android
-* **Opens on the Feature Tour** — a cold start shows what Orbit does rather than your last chat
+* **`/help` Sheet Sizing** — sized from the layout viewport now, with a late keyboard dismissal handled instead of leaving the sheet short
+* **Emoji Picker `"undefined"`** — a poisoned skin-tone value is rejected on write and cleared on read
+* **Drag vs Scroll** — an upward gesture over a scrollable list no longer starts a drag
 
 ### In Progress / Planned
 
