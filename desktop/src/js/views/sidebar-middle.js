@@ -10,6 +10,8 @@ window.SidebarMiddle = {
       if (!changedState || relevant.some(function(k) { return k in changedState; })) {
         if (state.activeView === 'groups') {
           this.renderGroups();
+        } else if (state.activeView === 'allfriends') {
+          this.renderAllFriends();
         } else if (state.activeView === 'folders') {
           this.renderFolders();
         } else {
@@ -55,8 +57,9 @@ window.SidebarMiddle = {
         '</div>' +
       '</div>' +
       '<div class="tabs-container" style="display:flex; padding: 0 var(--spacing-md); margin-bottom: var(--spacing-md); gap: 16px;">' +
-        '<button class="tab active" style="flex:1; text-align:center; padding: 12px 4px; border-bottom: 3px solid var(--accent-primary); border-top: none; border-left: none; border-right: none; font-weight: 600; color: var(--text-primary); background: transparent; transition: var(--transition); cursor:pointer;">Friends</button>' +
-        '<button class="tab" style="flex:1; text-align:center; padding: 12px 4px; border-bottom: 3px solid transparent; border-top: none; border-left: none; border-right: none; color: var(--text-muted); font-weight: 500; background: transparent; transition: var(--transition); cursor:pointer;">Groups</button>' +
+        '<button class="tab active" data-view="friends" style="flex:1; text-align:center; padding: 12px 4px; border-bottom: 3px solid var(--accent-primary); border-top: none; border-left: none; border-right: none; font-weight: 600; color: var(--text-primary); background: transparent; transition: var(--transition); cursor:pointer;">Friends</button>' +
+        '<button class="tab" data-view="allfriends" style="flex:1; text-align:center; padding: 12px 4px; border-bottom: 3px solid transparent; border-top: none; border-left: none; border-right: none; color: var(--text-muted); font-weight: 500; background: transparent; transition: var(--transition); cursor:pointer;">All Friends</button>' +
+        '<button class="tab" data-view="groups" style="flex:1; text-align:center; padding: 12px 4px; border-bottom: 3px solid transparent; border-top: none; border-left: none; border-right: none; color: var(--text-muted); font-weight: 500; background: transparent; transition: var(--transition); cursor:pointer;">Groups</button>' +
       '</div>' +
       '<div class="list-container" id="friends-list-container" style="flex:1; overflow-y:auto;">' +
         '<!-- Dynamically rendered -->' +
@@ -68,6 +71,8 @@ window.SidebarMiddle = {
     var state = window.store.getState();
     if (state.activeView === 'groups') {
       this.renderGroups();
+    } else if (state.activeView === 'allfriends') {
+      this.renderAllFriends();
     } else if (state.activeView === 'folders') {
       this.renderFolders();
     } else {
@@ -525,12 +530,73 @@ window.SidebarMiddle = {
     }
   },
 
+  /**
+   * Every friend, whether or not their DM is open.
+   *
+   * The Friends tab only lists who is online, and a closed DM is hidden from it
+   * entirely — so a DM closed by accident was unreachable, and there was no way to
+   * start a conversation with a friend who happens to be offline. This tab is the
+   * way back: closed DMs are listed with a hint, and clicking one reopens it.
+   *
+   * `_userChatIds` is still respected — that is the per-account isolation filter,
+   * and ignoring it would leak one account's friends into another's sidebar.
+   */
+  renderAllFriends() {
+    var self = this;
+    var state = window.store.getState();
+    var listContainer = document.getElementById('friends-list-container');
+    if (!listContainer) return;
+
+    var tabsEl = this.container.querySelector('.tabs-container');
+    if (tabsEl) tabsEl.style.display = state.activeFolder ? 'none' : 'flex';
+
+    var closedDMs = state.closedDMs || {};
+    var userChatIds = state._userChatIds;
+    var friends = (state.friends || []).filter(function(f) {
+      if (userChatIds && userChatIds.indexOf(f.userId) === -1) return false;
+      return true;
+    });
+
+    friends.sort(function(a, b) {
+      if (a.userId === 'local-echo') return -1;
+      if (b.userId === 'local-echo') return 1;
+      var ao = a.status === 'online' ? 0 : 1;
+      var bo = b.status === 'online' ? 0 : 1;
+      if (ao !== bo) return ao - bo;
+      return (a.username || '').localeCompare(b.username || '');
+    });
+
+    var closedCount = friends.filter(function(f) { return closedDMs[f.userId]; }).length;
+    var html = '<div style="padding: 0 var(--spacing-md) var(--spacing-sm) var(--spacing-md); display:flex; justify-content:space-between; align-items:center;">' +
+      '<span style="font-size: 12px; font-weight:bold; color:var(--text-muted); text-transform:uppercase;">All Friends (' + friends.length + ')</span>' +
+      (closedCount > 0 ? '<span style="font-size:11px;color:var(--text-muted);">' + closedCount + ' closed</span>' : '') +
+    '</div>';
+
+    if (friends.length === 0) {
+      listContainer.innerHTML = html +
+        '<div style="display:flex;flex-direction:column;align-items:center;padding:40px 20px;text-align:center;color:var(--text-muted);gap:12px;">' +
+          '<i data-lucide="users" style="width:40px;height:40px;opacity:0.3;"></i>' +
+          '<div style="font-size:14px;font-weight:500;">No friends yet</div>' +
+          '<div style="font-size:12px;">Add someone with the + button above</div>' +
+        '</div>';
+      if (window.lucide) lucide.createIcons({ root: listContainer });
+      return;
+    }
+
+    friends.forEach(function(f) {
+      html += self._buildFriendRowHtml(f, state, { reopen: true, closed: !!closedDMs[f.userId] });
+    });
+    listContainer.innerHTML = html;
+    if (window.lucide) lucide.createIcons({ root: listContainer });
+  },
+
   renderList(state) {
     var closedDMs = state.closedDMs || {};
     var pinnedDMs = state.pinnedDMs || {};
     var userChatIds = state._userChatIds;
     var friends = state.friends.filter(function(f) {
-      if (closedDMs[f.userId]) return false;
+      // Orbit Echo is never filtered out, closed or not.
+      if (f.userId !== 'local-echo' && closedDMs[f.userId]) return false;
       if (userChatIds && userChatIds.indexOf(f.userId) === -1) return false;
       return true;
     });
@@ -588,7 +654,8 @@ window.SidebarMiddle = {
     }
   },
 
-  _buildFriendRowHtml(friend, state) {
+  _buildFriendRowHtml(friend, state, opts) {
+    opts = opts || {};
     var self = this;
     var activeChatId = state.activeChatId;
     var messages = state.messages;
@@ -606,6 +673,11 @@ window.SidebarMiddle = {
       } else {
         subtitleHtml = '<span style="display:inline-flex;align-items:center;gap:4px;color:var(--accent-primary);"><i data-lucide="paperclip" style="width:12px;height:12px;"></i> Attachment</span>';
       }
+    }
+
+    if (opts.closed) {
+      subtitleHtml = '<span style="display:inline-flex;align-items:center;gap:4px;color:var(--text-muted);">' +
+        '<i data-lucide="archive" style="width:12px;height:12px;"></i> Closed \u2014 click to reopen</span>';
     }
 
     var frame = window.Frames.getFrameForUser(friend.userId);
@@ -629,7 +701,7 @@ window.SidebarMiddle = {
     var isPinned = pinnedDMs[friend.userId];
     var pinnedHtml = isPinned ? '<i data-lucide="pin" style="width:14px;height:14px;color:var(--accent-primary);flex-shrink:0;"></i>' : '';
 
-    return '<div class="list-row ' + (isActive ? 'active' : '') + '" data-id="' + window.Sanitize.escapeHtml(friend.userId) + '" data-debug="User: ' + window.Sanitize.escapeHtml(friend.username) + ' ID: ' + window.Sanitize.escapeHtml(friend.userId) + ' Status: ' + window.Sanitize.escapeHtml(friend.status || 'offline') + '">' +
+    return '<div class="list-row ' + (isActive ? 'active' : '') + '"' + (opts.reopen ? ' data-reopen="1"' : '') + ' data-id="' + window.Sanitize.escapeHtml(friend.userId) + '" data-debug="User: ' + window.Sanitize.escapeHtml(friend.username) + ' ID: ' + window.Sanitize.escapeHtml(friend.userId) + ' Status: ' + window.Sanitize.escapeHtml(friend.status || 'offline') + '">' +
       '<div class="avatar avatar-md list-row-avatar" style="position:relative;">' +
         avatarContainer +
         '<div class="status-indicator ' + window.Sanitize.escapeHtml(friend.status || 'offline') + '"></div>' +
@@ -1225,6 +1297,10 @@ window.SidebarMiddle = {
         var state = window.store.getState();
         var friend = state.friends.find(function(f) { return f.userId === id; });
         if (friend && window.ProfileSidebar) window.ProfileSidebar.open(friend);
+      } else if (row.getAttribute('data-reopen')) {
+        // From All Friends: clear the closed flag too, or the DM would open and
+        // then vanish from the list again on the next render.
+        window.store.reopenDM(id);
       } else {
         window.store.setState({ activeChatId: id });
       }
@@ -1280,7 +1356,9 @@ window.SidebarMiddle = {
         e.target.style.color = 'var(--text-primary)';
         e.target.style.fontWeight = '500';
         
-        var view = e.target.innerText.toLowerCase();
+        // data-view, not the label — "All Friends" would otherwise become the
+        // view name "all friends".
+        var view = e.target.getAttribute('data-view') || e.target.innerText.toLowerCase();
         window.store.setState({ activeView: view, activeFolder: null });
       });
     });
@@ -1481,9 +1559,15 @@ window.SidebarMiddle = {
               navigator.clipboard.writeText(id);
               if (window.Toast) window.Toast.show('Copied', 'User ID copied to clipboard');
             }},
-            { label: 'Close DM', icon: 'x', color: 'var(--accent-danger)', onClick: function() {
-              window.store.closeDM(id);
-            }}
+            (id === 'local-echo'
+              ? { label: 'Close DM (not available)', icon: 'lock', color: 'var(--text-muted)', onClick: function() {
+                  if (window.Toast) {
+                    window.Toast.show('Orbit Echo cannot be closed', 'It is always available in your DMs', 'info');
+                  }
+                }}
+              : { label: 'Close DM', icon: 'x', color: 'var(--accent-danger)', onClick: function() {
+                  window.store.closeDM(id);
+                }})
           ];
           self._appendFolderMenuItems(items, { kind: 'friend', id: id });
           window.ContextMenu.show(e.clientX, e.clientY, items);

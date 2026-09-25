@@ -21,19 +21,23 @@ test.describe('navigation', () => {
     await expect(echoRow.locator('.list-row-title')).toHaveText('Orbit Echo');
   });
 
-  test('switches between Friends and Groups tabs', async () => {
+  test('switches between Friends, All Friends and Groups tabs', async () => {
     // DMs view: friends list is rendered.
     await expect(page.locator('.list-row[data-id="local-echo"]')).toBeVisible();
 
+    // All Friends tab → every friend, whether or not their DM is open. Located by
+    // data-view: matching on the label would also hit "All Friends".
+    await page.locator('.tabs-container .tab[data-view="allfriends"]').click();
+    await expect(page.locator('.list-row[data-id="local-echo"]')).toBeVisible();
+
     // Groups tab → groups view ("+ Create Group" button).
-    const groupsTab = page.locator('.tabs-container .tab', { hasText: 'Groups' });
+    const groupsTab = page.locator('.tabs-container .tab[data-view="groups"]');
     await groupsTab.click();
     await expect(page.locator('#btn-create-group')).toBeVisible();
     await expect(page.locator('.list-row[data-id="local-echo"]')).toHaveCount(0);
 
     // Back to Friends tab → friends list again.
-    const friendsTab = page.locator('.tabs-container .tab', { hasText: 'Friends' });
-    await friendsTab.click();
+    await page.locator('.tabs-container .tab[data-view="friends"]').click();
     await expect(page.locator('.list-row[data-id="local-echo"]')).toBeVisible();
   });
 

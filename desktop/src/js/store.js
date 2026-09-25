@@ -132,7 +132,10 @@ class Store {
       activeView: 'friends',
       activeFolder: null,
       activeTab: uiState.activeTab || 'dms',
-      activeChatId: uiState.activeChatId || 'local-echo',
+      // Deliberately NOT the last chat. Orbit opens on the welcome slides: the
+      // panel's empty state is where the feature tour lives, and landing straight
+      // in an old conversation hid it. (Dan, v0.7.0.)
+      activeChatId: null,
       sidebarMiddleVisible: true,
       messages: dbMessages,
       transferProgress: {},
@@ -263,7 +266,10 @@ class Store {
     }
     this.setState({
       messages: data.messages || {},
-      activeChatId: 'local-echo',
+      // No chat open on load (or on an account switch): the chat panel's empty
+      // state is where the welcome slides live, and this used to force Orbit Echo
+      // open instead. (Dan, v0.7.0.)
+      activeChatId: null,
       activeTab: 'dms',
       unreadCounts: {},
       mentionCounts: {},
@@ -485,19 +491,26 @@ class Store {
   }
 
   closeDM(userId) {
-    // Don't delete friend globally — just close the DM for this account
-    const messages = { ...this.state.messages };
-    delete messages[userId];
-    const pinnedMessages = { ...this.state.pinnedMessages };
-    delete pinnedMessages[userId];
+    // Orbit Echo is the app's own bot and the one DM that has to stay reachable.
+    // A closed DM is filtered out of the sidebar, and Echo is not a peer you can
+    // re-add — so closing it removed the only way back to it.
+    if (userId === 'local-echo') {
+      if (window.Toast) {
+        window.Toast.show('Orbit Echo cannot be closed', 'It is always available in your DMs', 'info');
+      }
+      return;
+    }
+    // Closing only hides the DM. This used to delete messages[userId] and
+    // pinnedMessages[userId] out of state — and state is persisted — so
+    // "Close DM" destroyed the very conversation it was closing. The messages and
+    // pins now stay exactly where they are; only the sidebar entry is hidden, and
+    // the All Friends tab (or a new message) brings it back.
     const unreadCounts = { ...this.state.unreadCounts };
     delete unreadCounts[userId];
     const mentionCounts = { ...this.state.mentionCounts };
     delete mentionCounts[userId];
     const lastReadIds = { ...this.state.lastReadIds };
     delete lastReadIds[userId];
-    const mutedChats = { ...this.state.mutedChats };
-    delete mutedChats[userId];
     const uid = this.state.currentUser && this.state.currentUser.userId;
     var closedDMs = this._loadUserClosedDMs(uid);
     closedDMs = { ...closedDMs, [userId]: true };
@@ -505,8 +518,13 @@ class Store {
     var pinnedDMs = this._loadUserPinnedDMs(uid);
     delete pinnedDMs[userId];
     this._saveUserPinnedDMs(uid, pinnedDMs);
-    this.setState({ messages, pinnedMessages, unreadCounts, mentionCounts, lastReadIds, mutedChats, pinnedDMs, closedDMs, activeChatId: 'local-echo' });
-    if (window.Toast) window.Toast.show('Closed', 'DM closed');
+    // Closing the DM you are reading drops you back to the welcome screen rather
+    // than into Orbit Echo.
+    var nextActive = this.state.activeChatId === userId ? null : this.state.activeChatId;
+    this.setState({ unreadCounts, mentionCounts, lastReadIds, pinnedDMs, closedDMs, activeChatId: nextActive });
+    if (window.Toast) {
+      window.Toast.show('DM closed', 'The conversation is kept — reopen it from All Friends');
+    }
   }
 
   togglePinDM(userId) {

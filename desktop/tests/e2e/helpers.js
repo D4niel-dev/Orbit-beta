@@ -26,14 +26,16 @@ const DEFAULT_ELECTRON_ARGS = [
 // extraArgs are appended as Chromium switches (e.g. fake media flags for the
 // voice recorder spec). Passed per-test rather than via a second Playwright
 // project, because the launch happens here in the helper, not in the config.
-async function launchApp(userDataDir, extraArgs = []) {
+async function launchApp(userDataDir, extraArgs = [], opts = {}) {
   const app = await electron.launch({
     args: ['.', `--user-data-dir=${userDataDir}`, ...DEFAULT_ELECTRON_ARGS, ...extraArgs],
     cwd: DESKTOP_DIR
   });
   const page = await app.firstWindow();
-  // Wait for the renderer to finish booting (chat panel rendered for Orbit Echo).
-  await page.waitForSelector('#chat-input', { timeout: 30000 });
+  // Wait for the app SHELL, not the composer. Since v0.7.0 the app boots with no
+  // chat open — the chat panel shows the welcome slides — so #chat-input is not
+  // on screen yet, and waiting for it timed out for every spec.
+  await page.waitForSelector('#middle-sidebar-container', { timeout: 30000 });
   // The startup tutorial overlay can appear ~1s after boot and blocks pointer
   // events over the whole window. Dismiss it deterministically: mark it
   // completed in the store (identical to pressing "Skip") and click Skip if the
@@ -48,6 +50,18 @@ async function launchApp(userDataDir, extraArgs = []) {
     await skip.click();
   }
   await page.locator('#tutorial-overlay').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+
+  // The specs are written against a chat being open, so give them one. Pass
+  // { keepBootState: true } to observe the real cold-start state instead — the
+  // welcome slides with no active chat — which is what the DM/sidebar spec does.
+  if (!opts.keepBootState) {
+    await page.evaluate(() => {
+      if (window.store && !window.store.getState().activeChatId) {
+        window.store.setState({ activeChatId: 'local-echo' });
+      }
+    });
+    await page.waitForSelector('#chat-input', { timeout: 15000 });
+  }
   return { app, page };
 }
 
