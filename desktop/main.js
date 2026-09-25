@@ -1003,15 +1003,11 @@ app.whenReady().then(() => {
   // Notification Handler
   ipcMain.on('show-notification', (event, title, body, iconData) => {
     if (Notification.isSupported()) {
-      let notifIcon = icon;
-      if (iconData && typeof iconData === 'string') {
-        try {
-          notifIcon = nativeImage.createFromDataURL(iconData);
-        } catch(e) {
-          notifIcon = icon;
-        }
-      }
-      const notif = new Notification({ title, body, icon: notifIcon });
+      // The Orbit app icon, deliberately — not the sender's avatar. The icon is
+      // how a user tells which app a notification came from, and swapping in a
+      // face made Orbit's toasts look like they came from whatever contact sent
+      // them. iconData is still accepted so the callers keep working.
+      const notif = new Notification({ title, body, icon: icon });
       notif.on('click', () => {
         if (mainWindow) {
            if (mainWindow.isMinimized()) mainWindow.restore();

@@ -1,5 +1,17 @@
 # Orbit Changelog
 
+## v0.7.0-beta
+
+### Bug Fixes
+
+- **The `/help` Sheet Was Sized to the Keyboard, and Never Re-measured** — The sheet's `max-height` is derived from `visualViewport`, and a slash-command sheet opens while the soft keyboard is still up: `_dismissKeyboard()` only *asks* it to close, and Android takes a few hundred ms to animate it away. The single measurement taken at open time therefore recorded the keyboard-up height and the sheet stayed capped to 0.7 × that for its whole life, because the `visualViewport` resize event that should correct it does not reliably arrive when the keyboard hides. On a 2400px screen that is a 996px sheet — 19 commands reduced to the three that fit, with the rest below a fold that never moved. The screenshot gave the arithmetic away: 996 = 0.7 × 1423, and 1423 is exactly what a 2400px screen measures with the keyboard open. The sheet now re-measures on a short settle schedule (0/180/450/900/1500 ms) instead of trusting one sample, and every pass re-reads the current height, so a sheet that legitimately wants keyboard avoidance — the `/poll` builder — still shrinks when its own field raises the keyboard. Verified by reproducing the device state: the sheet recovers to the full 70% cap and the stale variable is corrected, with no resize event involved.
+- **`/help` Spent a Third of Every Row Repeating Itself** — Ten of the nineteen commands are invoked bare (`/help`, `/shrug`, `/flip`, `/lenny` …), and each of those rows printed a usage line identical to the command name. Those lines are gone, and row padding tightened, which took the list from 1415px to 1199px and the average row from ~150px to 57px — more of the list on screen before you scroll.
+- **A Long Sheet Now Shows That It Continues** — Android WebView paints overlay scrollbars that appear only once you are already scrolling, and styled `::-webkit-scrollbar` rules do not change that, so a clipped list gave no hint at all. The sheet now carries a real scroll thumb, sized in proportion to the content and moved to track the scroll position, which is what "a slider to see the other commands" needs.
+
+### Features
+
+- **One Icon for Every Notification** — Every notification now uses the Orbit mark instead of eight per-kind glyphs (a chat bubble, a phone, a tick, a sync arrow…), because the icon is how you tell which app a notification came from — the same reason Discord uses its logo for everything. On Android the mark is generated from the app banner's alpha channel at all five densities, so the system tints it correctly; the nine hand-made vector icons it replaces are deleted. The desktop notification also stops substituting the sender's avatar for the app icon. Channels are untouched, so per-kind muting and importance behave exactly as before.
+
 ## v0.6.5-beta
 
 > **Note:** The panels-and-playback release. Leaving a chat while audio was playing could strand the player outside its own bubble, in whatever chat you opened next — and once stranded it could never find its way home. The `/help` sheet and the emoji picker both had working machinery underneath but no visible way in or out. All three are addressed here.

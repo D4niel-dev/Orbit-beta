@@ -588,7 +588,7 @@ public class OrbitForegroundService extends Service {
         return new Notification.Builder(this, CHANNEL_ID)
             .setContentTitle("Orbit")
             .setContentText("Connected")
-            .setSmallIcon(com.orbit.app.R.drawable.ic_notify_service)
+            .setSmallIcon(com.orbit.app.R.drawable.ic_notify_orbit)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setPriority(Notification.PRIORITY_LOW)

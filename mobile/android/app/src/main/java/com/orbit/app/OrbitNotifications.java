@@ -38,23 +38,29 @@ public final class OrbitNotifications {
     /** Matches res/values/colors.xml colorAccent, so notifications look like Orbit. */
     private static final int ACCENT = 0xFF89B4FA;
 
-    /** What a notification is about. Decides both the channel and the small icon. */
+    /**
+     * What a notification is about. Decides the channel and the priority.
+     *
+     * Every kind shares one small icon — the Orbit mark — because the icon is
+     * how a user tells which app a notification came from, and per-kind glyphs
+     * (a chat bubble, a phone, a tick) made Orbit's notifications look like
+     * generic system ones. Channels still separate the kinds, so per-kind
+     * muting and importance are unchanged.
+     */
     public enum Kind {
-        MESSAGE   (R.drawable.ic_notify_message,    CH_MESSAGES,   NotificationCompat.PRIORITY_HIGH),
-        MENTION   (R.drawable.ic_notify_mention,    CH_MENTIONS,   NotificationCompat.PRIORITY_HIGH),
-        CALL      (R.drawable.ic_notify_call,       CH_CALLS,      NotificationCompat.PRIORITY_MAX),
-        VIDEO_CALL(R.drawable.ic_notify_video_call, CH_CALLS,      NotificationCompat.PRIORITY_MAX),
-        UPDATE    (R.drawable.ic_notify_update,     CH_UPDATES,    NotificationCompat.PRIORITY_DEFAULT),
-        PROGRESS  (R.drawable.ic_notify_sync,       CH_BACKGROUND, NotificationCompat.PRIORITY_LOW),
-        ERROR     (R.drawable.ic_notify_alert,      CH_MESSAGES,   NotificationCompat.PRIORITY_HIGH),
-        SUCCESS   (R.drawable.ic_notify_check,      CH_MESSAGES,   NotificationCompat.PRIORITY_DEFAULT);
+        MESSAGE   (CH_MESSAGES,   NotificationCompat.PRIORITY_HIGH),
+        MENTION   (CH_MENTIONS,   NotificationCompat.PRIORITY_HIGH),
+        CALL      (CH_CALLS,      NotificationCompat.PRIORITY_MAX),
+        VIDEO_CALL(CH_CALLS,      NotificationCompat.PRIORITY_MAX),
+        UPDATE    (CH_UPDATES,    NotificationCompat.PRIORITY_DEFAULT),
+        PROGRESS  (CH_BACKGROUND, NotificationCompat.PRIORITY_LOW),
+        ERROR     (CH_MESSAGES,   NotificationCompat.PRIORITY_HIGH),
+        SUCCESS   (CH_MESSAGES,   NotificationCompat.PRIORITY_DEFAULT);
 
-        public final int icon;
         public final String channel;
         public final int priority;
 
-        Kind(int icon, String channel, int priority) {
-            this.icon = icon;
+        Kind(String channel, int priority) {
             this.channel = channel;
             this.priority = priority;
         }
@@ -110,7 +116,7 @@ public final class OrbitNotifications {
             }
 
             NotificationCompat.Builder b = new NotificationCompat.Builder(ctx, kind.channel)
-                    .setSmallIcon(kind.icon)
+                    .setSmallIcon(R.drawable.ic_notify_orbit)
                     .setContentTitle(title == null ? "Orbit" : title)
                     .setContentText(text == null ? "" : text)
                     .setStyle(new NotificationCompat.BigTextStyle().bigText(text == null ? "" : text))

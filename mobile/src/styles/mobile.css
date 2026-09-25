@@ -5716,6 +5716,21 @@ textarea#chat-input {
   mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
 }
 
+/* Scroll thumb we position ourselves (see OrbitSheet._syncScrollHint).
+   Android WebView shows no scrollbar until you are already scrolling, so a long
+   sheet needs a visible indicator of its own — this is sized and moved to match
+   the scroll position. */
+.bottom-sheet-scrollbar {
+  position: absolute;
+  right: 3px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--text-muted);
+  opacity: 0.45;
+  pointer-events: none;
+  display: none;
+}
+
 /* 22. Mic button in composer */
 #btn-send i[data-lucide="mic"] {
   width: 20px;

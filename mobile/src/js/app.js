@@ -4132,11 +4132,19 @@ document.addEventListener('DOMContentLoaded', function() {
     html += '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Group-only utilities — only work inside group chats</div>';
     for (var i = 0; i < COMMANDS.length; i++) {
       var c = COMMANDS[i];
-      html += '<div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border-subtle);">';
+      // The usage line only earns a row when it shows something the name does
+      // not: 10 of the 19 commands are invoked bare (/help, /shrug, /flip …), so
+      // those rows were spending a third of their height repeating themselves.
+      // With 19 commands that is the difference between seeing three of them and
+      // seeing most of the list without scrolling.
+      var showUsage = String(c.usage || '').trim() !== String(c.name || '').trim();
+      html += '<div style="display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--border-subtle);">';
       html += '  <div style="flex:1;min-width:0;">';
       html += '    <div style="font-size:14px;font-weight:600;color:var(--accent-primary);font-family:monospace;">' + esc(c.name) + '</div>';
       html += '    <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">' + esc(c.desc) + '</div>';
-      html += '    <div style="font-size:11px;color:var(--text-muted);margin-top:1px;font-family:monospace;">' + esc(c.usage) + '</div>';
+      if (showUsage) {
+        html += '    <div style="font-size:11px;color:var(--text-muted);margin-top:1px;font-family:monospace;">' + esc(c.usage) + '</div>';
+      }
       html += '  </div>';
       html += '</div>';
     }
@@ -10160,7 +10168,7 @@ document.addEventListener('DOMContentLoaded', function() {
             title: title,
             body: body,
             channelId: 'orbit_messages',
-            smallIcon: 'ic_notify_message',
+            smallIcon: 'ic_notify_orbit',
             data: data || {}
           }]
         });

@@ -31,6 +31,36 @@ var OrbitSheet = {
   },
 
   /**
+   * Re-measure the viewport a few times after a sheet opens.
+   *
+   * A sheet opened from a slash command (/help, /poll) opens while the soft
+   * keyboard is still UP: _dismissKeyboard() only asks it to close, and Android
+   * takes a few hundred ms to animate it away. Measuring once at open time
+   * therefore records the keyboard-up height — on a 2400px screen that is about
+   * 1423px — and the sheet stays capped to 0.7 x that for its whole life, so a
+   * 19-command list shows three and looks truncated. Measured from a real device
+   * screenshot: the sheet came out 996px tall, which is exactly 0.7 x 1423.
+   *
+   * The visualViewport resize event that should correct this does not reliably
+   * arrive on Android when the keyboard hides, so re-measure on a short schedule
+   * instead of trusting a single sample. Each pass re-reads the CURRENT height,
+   * so a sheet that legitimately wants keyboard avoidance (the /poll builder)
+   * still shrinks when its own field raises the keyboard.
+   */
+  _settleViewport: function() {
+    var self = this;
+    if (this._settleTimers) this._settleTimers.forEach(function(t) { clearTimeout(t); });
+    this._settleTimers = [0, 180, 450, 900, 1500].map(function(ms) {
+      return setTimeout(function() {
+        var overlay = document.getElementById('bottom-sheet-overlay');
+        if (!overlay || !overlay.classList.contains('active')) return;
+        self._syncViewport();
+        self._syncScrollHint();
+      }, ms);
+    });
+  },
+
+  /**
    * Close the soft keyboard if a text field is focused.
    *
    * Belt-and-braces alongside _syncViewport: the conventional mobile behaviour
@@ -75,6 +105,7 @@ var OrbitSheet = {
 
     OrbitSheet._dismissKeyboard();
     OrbitSheet._syncViewport();
+    OrbitSheet._settleViewport();
     OrbitSheet._resetSheetTransform();
     
     // Build content
@@ -135,6 +166,7 @@ var OrbitSheet = {
     // Must happen BEFORE the sheet becomes visible — see _syncViewport.
     OrbitSheet._dismissKeyboard();
     OrbitSheet._syncViewport();
+    OrbitSheet._settleViewport();
     OrbitSheet._resetSheetTransform();
     
     content.innerHTML = html;
@@ -210,8 +242,34 @@ var OrbitSheet = {
     var sheet = document.getElementById('bottom-sheet');
     var content = document.getElementById('bottom-sheet-content');
     if (!sheet || !content) return;
-    var more = (content.scrollHeight - content.clientHeight - content.scrollTop) > 8;
+    var max = content.scrollHeight - content.clientHeight;
+    var more = (max - content.scrollTop) > 8;
     sheet.classList.toggle('has-more', more);
+
+    // A real, always-visible scroll thumb.
+    //
+    // Android WebView paints overlay scrollbars that only appear while you are
+    // ALREADY scrolling, and styled ::-webkit-scrollbar rules do not change that
+    // — so a clipped list gives no hint that it continues. This is an element we
+    // position ourselves, sized and moved to match the scroll position, which is
+    // what "a slider to scroll and see the other commands" needs.
+    var bar = sheet.querySelector('.bottom-sheet-scrollbar');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.className = 'bottom-sheet-scrollbar';
+      sheet.appendChild(bar);
+    }
+    if (max <= 1) {
+      bar.style.display = 'none';
+      return;
+    }
+    var track = content.clientHeight;
+    var thumb = Math.max(28, Math.round(track * (track / content.scrollHeight)));
+    var travel = Math.max(0, track - thumb);
+    var progress = max > 0 ? (content.scrollTop / max) : 0;
+    bar.style.display = 'block';
+    bar.style.height = thumb + 'px';
+    bar.style.top = (content.offsetTop + Math.round(travel * progress)) + 'px';
   },
 
   /** Set callbacks for actions */
