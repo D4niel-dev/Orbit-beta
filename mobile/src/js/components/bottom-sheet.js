@@ -20,14 +20,31 @@ var OrbitSheet = {
   _syncViewport: function() {
     var overlay = document.getElementById('bottom-sheet-overlay');
     if (!overlay) return;
+
+    // Which height the sheet is sized against depends on whether the keyboard is
+    // a concern at all.
+    //
+    // A sheet with NO text field has no reason to avoid the keyboard, and sizing
+    // it from `visualViewport` means inheriting the keyboard-shrunken height — a
+    // measurement Android does not always grow back when the keyboard hides. That
+    // is what left /help capped at roughly a third of the screen on Dan's phone,
+    // with its Cancel footer pushed off the bottom. The layout viewport
+    // (`innerHeight`) is stable and recovers, so use it.
+    //
+    // A sheet WITH a field (the /poll builder, rename prompts) does want to stay
+    // above the keyboard, and there the visual viewport is exactly right.
+    var sheet = document.getElementById('bottom-sheet');
+    var hasInput = !!(sheet && sheet.querySelector('input, textarea, [contenteditable="true"]'));
     var vv = window.visualViewport;
-    if (!vv || !vv.height) {
+    var h = hasInput ? ((vv && vv.height) ? vv.height : window.innerHeight) : window.innerHeight;
+
+    if (!h) {
       overlay.style.height = '';
       overlay.style.removeProperty('--sheet-vh');
       return;
     }
-    overlay.style.height = vv.height + 'px';
-    overlay.style.setProperty('--sheet-vh', vv.height + 'px');
+    overlay.style.height = h + 'px';
+    overlay.style.setProperty('--sheet-vh', h + 'px');
   },
 
   /**
@@ -287,7 +304,7 @@ var OrbitSheet = {
   var sheet = document.getElementById('bottom-sheet');
   var overlay = document.getElementById('bottom-sheet-overlay');
   if (!sheet || !overlay) return;
-  var startY = 0, curY = 0, dragging = false, startTime = 0;
+  var startY = 0, curY = 0, dragging = false, dragConfirmed = false, startTime = 0;
   var _rafPending = false, _lastDy = 0;
 
   function canStartDrag(target) {
@@ -316,6 +333,7 @@ var OrbitSheet = {
     if (!overlay.classList.contains('active')) { dragging = false; return; }
     if (!canStartDrag(e.target)) { dragging = false; return; }
     dragging = true;
+    dragConfirmed = false;
     startTime = Date.now();
     startY = e.touches[0].clientY;
     curY = startY;
@@ -325,6 +343,22 @@ var OrbitSheet = {
   sheet.addEventListener('touchmove', function (e) {
     if (!dragging) return;
     var dy = e.touches[0].clientY - startY;
+
+    // Direction is only knowable here, not at touchstart, and the decision has to
+    // be made from it: an UPWARD gesture over content that can scroll is a scroll,
+    // never a drag. Without this the body-drag (allowed while scrollTop is 0) took
+    // over the first swipe of every long list, so the sheet moved with the finger
+    // while the list tried to scroll underneath it.
+    if (!dragConfirmed) {
+      var content = document.getElementById('bottom-sheet-content');
+      var canScroll = !!(content && content.scrollHeight > content.clientHeight + 1);
+      if (dy < 0 && canScroll) {
+        dragging = false;
+        sheet.style.willChange = '';
+        return;
+      }
+      dragConfirmed = true;
+    }
     if (dy < 0) dy = 0;
     curY = e.touches[0].clientY;
     _lastDy = dy;

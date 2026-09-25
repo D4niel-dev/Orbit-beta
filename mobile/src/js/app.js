@@ -4260,12 +4260,33 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // emoji-picker-element only remembers the chosen skin tone for the session,
     // so persist it — otherwise every launch silently resets to the default.
+    //
+    // The value MUST be validated on both sides. The picker renders whatever it is
+    // handed inside its skin-tone button, and a `skin-tone-change` event with no
+    // detail stored the literal string "undefined" — which then rendered as a
+    // giant "undefined" across the search row on the next launch. (Reported by
+    // Dan; the poisoned value had to be cleared, not just stopped, so the read
+    // side rejects and removes it.)
+    function isValidSkinTone(v) {
+      // A tone emoji is a non-ASCII grapheme: "undefined" and friends are ASCII,
+      // so this rejects every bad value without trying to enumerate good ones.
+      return typeof v === 'string' && v.length > 0 && v.length <= 12 && !/[\x00-\x7F]/.test(v);
+    }
     try {
       var savedTone = localStorage.getItem('orbit_emoji_skin_tone');
-      if (savedTone) picker.skinToneEmoji = savedTone;
+      if (savedTone) {
+        if (isValidSkinTone(savedTone)) {
+          picker.skinToneEmoji = savedTone;
+        } else {
+          localStorage.removeItem('orbit_emoji_skin_tone');   // self-heal
+        }
+      }
     } catch (e) { /* storage blocked — the picker keeps its default tone */ }
     picker.addEventListener('skin-tone-change', function(e) {
-      try { localStorage.setItem('orbit_emoji_skin_tone', e.detail.skinToneEmoji); } catch (e2) {}
+      try {
+        var tone = e && e.detail ? e.detail.skinToneEmoji : null;
+        if (isValidSkinTone(tone)) localStorage.setItem('orbit_emoji_skin_tone', tone);
+      } catch (e2) {}
     });
 
     picker.addEventListener('emoji-click', function(e) {
