@@ -10168,6 +10168,36 @@ document.addEventListener('DOMContentLoaded', function() {
   // exercised without a device (there is no native plugin in a browser harness).
   window.orbitNotificationAvatar = _notificationAvatar;
 
+  // Hand the native layer the avatars it will need.
+  //
+  // A background notification is posted from the NATIVE message handler (the
+  // WebView may be frozen, which is exactly why that path exists), and it only has
+  // the packet — and a MESSAGE packet carries no image, deliberately: putting a
+  // thumbnail on every message would be absurd. So the renderer pushes what it
+  // knows instead, and OrbitNotifications.setPeerAvatars keeps it.
+  //
+  // Called on the way to the background, which is the last moment the WebView is
+  // guaranteed to be running, and once shortly after boot.
+  function pushPeerAvatarsToNative() {
+    try {
+      var plugins = (window.Capacitor && window.Capacitor.Plugins) || {};
+      if (!plugins.OrbitP2P || typeof plugins.OrbitP2P.setPeerAvatars !== 'function') return;
+      var map = {};
+      var friends = (window.MStore && MStore.friends) || [];
+      for (var i = 0; i < friends.length; i++) {
+        var f = friends[i];
+        if (!f || !f.id || !f.avatar) continue;
+        var src = (typeof safeAvatarSrc === 'function') ? safeAvatarSrc(f.avatar) : f.avatar;
+        // Data URLs only: the native side base64-decodes them directly. A path or
+        // a blob URL would be rejected there anyway, so do not pretend otherwise.
+        if (src && /^data:image\//i.test(src)) map[f.id] = src;
+      }
+      var r = plugins.OrbitP2P.setPeerAvatars({ avatars: map });
+      if (r && r.catch) r.catch(function () {});
+    } catch (e) { /* an avatar cache must never break anything */ }
+  }
+  window.orbitPushPeerAvatars = pushPeerAvatarsToNative;
+
   function showNativeNotification(title, body, data, kind) {
     if (NOTIFY_KINDS.indexOf(kind) === -1) kind = 'MESSAGE';
     try {
@@ -14332,6 +14362,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // instead of document.hidden which is unreliable in Capacitor WebView
     window._appIsBackgrounded = false;
 
+    // Seed the native avatar cache once the store has settled, so a notification
+    // arriving after a cold start in the background still has a face to show.
+    setTimeout(pushPeerAvatarsToNative, 4000);
+
     // Request battery optimization exemption (user prompt)
     try {
       if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.OrbitP2P) {
@@ -14403,6 +14437,10 @@ document.addEventListener('DOMContentLoaded', function() {
             flushPendingNotifications();
             // Anything queued while we were away may be deliverable now.
             if (window.OrbitOutbox) OrbitOutbox.flush();
+          } else {
+            // Last guaranteed moment the WebView is running: give the native
+            // layer the avatars its background notifications will need.
+            pushPeerAvatarsToNative();
           }
         });
       }

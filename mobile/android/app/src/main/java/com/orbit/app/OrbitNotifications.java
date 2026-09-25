@@ -66,6 +66,47 @@ public final class OrbitNotifications {
         }
     }
 
+    /**
+     * Avatars for peers, keyed by userId, pushed here by the renderer.
+     *
+     * The background notification is posted from the NATIVE message handler, which
+     * only has the packet — and a MESSAGE packet carries no avatar (adding one would
+     * put a thumbnail on every message). So the renderer pushes the avatars it knows
+     * about whenever they change, and this is what the native path looks up. Bounded
+     * on both axes: one entry per peer, and oversized values are ignored.
+     */
+    private static final java.util.Map<String, String> PEER_AVATARS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static final int MAX_AVATAR_CHARS = 65536;
+    private static final int MAX_AVATAR_ENTRIES = 200;
+
+    /** Replace the cache with the renderer's current view of its friends' avatars. */
+    public static void setPeerAvatars(org.json.JSONObject map) {
+        if (map == null) return;
+        try {
+            PEER_AVATARS.clear();
+            java.util.Iterator<String> keys = map.keys();
+            int taken = 0;
+            while (keys.hasNext() && taken < MAX_AVATAR_ENTRIES) {
+                String id = keys.next();
+                String avatar = map.optString(id, null);
+                if (id == null || id.isEmpty() || avatar == null || avatar.isEmpty()) continue;
+                if (!avatar.startsWith("data:image")) continue;   // only what we can decode
+                if (avatar.length() > MAX_AVATAR_CHARS) continue; // a full-res image, not a thumb
+                PEER_AVATARS.put(id, avatar);
+                taken++;
+            }
+        } catch (Throwable t) {
+            // A malformed push must never break notifications.
+        }
+    }
+
+    /** The cached avatar for a peer, or null. */
+    public static String avatarFor(String userId) {
+        if (userId == null || userId.isEmpty()) return null;
+        return PEER_AVATARS.get(userId);
+    }
+
     private OrbitNotifications() {}
 
     // ── channels ──

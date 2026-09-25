@@ -202,11 +202,16 @@ public class OrbitP2PPlugin extends Plugin {
             // single notification instead of stacking.
             String groupKey = !chatId.isEmpty() ? chatId : groupId;
 
+            // The avatar comes from the cache the renderer pushes (see
+            // OrbitNotifications.setPeerAvatars) — this path only has the packet,
+            // and a MESSAGE packet deliberately carries no image.
+            String avatar = com.orbit.app.OrbitNotifications.avatarFor(fromId);
+
             com.orbit.app.OrbitNotifications.post(
                     ctx,
                     isMention ? com.orbit.app.OrbitNotifications.Kind.MENTION
                               : com.orbit.app.OrbitNotifications.Kind.MESSAGE,
-                    fromName, text, groupKey, intent);
+                    fromName, text, groupKey, intent, avatar);
             Log.d(TAG, "Posted native notification from " + fromName + (isMention ? " (mention)" : ""));
         } catch (Exception e) {
             Log.e(TAG, "Failed to post native notification", e);
@@ -568,6 +573,18 @@ public class OrbitP2PPlugin extends Plugin {
     public void setIdentity(PluginCall call) {
         _selfId = call.getString("userId", "");
         call.resolve();
+    }
+
+    /** Renderer pushes {userId: avatarDataUrl} so background notifications can
+     *  show the sender's face. See OrbitNotifications.setPeerAvatars. */
+    @PluginMethod
+    public void setPeerAvatars(PluginCall call) {
+        try {
+            com.orbit.app.OrbitNotifications.setPeerAvatars(call.getObject("avatars", new JSObject()));
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("setPeerAvatars failed: " + e.getMessage());
+        }
     }
 
     /**
