@@ -14,7 +14,29 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.6.5-beta', 'Latest', [
+        versionBlock('0.7.0-beta', 'Latest', [
+          ['Messaging', [
+            'Closing a DM no longer deletes the conversation. It used to wipe the messages and the pins out of the chat it was closing \u2014 now it only hides the DM, and the history is exactly where you left it.',
+            'Orbit Echo can no longer be closed. It is the one DM that is always available, and closing it used to remove it for good with no way back.'
+          ]],
+          ['Friends', [
+            'An All friends button in the Friends header opens a directory of everyone \u2014 friends who are offline, and DMs you have closed, which you can reopen with one click. Search it, filter it (All / Online / Offline / Closed), and switch between a list and a grid.'
+          ]],
+          ['Chat Commands', [
+            'The /help list opens nearly full-screen and shows ten commands at once instead of three, with a scroll indicator so it is obvious there is more.'
+          ]],
+          ['Notifications', [
+            'Notifications use the Orbit icon now, so a glance at the corner tells you which app it came from.'
+          ]],
+          ['Look & Feel', [
+            'Orbit opens on its feature tour instead of jumping straight into your last conversation.',
+            'The people icons are the rounded variants now.'
+          ]],
+          ['Technical', [
+            'Version: Bumped to v0.7.0-beta.'
+          ]]
+        ]) +
+        versionBlock('0.6.5-beta', '', [
           ['Updates', [
             'Orbit downloads the update for you now. Instead of handing the installer to your browser, it fetches it into your Downloads folder, shows progress (with a cancel), checks it against the checksum published with the release, and then offers Open installer or Show in folder. If the file does not match the published checksum it is deleted rather than left on your disk. Nothing installs itself \u2014 these are unsigned builds, so you still run the installer \u2014 and the update notice also picks the right file for your machine now (an Intel Mac used to be offered the Apple-silicon build).'
           ]],

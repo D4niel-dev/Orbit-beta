@@ -6556,7 +6556,24 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button id="changelog-close-mobile" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;font-size:20px;">✕</button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
-        vBlock('0.6.5-beta', 'Latest', [
+        vBlock('0.7.0-beta', 'Latest', [
+          ['Chat Commands', [
+            'The /help list opens nearly full-screen and shows ten commands at once instead of three, with a scroll indicator so it is obvious there is more to see. The rows are tighter too, so there is less to scroll through.'
+          ]],
+          ['Notifications', [
+            'Every notification uses the Orbit icon now, so you can tell at a glance which app it came from \u2014 and the notification shows the face of whoever wrote.'
+          ]],
+          ['Fixed', [
+            'The first-run feature slides no longer appear in your chat list. That tour belongs on desktop; on a phone the conversation list should be the first thing you see.'
+          ]],
+          ['Look & Feel', [
+            'The people icons are the rounded variants now.'
+          ]],
+          ['Technical', [
+            'Version: Bumped to v0.7.0-beta.'
+          ]]
+        ]) +
+        vBlock('0.6.5-beta', '', [
           ['Audio', [
             'Audio no longer jumps out of its bubble. If you were playing a voice note and left the chat, the player used to reappear as a bare block in whatever chat you opened next \u2014 and it could not find its way home after that. It stays with its message now and carries on where it left off when you come back.'
           ]],

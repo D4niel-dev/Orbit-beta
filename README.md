@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v065-beta">v0.6.5-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v070-beta">v0.7.0-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@
 
 | Channel           | Version     | Status                                                                                                                                |
 | ----------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| **Latest**        | v0.6.5-beta | Update-delivery release — desktop fetches and checksum-verifies the installer itself, the notice picks the right build for your OS and CPU, playback no longer escapes its bubble, and the mobile panels gained real affordances |
+| **Latest**        | v0.7.0-beta | Directory-and-details release — "Close DM" no longer deletes the conversation, a friends directory that reaches everyone (closed DMs included), a `/help` sheet that is no longer sized to the keyboard, and notifications that say who wrote |
 | **Stable**        | v0.6.0-beta | Reliability release — notification plumbing, an offline send queue, a vault you can back up and take with you, in-app Android updates |
 | Legacy **Stable** | v0.1.1-beta | Legacy stable release                                                                                                                 |
 
@@ -90,13 +90,14 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage app for desktop and Android** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
-## Highlights (v0.6.5-beta)
+## Highlights (v0.7.0-beta)
 
-* **Desktop Downloads and Verifies the Update Itself** — The update notice used to hand the installer to your browser. It now fetches it into `Downloads/Orbit Updates`, shows progress with a cancel, checks the file against the release's published `SHA256SUMS.txt`, and offers **Open installer** / **Show in folder**. A mismatch deletes the file rather than leaving something wrong on disk. Nothing installs itself — these are unsigned builds — and only a file the app downloaded may be opened, so the new plumbing cannot be used as a general "run anything" primitive.
-* **The Update Notice Offered the Wrong Installer on macOS and Linux** — GitHub returns release assets in *alphabetical* order, not upload order, so "first match" was luck: an **Intel Mac was handed the Apple-silicon build** (which will not launch) and Linux was never offered the AppImage, only a `.deb`. Selection now considers the CPU architecture and prefers the format that runs anywhere. Windows checksum verification was also broken in a way that would have silently never matched — the manifest keeps CI's filename with spaces (`Orbit Setup 0.6.4-beta.exe`) while GitHub rewrites the asset to dots.
-* **A Playing Player No Longer Escapes Its Bubble** — Leave a chat mid-playback and the player used to be dumped into whatever chat you opened next as a bare block outside any bubble, then lose the ability to find its own message again. It stays with its message now, keeps playing while you are elsewhere, and re-attaches where it left off when you come back.
-* **The `/help` Sheet Has a Way Out and a Draggable Body** — The content always scrolled and the handle always dragged, but nothing said so: no visible scrollbar, a 4px grab target, and a Cancel pill pinned below the fold on a 19-command list. There is now a close button that is always on screen, the sheet body itself drags to dismiss when the list is at the top, and a fade on the last visible line shows there is more.
-* **The Emoji Picker Is Actually Themed** — It never was: the stylesheet set variable names the library does not read, so it rendered its own defaults the whole time — a `#444` hairline and a stray white focus box on whichever emoji held focus. Now themed to Orbit, with a grab handle, swipe-to-dismiss, a height that respects short screens, and your skin tone remembered between launches.
+* **"Close DM" No Longer Destroys the Conversation** — It deleted `messages[userId]` and `pinnedMessages[userId]` out of state, and state is persisted, so closing a DM threw away its entire history and every pin it held. Closing now hides the sidebar entry and nothing else — verified in the database and across a relaunch.
+* **A Closed DM Can Be Reopened, and Orbit Echo Cannot Be Closed At All** — A closed DM is filtered out of the Friends tab, and the only way back was a context menu *on that row* — which was no longer there. Echo was the worst case: it is not a peer you can re-add, so closing it removed it permanently. Echo's Close DM is now a locked item that explains itself, and the new **friends directory** reaches everyone else.
+* **The Friends Directory** — An **All friends** button in the Friends header opens a searchable list of every friend, online or not, with DMs you have closed marked *"Closed — click to reopen"*. It filters by All / Online / Offline / Closed and switches between a list and a grid. The button is there in the empty state too — "no friends online" is exactly when you need it.
+* **The `/help` Sheet Was Sized to the Keyboard** — A slash-command sheet opens while the soft keyboard is still up, and the single viewport measurement taken at that moment was kept for the sheet's whole life: 19 commands reduced to the three that fit, below a fold that never moved. It re-measures now, opens at 92% for reference lists (ten commands at once), shows a real scroll thumb, and no longer spends a third of every row repeating the command name.
+* **Notifications Say Who Wrote** — Every notification uses the Orbit mark, so the status bar says which app it came from, and on Android the notification carries the sender's avatar. Background notifications used to have no avatar at all: that path runs when the WebView is frozen and only has the packet, so the renderer now hands the native layer its friends' avatars on the way out.
+* **Orbit Opens on Its Feature Tour** — The app used to restore your last conversation, so the chat panel's empty state — where the tour lives — was only ever seen once. A cold start now opens with no chat selected. The first-run slides are desktop-only again; on mobile they were sitting in the conversation list, between you and the thing you opened the app for.
 
 ## Version History
 
@@ -660,7 +661,8 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Idle audio bubbles** — unplayed bubbles show the track's waveform instead of a void; the draw loop stops on pause and restarts on play
 
 </details>
-<details open>
+
+<details>
 <summary>v0.6.5-beta</summary>
 
 * **In-app update download (desktop)** — the notice fetches the installer into `Downloads/Orbit Updates` with progress and a cancel, verifies it against the release's `SHA256SUMS.txt`, and offers Open installer / Show in folder; a mismatch is deleted
@@ -669,6 +671,19 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Playback no longer escapes its bubble** — a player left mid-playback stayed in the wrong chat forever; it now keeps playing, stays hidden, and re-attaches to its own message
 * **`/help` sheet affordances** — always-visible close button, draggable body, and a scroll fade so a 19-command list does not look like it simply ends
 * **Emoji picker actually themed** — it had been rendering the library's defaults (stray outline included) because the CSS used variable names the library does not read; skin tone is remembered now
+
+</details>
+
+<details open>
+<summary>v0.7.0-beta</summary>
+
+* **"Close DM" keeps the conversation** — it deleted the messages and pins out of state (and state is persisted), so closing a DM destroyed its history
+* **Orbit Echo cannot be closed** — it is not a peer you can re-add, so closing its DM removed it for good; the menu entry is now a locked item that explains why
+* **The friends directory** — an "All friends" button in the Friends header opens a searchable, filterable list of everyone, closed DMs included, in a list or a grid
+* **The `/help` sheet** — it was capped to the keyboard-up viewport measurement taken when it opened, and never re-measured; it now opens at 92% with a scroll thumb, and rows no longer repeat the command name
+* **Notifications** — one Orbit icon for every kind, and the sender's avatar as the large icon (the background path had none at all)
+* **Orbit opens on the feature tour** instead of the last conversation, and the first-run slides are desktop-only again
+* **The people icons use their rounded variants** — `user`, `users`, `user-plus`, `user-x` and the Experimental flask
 
 </details>
 
@@ -683,6 +698,7 @@ Pre-built Windows installers are published on [GitHub Releases](https://github.c
 | Release                                                                          | Platform                    | Notes                                                                           |
 | -------------------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------- |
 | [All releases](https://github.com/D4niel-dev/Orbit-beta/releases)                | Win / Mac / Linux / Android | Most recent build first                                                         |
+| [v0.7.0-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.0-beta) | Win / Mac / Linux / Android | Close DM keeps the conversation, friends directory, `/help` sheet fix, notifications with the sender's avatar |
 | [v0.6.5-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.5-beta) | Win / Mac / Linux / Android | In-app update download with checksum verification, correct installer per OS/CPU, playback that survives a chat switch, mobile panel affordances |
 | [v0.6.4-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.4-beta) | Win / Mac / Linux / Android | Real audio waveform, file name above the timer, richer ⋮ menu, first-run feature slides |
 | [v0.6.3-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.3-beta) | Win / Mac / Linux / Android | File transfer fixed on both platforms, album art, video first frames, tray menu |
@@ -944,13 +960,14 @@ Transparency matters in beta. Current constraints include:
 
 ## Roadmap
 
-### Shipped (v0.6.5-beta)
+### Shipped (v0.7.0-beta)
 
-* **Desktop Downloads and Verifies Updates** — the installer lands in `Downloads/Orbit Updates` with progress and a cancel, is checked against the release's published `SHA256SUMS.txt`, and is deleted outright if it does not match
-* **The Update Notice Picks the Right Build** — assets arrive alphabetically from GitHub, which had been handing Intel Macs the Apple-silicon `.dmg` and Linux a `.deb` instead of the AppImage
-* **Playback Survives a Chat Switch** — a player left mid-playback no longer strands itself outside its bubble, in the wrong chat, permanently
-* **The `/help` Sheet Is Closable and Draggable** — an always-visible close button, a body that drags to dismiss, and a fade that admits there are more commands below
-* **The Emoji Picker Is Themed and Remembers Your Skin Tone** — it had been rendering the library's own defaults, stray focus outline included
+* **Close DM Stops Destroying History** — it deleted the chat's messages and pins out of persisted state; it now only hides the sidebar entry
+* **Orbit Echo Is Protected** — the one DM that is always available cannot be closed, and says so instead of disappearing
+* **The Friends Directory** — every friend, searchable and filterable, with closed DMs reopenable in one click
+* **`/help` Sized to the Keyboard Fixed** — the sheet kept the viewport measurement taken while the soft keyboard was still open, and never took another
+* **Notifications Identify Themselves** — one Orbit icon per notification, and the sender's avatar on Android
+* **Opens on the Feature Tour** — a cold start shows what Orbit does rather than your last chat
 
 ### In Progress / Planned
 
