@@ -24,9 +24,7 @@
 - **The Sidebar's "No Friends Online" State Is Dormant** — The friends list is empty only when there are *no friends at all*: it iterates `state.friends` (offline ones included), and Orbit Echo is always one of them. So that state cannot appear in practice. Left in place as the fallback it is, but it is worth knowing before anyone spends time on its wording.
 - **The desktop's own view scripts carry no `?v=` stamps** — only the stylesheets and some shared includes do (`js/views/chat-panel.js`, `js/views/sidebar-middle.js` are loaded bare). Harmless for an app reading local files, but it is an inconsistency with the mobile cache-busting rule, and worth aligning one day.
 
-### Technical
-
-- **`versionCode` comes from `GITHUB_RUN_NUMBER`**, and is `1` anywhere else** (`mobile/android/app/build.gradle`). That is fine for CI-built APKs, but a locally built APK therefore has `versionCode 1` and can never install over one built by CI — Android refuses the downgrade. Worth deriving from the version instead (e.g. `0.7.2` → `702`) so every build path produces a monotonic number.
+- **`versionCode` comes from `GITHUB_RUN_NUMBER`, and is `1` anywhere else** (`mobile/android/app/build.gradle`). That is fine for CI-built APKs, but a locally built APK therefore has `versionCode 1` and can never install over one built by CI — Android refuses the downgrade. Worth deriving from the version instead (e.g. `0.7.2` → `702`) so every build path produces a monotonic number.
 - The Android release APK is signed with the committed `debug.keystore` (release builds point at `signingConfigs.debug`). That keeps signatures stable across CI builds, but it also means an APK built from a *different* keystore — an older local build, or a fork — cannot be installed over it. Android's message for that is the same generic "problem with the app file", so the two causes are worth telling apart before debugging the file itself.
 
 ## v0.7.1-beta
