@@ -19,6 +19,26 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
+  // The caller renders this markup into a bigger template and usually never runs a
+  // lucide pass over it — that is exactly what happened at all eight call sites,
+  // and the icon then stayed an empty <i>. The component schedules its own
+  // conversion instead of depending on the caller's habits, coalesced to one pass
+  // per frame. lucide skips elements it has already replaced, so a repeated pass
+  // only touches what is new.
+  var _iconPass = false;
+  function scheduleIconPass() {
+    if (_iconPass) return;
+    _iconPass = true;
+    var run = function () {
+      _iconPass = false;
+      if (window.lucide && window.lucide.createIcons) {
+        try { window.lucide.createIcons(); } catch (e) {}
+      }
+    };
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
+    else setTimeout(run, 0);
+  }
+
   window.OrbitEmpty = {
     /**
      * Build the markup.
@@ -49,6 +69,7 @@
           esc(opts.action.label) + '</button>';
       }
       html += '</div>';
+      scheduleIconPass();
       return html;
     },
 

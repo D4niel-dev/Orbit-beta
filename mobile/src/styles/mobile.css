@@ -7514,3 +7514,99 @@ textarea#chat-input {
   color: var(--text-muted);
 }
 .ows-done svg { width: 48px; height: 48px; opacity: 0.3; }
+
+/* ─── Empty states ──────────────────────────────────────────────────────
+   The same treatment as desktop, built by shared/ui/empty-state.js and sized for
+   a phone: a glass icon tile with a soft bloom, a title, an optional hint, an
+   optional action. Motion is one fade-in and a slow float on the icon; both are
+   switched off under prefers-reduced-motion. */
+.oe-root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 9px;
+  padding: 44px 24px;
+  box-sizing: border-box;
+  animation: oe-in 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.oe-icon {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  border-radius: 17px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-primary);
+  background: var(--bg-hover);
+  background: color-mix(in srgb, var(--accent-primary) 18%, var(--bg-surface));
+  border: 1px solid var(--border-subtle);
+  border-color: color-mix(in srgb, var(--accent-primary) 32%, var(--border-subtle));
+  animation: oe-float 5.5s ease-in-out infinite;
+}
+/* above the tile's own background, behind the glyph */
+.oe-icon::after {
+  content: '';
+  position: absolute;
+  inset: -40%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--accent-primary), transparent 72%);
+  opacity: 0.18;
+  filter: blur(9px);
+  pointer-events: none;
+  z-index: -1;
+}
+.oe-icon svg { width: 24px; height: 24px; }
+.oe-title {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--text-primary);
+}
+.oe-hint {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  max-width: 260px;
+}
+.oe-action {
+  margin-top: 4px;
+  padding: 9px 18px;
+  border-radius: 999px;
+  border: none;
+  background: var(--accent-primary);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.oe-action:active { background: var(--accent-hover, var(--accent-primary)); }
+
+/* In a list, or inside a sheet, where a whole-panel scale would shout. */
+.oe-root.is-compact { padding: 30px 18px; gap: 7px; }
+.oe-root.is-compact .oe-icon { width: 42px; height: 42px; border-radius: 14px; }
+.oe-root.is-compact .oe-icon svg { width: 19px; height: 19px; }
+.oe-root.is-compact .oe-title { font-size: 13.5px; }
+.oe-root.is-compact .oe-hint { font-size: 12px; max-width: 240px; }
+
+/* Passive states do not wear the accent — "waiting for peers" is not an action. */
+.oe-root.is-muted .oe-icon {
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+.oe-root.is-muted .oe-icon::after { opacity: 0.14; }
+
+@keyframes oe-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes oe-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .oe-root, .oe-icon { animation: none; }
+}

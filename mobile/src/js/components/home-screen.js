@@ -580,7 +580,11 @@ var OrbitHome = {
     
     var friends = MStore.friends || [];
     if (friends.length === 0) {
-      container.innerHTML = '<div class="empty-state"><i data-lucide="users-round"></i><div class="empty-state-text">No friends yet</div><div class="empty-state-sub">Add friends by scanning QR or entering their IP</div></div>';
+      container.innerHTML = window.OrbitEmpty.html({
+        icon: 'users-round',
+        title: 'No friends yet',
+        hint: 'Add a friend by scanning their QR code or entering their IP address.'
+      });
       return;
     }
     

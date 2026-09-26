@@ -570,9 +570,12 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
       container.innerHTML =
-        '<div class="empty-state"><i data-lucide="message-circle"></i>' +
-        '<div class="empty-state-text">' + (searchFilter ? 'No matching chats' : 'No conversations yet') + '</div>' +
-        '<div class="empty-state-sub">' + (searchFilter ? 'Try a different search' : 'Start a new chat from the Friends tab') + '</div></div>';
+        window.OrbitEmpty.html({
+          icon: searchFilter ? 'search-x' : 'message-circle',
+          title: searchFilter ? 'No matching chats' : 'No conversations yet',
+          hint: searchFilter ? 'Try a different search.' : 'Start a new chat from the Friends tab.',
+          muted: !!searchFilter
+        });
       renderLucide({ root: container });
       return;
     }
@@ -1016,7 +1019,7 @@ document.addEventListener('DOMContentLoaded', function() {
       memberHtml += '</div>';
       memberHtml += '<div id="bs-member-count" style="font-size:12px;color:var(--text-muted);margin-top:6px;text-align:center;">0 selected</div>';
     } else {
-      memberHtml = '<div style="font-size:13px;color:var(--text-muted);text-align:center;padding:16px 0;">No friends to add</div>';
+      memberHtml = window.OrbitEmpty.html({ icon: 'users-round', title: 'No friends to add', compact: true, muted: true });
     }
     
     var html =
@@ -2030,9 +2033,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     if (msgs.length === 0) {
       feed.innerHTML =
-        '<div class="empty-state"><i data-lucide="message-circle"></i>' +
-        '<div class="empty-state-text">No messages yet</div>' +
-        '<div class="empty-state-sub">Send a message to start the conversation</div></div>';
+        window.OrbitEmpty.html({
+          icon: 'message-circle',
+          title: 'No messages yet',
+          hint: 'Send a message to start the conversation.'
+        });
       renderLucide({ root: feed });
       return;
     }
@@ -4707,9 +4712,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (filtered.length === 0) {
       container.innerHTML =
-        '<div class="empty-state"><i data-lucide="users-round"></i>' +
-        '<div class="empty-state-text">' + (friendsSearchFilter ? 'No matching friends' : 'No friends yet') + '</div>' +
-        '<div class="empty-state-sub">' + (friendsSearchFilter ? 'Try a different search' : 'Friends will appear here when discovered on your network') + '</div></div>';
+        window.OrbitEmpty.html({
+          icon: friendsSearchFilter ? 'search-x' : 'users-round',
+          title: friendsSearchFilter ? 'No matching friends' : 'No friends yet',
+          hint: friendsSearchFilter ? 'Try a different search.' : 'Friends appear here as they are discovered on your network.',
+          muted: !!friendsSearchFilter
+        });
       renderLucide({ root: container });
       return;
     }
@@ -9225,7 +9233,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!gid) return;
     var group = MStore.groups.find(function(g) { return g.id === gid; });
     if (!group) {
-      container.innerHTML = '<div class="empty-state"><i data-lucide="users-round"></i><div class="empty-state-text">Not a group</div></div>';
+      container.innerHTML = window.OrbitEmpty.html({ icon: 'users-round', title: 'Not a group', compact: true, muted: true });
       renderLucide({ root: container });
       document.querySelector('#panel-members-overlay .overlay-panel-header h3').textContent = 'Group Info';
       return;
@@ -9595,11 +9603,12 @@ document.addEventListener('DOMContentLoaded', function() {
       var logs = state.activityLog || [];
       logs = logs.filter(function(l) { return new Date(l.timestamp).getTime() > sysClearedAt; });
       if (logs.length === 0) {
-        html += '<div class="activity-empty-state">' +
-          '<div class="activity-empty-icon"><i data-lucide="activity" style="width:36px;height:36px;opacity:0.5;"></i></div>' +
-          '<div class="activity-empty-title">No System Activity</div>' +
-          '<div class="activity-empty-desc">Network events like connections and disconnections will appear here.</div>' +
-        '</div>';
+        html += window.OrbitEmpty.html({
+          icon: 'activity',
+          title: 'No System Activity',
+          hint: 'Network events like connections and disconnections appear here.',
+          muted: true
+        });
       } else {
         html += '<div class="activity-feed">';
         logs.slice().reverse().forEach(function(l) {

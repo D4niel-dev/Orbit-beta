@@ -283,7 +283,11 @@ var OrbitChat = {
     var messages = MStore.messages && MStore.messages[chatId] || [];
     
     if (messages.length === 0) {
-      feed.innerHTML = '<div class="empty-state" style="flex:1;display:flex;"><i data-lucide="message-circle"></i><div class="empty-state-text">No messages yet</div><div class="empty-state-sub">Say hello to start the conversation</div></div>';
+      feed.innerHTML = window.OrbitEmpty.html({
+        icon: 'message-circle',
+        title: 'No messages yet',
+        hint: 'Say hello to start the conversation.'
+      });
       this._initContextMenu();
       return;
     }
