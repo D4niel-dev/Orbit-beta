@@ -3569,7 +3569,6 @@ document.addEventListener('DOMContentLoaded', function() {
       isGroupChat = MStore.groups.some(function(g) { return g.id === activeChatId || g.groupId === activeChatId; });
     } catch(e) { isGroupChat = false; }
     if (!isGroupChat) {
-      showToast('Slash commands only work in group chats', 'info');
       // Clear the slash input so it does not look stuck
       var _slashInput = document.getElementById('chat-input');
       if (_slashInput && _slashInput.value.trim().indexOf('/') === 0) {
@@ -3578,6 +3577,15 @@ document.addEventListener('DOMContentLoaded', function() {
         updateSendButton();
         hideCommandTooltip();
       }
+      showToast('Slash commands only work in group chats', 'info');
+      // ...and open the reference sheet as well.
+      //
+      // A toast plus a cleared input reads as "nothing happened": that is exactly
+      // how it looked on a fresh emulator, where the only chat is Orbit Echo (a
+      // DM) — the command vanished and no sheet appeared, which looks like a bug
+      // in the command rather than a restriction. The sheet carries the group-only
+      // note, so the user learns what exists and why it is not running here.
+      showHelpModal();
       return { cancel: true };
     }
 
