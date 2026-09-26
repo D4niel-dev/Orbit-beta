@@ -50,17 +50,27 @@ var OrbitSheet = {
     //
     // Only for input-less sheets: a sheet WITH a field must honour a genuinely
     // small viewport, because that is the keyboard it has to stay above.
-    if (!hasInput) {
-      var screenH = (window.screen && window.screen.height) ? window.screen.height : 0;
-      if (screenH && h < screenH * 0.75) h = Math.round(screenH * 0.92);
-    }
+    var screenH = (window.screen && window.screen.height) ? window.screen.height : 0;
+    if (!hasInput && screenH && h < screenH * 0.75) h = screenH;
 
     if (!h) {
       overlay.style.height = '';
       overlay.style.removeProperty('--sheet-vh');
       return;
     }
-    overlay.style.height = h + 'px';
+
+    if (hasInput) {
+      // A sheet with a field has to sit ABOVE the keyboard, so the overlay shrinks
+      // to the visible area and the sheet is anchored to its bottom.
+      overlay.style.height = h + 'px';
+    } else {
+      // An input-less sheet sits at the bottom of the SCREEN and covers the
+      // composer, the way a modal should — it is not avoiding anything. Shrinking
+      // the overlay here anchored the sheet above the composer instead, leaving
+      // the message input visible under it. The overlay keeps its natural full
+      // height (CSS top/bottom) and only the sheet's cap uses the number.
+      overlay.style.height = '';
+    }
     overlay.style.setProperty('--sheet-vh', h + 'px');
   },
 

@@ -148,6 +148,15 @@
         prev.disabled = index === 0;
         prev.style.visibility = index === 0 ? 'hidden' : 'visible';
         next.textContent = (index === SLIDES.length - 1) ? 'Done' : 'Next';
+
+        // Replay the entrance animation on each slide change. Removing the class,
+        // forcing a reflow and re-adding it is what makes it run again — without
+        // the reflow the browser coalesces both class changes into no animation at
+        // all. The styles are desktop-side (components.css); mobile never mounts
+        // this component, and the class is inert wherever they are absent.
+        card.classList.remove('ows-enter');
+        void card.offsetWidth;
+        card.classList.add('ows-enter');
         // lucide is loaded by both platforms, but never assume it resolved.
         if (window.lucide && window.lucide.createIcons) {
           try { window.lucide.createIcons({ root: root }); } catch (e) {}

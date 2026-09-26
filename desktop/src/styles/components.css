@@ -1907,6 +1907,58 @@ button:active,
    Rendered into the chat panel's empty state on desktop and the conversation
    list's empty state on mobile, so it is sized to sit comfortably in a narrow
    column as well as a wide one. */
+/* ─── Welcome slides: atmosphere ────────────────────────────────────────
+   The empty state is the first thing anyone sees, so it carries the app's mood:
+   a slow aurora behind a glass card. All of it is decoration — nothing here is
+   content, and it all switches off under prefers-reduced-motion. */
+#chat-welcome-host {
+  position: relative;
+  overflow: hidden;
+}
+/* Two layers: drifting colour fields, and a faint grid for the colour to sit on.
+   inset:-20% so the drift never exposes an edge as it translates. */
+#chat-welcome-host::before,
+#chat-welcome-host::after {
+  content: '';
+  position: absolute;
+  inset: -20%;
+  pointer-events: none;
+  z-index: 0;
+}
+#chat-welcome-host::before {
+  /* Four fields rather than one: a single accent glow reads as a lamp, several
+     drifting past each other read as an aurora. Alphas are set per gradient with
+     color-mix so the green stays a guest, not a second brand colour. */
+  background:
+    radial-gradient(40% 44% at 24% 26%, color-mix(in srgb, var(--accent-primary) 92%, transparent) 0%, transparent 62%),
+    radial-gradient(30% 34% at 80% 20%, color-mix(in srgb, var(--accent-success) 40%, transparent) 0%, transparent 56%),
+    radial-gradient(46% 48% at 62% 82%, color-mix(in srgb, var(--accent-primary) 72%, transparent) 0%, transparent 66%),
+    radial-gradient(30% 34% at 10% 76%, color-mix(in srgb, var(--accent-soft) 85%, transparent) 0%, transparent 60%);
+  opacity: 0.4;
+  filter: blur(34px);
+  animation: ows-aurora 26s ease-in-out infinite alternate;
+}
+/* A light background needs less of it: the same alpha that reads as a glow on
+   near-black reads as a stain on near-white. */
+html[data-theme="light"] #chat-welcome-host::before { opacity: 0.3; }
+#chat-welcome-host::after {
+  background-image:
+    linear-gradient(var(--border-subtle) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px);
+  background-size: 44px 44px, 44px 44px;
+  opacity: 0.45;
+  -webkit-mask-image: radial-gradient(62% 62% at 50% 45%, #000 0%, transparent 76%);
+  mask-image: radial-gradient(62% 62% at 50% 45%, #000 0%, transparent 76%);
+}
+/* everything the host actually contains stays above the decoration */
+#chat-welcome-host > * { position: relative; z-index: 1; }
+
+@keyframes ows-aurora {
+  0%   { transform: translate3d(-4%, -2%, 0) scale(1.06); }
+  50%  { transform: translate3d(3%, 2%, 0) scale(1.14); }
+  100% { transform: translate3d(-2%, 4%, 0) scale(1.08); }
+}
+
 .ows-root {
   display: flex;
   flex-direction: column;
@@ -1931,7 +1983,32 @@ button:active,
   min-height: 190px;
   border-radius: 16px;
   border: 1px solid var(--border-subtle);
+  /* Glass, so the aurora reads through it. The flat value comes first as the
+     fallback for a browser without color-mix(). */
   background: var(--bg-surface);
+  background: color-mix(in srgb, var(--bg-surface) 84%, transparent);
+  backdrop-filter: blur(12px) saturate(1.1);
+  box-shadow: 0 22px 48px -28px rgba(0, 0, 0, 0.7);
+  transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.35s, border-color 0.35s;
+}
+.ows-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--accent-primary) 35%, var(--border-subtle));
+  box-shadow: 0 26px 54px -28px rgba(0, 0, 0, 0.75);
+}
+
+/* Entrance, staggered icon -> title -> body, replayed on every slide change. */
+.ows-card.ows-enter .ows-icon  { animation: ows-pop 0.5s cubic-bezier(0.2, 0.9, 0.25, 1.35) both; }
+.ows-card.ows-enter .ows-title { animation: ows-rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.06s both; }
+.ows-card.ows-enter .ows-body  { animation: ows-rise 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) 0.12s both; }
+
+@keyframes ows-pop {
+  from { opacity: 0; transform: scale(0.68) rotate(-7deg); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes ows-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
 }
 
 .ows-icon {
@@ -1945,6 +2022,19 @@ button:active,
   color: var(--accent-primary);
 }
 .ows-icon svg { width: 22px; height: 22px; }
+/* A soft bloom behind the glyph, so the accent reads as light rather than paint. */
+.ows-icon { position: relative; }
+.ows-icon::after {
+  content: '';
+  position: absolute;
+  inset: -34%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--accent-primary), transparent 72%);
+  opacity: 0.22;
+  filter: blur(7px);
+  pointer-events: none;
+  z-index: -1;
+}
 
 .ows-title {
   font-size: 16px;
@@ -1973,14 +2063,16 @@ button:active,
   height: 7px;
   padding: 0;
   border: none;
-  border-radius: 50%;
+  border-radius: 999px;
   background: var(--border-subtle);
   cursor: pointer;
-  transition: background 0.15s, transform 0.15s;
+  transition: background 0.18s, width 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
+/* The active dot stretches into a pill: a position cue you can read at a glance
+   without counting seven dots. */
 .ows-dot.is-active {
+  width: 18px;
   background: var(--accent-primary);
-  transform: scale(1.25);
 }
 
 .ows-btn {
@@ -2010,3 +2102,13 @@ button:active,
   color: var(--text-muted);
 }
 .ows-done svg { width: 48px; height: 48px; opacity: 0.3; }
+
+/* Decoration must never fight someone who asked for less movement. */
+@media (prefers-reduced-motion: reduce) {
+  #chat-welcome-host::before { animation: none; }
+  .ows-card,
+  .ows-dot { transition: none; }
+  .ows-card.ows-enter .ows-icon,
+  .ows-card.ows-enter .ows-title,
+  .ows-card.ows-enter .ows-body { animation: none; }
+}
