@@ -2092,7 +2092,15 @@ html[data-theme="light"] #chat-welcome-host::before { opacity: 0.3; }
   background: var(--accent-primary);
   color: #fff;
 }
-.ows-btn-primary:hover { filter: brightness(1.08); }
+.ows-btn-primary:hover {
+  /* Must state the background, not just the filter. `.ows-btn:hover` sets
+     --bg-hover and wins here — same specificity, and it declares a background this
+     rule does not — so the primary button turned pale while keeping white text.
+     In dark mode that is merely odd; in light mode --bg-hover is light and the
+     label disappears entirely. */
+  background: var(--accent-hover, var(--accent-primary));
+  filter: brightness(1.04);
+}
 
 .ows-done {
   display: flex;

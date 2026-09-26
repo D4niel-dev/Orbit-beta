@@ -51,20 +51,21 @@
     }
   ];
 
-  var SEEN_KEY = 'orbit_welcome_slide';
-
-  function readIndex() {
-    try {
-      var v = parseInt(localStorage.getItem(SEEN_KEY), 10);
-      return (isFinite(v) && v >= 0 && v < SLIDES.length) ? v : 0;
-    } catch (e) { return 0; }
-  }
-
-  function writeIndex(i) {
-    try { localStorage.setItem(SEEN_KEY, String(i)); } catch (e) {}
-  }
-
   var _mounted = null; // the live instance, so a re-render cannot leak listeners
+
+  // Where the tour is, for THIS run of the app.
+  //
+  // Deliberately in memory rather than in storage. A tour should start at the
+  // beginning every time the app starts — but the chat panel re-renders on every
+  // store change, and with no memory at all the tour snapped back to slide 1 the
+  // moment anything happened: a message arriving, a peer coming online, a tick.
+  // Per-run state gives both: the beginning on launch, and no reset while you read.
+  var _index = 0;
+  // Dismissed for this run. "Done" means done — without this it came back the next
+  // time the panel re-rendered, seconds after the user dismissed it.
+  var _done = false;
+
+  var DONE_HTML = '<div class="ows-done"><i data-lucide="message-circle"></i><span>Select a friend to start chatting</span></div>';
 
   window.OrbitWelcome = {
     slides: SLIDES,
@@ -76,7 +77,16 @@
       if (!host) return;
       this.destroy();
 
-      var index = readIndex();
+      // Dismissed in this run — leave the plain empty state alone.
+      if (_done) {
+        host.innerHTML = DONE_HTML;
+        if (window.lucide && window.lucide.createIcons) {
+          try { window.lucide.createIcons({ root: host }); } catch (e) {}
+        }
+        return;
+      }
+
+      var index = _index;
       var root = document.createElement('div');
       root.className = 'ows-root';
 
@@ -165,7 +175,7 @@
 
       function go(i) {
         index = Math.max(0, Math.min(SLIDES.length - 1, i));
-        writeIndex(index);
+        _index = index;
         paint();
       }
 
@@ -176,7 +186,8 @@
           // "Done" collapses back to the plain empty state rather than pretending
           // the carousel is a gate — the chat panel is still just waiting for a chat.
           this.destroy();
-          if (host) host.innerHTML = '<div class="ows-done"><i data-lucide="message-circle"></i><span>Select a friend to start chatting</span></div>';
+          _done = true;   // and stays dismissed for the rest of the run
+          if (host) host.innerHTML = DONE_HTML;
           if (window.lucide && window.lucide.createIcons) {
             try { window.lucide.createIcons({ root: host }); } catch (e2) {}
           }
