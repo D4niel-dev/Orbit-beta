@@ -1121,17 +1121,18 @@ window.ChatPanel = {
     if (!messagesHtml) {
       var isFirstMessageWithFriend = activeFriend && !isGroup && (!state.messages[state.activeChatId] || state.messages[state.activeChatId].length === 0);
       if (isFirstMessageWithFriend) {
-        messagesHtml = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-muted);text-align:center;gap:8px;padding:40px;">' +
-          '<i data-lucide="message-circle" style="width:40px;height:40px;opacity:0.3;"></i>' +
-          '<div style="font-size:15px;font-weight:500;color:var(--text-secondary);">No messages yet</div>' +
-          '<div style="font-size:13px;">Send a message to start the conversation</div>' +
-        '</div>';
+        messagesHtml = window.OrbitEmpty.html({
+          icon: 'message-circle',
+          title: 'No messages yet',
+          hint: 'Send a message to start the conversation' +
+            (activeFriend.username ? ' with ' + window.Sanitize.escapeHtml(activeFriend.username) : '') + '.'
+        });
       } else if (isGroup) {
-        messagesHtml = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-muted);text-align:center;gap:8px;padding:40px;">' +
-          '<i data-lucide="users-round" style="width:40px;height:40px;opacity:0.3;"></i>' +
-          '<div style="font-size:15px;font-weight:500;color:var(--text-secondary);">Welcome to ' + window.Sanitize.escapeHtml(activeGroup.groupName) + '</div>' +
-          '<div style="font-size:13px;">Send the first message to the group</div>' +
-        '</div>';
+        messagesHtml = window.OrbitEmpty.html({
+          icon: 'users-round',
+          title: 'Welcome to ' + window.Sanitize.escapeHtml(activeGroup.groupName),
+          hint: 'Send the first message to the group.'
+        });
       }
     }
 
@@ -2364,7 +2365,13 @@ window.ChatPanel = {
         });
 
         if (hits.length === 0) {
-          results.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px;line-height:1.6;">No results for <b style="color:var(--text-secondary);">' + window.Sanitize.escapeHtml(query) + '</b></div>';
+          results.innerHTML = window.OrbitEmpty.html({
+            icon: 'search-x',
+            title: 'No results',
+            hint: 'Nothing matched <b style="color:var(--text-secondary);">' + window.Sanitize.escapeHtml(query) + '</b>.',
+            compact: true,
+            muted: true
+          });
           return;
         }
 

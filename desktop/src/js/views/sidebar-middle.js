@@ -138,9 +138,12 @@ window.SidebarMiddle = {
     }
 
     if (groups.length === 0) {
-      html += '<div style="padding: var(--spacing-lg); text-align: center; color: var(--text-muted); font-size: 13px;">' +
-        'No groups yet.<br>Create a group to chat with multiple friends.' +
-      '</div>';
+      html += window.OrbitEmpty.html({
+        icon: 'users-round',
+        title: 'No groups yet',
+        hint: 'Create a group to chat with multiple friends.',
+        compact: true
+      });
     } else {
       groups.forEach(function(group) {
         html += self._buildGroupRowHtml(group, state);
@@ -774,12 +777,13 @@ window.SidebarMiddle = {
     }
 
     if (!friends || friends.length === 0) {
-      listContainer.innerHTML = headerHtml +
-        '<div style="display:flex;flex-direction:column;align-items:center;padding:40px 20px;text-align:center;color:var(--text-muted);gap:12px;">' +
-          '<i data-lucide="wifi-off" style="width:40px;height:40px;opacity:0.3;"></i>' +
-          '<div style="font-size:14px;font-weight:500;">No friends online</div>' +
-          '<div style="font-size:12px;">Waiting for peers on the local network...</div>' +
-        '</div>';
+      listContainer.innerHTML = headerHtml + window.OrbitEmpty.html({
+        icon: 'wifi-off',
+        title: 'No friends online',
+        hint: 'Waiting for peers on the local network\u2026',
+        compact: true,
+        muted: true
+      });
       lucide.createIcons({ root: listContainer });
       wireHeader();
       return;
@@ -960,7 +964,7 @@ window.SidebarMiddle = {
     });
     html += '<div style="font-size:10px;color:var(--text-muted);margin:6px 0 4px;font-weight:600;">Groups</div>';
     if (groups.length === 0) {
-      html += '<div style="font-size:12px;color:var(--text-muted);padding:4px 0;">No groups yet</div>';
+      html += window.OrbitEmpty.html({ icon: 'users-round', title: 'No groups yet', compact: true, muted: true });
     } else {
       groups.forEach(function(g) {
         html += chatRowHtml({ kind: 'group', id: g.groupId }, g.groupName || 'Unnamed Group', (g.members || []).length + ' members', groupAvatarHtml(g));

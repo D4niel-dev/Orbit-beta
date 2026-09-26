@@ -65,7 +65,20 @@
   // time the panel re-rendered, seconds after the user dismissed it.
   var _done = false;
 
-  var DONE_HTML = '<div class="ows-done"><i data-lucide="message-circle"></i><span>Select a friend to start chatting</span></div>';
+  // The collapsed state after "Done". Built on demand rather than at load: the
+  // helper is a separate script, and a load-order dependency is not worth the
+  // couple of microseconds.
+  function doneHtml() {
+    if (window.OrbitEmpty && window.OrbitEmpty.html) {
+      return window.OrbitEmpty.html({
+        icon: 'message-circle',
+        title: 'Select a friend to start chatting',
+        hint: 'Your messages stay on your devices \u2014 nothing is stored on a server.',
+        muted: true
+      });
+    }
+    return '<div class="ows-done"><i data-lucide="message-circle"></i><span>Select a friend to start chatting</span></div>';
+  }
 
   window.OrbitWelcome = {
     slides: SLIDES,
@@ -79,7 +92,7 @@
 
       // Dismissed in this run — leave the plain empty state alone.
       if (_done) {
-        host.innerHTML = DONE_HTML;
+        host.innerHTML = doneHtml();
         if (window.lucide && window.lucide.createIcons) {
           try { window.lucide.createIcons({ root: host }); } catch (e) {}
         }
@@ -187,7 +200,7 @@
           // the carousel is a gate — the chat panel is still just waiting for a chat.
           this.destroy();
           _done = true;   // and stays dismissed for the rest of the run
-          if (host) host.innerHTML = DONE_HTML;
+          if (host) host.innerHTML = doneHtml();
           if (window.lucide && window.lucide.createIcons) {
             try { window.lucide.createIcons({ root: host }); } catch (e2) {}
           }

@@ -2120,3 +2120,108 @@ html[data-theme="light"] #chat-welcome-host::before { opacity: 0.3; }
   .ows-card.ows-enter .ows-title,
   .ows-card.ows-enter .ows-body { animation: none; }
 }
+
+/* ─── Empty states ──────────────────────────────────────────────────────
+   One treatment for every "nothing here yet" surface, so the chat panel, the
+   sidebar and search all read as the same app. A glass icon tile with a soft
+   bloom, a title, an optional hint, an optional action — and the same gentle
+   motion the welcome slides use, switched off under prefers-reduced-motion. */
+.oe-root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 10px;
+  padding: 36px 24px;
+  box-sizing: border-box;
+  animation: oe-in 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.oe-icon {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-primary);
+  /* the flat value first, for a browser without color-mix() */
+  background: var(--bg-hover);
+  background: color-mix(in srgb, var(--accent-primary) 18%, var(--bg-surface));
+  border: 1px solid var(--border-subtle);
+  border-color: color-mix(in srgb, var(--accent-primary) 32%, var(--border-subtle));
+  animation: oe-float 5.5s ease-in-out infinite;
+}
+/* the bloom sits above the tile's own background but behind the glyph */
+.oe-icon::after {
+  content: '';
+  position: absolute;
+  inset: -40%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--accent-primary), transparent 72%);
+  opacity: 0.18;
+  filter: blur(9px);
+  pointer-events: none;
+  z-index: -1;
+}
+.oe-icon svg { width: 26px; height: 26px; }
+.oe-title {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--text-primary);
+}
+.oe-hint {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  max-width: 300px;
+}
+.oe-action {
+  margin-top: 4px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: none;
+  background: var(--accent-primary);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 0.18s, transform 0.18s;
+}
+.oe-action:hover {
+  background: var(--accent-hover, var(--accent-primary));
+  transform: translateY(-1px);
+}
+
+/* In a list, where a whole-panel scale would shout. */
+.oe-root.is-compact { padding: 26px 18px; gap: 8px; }
+.oe-root.is-compact .oe-icon { width: 44px; height: 44px; border-radius: 14px; }
+.oe-root.is-compact .oe-icon svg { width: 20px; height: 20px; }
+.oe-root.is-compact .oe-title { font-size: 13.5px; }
+.oe-root.is-compact .oe-hint { font-size: 12px; }
+
+/* Passive states — "waiting for peers" is not something to act on, so it does not
+   wear the accent the way an actionable one does. */
+.oe-root.is-muted .oe-icon {
+  /* --bg-hover alone is only a shade off the page in the dark themes, which made
+     the tile effectively invisible; the stronger border is what gives it an edge. */
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+.oe-root.is-muted .oe-icon::after { opacity: 0.14; }
+
+@keyframes oe-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes oe-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .oe-root, .oe-icon { animation: none; }
+  .oe-action { transition: none; }
+}
