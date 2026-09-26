@@ -38,6 +38,23 @@ var OrbitSheet = {
     var vv = window.visualViewport;
     var h = hasInput ? ((vv && vv.height) ? vv.height : window.innerHeight) : window.innerHeight;
 
+    // Sanity-check the measurement against the physical screen.
+    //
+    // Both viewport APIs can be wrong here, and both were: visualViewport stays at
+    // the keyboard-shrunken value indefinitely on Android, and innerHeight — which
+    // the layout viewport should recover — evidently can too, because the sheet
+    // was still opening as a short strip after that fix. `screen.height` does not
+    // change when the keyboard moves, so it is the one number that cannot go
+    // stale. A viewport reporting under three quarters of the screen is not
+    // describing a keyboard, it is describing a stale measurement.
+    //
+    // Only for input-less sheets: a sheet WITH a field must honour a genuinely
+    // small viewport, because that is the keyboard it has to stay above.
+    if (!hasInput) {
+      var screenH = (window.screen && window.screen.height) ? window.screen.height : 0;
+      if (screenH && h < screenH * 0.75) h = Math.round(screenH * 0.92);
+    }
+
     if (!h) {
       overlay.style.height = '';
       overlay.style.removeProperty('--sheet-vh');

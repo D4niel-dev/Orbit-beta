@@ -53,6 +53,15 @@ window.UpdateNotice = {
     var btn = overlay.querySelector('#update-modal-download');
     var url = res.downloadUrl;
     if (!url) { self._toast('No download link for this release', 'error'); return; }
+    // update-check falls back to the release PAGE url when a release carries no
+    // matching artifact. Downloading that and handing it to the installer is how
+    // "There's a problem with the app file" is produced — the file is HTML. Say so
+    // instead.
+    if (!res.asset || !res.asset.name) {
+      self._toast('This release has no Android APK attached', 'error');
+      if (self._openExternal(res.releaseUrl || url)) self._toast('Opening the release page\u2026', 'info');
+      return;
+    }
 
     var plugins = (window.Capacitor && window.Capacitor.Plugins) || {};
     var FS = plugins.Filesystem;
@@ -166,6 +175,22 @@ window.UpdateNotice = {
         }).then(function () { return received; });
       })
       .then(function (bytes) {
+        // Verify BEFORE the installer sees it.
+        //
+        // Android's own error for a bad APK is "There's a problem with the app
+        // file", which tells the user nothing and looks like an app bug. A partial
+        // download is the common cause, and the expected size is known two ways:
+        // the API's declared asset size, and Content-Length. Refuse to install
+        // anything short, and delete it so the next attempt starts clean.
+        var expected = (res.asset && res.asset.size) ? res.asset.size : 0;
+        var short = (expected && bytes < expected) || (total && bytes < total);
+        if (short) {
+          return FS.deleteFile({ path: APK_PATH, directory: 'CACHE' }).catch(function () {}).then(function () {
+            var want = Math.round((expected || total) / 1048576);
+            var got = Math.round(bytes / 1048576);
+            throw new Error('The download stopped early (' + got + ' of ' + want + ' MB) \u2014 try again');
+          });
+        }
         setLabel('Opening installer\u2026');
         return P2P.installApk({ path: APK_PATH }).then(function () {
           return bytes;

@@ -1,5 +1,19 @@
 # Orbit Changelog
 
+## v0.7.2-beta
+
+> **Note:** Follow-ups to the v0.7.1-beta patch. The `/help` sheet could still open as a short strip when *both* viewport APIs reported a stale keyboard-shrunken height, and the in-app updater had no way to tell a good APK from a broken one — which is why a failed update surfaced only as Android's generic "There's a problem with the app file".
+
+### Bug Fixes
+
+- **`/help` Could Still Open as a Short Strip** — The v0.7.1 fix sized input-less sheets from the layout viewport (`innerHeight`), on the assumption that it recovers when the keyboard hides. On a device where it does not, the sheet was still a short strip with its Cancel footer off-screen. The measurement is now sanity-checked against the physical screen: `screen.height` does not move when the keyboard does, so a viewport reporting under three quarters of the screen is not describing a keyboard, it is describing a stale number, and the sheet falls back to 92% of the screen. Input-bearing sheets still honour the keyboard they have to sit above. Consequence, and it is the intended one: an input-less sheet now opens tall on the first frame instead of waiting for the keyboard to finish hiding.
+- **The In-App Update Could Hand Android a Broken File** — The downloader wrote the APK and launched the installer with no verification beyond "the response was not empty", so a truncated transfer reached Android as a corrupt file and the user saw only the installer's generic error. It now checks what it downloaded against the release's declared asset size (and Content-Length) and refuses to install anything short, deleting the partial file and saying how much arrived. It also refuses to install when a release carries no Android artifact at all: the update check falls back to the *release page* URL in that case, and downloading an HTML page and handing it to the installer is another way to produce that same error.
+
+### Technical
+
+- **`versionCode` comes from `GITHUB_RUN_NUMBER`, and is `1` anywhere else** (`mobile/android/app/build.gradle`). That is fine for CI-built APKs, but a locally built APK therefore has `versionCode 1` and can never install over one built by CI — Android refuses the downgrade. Worth deriving from the version instead (e.g. `0.7.2` → `702`) so every build path produces a monotonic number.
+- The Android release APK is signed with the committed `debug.keystore` (release builds point at `signingConfigs.debug`). That keeps signatures stable across CI builds, but it also means an APK built from a *different* keystore — an older local build, or a fork — cannot be installed over it. Android's message for that is the same generic "problem with the app file", so the two causes are worth telling apart before debugging the file itself.
+
 ## v0.7.1-beta
 
 > **Note:** Three fixes following v0.7.0-beta, all found on a real device within hours of the release — and none of them visible to the browser harness the first time round: the `/help` sheet was still sized from a keyboard-shrunken viewport, the emoji picker was painting a persisted `"undefined"` across its search row, and a drag could take over the first swipe of a long list.
