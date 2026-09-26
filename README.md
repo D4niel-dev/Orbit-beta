@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v071-beta">v0.7.1-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v072-beta">v0.7.2-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@
 
 | Channel           | Version     | Status                                                                                                                                |
 | ----------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| **Latest**        | v0.7.1-beta | Patch release — the `/help` sheet was still sized from a keyboard-shrunken viewport (so it would not scroll or close), the emoji picker painted a persisted `"undefined"`, and a drag could take over the first swipe of a long list |
+| **Latest**        | v0.7.2-beta | Follow-ups to the patch — the `/help` sheet opens full-screen over the message input and scrolls properly, the in-app updater verifies what it downloads before handing it to Android, and every empty screen got a proper welcome |
 | **Stable**        | v0.6.0-beta | Reliability release — notification plumbing, an offline send queue, a vault you can back up and take with you, in-app Android updates |
 | Legacy **Stable** | v0.1.1-beta | Legacy stable release                                                                                                                 |
 
@@ -90,14 +90,16 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage app for desktop and Android** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
-## Highlights (v0.7.1-beta)
+## Highlights (v0.7.2-beta)
 
-A patch release for three bugs found on a real device within hours of v0.7.0-beta — none of which the
-browser harness had caught.
+Follow-ups to v0.7.1-beta, most of them found by using the shipped build on a real phone.
 
-* **`/help` Opened as a Short Strip and Would Not Scroll or Close** — The sheet was still being sized from the keyboard-shrunken viewport, and on Android that measurement can stay wrong indefinitely, so re-measuring just re-read the same number. Its Cancel footer ended up below the bottom of the screen. Sheets with no text field now size against the layout viewport, which is stable, and a keyboard that hides late grows the sheet back instead of leaving it short.
-* **The Emoji Picker Drew a Giant "undefined"** — Its skin-tone button renders whatever value it is handed, and a tone event arriving without detail had persisted the literal string `"undefined"` into storage, which the picker then painted across its search row. The value is validated on both sides now, and a poisoned one is cleared on read — so a device that already carries it heals itself.
-* **A Drag Could Take Over a Scroll** — The body-drag is allowed while the list sits at the top, and that was decided at `touchstart`, before the gesture's direction was known — so the first upward swipe of any long list started a drag and the panel moved with the finger while the list tried to scroll underneath.
+* **`/help` Opens Over the Message Input** — It was anchored *above* the composer rather than over it, because the sheet was sized from a viewport measurement that Android can leave stale at the keyboard-shrunken value indefinitely. Input-less sheets now size against the layout viewport with a sanity check against the physical screen, so the list opens full-screen, scrolls, and keeps its Cancel button on screen. Sheets that contain a text field still shrink to sit above the keyboard.
+* **The In-App Update Verifies What It Downloads** — It wrote the APK and launched Android's installer with no check beyond "the response was not empty", so a partial download — or the release-page URL it falls back to when a release has no Android artifact — reached the installer as a corrupt file and surfaced only as Android's generic *"There's a problem with the app file"*. It now checks the size against the release, deletes a short file, and says how much arrived.
+* **Every Empty State Uses One Treatment, on Both Platforms** — Eight "nothing here yet" screens had drifted apart: a bare icon and a grey line in the chat panel, a plain sentence in the sidebar, a bolded query in search. They are one component now — a glass icon tile with a soft bloom, a title and a hint, with a compact scale for lists and a muted tone for states that are nobody's fault.
+* **The Desktop Welcome Slides Have Atmosphere** — A slow aurora behind a frosted-glass card, over a masked grid, with a staggered entrance on every slide change and the active dot stretching into a pill. All of it switches off under `prefers-reduced-motion`.
+* **The Tour Starts at the Beginning, and "Done" Stays Done** — It used to resume at whichever slide you last looked at, and dismissing it lasted only until the next re-render.
+* **A False Security Claim Was Removed From the Tour** — The second slide promised a key-change warning that is not implemented. It now says something true, and the gap is stated plainly on the website instead.
 
 ## Version History
 
@@ -688,12 +690,26 @@ browser harness had caught.
 
 </details>
 
-<details open>
+
+<details>
 <summary>v0.7.1-beta</summary>
 
 * **`/help` sizing** — it was sized from the keyboard-shrunken viewport, which on Android can stay wrong indefinitely; sheets with no text field now use the layout viewport, and a late keyboard dismissal grows the sheet back
 * **The emoji picker's `"undefined"`** — a tone event with no detail had persisted the literal string, which the picker then painted across its search row; validated on both sides and cleared on read
 * **A drag could take over a scroll** — the body-drag was decided at touchstart, before the direction was known
+
+</details>
+
+<details open>
+<summary>v0.7.2-beta</summary>
+
+* **`/help` opens over the message input** — sized from the layout viewport with a screen-height sanity check, so it is no longer a short strip; the list scrolls and Cancel is on screen
+* **The in-app update verifies its download** — it checks the size against the release before handing the APK to Android, and refuses a partial file or a release page
+* **Every empty state uses one treatment**, on both platforms — a glass icon tile with a bloom, a title and a hint, in compact and muted variants
+* **The desktop welcome slides have atmosphere** — an aurora behind a glass card, with a staggered entrance per slide
+* **The light-mode "Next" button is readable on hover** — it was white on pale grey
+* **The tour starts at the beginning** on every launch, and "Done" stays done
+* **A false security claim was removed from the tour** — it promised a key-change warning that is not implemented
 
 </details>
 
@@ -708,6 +724,7 @@ Pre-built Windows installers are published on [GitHub Releases](https://github.c
 | Release                                                                          | Platform                    | Notes                                                                           |
 | -------------------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------- |
 | [All releases](https://github.com/D4niel-dev/Orbit-beta/releases)                | Win / Mac / Linux / Android | Most recent build first                                                         |
+| [v0.7.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.2-beta) | Win / Mac / Linux / Android | `/help` over the composer, a verified update download, one treatment for every empty state, and the welcome tour's atmosphere |
 | [v0.7.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.1-beta) | Win / Mac / Linux / Android | `/help` sheet sizing, the emoji picker's "undefined", and a drag that could take over a scroll |
 | [v0.7.0-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.0-beta) | Win / Mac / Linux / Android | Close DM keeps the conversation, friends directory, `/help` sheet fix, notifications with the sender's avatar |
 | [v0.6.5-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.5-beta) | Win / Mac / Linux / Android | In-app update download with checksum verification, correct installer per OS/CPU, playback that survives a chat switch, mobile panel affordances |
@@ -971,11 +988,14 @@ Transparency matters in beta. Current constraints include:
 
 ## Roadmap
 
-### Shipped (v0.7.1-beta)
+### Shipped (v0.7.2-beta)
 
-* **`/help` Sheet Sizing** — sized from the layout viewport now, with a late keyboard dismissal handled instead of leaving the sheet short
-* **Emoji Picker `"undefined"`** — a poisoned skin-tone value is rejected on write and cleared on read
-* **Drag vs Scroll** — an upward gesture over a scrollable list no longer starts a drag
+* **`/help` Over the Composer** — input-less sheets size against the layout viewport with a screen-height check; the list scrolls and Cancel stays visible
+* **A Verified Update Download** — the APK's size is checked against the release before the installer sees it, with a real error instead of Android's generic one
+* **One Empty-State Treatment** — eight screens across both platforms, with compact and muted variants
+* **The Welcome Tour's Atmosphere** — an aurora background, a glass card and per-slide motion, all off under reduced-motion
+* **The Tour Starts at the Beginning**, and "Done" stays done
+* **A False Security Claim Removed** — the tour no longer promises a key-change warning that does not exist
 
 ### In Progress / Planned
 

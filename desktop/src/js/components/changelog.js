@@ -14,7 +14,24 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.7.1-beta', 'Latest', [
+        versionBlock('0.7.2-beta', 'Latest', [
+          ['Welcome Tour', [
+            'The feature tour has atmosphere now: a slow aurora behind a frosted-glass card, with each slide animating in \u2014 icon first, then the title, then the text.',
+            'It starts at the first slide every time you open the app. It used to resume wherever you left off, and clicking Done only lasted until the next redraw.',
+            'The second slide used to claim Orbit warns you if someone\u2019s key changes. It does not yet \u2014 that promise is gone, and the gap is stated plainly on the website instead.'
+          ]],
+          ['Look & Feel', [
+            'Every empty screen \u2014 the chat panel, an empty conversation, the friends and groups lists, search \u2014 now shares one treatment: a soft glowing icon, a title, and a line telling you what to do next.',
+            'The Next button in light mode is readable on hover again. It was white text on a pale background.'
+          ]],
+          ['Also in this release', [
+            'On Android: the /help list opens full-screen over the keyboard and scrolls properly, the emoji picker no longer shows a stray "undefined", and an update download is checked before Android is asked to install it.'
+          ]],
+          ['Technical', [
+            'Version: Bumped to v0.7.2-beta.'
+          ]]
+        ]) +
+        versionBlock('0.7.1-beta', '', [
           ['Note', [
             'This one is a mobile-only patch: the /help sheet, the emoji picker and list dragging were all phone-side, and nothing changed on desktop. It is here so the version you are running has an entry.'
           ]],

@@ -6585,7 +6585,22 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button id="changelog-close-mobile" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;font-size:20px;">✕</button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
-        vBlock('0.7.1-beta', 'Latest', [
+        vBlock('0.7.2-beta', 'Latest', [
+          ['Chat Commands', [
+            'The /help list opens full-screen over the keyboard and scrolls properly now, with its Cancel button on screen. It used to open as a short strip that would not scroll or close.',
+            'The emoji picker no longer shows a stray "undefined" across its search row.'
+          ]],
+          ['Updates', [
+            'An update download is checked before Android is asked to install it, so a partial download says how much arrived instead of failing with Android\u2019s generic "problem with the app file".'
+          ]],
+          ['Look & Feel', [
+            'Every empty screen \u2014 your chats, a new conversation, the friends list, group members, the activity log \u2014 now shares one treatment: a soft glowing icon, a title, and a line telling you what to do next.'
+          ]],
+          ['Technical', [
+            'Version: Bumped to v0.7.2-beta.'
+          ]]
+        ]) +
+        vBlock('0.7.1-beta', '', [
           ['Fixed', [
             'The /help list opens at full height now, with its Cancel button on screen. It was being sized to the keyboard, which left it as a short strip that would not scroll or close.',
             'The emoji picker no longer shows a stray "undefined" across its search row.',
