@@ -22,7 +22,7 @@
     {
       icon: 'lock',
       title: 'Encrypted end to end',
-      body: 'Messages are sealed for the person you are talking to, not for a server. If someone\u2019s key ever changes, Orbit says so out loud instead of quietly accepting it.'
+      body: 'Messages are sealed for the person you are talking to, not for a server. Your keys are generated on your own devices and never leave them.'
     },
     {
       icon: 'paperclip',
