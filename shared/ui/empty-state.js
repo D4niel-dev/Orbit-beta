@@ -51,12 +51,17 @@
      *   compact smaller scale, for a list rather than a whole panel
      *   muted   no accent tint — for states that are passive ("waiting for peers")
      *           rather than something the user can act on
+     *   fill    stretch to the height of the container and centre in it, for an
+     *           empty chat feed. The feed is a flex column on mobile and a plain
+     *           block on desktop, and without this the placeholder sits at the top
+     *           of an empty conversation instead of in the middle of it.
      */
     html: function (opts) {
       opts = opts || {};
       var cls = 'oe-root';
       if (opts.compact) cls += ' is-compact';
       if (opts.muted) cls += ' is-muted';
+      if (opts.fill) cls += ' is-fill';
 
       var html = '<div class="' + cls + '">';
       html += '<div class="oe-icon"><i data-lucide="' + esc(opts.icon || 'circle') + '"></i></div>';

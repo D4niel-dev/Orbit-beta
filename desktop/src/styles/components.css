@@ -2225,3 +2225,12 @@ html[data-theme="light"] #chat-welcome-host::before { opacity: 0.3; }
   .oe-root, .oe-icon { animation: none; }
   .oe-action { transition: none; }
 }
+
+/* Fills and centres inside an empty chat feed. flex:1 covers the mobile feed (a
+   flex column) and min-height:100% covers the desktop one (a plain block), so the
+   placeholder lands in the middle of the conversation either way. */
+.oe-root.is-fill {
+  flex: 1;
+  min-height: 100%;
+  justify-content: center;
+}

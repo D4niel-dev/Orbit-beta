@@ -286,7 +286,8 @@ var OrbitChat = {
       feed.innerHTML = window.OrbitEmpty.html({
         icon: 'message-circle',
         title: 'No messages yet',
-        hint: 'Say hello to start the conversation.'
+        hint: 'Say hello to start the conversation.',
+        fill: true
       });
       this._initContextMenu();
       return;

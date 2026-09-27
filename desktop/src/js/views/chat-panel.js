@@ -1125,13 +1125,15 @@ window.ChatPanel = {
           icon: 'message-circle',
           title: 'No messages yet',
           hint: 'Send a message to start the conversation' +
-            (activeFriend.username ? ' with ' + window.Sanitize.escapeHtml(activeFriend.username) : '') + '.'
+            (activeFriend.username ? ' with ' + window.Sanitize.escapeHtml(activeFriend.username) : '') + '.',
+          fill: true
         });
       } else if (isGroup) {
         messagesHtml = window.OrbitEmpty.html({
           icon: 'users-round',
           title: 'Welcome to ' + window.Sanitize.escapeHtml(activeGroup.groupName),
-          hint: 'Send the first message to the group.'
+          hint: 'Send the first message to the group.',
+          fill: true
         });
       }
     }

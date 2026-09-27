@@ -2036,7 +2036,8 @@ document.addEventListener('DOMContentLoaded', function() {
         window.OrbitEmpty.html({
           icon: 'message-circle',
           title: 'No messages yet',
-          hint: 'Send a message to start the conversation.'
+          hint: 'Send a message to start the conversation.',
+          fill: true
         });
       renderLucide({ root: feed });
       return;
