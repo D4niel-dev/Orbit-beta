@@ -59,6 +59,10 @@ Orbit.Protocol = {
     GROUP_JOIN_ACCEPT: 'GROUP_JOIN_ACCEPT',
     GROUP_JOIN_DENY: 'GROUP_JOIN_DENY',
     GROUP_LEAVE: 'GROUP_LEAVE',
+    // Carries a whitelisted slice of settings between a user's OWN devices. See
+    // shared/network/settings-sync.js for what travels and how an incoming payload is
+    // validated — the receive side must never trust the sender.
+    SETTINGS_SYNC: 'SETTINGS_SYNC',
     GROUP_MEMBER_ADDED: 'GROUP_MEMBER_ADDED',
     GROUP_OWNER_TRANSFER: 'GROUP_OWNER_TRANSFER',
     PIN_MESSAGE: 'PIN_MESSAGE',
