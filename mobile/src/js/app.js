@@ -6635,7 +6635,22 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button id="changelog-close-mobile" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;font-size:20px;">✕</button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
-        vBlock('0.7.2-beta', 'Latest', [
+        vBlock('0.7.3-beta', 'Latest', [
+          ['Messages', [
+            'An unsent message stays in its chat until you send it, and sending ends the draft. Drafts used to come back after you had sent the message \u2014 and could even land in the wrong conversation.'
+          ]],
+          ['Themes', [
+            'A custom theme built on the desktop now applies here. Android had no custom-theme support at all, so your colours were silently ignored and the app fell back to the base theme.',
+            'There is still no colour editor on the phone \u2014 the colours travel, the editing does not.'
+          ]],
+          ['Note', [
+            'Settings sync is groundwork in this release: the rules are in and tested, but nothing sends or receives yet, so a theme still has to reach this device through a backup or a fresh edit on the desktop.'
+          ]],
+          ['Technical', [
+            'Version: Bumped to v0.7.3-beta.'
+          ]]
+        ]) +
+        vBlock('0.7.2-beta', '', [
           ['Chat Commands', [
             'The /help list opens full-screen over the keyboard and scrolls properly now, with its Cancel button on screen. It used to open as a short strip that would not scroll or close.',
             'The emoji picker no longer shows a stray "undefined" across its search row.'

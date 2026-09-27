@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v072-beta">v0.7.2-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v073-beta">v0.7.3-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@
 
 | Channel           | Version     | Status                                                                                                                                |
 | ----------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| **Latest**        | v0.7.2-beta | Follow-ups to the patch — the `/help` sheet opens full-screen over the message input and scrolls properly, the in-app updater verifies what it downloads before handing it to Android, and every empty screen got a proper welcome |
+| **Latest**        | v0.7.3-beta | Custom Colors covers the whole theme and reaches Android, the desktop emoji picker is themed and no longer clipped, drafts stop when you send, and group info gained an owner’s Danger Zone |
 | **Stable**        | v0.6.0-beta | Reliability release — notification plumbing, an offline send queue, a vault you can back up and take with you, in-app Android updates |
 | Legacy **Stable** | v0.1.1-beta | Legacy stable release                                                                                                                 |
 
@@ -90,16 +90,15 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage app for desktop and Android** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
-## Highlights (v0.7.2-beta)
+## Highlights (v0.7.3-beta)
 
-Follow-ups to v0.7.1-beta, most of them found by using the shipped build on a real phone.
-
-* **`/help` Opens Over the Message Input** — It was anchored *above* the composer rather than over it, because the sheet was sized from a viewport measurement that Android can leave stale at the keyboard-shrunken value indefinitely. Input-less sheets now size against the layout viewport with a sanity check against the physical screen, so the list opens full-screen, scrolls, and keeps its Cancel button on screen. Sheets that contain a text field still shrink to sit above the keyboard.
-* **The In-App Update Verifies What It Downloads** — It wrote the APK and launched Android's installer with no check beyond "the response was not empty", so a partial download — or the release-page URL it falls back to when a release has no Android artifact — reached the installer as a corrupt file and surfaced only as Android's generic *"There's a problem with the app file"*. It now checks the size against the release, deletes a short file, and says how much arrived.
-* **Every Empty State Uses One Treatment, on Both Platforms** — Eight "nothing here yet" screens had drifted apart: a bare icon and a grey line in the chat panel, a plain sentence in the sidebar, a bolded query in search. They are one component now — a glass icon tile with a soft bloom, a title and a hint, with a compact scale for lists and a muted tone for states that are nobody's fault.
-* **The Desktop Welcome Slides Have Atmosphere** — A slow aurora behind a frosted-glass card, over a masked grid, with a staggered entrance on every slide change and the active dot stretching into a pill. All of it switches off under `prefers-reduced-motion`.
-* **The Tour Starts at the Beginning, and "Done" Stays Done** — It used to resume at whichever slide you last looked at, and dismissing it lasted only until the next re-render.
-* **A False Security Claim Was Removed From the Tour** — The second slide promised a key-change warning that is not implemented. It now says something true, and the gap is stated plainly on the website instead.
+* **Custom Colors Now Covers the Whole Theme** — The editor offered 13 of the 21 tokens the themes define, and the one that hurt was `--text-inverse`: the colour of text *on* an accent background, so a light custom accent left unreadable text on it. It covers all 17 colour tokens now, with a real colour picker beside every field, values validated by the browser rather than taken on trust, and a way back to your saved colours — which the theme list never offered, so choosing any other theme used to drop you out of them with no route home.
+* **Custom Colors Works on Android** — It had no custom-theme support at all: `theme = 'custom'` matched no stylesheet and your colours were ignored, so a theme built on the desktop silently became the base theme on a phone. Mobile layers them over the dark base exactly as the desktop does now. There is still no editor on mobile; the colours travel.
+* **The Desktop Emoji Picker Wears the App's Theme** — It had no styling at all and rendered the library's raw defaults: a `#444` hairline, a white box on whichever emoji held focus, an unthemed search field. It follows the app's tokens now, remembers your skin tone, and its last column is no longer hidden behind the scrollbar on Windows.
+* **Drafts Stop When You Send** — An unsent message stays in its chat until you send it, and sending ends the draft. On Android it used to come back: a debounced save captured the text as you typed and wrote it 300ms later, so a message sent inside that window had its draft written back afterwards.
+* **The Empty-Chat Placeholder Sits in the Middle** — It was at the top of the conversation, on both platforms.
+* **Group Info Says More, and Lets the Owner Act** — How many members are online, when the group was created, and a Danger Zone for the owner, whose only route to deleting their own group used to be a right-click menu.
+* **Groundwork, Not a Feature: Settings Sync** — A custom theme cannot yet travel between your own devices, and the reason is that the protocol has no settings packet at all. This release adds the packet type and the rules that decide what may travel and what may be applied — an explicit whitelist, validated on receive, last-write-wins by timestamp. **Nothing sends or receives yet**, so the feature does not work end to end; the tested core is in, and the transport is next.
 
 ## Version History
 
@@ -700,7 +699,7 @@ Follow-ups to v0.7.1-beta, most of them found by using the shipped build on a re
 
 </details>
 
-<details open>
+<details>
 <summary>v0.7.2-beta</summary>
 
 * **`/help` opens over the message input** — sized from the layout viewport with a screen-height sanity check, so it is no longer a short strip; the list scrolls and Cancel is on screen
@@ -710,6 +709,18 @@ Follow-ups to v0.7.1-beta, most of them found by using the shipped build on a re
 * **The light-mode "Next" button is readable on hover** — it was white on pale grey
 * **The tour starts at the beginning** on every launch, and "Done" stays done
 * **A false security claim was removed from the tour** — it promised a key-change warning that is not implemented
+
+</details>
+
+<details open>
+<summary>v0.7.3-beta</summary>
+
+* **Custom Colors covers all 17 colour tokens** — real colour pickers, browser-validated values, a way back to your saved colours, and Android support where there was none
+* **The emoji picker is themed** — the app's tokens instead of the library defaults, a remembered skin tone, and no more clipped last column behind the Windows scrollbar
+* **Drafts end when you send** — an unsent message stays in its chat; sending no longer lets the draft come back
+* **The empty-chat placeholder is centred** in the conversation, on both platforms
+* **Group info** — how many members are online, when the group was created, and a Danger Zone for the owner
+* **Groundwork for settings sync** — the packet type and the rules, with unit tests; nothing sends or receives yet
 
 </details>
 
@@ -724,6 +735,7 @@ Pre-built Windows installers are published on [GitHub Releases](https://github.c
 | Release                                                                          | Platform                    | Notes                                                                           |
 | -------------------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------- |
 | [All releases](https://github.com/D4niel-dev/Orbit-beta/releases)                | Win / Mac / Linux / Android | Most recent build first                                                         |
+| [v0.7.3-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.3-beta) | Win / Mac / Linux / Android | Custom Colors across the whole theme and on Android, a themed emoji picker, drafts that stop when you send, and an owner’s Danger Zone in group info |
 | [v0.7.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.2-beta) | Win / Mac / Linux / Android | `/help` over the composer, a verified update download, one treatment for every empty state, and the welcome tour's atmosphere |
 | [v0.7.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.1-beta) | Win / Mac / Linux / Android | `/help` sheet sizing, the emoji picker's "undefined", and a drag that could take over a scroll |
 | [v0.7.0-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.0-beta) | Win / Mac / Linux / Android | Close DM keeps the conversation, friends directory, `/help` sheet fix, notifications with the sender's avatar |
@@ -988,14 +1000,14 @@ Transparency matters in beta. Current constraints include:
 
 ## Roadmap
 
-### Shipped (v0.7.2-beta)
+### Shipped (v0.7.3-beta)
 
-* **`/help` Over the Composer** — input-less sheets size against the layout viewport with a screen-height check; the list scrolls and Cancel stays visible
-* **A Verified Update Download** — the APK's size is checked against the release before the installer sees it, with a real error instead of Android's generic one
-* **One Empty-State Treatment** — eight screens across both platforms, with compact and muted variants
-* **The Welcome Tour's Atmosphere** — an aurora background, a glass card and per-slide motion, all off under reduced-motion
-* **The Tour Starts at the Beginning**, and "Done" stays done
-* **A False Security Claim Removed** — the tour no longer promises a key-change warning that does not exist
+* **Custom Colors, Completed** — all 17 colour tokens, real pickers, validated values, a route back to your saved colours, and Android support
+* **A Themed Emoji Picker** — the app's tokens, a remembered skin tone, and no clipped column behind the Windows scrollbar
+* **Drafts That End on Send** — an unsent message stays put; sending no longer lets it return
+* **The Empty-Chat Placeholder, Centred**
+* **Group Info** — an online count, the creation date, and an owner's Danger Zone
+* **Settings Sync, Groundwork** — the packet type and the validated rules; the transport is next
 
 ### In Progress / Planned
 

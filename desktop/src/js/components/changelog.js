@@ -14,7 +14,33 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.7.2-beta', 'Latest', [
+        versionBlock('0.7.3-beta', 'Latest', [
+          ['Custom Colors', [
+            'Every colour token the themes define is editable now \u2014 the editor used to offer 13 of 21, and the one that mattered was the text colour on an accent background, so a light custom accent left unreadable text.',
+            'Each row has a real colour picker beside its hex field, and a value that is not a colour is refused instead of applied.',
+            'There is a way back to your saved colours. Applying set the theme to your custom one, but nothing in the theme list offered it, so picking any other theme dropped you out with no route home.'
+          ]],
+          ['Emoji Picker', [
+            'It wears the app\u2019s theme now instead of the library\u2019s raw defaults \u2014 no more stray hairline or white focus box.',
+            'Your skin tone is remembered between sessions.',
+            'The last column is no longer hidden behind the scrollbar on Windows.'
+          ]],
+          ['Messages', [
+            'An unsent message stays in its chat until you send it, and sending ends the draft. Drafts used to come back after you had sent the message.',
+            'The "no messages yet" placeholder sits in the middle of the conversation rather than at the top.'
+          ]],
+          ['Groups', [
+            'Group info says how many members are online and when the group was created.',
+            'The owner has a Danger Zone now. Deleting your own group used to live only in the right-click menu.'
+          ]],
+          ['Note', [
+            'Settings sync \u2014 carrying a custom theme between your own devices \u2014 is groundwork in this release: the packet type and the validated rules are in, but nothing sends or receives yet, so it does not work end to end. The transport is next.'
+          ]],
+          ['Technical', [
+            'Version: Bumped to v0.7.3-beta.'
+          ]]
+        ]) +
+        versionBlock('0.7.2-beta', '', [
           ['Welcome Tour', [
             'The feature tour has atmosphere now: a slow aurora behind a frosted-glass card, with each slide animating in \u2014 icon first, then the title, then the text.',
             'It starts at the first slide every time you open the app. It used to resume wherever you left off, and clicking Done only lasted until the next redraw.',
