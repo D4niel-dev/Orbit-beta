@@ -782,14 +782,52 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
+  /* ---- Drafts ----
+     Per-chat composer drafts. Four separate copies of this logic had drifted apart,
+     and between them they produced every symptom in Dan's report:
+
+       * the debounced save captured the text at INPUT time and wrote it 300ms later,
+         so a message sent inside that window had its draft written back afterwards —
+         the draft "reappearing" after you sent it;
+       * it wrote against whatever chat was active when the timer fired, not the chat
+         the text was typed in, so a draft could land in the wrong conversation;
+       * switching away only SAVED when the box had text and never removed the key, so
+         an emptied composer left a stale draft behind;
+       * restoring only set the value when a draft existed and never cleared the box,
+         so the previous chat's text stayed on screen.
+
+     One helper each way now. */
+  function saveDraft(chatId, value) {
+    if (!chatId) return;
+    try {
+      var v = (value == null ? '' : String(value)).trim();
+      if (v) localStorage.setItem('orbit_draft_' + chatId, v);
+      else localStorage.removeItem('orbit_draft_' + chatId);
+    } catch (e) { /* storage blocked — drafts are a convenience, never fatal */ }
+  }
+
+  function readDraft(chatId) {
+    if (!chatId) return '';
+    try { return localStorage.getItem('orbit_draft_' + chatId) || ''; } catch (e) { return ''; }
+  }
+
+  // Cancel a pending debounced save. Called when the message is sent, so the timer
+  // cannot write the just-sent text back as a draft.
+  function cancelPendingDraftSave() {
+    if (window._draftTimer) {
+      clearTimeout(window._draftTimer);
+      window._draftTimer = null;
+    }
+  }
+
   /* -- Render Chat View -- */
   function openChat(chatId) {
-    // Save draft for current chat before switching
+    // Save the draft for the chat we are leaving. Through the helper, so an emptied
+    // box REMOVES the key rather than leaving the old text to come back later.
     if (activeChatId) {
       var _oldInput = document.getElementById('chat-input');
-      if (_oldInput && _oldInput.value.trim()) {
-        localStorage.setItem('orbit_draft_' + activeChatId, _oldInput.value);
-      }
+      if (_oldInput) saveDraft(activeChatId, _oldInput.value);
+      cancelPendingDraftSave();
     }
     activeChatId = chatId;
     if (window.OrbitChat) window.OrbitChat._currentChatId = chatId;
@@ -932,13 +970,14 @@ document.addEventListener('DOMContentLoaded', function() {
     applyChatWallpaper(chatId);
     if (window.renderTypingIndicator) window.renderTypingIndicator();
 
-    // Restore draft for this chat
-    var _draft = localStorage.getItem('orbit_draft_' + chatId);
+    // Restore this chat's draft — and CLEAR the box when it has none, which is what
+    // used to leave the previous conversation's text sitting there.
+    var _draft = readDraft(chatId);
     var _input = document.getElementById('chat-input');
-    if (_draft && _input) {
+    if (_input) {
       _input.value = _draft;
       _input.style.height = 'auto';
-      _input.style.height = Math.min(_input.scrollHeight, 150) + 'px';
+      if (_draft) _input.style.height = Math.min(_input.scrollHeight, 150) + 'px';
       updateSendButton();
     }
   }
@@ -1217,7 +1256,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (activeChatId) {
       var _closeInput = document.getElementById('chat-input');
       if (_closeInput && _closeInput.value.trim()) {
-        localStorage.setItem('orbit_draft_' + activeChatId, _closeInput.value);
+        saveDraft(activeChatId, _closeInput.value);
       }
     }
     // Send stop-typing indicator before clearing activeChatId
@@ -3016,7 +3055,8 @@ document.addEventListener('DOMContentLoaded', function() {
       renderMessages(activeChatId);
       renderChatList();
       input.value = '';
-      localStorage.removeItem('orbit_draft_' + activeChatId);
+      cancelPendingDraftSave();
+      saveDraft(activeChatId, '');
       input.style.height = 'auto';
       return;
     }
@@ -3176,7 +3216,8 @@ document.addEventListener('DOMContentLoaded', function() {
     renderChatList();
     input.value = '';
     hideCommandTooltip();
-    localStorage.removeItem('orbit_draft_' + activeChatId);
+    cancelPendingDraftSave();
+    saveDraft(activeChatId, '');
     input.style.height = 'auto';
     updateSendButton();
     replyingTo = null;
@@ -11151,18 +11192,17 @@ document.addEventListener('DOMContentLoaded', function() {
       hideCommandTooltip();
     }
 
-    // Debounced draft save
+    // Debounced draft save.
+    //
+    // The chat is captured HERE, because that is the conversation the text belongs to.
+    // The text is read at FIRE time, not captured — a captured value is what let a
+    // sent message be written back as a draft 300ms later.
     if (window._draftTimer) clearTimeout(window._draftTimer);
-    var _inpVal = this.value;
+    var _draftChatId = activeChatId;
     window._draftTimer = setTimeout(function() {
-      if (activeChatId) {
-        var _v = _inpVal.trim();
-        if (_v) {
-          localStorage.setItem('orbit_draft_' + activeChatId, _v);
-        } else {
-          localStorage.removeItem('orbit_draft_' + activeChatId);
-        }
-      }
+      window._draftTimer = null;
+      var box = document.getElementById('chat-input');
+      saveDraft(_draftChatId, box ? box.value : '');
     }, 300);
 
     // Send typing indicator
