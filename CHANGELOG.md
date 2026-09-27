@@ -13,6 +13,8 @@
 
 ### Bug Fixes
 
+- **The Desktop Emoji Picker's Last Column Was Half-Hidden Behind Its Scrollbar** — The picker sizes its grid to the full width of the element and then scrolls it. Where a scrollbar overlays the content that costs nothing, but on Windows it takes real space, so the grid is drawn underneath it and the rightmost column sits behind the bar. The element now measures the platform's scrollbar and widens itself by exactly that much, which also means the fix does nothing on a platform with overlay scrollbars and stays correct at any app zoom — a hardcoded width would be wrong at every zoom but 100%.
+
 - **The Owner Had No Way to Delete a Group From Its Info Panel** — The panel offered a Danger Zone only to non-owners; an owner's only route to deleting their own group was the sidebar's right-click menu, which is not where anyone looks. Both roles now get a Danger Zone with the action that applies to them, and the owner's version says why there is no Leave option — you own it, so you delete it or hand ownership over first. The delete flow itself (confirm, tell the members, remove it locally) existed in two shapes and now lives in one place, so the panel and the context menu cannot drift.
 - **The Member List Did Not Say How Many Were Online** — The count was already computed for the header and then thrown away. It reads `Members (4 · 4 online)` now.
 - **Group Info Did Not Say When the Group Was Created** — It does, in the Profile section, from the group's own `createdAt`.
