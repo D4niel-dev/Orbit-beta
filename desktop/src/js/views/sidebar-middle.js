@@ -1672,24 +1672,7 @@ window.SidebarMiddle = {
           if (isOwner) {
             items.push('separator');
             items.push({ label: 'Delete Group', icon: 'trash-2', color: 'var(--accent-danger)', onClick: function() {
-              if (window.ConfirmModal) {
-                window.ConfirmModal.show({
-                  title: 'Delete Group',
-                  message: 'Are you sure you want to permanently delete this group and all messages?',
-                  confirmText: 'Delete',
-                  danger: true,
-                  onConfirm: function() {
-                    if (window.orbitAPI) {
-                      group.members.forEach(function(m) {
-                        if (m.userId !== state.currentUser.userId) {
-                          window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.GROUP_LEAVE, { groupId: id, userId: state.currentUser.userId });
-                        }
-                      });
-                    }
-                    window.store.removeGroup(id);
-                  }
-                });
-              }
+              self._deleteGroup(id);
             }});
           }
           self._appendFolderMenuItems(items, { kind: 'group', id: id });
@@ -1778,6 +1761,35 @@ window.SidebarMiddle = {
       if (e.key === 'Escape') { document.body.removeChild(overlay); document.removeEventListener('keydown', onKey); }
     }
     document.addEventListener('keydown', onKey);
+  },
+
+  // Deleting a group: confirm, tell the members, remove it locally.
+  //
+  // One copy, used by both the sidebar's context menu and the group info panel. They
+  // were separate — the panel had no delete at all — and a duplicated broadcast is
+  // exactly how the two would drift apart.
+  _deleteGroup(id) {
+    var state = window.store.getState();
+    var group = (state.groups || []).find(function(g) { return (g.groupId || g.id) === id; });
+    if (!group || !window.ConfirmModal) return;
+    window.ConfirmModal.show({
+      title: 'Delete Group',
+      message: 'Are you sure you want to permanently delete this group and all messages?',
+      confirmText: 'Delete',
+      danger: true,
+      onConfirm: function() {
+        try {
+          if (window.orbitAPI) {
+            (group.members || []).forEach(function(m) {
+              if (m.userId !== state.currentUser.userId) {
+                window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.GROUP_LEAVE, { groupId: id, userId: state.currentUser.userId });
+              }
+            });
+          }
+        } catch (e) {}
+        window.store.removeGroup(id);
+      }
+    });
   },
 
   showGroupInfo(groupId) {
@@ -2079,6 +2091,11 @@ window.SidebarMiddle = {
           '<input id="group-info-name" type="text" value="' + window.Sanitize.escapeHtml(group.groupName || '') + '" style="' + fieldStyle + (isOwner ? '' : 'opacity:0.7;') + '" ' + (isOwner ? '' : 'disabled') + '></div>' +
           '<div><label style="display:block;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;margin-bottom:6px;">Description</label>' +
           '<textarea id="group-info-desc" rows="3" style="' + fieldStyle + 'resize:none;' + (isOwner ? '' : 'opacity:0.7;') + '" ' + (isOwner ? '' : 'disabled') + '>' + window.Sanitize.escapeHtml(group.description || '') + '</textarea></div>' +
+          (group.createdAt
+            ? '<div style="font-size:11px;color:var(--text-muted);">Created ' +
+              window.Sanitize.escapeHtml(new Date(group.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })) +
+              '</div>'
+            : '') +
         sectionEnd +
         sectionStart('key-round', 'Invite', false) +
           '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">' +
@@ -2106,7 +2123,10 @@ window.SidebarMiddle = {
             '</span><div><div>Mute Notifications</div><div style="font-size:11px;color:var(--text-muted);font-weight:400;">Stop notification alerts from this group</div></div>' +
           '</label>' +
         sectionEnd +
-        sectionStart('user-plus', 'Members (' + members.length + ')', true) +
+        // The online count was computed but never shown, so the one thing you want to
+        // know about a member list at a glance was the one thing missing from it.
+        sectionStart('user-plus', 'Members (' + members.length +
+          (onlineCount ? ' \u00b7 ' + onlineCount + ' online' : '') + ')', true) +
           '<div style="display:flex;gap:8px;margin-bottom:12px;">' +
             '<input id="group-info-member-search" type="text" placeholder="Search members..." style="flex:1;padding:10px 12px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);font-size:13px;outline:none;">' +
             '<button id="group-info-add-member-btn" style="' + ghostBtnStyle + 'color:var(--accent-primary);">Add</button>' +
@@ -2117,9 +2137,15 @@ window.SidebarMiddle = {
           '</div>' +
           '<div id="group-info-members-list">' + buildMemberListHtml('') + '</div>' +
         sectionEnd +
-        (!isOwner ? sectionStart('log-out', 'Danger Zone', false) +
-          '<button id="group-info-leave-group" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--accent-danger);background:transparent;color:var(--accent-danger);cursor:pointer;font-size:13px;font-weight:600;">Leave Group</button>' +
-        sectionEnd : '') +
+        // A danger zone for both roles. The owner used to get nothing here, and their
+        // delete lived only in the sidebar's right-click menu — which is not somewhere
+        // anyone looks for it.
+        sectionStart('trash-2', 'Danger Zone', false) +
+          (isOwner
+            ? '<button id="group-info-delete-group" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--accent-danger);background:transparent;color:var(--accent-danger);cursor:pointer;font-size:13px;font-weight:600;">Delete Group</button>' +
+              '<div style="font-size:11px;color:var(--text-muted);margin-top:8px;line-height:1.5;">You own this group, so there is no Leave option. Delete it, or hand ownership to someone else first.</div>'
+            : '<button id="group-info-leave-group" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--accent-danger);background:transparent;color:var(--accent-danger);cursor:pointer;font-size:13px;font-weight:600;">Leave Group</button>') +
+        sectionEnd +
       '</div>';
 
     overlay.appendChild(panel);
@@ -2268,6 +2294,13 @@ window.SidebarMiddle = {
     wireAddFriendButtons();
 
     // Leave Group
+    var deleteBtn = document.getElementById('group-info-delete-group');
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', function() {
+        self._deleteGroup(groupId);
+      });
+    }
+
     var leaveBtn = document.getElementById('group-info-leave-group');
     if (leaveBtn) {
       leaveBtn.addEventListener('click', function() {

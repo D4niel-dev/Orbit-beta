@@ -111,6 +111,14 @@ test.describe('groups', () => {
     await expect(page.locator('#group-info-members-list')).toBeVisible();
     await expect(page.locator('#group-info-leave-group')).toHaveCount(0);
     await expect(page.locator('.group-info-transfer-ownership').first()).toBeVisible();
+    // The owner gets a danger zone of their own, with the delete that used to live
+    // only in the sidebar's right-click menu, and a line explaining the asymmetry.
+    // The danger zone is collapsed by default, which is right for a destructive
+    // action, so this checks the control is there rather than fighting the collapse
+    // animation. What it looks like is a screenshot's job.
+    await expect(page.locator('#group-info-delete-group')).toHaveCount(1);
+    await expect(page.locator('#group-info-leave-group')).toHaveCount(0);
+    await expect(page.locator('#group-info-delete-group')).toContainText('Delete Group');
   });
 
   test('a group with no messages shows the welcome state, and sending replaces it', async () => {

@@ -13,6 +13,10 @@
 
 ### Bug Fixes
 
+- **The Owner Had No Way to Delete a Group From Its Info Panel** — The panel offered a Danger Zone only to non-owners; an owner's only route to deleting their own group was the sidebar's right-click menu, which is not where anyone looks. Both roles now get a Danger Zone with the action that applies to them, and the owner's version says why there is no Leave option — you own it, so you delete it or hand ownership over first. The delete flow itself (confirm, tell the members, remove it locally) existed in two shapes and now lives in one place, so the panel and the context menu cannot drift.
+- **The Member List Did Not Say How Many Were Online** — The count was already computed for the header and then thrown away. It reads  now.
+- **Group Info Did Not Say When the Group Was Created** — It does, in the Profile section, from the group's own .
+
 - **The Empty-Chat Placeholder Sat at the Top of the Conversation** — It should sit in the middle of the chat box. The desktop version used to, because the original markup carried `height: 100%` to centre itself, and that was dropped when it was replaced by the shared empty-state component. The component gained a `fill` variant (`flex: 1` for the mobile feed, `min-height: 100%` for the desktop one, so a single rule covers both), used at all four chat-feed call sites. Measured rather than eyeballed: the placeholder's centre is now 0px from the feed's centre on both platforms, with equal gaps above and below. Lists and sheets keep the non-filling variant.
 
 - **A Sheet Could Open Entirely Below the Fold** — The v0.7.2 screen check corrected a viewport that was too *small*, but took one that was too *large* at face value. Because a sheet is anchored to the bottom of its overlay, a viewport larger than the screen pushes a short sheet — a two-item chooser, `/help` with a few rows — completely off the bottom, which is indistinguishable from the sheet never opening. The check now clamps both directions, for every sheet.
