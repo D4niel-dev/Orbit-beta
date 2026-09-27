@@ -1,5 +1,14 @@
 # Orbit Changelog
 
+## v0.7.3-beta
+
+> **Note:** Follow-ups to v0.7.2-beta. Both are in the sheet's sizing code, and both are mine: a sanity check that only clamped one direction, and a measurement taken before the sheet had its content.
+
+### Bug Fixes
+
+- **A Sheet Could Open Entirely Below the Fold** — The v0.7.2 screen check corrected a viewport that was too *small*, but took one that was too *large* at face value. Because a sheet is anchored to the bottom of its overlay, a viewport larger than the screen pushes a short sheet — a two-item chooser,  with a few rows — completely off the bottom, which is indistinguishable from the sheet never opening. The check now clamps both directions, for every sheet.
+- **A Sheet Could Inherit the Previous Sheet's Sizing** — The decision between the layout and visual viewport is made by looking for a text field inside the sheet, and that check ran *before* the new content was injected — so it read the previous sheet's content. A chooser opened after the  builder was sized as though it had an input of its own, inheriting the keyboard-avoiding height instead of the layout one. Measurement now happens after the content is in place.
+
 ## v0.7.2-beta
 
 > **Note:** Follow-ups to the v0.7.1-beta patch. The `/help` sheet could still open as a short strip when *both* viewport APIs reported a stale keyboard-shrunken height, and the in-app updater had no way to tell a good APK from a broken one — which is why a failed update surfaced only as Android's generic "There's a problem with the app file".
