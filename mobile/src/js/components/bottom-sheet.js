@@ -51,7 +51,19 @@ var OrbitSheet = {
     // Only for input-less sheets: a sheet WITH a field must honour a genuinely
     // small viewport, because that is the keyboard it has to stay above.
     var screenH = (window.screen && window.screen.height) ? window.screen.height : 0;
-    if (!hasInput && screenH && h < screenH * 0.75) h = screenH;
+    if (screenH) {
+      // A viewport LARGER than the physical screen is not a viewport at all, and it
+      // is the more damaging direction of the two: the sheet is anchored to the
+      // bottom of the overlay, so a short sheet (a two-item chooser, /help with a
+      // couple of rows) lands entirely below the fold and reads as "the sheet did
+      // not open at all". Clamp this always, for every sheet.
+      if (h > screenH) h = screenH;
+      // The other direction: a viewport under three quarters of the screen is a
+      // stale keyboard measurement, not a keyboard. Only input-less sheets may
+      // ignore it — a sheet with a field has to honour a genuinely small viewport,
+      // because that is the keyboard it must sit above.
+      else if (!hasInput && h < screenH * 0.75) h = screenH;
+    }
 
     if (!h) {
       overlay.style.height = '';
@@ -150,8 +162,10 @@ var OrbitSheet = {
     if (sheetEl) sheetEl.classList.remove('bottom-sheet-tall');
 
     OrbitSheet._dismissKeyboard();
-    OrbitSheet._syncViewport();
-    OrbitSheet._settleViewport();
+    // _syncViewport is deliberately NOT called yet: it decides between the layout
+    // and visual viewport by looking for a text field inside the sheet, and at this
+    // point the content is still the PREVIOUS sheet's — so a chooser opened after
+    // the /poll builder was sized as if it had an input of its own.
     OrbitSheet._resetSheetTransform();
     
     // Build content
@@ -170,7 +184,11 @@ var OrbitSheet = {
     }
     content.innerHTML = html;
     content.scrollTop = 0;
-    
+
+    // Now that the real content is in place, size against it.
+    OrbitSheet._syncViewport();
+    OrbitSheet._settleViewport();
+
     // Add cancel pill
     OrbitSheet._addCancelPill();
     OrbitSheet._addCloseButton();
@@ -213,13 +231,15 @@ var OrbitSheet = {
     // Clear first: a tall sheet must not make the NEXT sheet tall too.
     if (sheetEl) sheetEl.classList.toggle('bottom-sheet-tall', !!(opts && opts.tall));
 
-    // Must happen BEFORE the sheet becomes visible — see _syncViewport.
+    // The keyboard has to go before anything is measured, or we measure it.
     OrbitSheet._dismissKeyboard();
+    OrbitSheet._resetSheetTransform();
+
+    content.innerHTML = html;
+
+    // Size AFTER the content is in place — see the note in show().
     OrbitSheet._syncViewport();
     OrbitSheet._settleViewport();
-    OrbitSheet._resetSheetTransform();
-    
-    content.innerHTML = html;
     content.scrollTop = 0;
     OrbitSheet._addCancelPill();
     OrbitSheet._addCloseButton();
