@@ -515,6 +515,16 @@ window.SettingsModal = {
                 '<span>Custom Colors</span>' + experimentalBadge +
               '</button>'
               : '') +
+            // A way BACK to the saved custom colours. Applying in the editor sets
+            // theme='custom', but nothing in this list offered that value — so
+            // choosing any other theme dropped you out of your own colours with no
+            // route back except reopening the editor and pressing Apply again.
+            ((s.enableCustomColors && s.customThemeColors && Object.keys(s.customThemeColors).length)
+              ? '<button id="theme-use-custom-btn" style="display:flex;align-items:center;gap:6px;width:100%;padding:8px 12px;margin-top:6px;border-radius:8px;border:1px solid ' + (s.theme === 'custom' ? 'var(--accent-primary)' : 'var(--border-subtle)') + ';background:var(--bg-base);color:var(--text-primary);font-size:12px;cursor:pointer;justify-content:center;transition:border-color 0.15s;">' +
+                '<i data-lucide="check" style="width:14px;height:14px;' + (s.theme === 'custom' ? 'color:var(--accent-primary);' : 'color:var(--text-muted);') + '"></i>' +
+                '<span>' + (s.theme === 'custom' ? 'Using your custom colors' : 'Use your custom colors') + '</span>' +
+              '</button>'
+              : '') +
             '<label style="display:flex;align-items:center;gap:12px;font-size:14px;color:var(--text-primary);cursor:pointer;margin-top:16px;padding-top:12px;border-top:1px solid var(--border-subtle);">' +
               '<input id="set-24h" type="checkbox" '+(s.timeFormat24?'checked':'')+'>' +
               '<div><div>24-hour Time</div><div style="font-size:12px;color:var(--text-muted);font-weight:400;">Show timestamps in 24-hour format</div></div>' +
@@ -902,6 +912,14 @@ window.SettingsModal = {
       if (customColorsBtn) {
         customColorsBtn.addEventListener('click', function() {
           if (window.CustomThemeModal) window.CustomThemeModal.open();
+        });
+      }
+
+      var useCustomBtn = content.querySelector('#theme-use-custom-btn');
+      if (useCustomBtn) {
+        useCustomBtn.addEventListener('click', function() {
+          updateSettings('theme', 'custom');
+          if (window.SettingsModal) window.SettingsModal.renderTab('appearance');
         });
       }
 

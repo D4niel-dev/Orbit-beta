@@ -2,7 +2,14 @@
 
 ## v0.7.3-beta
 
-> **Note:** Follow-ups to v0.7.2-beta. Both are in the sheet's sizing code, and both are mine: a sanity check that only clamped one direction, and a measurement taken before the sheet had its content.
+> **Note:** Follow-ups to v0.7.2-beta, plus a pass over Custom Colors — which turned out to be incomplete in a way that was invisible from the UI.
+
+### Features
+
+- **Custom Colors Covers the Whole Theme** — The editor offered 13 of the 21 tokens the themes define, and the two lists were written out separately in two places, which is how they drifted. `--text-inverse` was the one that hurt: it is the text colour *on* an accent background, so a light custom accent left unreadable text on it. `--accent-danger`, `--accent-success` and `--accent-warning` were unreachable too. There is one list now, it covers **all 17 colour tokens**, and the editor uses it for both the defaults and the fields.
+- **Real Colour Pickers, and Values That Are Actually Colours** — Each row has a native colour input beside its hex field, so the two drive each other. The hex field is validated with the browser itself: a typo is refused and the field is marked instead of applied, because an invalid custom property is invalid at computed-value time and the whole token is lost until it is corrected. Values in `rgb()`/`hsl()`/named form are accepted and normalised into the picker.
+- **A Way Back to Your Custom Colours** — Applying in the editor sets the theme to `custom`, but nothing in the theme list offered that value, so choosing any other theme dropped you out with no route back except reopening the editor and pressing Apply again. A row now appears whenever custom colours are saved, showing which one you are on and returning to it in one click.
+- **Custom Colors Works on Android Too** — Mobile had no custom-theme handling at all: `theme = 'custom'` set `data-theme="custom"`, no stylesheet matched, and the saved colours were ignored — so a theme built on the desktop silently became the base theme on a phone. Mobile now layers the saved colours over the dark base exactly as the desktop does, and clears them when another theme is chosen. There is still no editor on mobile; the colours themselves travel.
 
 ### Bug Fixes
 

@@ -7492,6 +7492,15 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
+  // Every token a custom theme can set. Kept as a list rather than read from the
+  // saved colours alone, so a token that was customised once and then dropped is
+  // still cleared when another theme is chosen.
+  var CUSTOM_THEME_KEYS = ['bg-base','bg-surface','bg-sidebar','bg-hover','bg-active',
+    'text-primary','text-secondary','text-muted','text-inverse',
+    'accent-primary','accent-hover','accent-soft',
+    'accent-danger','accent-success','accent-warning',
+    'border-subtle','border-strong'];
+
   function applyTheme(theme) {
     if (theme === 'system') {
       var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -7504,8 +7513,25 @@ document.addEventListener('DOMContentLoaded', function() {
       else if (month >= 8 && month <= 9) seasonTheme = 'seasonal-fall';
       else seasonTheme = 'seasonal-winter';
       document.documentElement.setAttribute('data-theme', seasonTheme);
+    } else if (theme === 'custom') {
+      // There is no custom theme stylesheet, here or on the desktop: a custom theme
+      // is the dark base with the user's own values layered over it. Mobile never
+      // did the layering, so a custom theme set on the desktop was silently ignored
+      // on the phone — data-theme was set to "custom", no stylesheet matched, and
+      // the app fell back to the base theme.
+      document.documentElement.setAttribute('data-theme', 'dark');
     } else {
       document.documentElement.setAttribute('data-theme', theme);
+    }
+
+    // Layer the saved colours on, or clear them for any other theme.
+    var stored = MStore.settings.customThemeColors || null;
+    var use = (theme === 'custom' && stored) ? stored : null;
+    var keys = CUSTOM_THEME_KEYS.concat(Object.keys(stored || {}));
+    for (var i = 0; i < keys.length; i++) {
+      var key = keys[i];
+      if (use && use[key]) document.documentElement.style.setProperty('--' + key, use[key]);
+      else document.documentElement.style.removeProperty('--' + key);
     }
   }
 

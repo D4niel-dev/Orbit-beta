@@ -18,11 +18,57 @@ window.CustomThemeModal = {
     });
   },
 
+  // The single list of what a custom theme can change. The defaults and the editor
+  // used to each carry their own copy, which is how four tokens the theme defines
+  // came to be missing from the editor entirely — and why a custom theme left them
+  // at whatever the base theme happened to be.
+  COLOR_SECTIONS: [
+    { label: 'Backgrounds', keys: ['bg-base','bg-surface','bg-sidebar','bg-hover','bg-active'] },
+    { label: 'Text',        keys: ['text-primary','text-secondary','text-muted','text-inverse'] },
+    { label: 'Accents',     keys: ['accent-primary','accent-hover','accent-soft'] },
+    { label: 'Status',      keys: ['accent-danger','accent-success','accent-warning'] },
+    { label: 'Borders',     keys: ['border-subtle','border-strong'] }
+  ],
+
+  _allKeys() {
+    var out = [];
+    this.COLOR_SECTIONS.forEach(function(section) {
+      section.keys.forEach(function(k) { out.push(k); });
+    });
+    return out;
+  },
+
+  // Resolve any CSS colour (hex, rgb(), rgba(), hsl(), a named colour) to the
+  // #rrggbb that <input type="color"> insists on. Anything unusable becomes black
+  // rather than silently showing the wrong swatch.
+  _toHex(v) {
+    var probe = document.createElement('span');
+    probe.style.color = '';
+    probe.style.color = v;
+    if (!probe.style.color) return '#000000';
+    var m = probe.style.color.match(/\d+/g);
+    if (!m || m.length < 3) return '#000000';
+    return '#' + m.slice(0, 3).map(function(n) {
+      var h = parseInt(n, 10).toString(16);
+      return h.length === 1 ? '0' + h : h;
+    }).join('');
+  },
+
+  // True when the browser understands the value. Using the browser as the validator
+  // is the only way to accept everything it accepts and reject the rest.
+  _isValidColor(v) {
+    var probe = document.createElement('span');
+    probe.style.color = '';
+    probe.style.color = v;
+    return probe.style.color !== '';
+  },
+
   _getDefaultColors() {
     var style = getComputedStyle(document.documentElement);
-    var keys = ['bg-base','bg-surface','bg-sidebar','bg-hover','bg-active','text-primary','text-secondary','text-muted','accent-primary','accent-hover','accent-soft','border-subtle','border-strong'];
     var colors = {};
-    keys.forEach(function(k) { colors[k] = style.getPropertyValue('--' + k).trim() || '#000'; });
+    this._allKeys().forEach(function(k) {
+      colors[k] = style.getPropertyValue('--' + k).trim() || '#000';
+    });
     return colors;
   },
 
@@ -44,12 +90,7 @@ window.CustomThemeModal = {
   render() {
     var self = this;
 
-    var sections = [
-      { label: 'Backgrounds', keys: ['bg-base','bg-surface','bg-sidebar','bg-hover','bg-active'] },
-      { label: 'Text', keys: ['text-primary','text-secondary','text-muted'] },
-      { label: 'Accents', keys: ['accent-primary','accent-hover','accent-soft'] },
-      { label: 'Borders', keys: ['border-subtle','border-strong'] }
-    ];
+    var sections = this.COLOR_SECTIONS;
 
     var pickerHtml = sections.map(function(section) {
       return '<div style="margin-bottom:20px;">' +
@@ -58,7 +99,9 @@ window.CustomThemeModal = {
           var val = self.colors[key] || '#000';
           var safeVal = (window.Sanitize && window.Sanitize.escapeHtml) ? window.Sanitize.escapeHtml(val) : val;
           return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">' +
-            '<div style="width:24px;height:24px;border-radius:4px;border:1px solid var(--border-subtle);background:' + val + ';flex-shrink:0;" class="custom-swatch" data-key="' + key + '"></div>' +
+            // A real colour picker, not just a swatch — it cannot produce an invalid
+            // value, which the text field cheerfully could.
+            '<input type="color" class="custom-swatch-input" data-key="' + key + '" value="' + self._toHex(val) + '" style="width:24px;height:24px;padding:0;border:1px solid var(--border-subtle);border-radius:4px;background:none;cursor:pointer;flex-shrink:0;">' +
             '<label style="font-size:11px;color:var(--text-muted);min-width:80px;flex-shrink:0;font-family:var(--font-mono);">' + key + '</label>' +
             '<input type="text" class="custom-color-input" data-key="' + key + '" value="' + safeVal + '" style="flex:1;padding:5px 8px;border-radius:4px;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--text-primary);font-size:11px;font-family:var(--font-mono);outline:none;transition:border-color 0.15s;">' +
           '</div>';
@@ -140,13 +183,33 @@ window.CustomThemeModal = {
   _bindEvents() {
     var self = this;
 
+    // The picker drives the text field and the preview.
+    this.overlay.querySelectorAll('.custom-swatch-input').forEach(function(picker) {
+      picker.addEventListener('input', function(e) {
+        var key = e.target.dataset.key;
+        self.colors[key] = e.target.value;
+        var text = self.overlay.querySelector('.custom-color-input[data-key="' + key + '"]');
+        if (text) { text.value = e.target.value; text.style.borderColor = ''; }
+        self._applyPreview();
+      });
+    });
+
+    // The text field drives the picker and the preview — but only for a value the
+    // browser accepts. An invalid custom property is invalid at computed-value time,
+    // so the whole token is lost until it is corrected; mark the field instead of
+    // applying a typo.
     this.overlay.querySelectorAll('.custom-color-input').forEach(function(input) {
       input.addEventListener('input', function(e) {
         var key = e.target.dataset.key;
-        var val = e.target.value;
+        var val = e.target.value.trim();
+        if (!self._isValidColor(val)) {
+          e.target.style.borderColor = 'var(--accent-danger)';
+          return;
+        }
+        e.target.style.borderColor = '';
         self.colors[key] = val;
-        var swatch = self.overlay.querySelector('.custom-swatch[data-key="' + key + '"]');
-        if (swatch) swatch.style.background = val;
+        var picker = self.overlay.querySelector('.custom-swatch-input[data-key="' + key + '"]');
+        if (picker) picker.value = self._toHex(val);
         self._applyPreview();
       });
     });
