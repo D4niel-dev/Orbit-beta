@@ -738,10 +738,6 @@ Pre-built Windows installers are published on [GitHub Releases](https://github.c
 | [v0.7.3-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.3-beta) | Win / Mac / Linux / Android | Custom Colors across the whole theme and on Android, a themed emoji picker, drafts that stop when you send, and an owner’s Danger Zone in group info |
 | [v0.7.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.2-beta) | Win / Mac / Linux / Android | `/help` over the composer, a verified update download, one treatment for every empty state, and the welcome tour's atmosphere |
 | [v0.7.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.1-beta) | Win / Mac / Linux / Android | `/help` sheet sizing, the emoji picker's "undefined", and a drag that could take over a scroll |
-| [v0.7.0-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.0-beta) | Win / Mac / Linux / Android | Close DM keeps the conversation, friends directory, `/help` sheet fix, notifications with the sender's avatar |
-| [v0.6.5-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.5-beta) | Win / Mac / Linux / Android | In-app update download with checksum verification, correct installer per OS/CPU, playback that survives a chat switch, mobile panel affordances |
-| [v0.6.4-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.4-beta) | Win / Mac / Linux / Android | Real audio waveform, file name above the timer, richer ⋮ menu, first-run feature slides |
-| [v0.6.3-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.6.3-beta) | Win / Mac / Linux / Android | File transfer fixed on both platforms, album art, video first frames, tray menu |
 | [v0.0.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.2-beta) | Windows                     | SQLite storage, privacy mode, large file transfers                              |
 | [v0.0.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.1-beta) | Windows                     | Original release                                                                |
 
