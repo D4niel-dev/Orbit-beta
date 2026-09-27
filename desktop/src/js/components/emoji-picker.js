@@ -7,14 +7,11 @@ window.EmojiPicker = {
   init() {
     this.container = document.createElement('div');
     this.container.id = 'emoji-picker-container';
+    // Only behaviour here. Position, radius, shadow and border live in components.css:
+    // they were inline, which meant the stylesheet could not change them — an inline
+    // border-radius quietly beat the themed one, and the panel kept the library-era
+    // 8px corners. Anything that is a look belongs where the theme can reach it.
     this.container.style.display = 'none';
-    this.container.style.position = 'absolute';
-    this.container.style.bottom = '80px';
-    this.container.style.right = '40px';
-    this.container.style.zIndex = '1000';
-    this.container.style.boxShadow = 'var(--shadow-xl)';
-    this.container.style.borderRadius = '8px';
-    this.container.style.overflow = 'hidden';
     
     // Create the emoji picker web component
     const picker = document.createElement('emoji-picker');
@@ -74,6 +71,26 @@ window.EmojiPicker = {
   },
 
   attachEvents(picker) {
+    // Remember the chosen skin tone, the way mobile does. The value MUST be validated
+    // on both sides: the picker renders whatever it is handed in its tone button, and
+    // a `skin-tone-change` event with no detail stored the literal string "undefined"
+    // once — which then painted across the search row. A tone is a non-ASCII grapheme,
+    // so anything ASCII is rejected without enumerating the good values.
+    const isValidTone = (v) => typeof v === 'string' && v.length > 0 && v.length <= 12 && !/[\x00-\x7F]/.test(v);
+    try {
+      const saved = localStorage.getItem('orbit_emoji_skin_tone');
+      if (saved) {
+        if (isValidTone(saved)) picker.skinToneEmoji = saved;
+        else localStorage.removeItem('orbit_emoji_skin_tone');   // self-heal
+      }
+    } catch (e) { /* storage blocked — the default tone stands */ }
+    picker.addEventListener('skin-tone-change', (e) => {
+      try {
+        const tone = e && e.detail ? e.detail.skinToneEmoji : null;
+        if (isValidTone(tone)) localStorage.setItem('orbit_emoji_skin_tone', tone);
+      } catch (e2) {}
+    });
+
     picker.addEventListener('emoji-click', (e) => {
       if (this.targetInput) {
         this.targetInput.value += e.detail.unicode;

@@ -2234,3 +2234,57 @@ html[data-theme="light"] #chat-welcome-host::before { opacity: 0.3; }
   min-height: 100%;
   justify-content: center;
 }
+
+/* ─── Emoji picker (desktop) ────────────────────────────────────────────
+   The desktop picker had no styling at all, so it rendered the library's raw
+   defaults: a #444 hairline around the panel, a white box on whichever emoji held
+   focus, and an unthemed search field. The same variable set mobile uses, mapped
+   onto the app's tokens — emoji-picker-element reads these UNPREFIXED names, which
+   is worth stating because a `--emoji-picker-*` set lived here once and was never
+   read by anything. */
+#emoji-picker-container emoji-picker {
+  --background: var(--bg-surface);
+  --border-size: 0;                 /* the library's own hairline outline */
+  --border-radius: 0;               /* the container rounds the corners */
+  --indicator-color: var(--accent-primary);
+  --indicator-height: 2px;
+  --input-border-color: var(--border-subtle);
+  --input-font-color: var(--text-primary);
+  --input-placeholder-color: var(--text-muted);
+  --category-font-color: var(--text-muted);
+  --button-hover-background: var(--bg-hover);
+  --button-active-background: var(--border-subtle);
+  /* No focus ring: the library draws it on :focus rather than :focus-visible, so it
+     reads as a stray white rectangle. Themed hover and active states carry it. */
+  --outline-size: 0;
+  width: 100%;
+  /* No height here. The element sizes itself, and a percentage height against an
+     auto-height parent is a trap: it collapsed the panel to something taller than
+     the window, pushing the search field off the top of the screen. */
+}
+
+#emoji-picker-container {
+  position: absolute;
+  bottom: 80px;
+  right: 40px;
+  z-index: 1000;
+  overflow: hidden;
+  /* Never taller than the space it has to live in. */
+  max-height: calc(100vh - 160px);
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  box-shadow: var(--shadow-xl);
+  /* It had a shadow and a radius but no edge, which is why it read as a floating
+     widget rather than part of the window. */
+  animation: emoji-picker-in 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes emoji-picker-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Same courtesy as everywhere else: no motion if it was not asked for. */
+@media (prefers-reduced-motion: reduce) {
+  #emoji-picker-container { animation: none; }
+}
