@@ -13,9 +13,14 @@
 
 ### Bug Fixes
 
+- **The Empty-Chat Placeholder Sat at the Top of the Conversation** — It should sit in the middle of the chat box. The desktop version used to, because the original markup carried `height: 100%` to centre itself, and that was dropped when it was replaced by the shared empty-state component. The component gained a `fill` variant (`flex: 1` for the mobile feed, `min-height: 100%` for the desktop one, so a single rule covers both), used at all four chat-feed call sites. Measured rather than eyeballed: the placeholder's centre is now 0px from the feed's centre on both platforms, with equal gaps above and below. Lists and sheets keep the non-filling variant.
+
 - **A Sheet Could Open Entirely Below the Fold** — The v0.7.2 screen check corrected a viewport that was too *small*, but took one that was too *large* at face value. Because a sheet is anchored to the bottom of its overlay, a viewport larger than the screen pushes a short sheet — a two-item chooser, `/help` with a few rows — completely off the bottom, which is indistinguishable from the sheet never opening. The check now clamps both directions, for every sheet.
 - **A Sheet Could Inherit the Previous Sheet's Sizing** — The decision between the layout and visual viewport is made by looking for a text field inside the sheet, and that check ran *before* the new content was injected — so it read the previous sheet's content. a chooser opened after the `/poll` builder was sized as though it had an input of its own, inheriting the keyboard-avoiding height instead of the layout one. Measurement now happens after the content is in place.
 
+### Technical
+
+- **Group End-to-End Tests** — `desktop/tests/e2e/groups.spec.js` covers what `group-picker.spec.js` never did: creating a group and then *living* in it — the header and the empty state, sending a message, the state disappearing once there is something to show, the group and its messages surviving a restart, and what the group info panel shows the owner. That last one pins down a deliberate asymmetry worth protecting: `Leave Group` is rendered only for non-owners, because an owner leaves by deleting the group or transferring ownership. The suite is 37 tests now, from 35.
 ## v0.7.2-beta
 
 > **Note:** Follow-ups to the v0.7.1-beta patch. The `/help` sheet could still open as a short strip when *both* viewport APIs reported a stale keyboard-shrunken height, and the in-app updater had no way to tell a good APK from a broken one — which is why a failed update surfaced only as Android's generic "There's a problem with the app file".
