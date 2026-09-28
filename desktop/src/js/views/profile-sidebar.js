@@ -23,6 +23,39 @@ window.ProfileSidebar = {
     });
   },
 
+  // The pinned block: a count, the top pin, and a way into the full list. Clicking the
+  // pin scrolls the chat to that message.
+  _pinnedSectionHtml(chatId) {
+    var store = window.store;
+    var P = window.OrbitPinned;
+    if (!store || !store.getPinnedMessages) return '';
+    var pinned = store.getPinnedMessages(chatId);
+    if (!pinned.length) return '';
+    var esc = window.Sanitize.escapeHtml;
+    var limit = P ? P.limitFor(false) : 3;
+    var first = pinned[0];
+    var rowStyle = 'display:block;width:100%;text-align:left;background:transparent;border:none;' +
+      'padding:6px 0;cursor:pointer;font-size:12.5px;color:var(--text-secondary);' +
+      'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    return '<div id="profile-pinned" style="margin-top:16px;text-align:left;background:var(--bg-base);' +
+        'border-radius:8px;padding:12px;">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">' +
+        '<i data-lucide="pin" style="width:14px;height:14px;color:var(--accent-primary);"></i>' +
+        '<span style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-muted);">Pinned</span>' +
+        '<span style="margin-left:auto;font-size:11px;color:var(--text-muted);">' +
+          pinned.length + ' of ' + limit +
+        '</span>' +
+      '</div>' +
+      '<button id="profile-pinned-jump" data-msg-id="' + esc(String(first.msgId)) + '" style="' + rowStyle + '">' +
+        esc(first.text || '(attachment)') +
+      '</button>' +
+      '<button id="profile-pinned-show-all" style="margin-top:6px;background:transparent;border:none;' +
+        'padding:0;cursor:pointer;font-size:11.5px;font-weight:600;color:var(--accent-primary);">' +
+        (pinned.length > 1 ? 'Show all ' + pinned.length + ' pinned' : 'Manage pinned') +
+      '</button>' +
+    '</div>';
+  },
+
   render(user) {
     var self = this;
     if (!user) {
@@ -51,6 +84,10 @@ window.ProfileSidebar = {
       var lastSeenStr = window.Format.relativeTime ? window.Format.relativeTime(new Date(user.lastSeen).toISOString()) : window.Format.absoluteTime(new Date(user.lastSeen).toISOString());
       lastSeenHtml = '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Last seen ' + lastSeenStr + '</div>';
     }
+
+    // A DM's chat id is the other person's user id.
+    var pinnedChatId = user.userId;
+    var pinnedSectionHtml = this._pinnedSectionHtml(pinnedChatId);
 
     this.contentArea.innerHTML =
       '<div style="display:flex;flex-direction:column;height:100%;">' +
@@ -89,6 +126,11 @@ window.ProfileSidebar = {
             bioHtml +
           '</div>' +
 
+          // Pinned messages — directly under the user info, which is where you look
+          // for them. Rendered only when something is pinned, so it never occupies
+          // space for nothing.
+          pinnedSectionHtml +
+
           // Mute toggle
           '<div id="profile-mute-row" style="margin-top:16px;display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--bg-base);border-radius:8px;border:1px solid var(--border-subtle);cursor:pointer;">' +
             '<div style="display:flex;align-items:center;gap:10px;">' +
@@ -115,6 +157,31 @@ window.ProfileSidebar = {
       '</div>';
 
     if (window.lucide) window.lucide.createIcons({ root: this.contentArea });
+
+    // Pinned: the top pin scrolls to its message, the second button opens the list.
+    var _pinJump = this.contentArea.querySelector('#profile-pinned-jump');
+    if (_pinJump) {
+      _pinJump.addEventListener('click', function () {
+        var id = _pinJump.getAttribute('data-msg-id');
+        var el = document.querySelector('[data-msg-id="' + id + '"].message-row');
+        // The chat may not have that message loaded yet; load it, then try again.
+        if (!el && window.store && window.store.loadFullChatMessages) {
+          window.store.loadFullChatMessages(pinnedChatId);
+          setTimeout(function () {
+            var again = document.querySelector('[data-msg-id="' + id + '"].message-row');
+            if (again) again.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 250);
+          return;
+        }
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    }
+    var _pinAll = this.contentArea.querySelector('#profile-pinned-show-all');
+    if (_pinAll) {
+      _pinAll.addEventListener('click', function () {
+        if (window.PinnedModal) window.PinnedModal.show(pinnedChatId);
+      });
+    }
 
     var closeBtn = this.contentArea.querySelector('#btn-close-profile-sidebar');
     if (closeBtn) {

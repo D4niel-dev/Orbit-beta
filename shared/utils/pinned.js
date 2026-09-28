@@ -35,11 +35,15 @@
       var id = p.msgId == null ? '' : String(p.msgId);
       if (!id || seen[id]) continue;
       seen[id] = true;
-      out.push({
+      // Keep the entry's own fields and normalise only the ones this module owns.
+      // Rebuilding the object from scratch dropped everything else — including the text
+      // the UI shows — which is why every pinned row rendered as "(attachment)". The
+      // unit tests missed it because they only ever checked msgId.
+      out.push(Object.assign({}, p, {
         msgId: id,
         pinnedAt: typeof p.pinnedAt === 'number' ? p.pinnedAt : 0,
         pinnedBy: p.pinnedBy == null ? '' : String(p.pinnedBy)
-      });
+      }));
     }
     return out;
   }
