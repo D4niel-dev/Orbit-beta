@@ -1214,6 +1214,20 @@ window.ChatPanel = {
           '<button id="btn-chat-more" title="More" style="background:transparent; border:none; cursor:pointer; color:inherit;"><i data-lucide="more-vertical"></i></button>' +
         '</div>' +
       '</div>' +
+      // Pinned messages, on top of the conversation — under the header and above the
+      // messages. (It went to the composer, then the right-hand panel; Dan meant the top
+      // of the third panel.) One bar for DMs and groups alike; only the limit differs,
+      // and the shared rules decide that from the chat type.
+      '<!-- Pinned Messages Bar -->' +
+      '<div id="pinned-messages-bar" title="Click to jump to this message, right-click for the list" style="display:none;align-items:center;gap:8px;' +
+        'padding:6px 12px;border-bottom:1px solid var(--border-subtle);background:var(--bg-hover);font-size:13px;color:var(--text-secondary);cursor:pointer;">' +
+        '<i data-lucide="pin" style="width:14px;height:14px;flex-shrink:0;color:var(--accent-primary);"></i>' +
+        '<span id="pinned-messages-text" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>' +
+        '<span id="pinned-messages-count" style="flex-shrink:0;font-size:11px;color:var(--text-muted);"></span>' +
+        '<button id="btn-show-all-pinned" style="background:none;border:none;cursor:pointer;color:var(--accent-primary);padding:2px 4px;font-size:11.5px;font-weight:600;">Show all</button>' +
+        '<button id="btn-unpin-all" style="background:none;border:none;cursor:pointer;color:var(--text-muted);padding:2px;font-size:16px;line-height:1;" title="Unpin all">×</button>' +
+      '</div>' +
+
       '<!-- Message Feed -->' +
       '<div class="message-feed" id="chat-message-feed" style="flex:1; overflow-y:auto; overflow-x:visible; padding: var(--spacing-lg);">' +
         messagesHtml + progressHtml + errorsHtml +
@@ -1296,22 +1310,6 @@ window.ChatPanel = {
       '</div>';
 
     this.container.insertAdjacentHTML('beforeend',
-      // Pinned messages, between the messages and the composer.
-      //
-      // It used to sit above the feed, and I first put it in the right-hand profile
-      // panel. Dan meant the third panel — the conversation itself — so it belongs here,
-      // under the messages and just above where you type. One bar for DMs and groups
-      // alike; only the limit differs, and the shared rules decide that.
-      '<!-- Pinned Messages Bar -->' +
-      '<div id="pinned-messages-bar" title="Click to jump to this message, right-click for the list" style="display:none;align-items:center;gap:8px;' +
-        'padding:6px 12px;margin:0 var(--spacing-lg) 4px;border-radius:10px;background:var(--bg-hover);font-size:13px;color:var(--text-secondary);cursor:pointer;">' +
-        '<i data-lucide="pin" style="width:14px;height:14px;flex-shrink:0;color:var(--accent-primary);"></i>' +
-        '<span id="pinned-messages-text" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>' +
-        '<span id="pinned-messages-count" style="flex-shrink:0;font-size:11px;color:var(--text-muted);"></span>' +
-        '<button id="btn-show-all-pinned" style="background:none;border:none;cursor:pointer;color:var(--accent-primary);padding:2px 4px;font-size:11.5px;font-weight:600;">Show all</button>' +
-        '<button id="btn-unpin-all" style="background:none;border:none;cursor:pointer;color:var(--text-muted);padding:2px;font-size:16px;line-height:1;" title="Unpin all">×</button>' +
-      '</div>' +
-
       '<!-- Chat Input -->' +
       '<div class="chat-input-area" style="padding: var(--spacing-md) var(--spacing-lg) 48px var(--spacing-lg); display: flex; flex-direction: column;">' +
         '<div id="file-preview-area" style="display:none; gap: 8px; padding: 12px; margin-bottom: 8px; overflow-x: auto; white-space: nowrap; border-radius: 16px; background: var(--bg-hover); border: 1px solid var(--border-subtle);"></div>' +
