@@ -2367,12 +2367,14 @@ document.addEventListener('DOMContentLoaded', function() {
         var msgId = this.getAttribute('data-msg-id');
         if (!msgId || !activeChatId) return;
         var group = MStore.groups.find(function(g) { return g.id === activeChatId; });
-        if (!group) return;
-        if (!group.pinnedMessages) group.pinnedMessages = [];
+        // A DM has no group, and it can have pins too — that is the whole point of the
+        // store map. Only a broadcast needs the member list, further down.
+        var _list = _pinnedFor(activeChatId).slice();
         var _P = window.OrbitPinned;
-        var idx = group.pinnedMessages.findIndex(function(p) { return String(p.msgId) === String(msgId); });
+        var idx = _list.findIndex(function(p) { return String(p.msgId) === String(msgId); });
         if (idx >= 0) {
-          group.pinnedMessages.splice(idx, 1);
+          _list.splice(idx, 1);
+          _setPinned(activeChatId, _list);
         } else {
           var msgs = MStore.getMessages(activeChatId);
           var msg = msgs.find(function(m) { return String(m.id) === String(msgId); });
@@ -2386,28 +2388,36 @@ document.addEventListener('DOMContentLoaded', function() {
           };
           // The limit lives in the shared rules so both platforms agree: 3 in a DM, 5 in a
           // group. A full list says why rather than silently ignoring the tap.
+          var _isGroup = _isGroupChat(activeChatId);
           if (_P) {
-            var _added = _P.add(group.pinnedMessages, _entry, true);
+            var _added = _P.add(_list, _entry, _isGroup);
             if (!_added.ok) {
-              showToast(_added.message || 'You can pin up to 5 messages here. Unpin one first.', 'info');
+              showToast(_added.message || ('You can pin up to ' + (_isGroup ? 5 : 3) + ' messages here. Unpin one first.'), 'info');
               return;
             }
-            group.pinnedMessages = _added.list;
+            _list = _added.list;
           } else {
-            group.pinnedMessages.push(_entry);
+            _list.push(_entry);
           }
+          _setPinned(activeChatId, _list);
         }
-        MStore.save();
         renderMessages(activeChatId);
-        // Broadcast to group members
+        // Tell the other side. A group goes to its members; a DM goes to the one person.
+        // This used to read group.members unguarded, which was safe only while the toggle
+        // refused to run outside a group — and a DM can be pinned now.
         if (window.Orbit && window.Orbit.P2P && Orbit.P2P.isAvailable()) {
           var pktType = idx >= 0 ? Orbit.Protocol.Types.UNPIN_MESSAGE : Orbit.Protocol.Types.PIN_MESSAGE;
-          (group.members || []).forEach(function(m) {
+          var _recipients = (group && group.members && group.members.length)
+            ? group.members
+            : [{ userId: activeChatId }];
+          _recipients.forEach(function(m) {
             var mid = typeof m === 'string' ? m : m.userId;
             if (mid !== (MStore.user ? MStore.user.id : '')) {
               var pktPayload = { msgId: msgId, groupId: activeChatId };
               if (pktType === Orbit.Protocol.Types.PIN_MESSAGE && msg) {
-                pktPayload.text = (msg.text || '(attachment)').substring(0, 100);
+                // The shared label, so the other side shows a file name rather than
+                // "(attachment)" — and no 100-character truncation, which cut names off.
+                pktPayload.text = window.OrbitPinned ? window.OrbitPinned.labelFor(msg) : (msg.text || '');
                 pktPayload.pinnedAt = new Date().toISOString();
               }
               var pkt = Orbit.Protocol.createPacket(pktType, MStore.user ? MStore.user.id : '', mid, pktPayload);
@@ -4280,6 +4290,52 @@ document.addEventListener('DOMContentLoaded', function() {
     up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="transfer-icon-svg"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>',
     down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="transfer-icon-svg"><path d="M12 4v12"/><path d="m7 11 5 5 5-5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>'
   };
+
+  /* ---- Pinned messages ----
+     One accessor for both chat types.
+
+     MStore.pinnedMessages is a per-chat map and MStore.save() already persists it — it was
+     simply never written to. Groups kept their pins inside the group object instead, which
+     meant a DM could not have any: the toggle looked for a group and gave up. Both live in
+     the store map now, keyed by chat id, exactly like the desktop, with the old
+     group.pinnedMessages read as a fallback so existing pins are not lost.
+
+     Pruned on read: a pin whose message is gone is dropped, so a deleted message leaves the
+     list rather than scrolling to nothing. */
+  function _pinnedFor(chatId) {
+    if (!chatId) return [];
+    var P = window.OrbitPinned;
+    var stored = (MStore.pinnedMessages && MStore.pinnedMessages[chatId]) || null;
+    if (!stored) {
+      // the pre-store location, for groups pinned before this change
+      var g = (MStore.groups || []).find(function (x) { return x.id === chatId || x.groupId === chatId; });
+      stored = (g && g.pinnedMessages) || [];
+    }
+    if (!P) return stored || [];
+    var msgs = MStore.getMessages(chatId) || [];
+    var live = {};
+    msgs.forEach(function (m) { live[String(m.id)] = true; });
+    return P.prune(stored, function (id) { return !!live[String(id)]; });
+  }
+
+  // Write them back, and keep the group object in step so anything still reading it agrees.
+  function _setPinned(chatId, list) {
+    if (!chatId) return;
+    if (!MStore.pinnedMessages) MStore.pinnedMessages = {};
+    MStore.pinnedMessages[chatId] = list || [];
+    var g = (MStore.groups || []).find(function (x) { return x.id === chatId || x.groupId === chatId; });
+    if (g) g.pinnedMessages = MStore.pinnedMessages[chatId];
+    MStore.save();
+  }
+
+  function _isGroupChat(chatId) {
+    return (MStore.groups || []).some(function (g) { return g.id === chatId || g.groupId === chatId; });
+  }
+
+  // Exposed for the pinned bar and list, and for the harness.
+  window._pinnedFor = _pinnedFor;
+  window._setPinned = _setPinned;
+  window._isGroupChat = _isGroupChat;
 
   function _transferRows() {
     var rows = [];
@@ -12442,30 +12498,50 @@ document.addEventListener('DOMContentLoaded', function() {
       case 'delete':
         if (typeof confirmDeleteMessage === 'function') confirmDeleteMessage(msgId);
         break;
-      case 'pin':
-        var grp = MStore.groups.find(function(g) { return g.id === chatId; });
-        if (!grp) break;
-        var isPinned = grp.pinnedMessages && grp.pinnedMessages.some(function(p) { return String(p.msgId) === String(msgId); });
+      case 'pin': {
+        // Both chat types, through the store map and the shared rules.
+        //
+        // This used to bail unless the chat was a group, pushed without any limit, and
+        // labelled every file "(attachment)". The three fixes are the same three the
+        // desktop needed, which is why the rules live in shared/utils/pinned.js.
+        var _list = _pinnedFor(chatId);
+        var _wasPinned = _list.some(function(p) { return String(p.msgId) === String(msgId); });
+        var _isGroupChatHere = _isGroupChat(chatId);
+
         if (window.Orbit && Orbit.P2P && Orbit.P2P.isAvailable()) {
-          if (isPinned) {
-            var upkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.UNPIN_MESSAGE, MStore.user ? MStore.user.id : 'mobile', chatId, { groupId: chatId, msgId: msgId });
-            Orbit.P2P.send(chatId, upkt);
-          } else {
-            var ppkt = Orbit.Protocol.createPacket(Orbit.Protocol.Types.PIN_MESSAGE, MStore.user ? MStore.user.id : 'mobile', chatId, { groupId: chatId, msgId: msgId, text: '', pinnedAt: new Date().toISOString() });
-            Orbit.P2P.send(chatId, ppkt);
+          var _pktType = _wasPinned ? Orbit.Protocol.Types.UNPIN_MESSAGE : Orbit.Protocol.Types.PIN_MESSAGE;
+          var _send = { groupId: chatId, msgId: msgId };
+          if (!_wasPinned) {
+            var _src = MStore.getMessages(chatId).find(function(x) { return String(x.id) === String(msgId); });
+            _send.text = window.OrbitPinned ? OrbitPinned.labelFor(_src) : (_src ? _src.text : '');
+            _send.pinnedAt = new Date().toISOString();
           }
+          Orbit.P2P.send(chatId, Orbit.Protocol.createPacket(_pktType, MStore.user ? MStore.user.id : 'mobile', chatId, _send));
         }
-        if (isPinned) {
-          grp.pinnedMessages = (grp.pinnedMessages || []).filter(function(p) { return String(p.msgId) !== String(msgId); });
+
+        if (_wasPinned) {
+          _setPinned(chatId, _list.filter(function(p) { return String(p.msgId) !== String(msgId); }));
         } else {
-          if (!grp.pinnedMessages) grp.pinnedMessages = [];
-          var ms = MStore.getMessages(chatId);
-          var m = ms.find(function(x) { return String(x.id) === String(msgId); });
-          grp.pinnedMessages.push({ msgId: msgId, text: m ? m.text : '', pinnedBy: MStore.user ? MStore.user.id : 'mobile', pinnedAt: new Date().toISOString() });
+          var _ms = MStore.getMessages(chatId);
+          var _m = _ms.find(function(x) { return String(x.id) === String(msgId); });
+          var _entry = {
+            msgId: msgId,
+            text: window.OrbitPinned ? OrbitPinned.labelFor(_m) : (_m ? _m.text : ''),
+            pinnedBy: MStore.user ? MStore.user.id : 'mobile',
+            pinnedAt: new Date().toISOString()
+          };
+          var _res = window.OrbitPinned
+            ? OrbitPinned.add(_list, _entry, _isGroupChatHere)
+            : { ok: true, list: _list.concat([_entry]) };
+          if (!_res.ok) {
+            showToast(_res.message || ('You can pin up to ' + (_isGroupChatHere ? 5 : 3) + ' messages here. Unpin one first.'), 'info');
+            break;
+          }
+          _setPinned(chatId, _res.list);
         }
-        MStore.save();
         if (window.activeChatId === chatId && typeof renderMessages === 'function') renderMessages(chatId);
         break;
+      }
     }
   }
 
@@ -12514,11 +12590,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     actions.push({ label: 'Delete', icon: 'trash-2', action: 'delete', danger: true });
 
-    var chatGroup = MStore.groups.find(function(g) { return g.id === chatId; });
-    if (chatGroup) {
-      var isPinned = chatGroup.pinnedMessages && chatGroup.pinnedMessages.some(function(p) { return String(p.msgId) === String(msg.id); });
-      actions.push({ label: isPinned ? 'Unpin' : 'Pin', icon: isPinned ? 'pin-off' : 'pin', action: 'pin', danger: false });
-    }
+    // Offered for a DM as well as a group. The pins live in MStore.pinnedMessages, which is
+    // keyed by chat id and persisted by save(), so a DM can hold them too — it used to
+    // require a group, which is why a DM had no Pin in this sheet at all.
+    var _pinList = _pinnedFor(chatId);
+    var _isPinnedNow = _pinList.some(function(p) { return String(p.msgId) === String(msg.id); });
+    actions.push({ label: _isPinnedNow ? 'Unpin' : 'Pin', icon: _isPinnedNow ? 'pin-off' : 'pin', action: 'pin', danger: false });
 
     for (var ai = 0; ai < actions.length; ai++) {
       var a = actions[ai];
