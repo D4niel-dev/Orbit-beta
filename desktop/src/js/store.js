@@ -1266,6 +1266,10 @@ class Store {
       msgs[chatId] = msgs[chatId].filter(m => m.id != msgId);
       if (window.orbitAPI) window.orbitAPI.dbDeleteMessage(chatId, msgId);
       this.setState({ messages: msgs });
+
+      // A pinned message that no longer exists leaves the pinned list at once. The
+      // alternative is a pinned row that scrolls to nothing, which reads as a bug.
+      this._prunePinned(chatId);
     }
   }
 
@@ -1315,6 +1319,17 @@ class Store {
     var msg = msgs.find(function(m) { return String(m.id) === String(msgId); });
     if (!msg) return;
 
+    // The limit is a rule, not a silent no-op: refuse it and say why, so the UI can tell
+    // the user rather than appearing to do nothing.
+    var P = window.OrbitPinned;
+    if (P) {
+      var allowed = P.canPin(this.getPinnedMessages(chatId), this._isGroupChat(chatId));
+      if (!allowed.ok) {
+        if (window.Toast) window.Toast.show(allowed.message, 'info');
+        return;
+      }
+    }
+
     var pinned = { ...this.state.pinnedMessages };
     if (!pinned[chatId]) pinned[chatId] = [];
     
@@ -1343,7 +1358,40 @@ class Store {
 
   getPinnedMessages(chatId) {
     var pinned = this.state.pinnedMessages[chatId];
-    return pinned || [];
+    if (!pinned || !pinned.length) return [];
+    var P = window.OrbitPinned;
+    if (!P) return pinned;
+    // Prune on read as a safety net: a message can disappear without going through
+    // deleteMessage (a chat cleared, a store restore), and a pinned row that scrolls
+    // nowhere is worse than a shorter list. The rules live in shared/utils/pinned.js so
+    // both platforms agree on them.
+    var msgs = this.state.messages[chatId] || [];
+    var live = {};
+    msgs.forEach(function (m) { live[String(m.id)] = true; });
+    return P.prune(pinned, function (id) { return !!live[String(id)]; });
+  }
+
+  // Is this chat a group? The pin limit differs: 3 in a direct message, 5 in a group.
+  _isGroupChat(chatId) {
+    return (this.state.groups || []).some(function (g) {
+      return String(g.groupId || g.id) === String(chatId);
+    });
+  }
+
+  // The pinned list as it should be stored, with dead entries removed.
+  _prunePinned(chatId) {
+    var P = window.OrbitPinned;
+    var pinned = this.state.pinnedMessages[chatId];
+    if (!P || !pinned || !pinned.length) return;
+    var msgs = this.state.messages[chatId] || [];
+    var live = {};
+    msgs.forEach(function (m) { live[String(m.id)] = true; });
+    var clean = P.prune(pinned, function (id) { return !!live[String(id)]; });
+    if (clean.length === pinned.length) return;
+    var next = { ...this.state.pinnedMessages };
+    if (clean.length) next[chatId] = clean;
+    else delete next[chatId];
+    this.setState({ pinnedMessages: next });
   }
 
   sendPinMessage(chatId, msgId) {
