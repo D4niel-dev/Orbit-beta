@@ -689,18 +689,13 @@ app.whenReady().then(() => {
   const _downloadedFiles = new Set();
   let _activeDownload = null;
 
-  function _isAllowedUpdateHost(hostname) {
-    const h = String(hostname || '').toLowerCase();
-    return h === 'github.com' || h.endsWith('.github.com') || h.endsWith('.githubusercontent.com');
-  }
+  // Extracted to desktop/lib/update-assets.js so it can be tested; the logic is
+  // unchanged. Closures in here are unreachable from a test, and the mobile updater
+  // proved what that costs.
+  const _updateAssets = require('./lib/update-assets');
+  const _isAllowedUpdateHost = _updateAssets.isAllowedUpdateHost;
 
-  // The asset name comes from the release, so it is untrusted: basename it (no
-  // traversal), strip anything that is not filename-safe, and cap the length.
-  function _safeAssetName(name) {
-    const base = path.basename(String(name || 'Orbit-installer'));
-    const cleaned = base.replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^\.+/, '').slice(0, 120);
-    return cleaned || 'Orbit-installer';
-  }
+  const _safeAssetName = _updateAssets.safeAssetName;
 
   function _updateDownloadDir() {
     let base;
