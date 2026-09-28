@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v073-beta">v0.7.3-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v074-beta">v0.7.4-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@
 
 | Channel           | Version     | Status                                                                                                                                |
 | ----------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| **Latest**        | v0.7.3-beta | Custom Colors covers the whole theme and reaches Android, the desktop emoji picker is themed and no longer clipped, drafts stop when you send, and group info gained an owner’s Danger Zone |
+| **Latest**        | v0.7.4-beta | The in-app Android update works at last — it had never once succeeded — with a progress bar and the time remaining on both platforms, transfer progress on mobile, and a `/help` that either works or tells you why |
 | **Stable**        | v0.6.0-beta | Reliability release — notification plumbing, an offline send queue, a vault you can back up and take with you, in-app Android updates |
 | Legacy **Stable** | v0.1.1-beta | Legacy stable release                                                                                                                 |
 
@@ -90,15 +90,12 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage app for desktop and Android** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
-## Highlights (v0.7.3-beta)
+## Highlights (v0.7.4-beta)
 
-* **Custom Colors Now Covers the Whole Theme** — The editor offered 13 of the 21 tokens the themes define, and the one that hurt was `--text-inverse`: the colour of text *on* an accent background, so a light custom accent left unreadable text on it. It covers all 17 colour tokens now, with a real colour picker beside every field, values validated by the browser rather than taken on trust, and a way back to your saved colours — which the theme list never offered, so choosing any other theme used to drop you out of them with no route home.
-* **Custom Colors Works on Android** — It had no custom-theme support at all: `theme = 'custom'` matched no stylesheet and your colours were ignored, so a theme built on the desktop silently became the base theme on a phone. Mobile layers them over the dark base exactly as the desktop does now. There is still no editor on mobile; the colours travel.
-* **The Desktop Emoji Picker Wears the App's Theme** — It had no styling at all and rendered the library's raw defaults: a `#444` hairline, a white box on whichever emoji held focus, an unthemed search field. It follows the app's tokens now, remembers your skin tone, and its last column is no longer hidden behind the scrollbar on Windows.
-* **Drafts Stop When You Send** — An unsent message stays in its chat until you send it, and sending ends the draft. On Android it used to come back: a debounced save captured the text as you typed and wrote it 300ms later, so a message sent inside that window had its draft written back afterwards.
-* **The Empty-Chat Placeholder Sits in the Middle** — It was at the top of the conversation, on both platforms.
-* **Group Info Says More, and Lets the Owner Act** — How many members are online, when the group was created, and a Danger Zone for the owner, whose only route to deleting their own group used to be a right-click menu.
-* **Groundwork, Not a Feature: Settings Sync** — A custom theme cannot yet travel between your own devices, and the reason is that the protocol has no settings packet at all. This release adds the packet type and the rules that decide what may travel and what may be applied — an explicit whitelist, validated on receive, last-write-wins by timestamp. **Nothing sends or receives yet**, so the feature does not work end to end; the tested core is in, and the transport is next.
+* **The In-App Update Finally Works on Android** — It had never once succeeded, and the reason was one byte. The downloaded APK was written **one byte too long**: the trailing chunk was padded out to a base64 group boundary with zero bytes that were never in the file, so a 200,000-byte download landed as 200,001. Android checks an APK's zip against its signature, so a file one or two bytes long is refused with "There's a problem with the app file". It only happened when the byte count was not a multiple of three — which is most of the time. The size check passed all along because it compared against the bytes *read from the network*, never the bytes *written to the file*.
+* **A Progress Bar and the Time Remaining for Update Downloads** — On both platforms. Tens of megabytes used to be signalled by a percentage on the button, which then vanished once it read "Opening installer…". Now a bar and a line reading the bytes, the percentage and an estimate of the time left. The estimate is held back for the first second and a half on purpose: the first chunk measures the round trip, not the throughput, and an estimate that opens at "2m left" and settles on "20s left" is worse than none.
+* **File Transfers Show Progress on Mobile** — Sending or receiving gave no feedback at all, so a large transfer looked like nothing happening. A row above the composer now shows the direction, the file name, a bar and a percentage, in the same shape as the desktop's. The counters were already there; nothing had surfaced them.
+* **`/help` Works, and Says So When It Doesn't** — Two separate problems. In a direct message it showed nothing at all, because the command picker is suppressed outside groups — and a fresh install's only chat is a DM, which made it look broken on every version. And when the sheet failed to open it failed *silently*, clearing what you had typed. It is offered wherever you type it now, and a failure names itself and keeps your text.
 
 ## Version History
 
@@ -712,7 +709,7 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 
 </details>
 
-<details open>
+<details>
 <summary>v0.7.3-beta</summary>
 
 * **Custom Colors covers all 17 colour tokens** — real colour pickers, browser-validated values, a way back to your saved colours, and Android support where there was none
@@ -721,6 +718,16 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **The empty-chat placeholder is centred** in the conversation, on both platforms
 * **Group info** — how many members are online, when the group was created, and a Danger Zone for the owner
 * **Groundwork for settings sync** — the packet type and the rules, with unit tests; nothing sends or receives yet
+
+</details>
+
+<details open>
+<summary>v0.7.4-beta</summary>
+
+* **The in-app Android update works** — the APK was one byte too long, so Android refused it every time
+* **Update progress with the time remaining**, on both platforms
+* **Transfer progress on mobile**, matching the desktop
+* **`/help` offered in DMs**, and it reports a failure instead of failing silently
 
 </details>
 
@@ -735,6 +742,7 @@ Pre-built Windows installers are published on [GitHub Releases](https://github.c
 | Release                                                                          | Platform                    | Notes                                                                           |
 | -------------------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------- |
 | [All releases](https://github.com/D4niel-dev/Orbit-beta/releases)                | Win / Mac / Linux / Android | Most recent build first                                                         |
+| [v0.7.4-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.4-beta) | Win / Mac / Linux / Android | A working Android updater with a progress bar and time remaining, transfer progress on mobile, and a `/help` that works or explains itself |
 | [v0.7.3-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.3-beta) | Win / Mac / Linux / Android | Custom Colors across the whole theme and on Android, a themed emoji picker, drafts that stop when you send, and an owner’s Danger Zone in group info |
 | [v0.7.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.2-beta) | Win / Mac / Linux / Android | `/help` over the composer, a verified update download, one treatment for every empty state, and the welcome tour's atmosphere |
 | [v0.7.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.1-beta) | Win / Mac / Linux / Android | `/help` sheet sizing, the emoji picker's "undefined", and a drag that could take over a scroll |
@@ -996,14 +1004,13 @@ Transparency matters in beta. Current constraints include:
 
 ## Roadmap
 
-### Shipped (v0.7.3-beta)
+### Shipped (v0.7.4-beta)
 
-* **Custom Colors, Completed** — all 17 colour tokens, real pickers, validated values, a route back to your saved colours, and Android support
-* **A Themed Emoji Picker** — the app's tokens, a remembered skin tone, and no clipped column behind the Windows scrollbar
-* **Drafts That End on Send** — an unsent message stays put; sending no longer lets it return
-* **The Empty-Chat Placeholder, Centred**
-* **Group Info** — an online count, the creation date, and an owner's Danger Zone
-* **Settings Sync, Groundwork** — the packet type and the validated rules; the transport is next
+* **A Working Android Updater** — the byte-count corruption is fixed, so Android accepts the APK
+* **Update Progress** — a bar and the time remaining, on both platforms
+* **Transfer Progress on Mobile** — matching the desktop
+* **`/help` Fixed Twice** — offered in DMs, and loud instead of silent when it fails
+* **The Desktop Updater's Host and Filename Rules Tested** — extracted from the IPC handler so they could be
 
 ### In Progress / Planned
 

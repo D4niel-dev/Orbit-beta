@@ -1,5 +1,24 @@
 # Orbit Changelog
 
+## v0.7.4-beta
+
+### Features
+
+- **The Update Download Shows a Progress Bar and the Time Remaining** — On both platforms. The download is tens of megabytes, and the only sign anything was happening was a percentage on the button — which then disappeared entirely once the label read "Opening installer…". There is now a bar and a line under it reading the bytes, the percentage and an estimate of the time left, from the rate actually observed. The estimate is withheld for the first second and a half on purpose: the first chunk measures the round trip rather than the throughput, and an estimate that opens at "2m left" and settles on "20s left" is worse than no estimate at all.
+- **File Transfers Show Progress on Mobile** — Sending or receiving a file gave no feedback at all, so a large transfer looked like nothing happening. A row now appears above the composer with the direction, the file name, a bar and a percentage — the same shape as the desktop's, with the same tokens, so the two platforms read the same. The counters were already there; nothing had ever surfaced them.
+
+### Bug Fixes
+
+- **The In-App Update Never Worked on Android** — Every attempt failed, and this is why: the downloaded APK was written **one byte too long**. The trailing chunk was padded out to a base64 group boundary with zero bytes that were never in the file — a 200,000-byte download landed as 200,001. Android checks an APK's zip against its signature, so a file one or two bytes long is refused with "There's a problem with the app file", which is the exact error the size check in that function was written to prevent, arriving by another route. It only triggers when the byte count is not a multiple of three, which is most of the time. The size check passed throughout because it compared against the bytes *read from the network*, never the bytes *written to the file* — the number being verified was not the number that mattered.
+- **"Update failed: total is not defined"** — A variable was declared inside the response callback and read in the verification step further down the chain, which is a different scope. The ReferenceError fired before the size check could run, so every Android update attempt died there. Introduced while fixing the previous error in the same function, which is worth saying plainly.
+- **The Update Modal Closed as Soon as You Pressed Download** — The progress bar lives inside the modal, so closing it on the same click that started the download destroyed the bar before a single byte arrived. The download ran with no indication at all — precisely the complaint the progress bar was added to fix. The modal now stays open until the download ends, or until you dismiss it.
+- **`/help` Failed Silently and Deleted What You Typed** — In a group, typing `/help` and sending closed the keyboard, cleared the input and then showed nothing at all, while every other command worked. Something threw between dismissing the keyboard and activating the sheet, and the failure was invisible — the input was cleared regardless. It now reports the failure and **keeps your text**, so a failure is something you can see and tell us about rather than a command that appears dead.
+- **`/help` Offered Nothing in a Direct Message** — The slash-command picker is suppressed outside group chats, because the commands really are group utilities. `/help` is a reference rather than a utility, so typing it in a DM showed nothing at all — and a fresh install's only chat is a DM, which made the command look broken on every version. Help is now offered wherever it is typed; the actual group-only commands stay hidden in DMs.
+
+### Technical
+
+- **The Desktop Updater's Host and Filename Rules Are Tested** — Which hosts the updater will download from, and what filename it writes, were closures inside the IPC handler and therefore unreachable from any test — the same property that let three defects reach the Android updater untouched. Extracted to `desktop/lib/update-assets.js` with the logic unchanged and covered with 12 tests, including the redirect host (`objects.githubusercontent.com`, without which every real download fails at the redirect) and the suffix trick (`github.com.evil.example`, which a missing dot in the comparison would let through).
+
 ## v0.7.3-beta
 
 > **Note:** Follow-ups to v0.7.2-beta, plus a pass over Custom Colors — which turned out to be incomplete in a way that was invisible from the UI.

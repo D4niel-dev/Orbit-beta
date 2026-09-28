@@ -6779,7 +6779,25 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button id="changelog-close-mobile" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;font-size:20px;">✕</button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
-        vBlock('0.7.3-beta', 'Latest', [
+        vBlock('0.7.4-beta', 'Latest', [
+          ['Updates', [
+            'The in-app update works. It never once succeeded before, and the reason was one byte: the downloaded APK was written a byte too long, so Android refused it with "There\u2019s a problem with the app file".',
+            'Downloading now shows a progress bar and the time remaining, and the dialog stays open while it runs instead of closing the moment you press Download.',
+            '"Update failed: total is not defined" is fixed too \u2014 it fired before the size check could even run.'
+          ]],
+          ['File transfers', [
+            'Sending or receiving a file shows a progress row above the message box: the direction, the file name, a bar and a percentage.',
+            'It looks the same as the desktop now, so the two do not read differently for the same event.'
+          ]],
+          ['Commands', [
+            '/help opens its command list in a direct message too. It used to show nothing outside a group chat, and a fresh install only has a direct message.',
+            'And when it cannot open, it says so and keeps what you typed. It used to fail silently and clear the box.'
+          ]],
+          ['Version', [
+            'Version: Bumped to v0.7.4-beta.'
+          ]]
+        ]) +
+        vBlock('0.7.3-beta', '', [
           ['Messages', [
             'An unsent message stays in its chat until you send it, and sending ends the draft. Drafts used to come back after you had sent the message \u2014 and could even land in the wrong conversation.'
           ]],

@@ -14,7 +14,19 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.7.3-beta', 'Latest', [
+        versionBlock('0.7.4-beta', 'Latest', [
+          ['Updates', [
+            'Downloading an update shows a progress bar and the time remaining, instead of a percentage that vanished the moment the button said "Opening installer".',
+            'The estimate is held back for the first second and a half: the first chunk measures the round trip rather than the throughput, and a number that starts at "2m left" and settles on "20s left" is worse than no number.'
+          ]],
+          ['Technical', [
+            'The rules deciding which hosts the updater will download from, and what filename it writes, were closures inside the IPC handler \u2014 unreachable from any test. They live in desktop/lib/update-assets.js now and are covered, including the redirect host GitHub sends release assets to.'
+          ]],
+          ['Version', [
+            'Version: Bumped to v0.7.4-beta.'
+          ]]
+        ]) +
+        versionBlock('0.7.3-beta', '', [
           ['Custom Colors', [
             'Every colour token the themes define is editable now \u2014 the editor used to offer 13 of 21, and the one that mattered was the text colour on an accent background, so a light custom accent left unreadable text.',
             'Each row has a real colour picker beside its hex field, and a value that is not a colour is refused instead of applied.',
