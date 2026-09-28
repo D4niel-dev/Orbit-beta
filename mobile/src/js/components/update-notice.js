@@ -83,6 +83,12 @@ window.UpdateNotice = {
     };
     setLabel('Starting download\u2026');
 
+    // Declared here, at the top of the function, so every step of the chain below can
+    // see it. It used to be declared inside the response callback and read in the
+    // verification step — a different callback — which threw
+    // "Update failed: total is not defined".
+    var total = 0;
+
     FS.mkdir({ path: APK_DIR, directory: 'CACHE', recursive: true })
       .catch(function () { /* already there */ })
       .then(function () { return FS.deleteFile({ path: APK_PATH, directory: 'CACHE' }).catch(function () {}); })
@@ -95,7 +101,9 @@ window.UpdateNotice = {
         // resp.headers.get(...) throw and turn a working download into
         // "Cannot read properties of undefined". Length is only used for the progress
         // readout, so treat it as optional.
-        var total = 0;
+        // Assigned, not declared: a `var` here shadows the one at the top of the
+        // function, so the verification step further down would read the outer 0 and
+        // silently stop checking the download size.
         try {
           if (resp.headers && typeof resp.headers.get === 'function') {
             total = parseInt(resp.headers.get('content-length') || '0', 10) || 0;
