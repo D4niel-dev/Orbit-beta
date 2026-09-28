@@ -4250,11 +4250,22 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   /* ---- Transfer progress strip ----
-     Reads the counters the transfer code already keeps and shows them. Deliberately a
-     poller rather than a hook in every chunk: the chunk paths are the most delicate
+     Same shape as the desktop's transfer-progress-inline: a card row per transfer with
+     an icon, the name and percentage on one line, and a bar underneath — so the two
+     platforms read the same. Desktop labels are mirrored too ("Receiving Video...").
+
+     Inline SVG rather than a lucide pass: this markup is rewritten on a 600ms poller,
+     and the app already prefers inline SVG for exactly this reason (see the sheet's
+     close button) — no icon pass, so nothing can be lost to icon timing.
+
+     A poller rather than a hook in every chunk: the chunk paths are the most delicate
      code in the app (resume rewinds, checkpoints, reap sweeps) and a UI concern has no
-     business being threaded through them. 600ms is invisible for a progress bar and
-     costs nothing when no transfer is running. */
+     business being threaded through them. It costs nothing when no transfer is running. */
+  var _TP_ICONS = {
+    up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="transfer-icon-svg"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>',
+    down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="transfer-icon-svg"><path d="M12 4v12"/><path d="m7 11 5 5 5-5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>'
+  };
+
   function _transferRows() {
     var rows = [];
     var sends = window.activeSends || {};
@@ -4263,9 +4274,12 @@ document.addEventListener('DOMContentLoaded', function() {
       if (!sess || sess.done || sess.cancelled) continue;
       var total = sess.total || 0;
       var sent = Math.min(sess.ci || 0, total);
+      var att = sess.att || {};
+      var name = att.name || att.fileName || '';
       rows.push({
-        name: (sess.att && (sess.att.name || sess.att.fileName)) || 'File',
-        pct: total ? Math.round(sent / total * 100) : 0,
+        // Desktop falls back to a description rather than an empty or unknown name
+        name: name || 'Sending file\u2026',
+        pct: total ? Math.floor(sent / total * 100) : 0,
         dir: 'up'
       });
     }
@@ -4275,34 +4289,58 @@ document.addEventListener('DOMContentLoaded', function() {
       if (!t) continue;
       var tot = t.total || 0;
       var got = t.received || 0;
+      var label = t.fileName || '';
+      // Desktop names the kind when it has one, so a nameless receive still says
+      // something useful instead of "unknown".
+      if (!label || label === 'unknown') {
+        if (t.progType === 'audio') label = 'Receiving Audio\u2026';
+        else if (t.progType === 'video') label = 'Receiving Video\u2026';
+        else label = 'Receiving file\u2026';
+      }
       rows.push({
-        name: t.fileName || 'File',
-        pct: tot ? Math.round(got / tot * 100) : 0,
+        name: label,
+        pct: tot ? Math.floor(got / tot * 100) : 0,
         dir: 'down'
       });
     }
     return rows;
   }
 
+  var _lastStripSignature = '';
   function _renderTransferStrip() {
     var strip = document.getElementById('transfer-progress-strip');
     if (!strip) return;
     var rows = _transferRows();
     if (!rows.length) {
-      if (strip.style.display !== 'none') { strip.style.display = 'none'; strip.innerHTML = ''; }
+      if (strip.style.display !== 'none') {
+        strip.style.display = 'none';
+        strip.innerHTML = '';
+        _lastStripSignature = '';
+      }
       return;
     }
+    // Only touch the DOM when something actually changed: the poller runs every 600ms
+    // and a rebuild per tick would fight the bar's width transition.
+    var sig = rows.map(function (r) { return r.dir + '|' + r.name + '|' + r.pct; }).join('\n');
+    if (sig === _lastStripSignature) return;
+    _lastStripSignature = sig;
+
     var esc = (window.Sanitize && window.Sanitize.escapeHtml)
       ? window.Sanitize.escapeHtml
       : function (v) { return String(v == null ? '' : v); };
     var html = '';
     for (var i = 0; i < rows.length; i++) {
       var r = rows[i];
-      html += '<div class="transfer-row">' +
-        '<span class="transfer-arrow" aria-hidden="true">' + (r.dir === 'up' ? '\u2191' : '\u2193') + '</span>' +
-        '<span class="transfer-name">' + esc(r.name) + '</span>' +
-        '<span class="transfer-bar"><span class="transfer-bar-fill" style="width:' + r.pct + '%"></span></span>' +
-        '<span class="transfer-pct">' + r.pct + '%</span>' +
+      var pct = Math.max(0, Math.min(100, r.pct));
+      html += '<div class="transfer-card">' +
+        '<span class="transfer-icon" aria-hidden="true">' + (_TP_ICONS[r.dir] || _TP_ICONS.down) + '</span>' +
+        '<div class="transfer-body">' +
+          '<div class="transfer-line">' +
+            '<span class="transfer-name">' + esc(r.name) + '</span>' +
+            '<span class="transfer-pct">' + pct + '%</span>' +
+          '</div>' +
+          '<div class="transfer-bar"><div class="transfer-bar-fill" style="width:' + pct + '%"></div></div>' +
+        '</div>' +
       '</div>';
     }
     strip.innerHTML = html;
