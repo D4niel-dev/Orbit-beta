@@ -4178,6 +4178,9 @@ document.addEventListener('DOMContentLoaded', function() {
   function showHelpModal() {
     var sheet = (typeof window !== 'undefined' && window.OrbitSheet) ? window.OrbitSheet : (typeof OrbitSheet !== 'undefined' ? OrbitSheet : null);
     if (!sheet || typeof sheet.showCustom !== 'function') {
+      // The sheet is loaded before app.js, so this should be unreachable — if it fires,
+      // something is wrong with the load order and the message should say so.
+      if (window.console && console.error) console.error('[help] OrbitSheet missing', typeof sheet);
       showToast('Help unavailable — sheet not loaded', 'error');
       return;
     }
@@ -4204,9 +4207,39 @@ document.addEventListener('DOMContentLoaded', function() {
       html += '</div>';
     }
     html += '</div>';
-    // Tall: this is a reference list, not a chooser (see .bottom-sheet-tall).
-    sheet.showCustom(html, { tall: true });
-    // Clear the /help input after opening modal so it does not linger
+
+    // Open it, and only clear the input if it actually opened.
+    //
+    // Dan's report: in a GROUP, typing /help showed the tooltip, pressing send closed
+    // the keyboard, deleted the text, and then NOTHING appeared — while every other
+    // command worked. That is the shape of a throw between dismissing the keyboard and
+    // activating the overlay: the sheet never becomes visible, the input is cleared
+    // anyway, and the user is left with neither their text nor the help.
+    //
+    // So: catch it, say so, and keep the text. A silent failure that eats what you
+    // typed is the worst possible outcome, and "nothing showed" gave us nothing to
+    // work with. Whatever is throwing on a real device will now name itself.
+    var opened = false;
+    try {
+      sheet.showCustom(html, { tall: true });
+      var _ov = document.getElementById('bottom-sheet-overlay');
+      opened = !!(_ov && _ov.classList.contains('active'));
+    } catch (e) {
+      if (window.console && console.error) console.error('[help] sheet failed', e);
+      showToast('Could not open the command list: ' + ((e && e.message) || e), 'error');
+    }
+    if (!opened) {
+      // Not open, for whatever reason. Leave the input alone so the text is not lost,
+      // and say something rather than nothing.
+      if (!window.OrbitSheet || typeof window.OrbitSheet.showCustom !== 'function') {
+        showToast('Help unavailable — sheet not loaded', 'error');
+      } else {
+        showToast('Could not open the command list', 'error');
+      }
+      return;
+    }
+
+    // Clear the /help input now that the list is on screen, so it does not linger
     var _helpInput = document.getElementById('chat-input');
     if (_helpInput) {
       _helpInput.value = '';
