@@ -1792,6 +1792,38 @@ window.SidebarMiddle = {
     });
   },
 
+  // The pinned block for a group: a count, the top pin, and a way into the full list.
+  // Mirrors the one in the DM profile sidebar so the two read the same.
+  _pinnedSectionHtml(chatId, group) {
+    var store = window.store;
+    var P = window.OrbitPinned;
+    if (!store || !store.getPinnedMessages) return '';
+    var pinned = store.getPinnedMessages(chatId);
+    if (!pinned.length) return '';
+    var esc = window.Sanitize.escapeHtml;
+    var limit = P ? P.limitFor(true) : 5;
+    var first = pinned[0];
+    var rowStyle = 'display:block;width:100%;text-align:left;background:transparent;border:none;' +
+      'padding:6px 0;cursor:pointer;font-size:12.5px;color:var(--text-secondary);' +
+      'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    return '<div id="group-pinned" style="margin:0 0 12px;background:var(--bg-base);border-radius:8px;padding:12px;">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">' +
+        '<i data-lucide="pin" style="width:14px;height:14px;color:var(--accent-primary);"></i>' +
+        '<span style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-muted);">Pinned</span>' +
+        '<span style="margin-left:auto;font-size:11px;color:var(--text-muted);">' +
+          pinned.length + ' of ' + limit +
+        '</span>' +
+      '</div>' +
+      '<button id="group-pinned-jump" data-msg-id="' + esc(String(first.msgId)) + '" style="' + rowStyle + '">' +
+        esc(first.text || '(attachment)') +
+      '</button>' +
+      '<button id="group-pinned-show-all" style="margin-top:6px;background:transparent;border:none;' +
+        'padding:0;cursor:pointer;font-size:11.5px;font-weight:600;color:var(--accent-primary);">' +
+        (pinned.length > 1 ? 'Show all ' + pinned.length + ' pinned' : 'Manage pinned') +
+      '</button>' +
+    '</div>';
+  },
+
   showGroupInfo(groupId) {
     var self = this;
     var state = window.store.getState();
@@ -2097,6 +2129,10 @@ window.SidebarMiddle = {
               '</div>'
             : '') +
         sectionEnd +
+        // Pinned messages — directly under the group's own info, the same place as in a
+        // DM. Same modal, same rules; only the limit differs, and that is decided by the
+        // shared module from the chat type.
+        this._pinnedSectionHtml(groupId, group) +
         sectionStart('key-round', 'Invite', false) +
           '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">' +
             '<div style="min-width:0;">' +
@@ -2294,6 +2330,30 @@ window.SidebarMiddle = {
     wireAddFriendButtons();
 
     // Leave Group
+    // Pinned: the top pin scrolls to its message, the second button opens the list.
+    var _pinJump = document.getElementById('group-pinned-jump');
+    if (_pinJump) {
+      _pinJump.addEventListener('click', function () {
+        var id = _pinJump.getAttribute('data-msg-id');
+        var el = document.querySelector('[data-msg-id="' + id + '"].message-row');
+        if (!el && window.store && window.store.loadFullChatMessages) {
+          window.store.loadFullChatMessages(groupId);
+          setTimeout(function () {
+            var again = document.querySelector('[data-msg-id="' + id + '"].message-row');
+            if (again) again.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 250);
+          return;
+        }
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    }
+    var _pinAll = document.getElementById('group-pinned-show-all');
+    if (_pinAll) {
+      _pinAll.addEventListener('click', function () {
+        if (window.PinnedModal) window.PinnedModal.show(groupId);
+      });
+    }
+
     var deleteBtn = document.getElementById('group-info-delete-group');
     if (deleteBtn) {
       deleteBtn.addEventListener('click', function() {
