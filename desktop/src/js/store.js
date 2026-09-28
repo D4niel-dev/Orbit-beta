@@ -1341,6 +1341,9 @@ class Store {
   // The name first (the user knows the file), the kind second (a photo pasted from the
   // clipboard has no name), and the old fallback only if there is nothing at all.
   _pinLabel(msg) {
+    // One copy, in shared/utils/pinned.js, because the mobile had its own and both were
+    // wrong in the same way.
+    if (window.OrbitPinned && window.OrbitPinned.labelFor) return window.OrbitPinned.labelFor(msg);
     if (!msg) return '(attachment)';
     var text = String(msg.text == null ? '' : msg.text).trim();
     if (text) return text;

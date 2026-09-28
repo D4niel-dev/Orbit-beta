@@ -122,6 +122,34 @@
     return false;
   }
 
+  // What a pinned message should be called in a list.
+  //
+  // A file-only message has no text, and the old fallback was the literal "(attachment)" —
+  // so pinning a photo or a document produced a pin labelled "(attachment)", which says
+  // nothing about which one it is. Both platforms had that fallback, written twice.
+  //
+  // The ladder, in the vocabulary the apps already use for attachments:
+  //   caption -> file name -> "Photo" / "Video" / "Voice message" / "File" -> "(attachment)"
+  function labelFor(msg) {
+    if (!msg) return '(attachment)';
+    var text = String(msg.text == null ? '' : msg.text).trim();
+    if (text) return text;
+    var att = (msg.attachments && msg.attachments[0]) || msg.attachment || null;
+    if (!att) return '(attachment)';
+    var kind = att.type || '';
+    if (!kind && att.mimeType) {
+      if (/^image\//.test(att.mimeType)) kind = 'image';
+      else if (/^video\//.test(att.mimeType)) kind = 'video';
+      else if (/^audio\//.test(att.mimeType)) kind = 'audio';
+    }
+    var name = String(att.name || att.fileName || '').trim();
+    if (name) return name;
+    if (kind === 'image') return 'Photo';
+    if (kind === 'video') return 'Video';
+    if (kind === 'audio') return 'Voice message';
+    return 'File';
+  }
+
   // The note other people see. Dan's wording, tidied: it is a system line in the chat, so
   // it should read as a sentence about a person, and name them.
   function orderChangedText(username) {
@@ -141,6 +169,7 @@
     remove: remove,
     reorder: reorder,
     orderChanged: orderChanged,
-    orderChangedText: orderChangedText
+    orderChangedText: orderChangedText,
+    labelFor: labelFor
   };
 })();

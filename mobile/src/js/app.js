@@ -2369,18 +2369,33 @@ document.addEventListener('DOMContentLoaded', function() {
         var group = MStore.groups.find(function(g) { return g.id === activeChatId; });
         if (!group) return;
         if (!group.pinnedMessages) group.pinnedMessages = [];
+        var _P = window.OrbitPinned;
         var idx = group.pinnedMessages.findIndex(function(p) { return String(p.msgId) === String(msgId); });
         if (idx >= 0) {
           group.pinnedMessages.splice(idx, 1);
         } else {
           var msgs = MStore.getMessages(activeChatId);
           var msg = msgs.find(function(m) { return String(m.id) === String(msgId); });
-          group.pinnedMessages.push({
+          var _entry = {
             msgId: msgId,
-            text: msg ? (msg.text || '(attachment)').substring(0, 100) : '',
+            // The shared label, not '(attachment)': a pinned photo should be named. This
+            // used to truncate to 100 characters as well, which cut filenames in half.
+            text: _P ? _P.labelFor(msg) : (msg ? (msg.text || '(attachment)') : ''),
             pinnedBy: MStore.user ? MStore.user.id : '',
             pinnedAt: new Date().toISOString()
-          });
+          };
+          // The limit lives in the shared rules so both platforms agree: 3 in a DM, 5 in a
+          // group. A full list says why rather than silently ignoring the tap.
+          if (_P) {
+            var _added = _P.add(group.pinnedMessages, _entry, true);
+            if (!_added.ok) {
+              showToast(_added.message || 'You can pin up to 5 messages here. Unpin one first.', 'info');
+              return;
+            }
+            group.pinnedMessages = _added.list;
+          } else {
+            group.pinnedMessages.push(_entry);
+          }
         }
         MStore.save();
         renderMessages(activeChatId);
