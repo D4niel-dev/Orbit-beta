@@ -1222,8 +1222,13 @@ window.ChatPanel = {
       // of the third panel.) One bar for DMs and groups alike; only the limit differs,
       // and the shared rules decide that from the chat type.
       '<!-- Pinned Messages Bar -->' +
+      // A floating card, not a full-width strip: rounded, inset from the edges, with an
+      // edge and a shadow, on a surface a step lighter than the chat behind it.
       '<div id="pinned-messages-bar" title="Click to jump to this message, right-click for the list" style="display:none;align-items:center;gap:8px;' +
-        'padding:6px 12px;border-bottom:1px solid var(--border-subtle);background:var(--bg-hover);font-size:13px;color:var(--text-secondary);cursor:pointer;">' +
+        'padding:8px 12px;margin:8px var(--spacing-lg) 4px;border-radius:12px;' +
+        'border:1px solid var(--border-subtle);background:var(--bg-hover);' +
+        'box-shadow:var(--shadow-sm, 0 2px 10px rgba(0,0,0,0.28));' +
+        'font-size:13px;color:var(--text-secondary);cursor:pointer;">' +
         '<i data-lucide="pin" style="width:14px;height:14px;flex-shrink:0;color:var(--accent-primary);"></i>' +
         '<span id="pinned-messages-text" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>' +
         '<span id="pinned-messages-count" style="flex-shrink:0;font-size:11px;color:var(--text-muted);"></span>' +
