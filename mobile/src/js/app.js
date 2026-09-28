@@ -1949,6 +1949,8 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function renderMessages(chatId) {
+    // The pinned bar belongs to the chat, so it repaints whenever the chat does.
+    try { _renderPinnedBar(chatId); } catch (e) { /* the bar must never break the messages */ }
     // Never render without a chat.
     //
     // MStore.getMessages(undefined) does not fail — it lazily creates
@@ -4331,6 +4333,147 @@ document.addEventListener('DOMContentLoaded', function() {
   function _isGroupChat(chatId) {
     return (MStore.groups || []).some(function (g) { return g.id === chatId || g.groupId === chatId; });
   }
+
+  /* ---- The pinned bar, above the composer ----
+     Same card as the desktop's, so the two read alike. Rendered from _pinnedFor, so it is
+     always the pruned list and always the store's, not a group's. */
+  var _lastPinnedBarSig = '';
+  // The chat id is passed in, not read from window: activeChatId is a module-local in this
+  // app, so window.activeChatId is undefined and the bar silently rendered for no chat.
+  // renderMessages already receives it; the poller reuses the last one seen.
+  var _pinnedBarChatId = null;
+  function _renderPinnedBar(chatIdArg) {
+    var el = document.getElementById('pinned-messages-bar');
+    if (!el) return;
+    if (chatIdArg) _pinnedBarChatId = chatIdArg;
+    var chatId = chatIdArg || _pinnedBarChatId;
+    var list = chatId ? _pinnedFor(chatId) : [];
+    if (!list.length) {
+      if (el.style.display !== 'none') { el.style.display = 'none'; el.innerHTML = ''; _lastPinnedBarSig = ''; }
+      return;
+    }
+    var sig = chatId + '|' + list.map(function (p) { return p.msgId; }).join(',');
+    if (sig === _lastPinnedBarSig && el.style.display !== 'none') return;
+    _lastPinnedBarSig = sig;
+    var P = window.OrbitPinned;
+    var limit = P ? P.limitFor(_isGroupChat(chatId)) : 3;
+    var esc = (window.escapeHtml) || function (v) { return String(v == null ? '' : v); };
+    el.innerHTML =
+      '<i data-lucide="pin" style="width:14px;height:14px;flex-shrink:0;color:var(--accent-primary);"></i>' +
+      '<span class="pin-name">' + esc(list[0].text || '(attachment)') + '</span>' +
+      '<span class="pin-count">' + list.length + ' of ' + limit + '</span>' +
+      '<button class="pin-show-all" type="button">' + (list.length > 1 ? 'Show all' : 'Manage') + '</button>';
+    el.style.display = 'flex';
+    if (window.lucide) { try { lucide.createIcons({ root: el }); } catch (e) {} }
+    // Tap the row to jump to the top pin; the button opens the list.
+    el.onclick = function (e) {
+      if (e.target.closest('.pin-show-all')) { showPinnedSheet(chatId); return; }
+      _jumpToPinned(chatId, list[0].msgId);
+    };
+  }
+
+  function _jumpToPinned(chatId, msgId) {
+    var sel = '.message-row[data-msg-id="' + String(msgId).replace(/"/g, '') + '"]';
+    var el = document.querySelector(sel);
+    if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+    // Not rendered yet: load the chat, then try once more.
+    if (window.openChat && window.activeChatId !== chatId) {
+      window.openChat(chatId);
+      setTimeout(function () {
+        var again = document.querySelector(sel);
+        if (again) again.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 500);
+    }
+  }
+
+  /* ---- The list, with reordering ----
+     A working copy, so leaving without saving changes nothing. Save hands the order to
+     _setPinned, and the shared rules decide whether it was a change worth announcing. */
+  function showPinnedSheet(chatId) {
+    if (typeof OrbitSheet === 'undefined') return;
+    var P = window.OrbitPinned;
+    var working = _pinnedFor(chatId).map(function (p) { return { msgId: p.msgId, text: p.text }; });
+    var esc = (window.escapeHtml) || function (v) { return String(v == null ? '' : v); };
+    var limit = P ? P.limitFor(_isGroupChat(chatId)) : 3;
+
+    function rowsHtml() {
+      if (!working.length) {
+        return '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px;">Nothing is pinned here yet.</div>';
+      }
+      var h = '';
+      working.forEach(function (r, i) {
+        h += '<div class="pinned-sheet-row" data-index="' + i + '">' +
+          '<span class="pin-text">' + esc(r.text || '(attachment)') + '</span>' +
+          '<button class="pin-move" data-move="up" data-index="' + i + '"' + (i === 0 ? ' disabled' : '') + '>&uarr;</button>' +
+          '<button class="pin-move" data-move="down" data-index="' + i + '"' + (i === working.length - 1 ? ' disabled' : '') + '>&darr;</button>' +
+        '</div>';
+      });
+      return h;
+    }
+
+    function paint() {
+      var host = document.getElementById('pinned-sheet-rows');
+      if (host) host.innerHTML = rowsHtml();
+    }
+
+    OrbitSheet.showCustom(
+      '<div style="padding:16px;">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">' +
+          '<i data-lucide="pin" style="width:16px;height:16px;color:var(--accent-primary);"></i>' +
+          '<span style="font-weight:600;font-size:15px;color:var(--text-primary);">Pinned messages</span>' +
+          '<span style="margin-left:auto;font-size:11px;color:var(--text-muted);">' + working.length + ' of ' + limit + '</span>' +
+        '</div>' +
+        '<div id="pinned-sheet-rows">' + rowsHtml() + '</div>' +
+        '<div style="display:flex;gap:8px;margin-top:12px;">' +
+          '<button id="pinned-sheet-close" type="button" style="flex:1;padding:12px;border-radius:11px;border:1px solid var(--border-subtle);background:transparent;color:var(--text-secondary);font-size:14px;">Close</button>' +
+          '<button id="pinned-sheet-save" type="button" style="flex:1;padding:12px;border-radius:11px;border:none;background:var(--accent-primary);color:#fff;font-size:14px;font-weight:600;">Save order</button>' +
+        '</div>' +
+      '</div>'
+    );
+
+    setTimeout(function () {
+      if (window.lucide) { try { lucide.createIcons(); } catch (e) {} }
+      var host = document.getElementById('pinned-sheet-rows');
+      if (host) {
+        host.addEventListener('click', function (e) {
+          var btn = e.target.closest('.pin-move');
+          if (!btn || btn.disabled) return;
+          var i = parseInt(btn.getAttribute('data-index'), 10);
+          var to = btn.getAttribute('data-move') === 'up' ? i - 1 : i + 1;
+          if (to < 0 || to >= working.length) return;
+          var row = working.splice(i, 1)[0];
+          working.splice(to, 0, row);
+          paint();
+        });
+      }
+      var closeBtn = document.getElementById('pinned-sheet-close');
+      if (closeBtn) closeBtn.onclick = function () { OrbitSheet.hide(); };
+      var saveBtn = document.getElementById('pinned-sheet-save');
+      if (saveBtn) saveBtn.onclick = function () {
+        var before = _pinnedFor(chatId);
+        var nextIds = working.map(function (r) { return String(r.msgId); });
+        // orderChanged only looks at msgId order, so plain {msgId} shapes are enough.
+        var asIds = function (ids) { return ids.map(function (id) { return { msgId: id }; }); };
+        var beforeIds = before.map(function (b) { return String(b.msgId); });
+        if (P && P.orderChanged(asIds(beforeIds), asIds(nextIds))) {
+          var byId = {};
+          before.forEach(function (b) { byId[String(b.msgId)] = b; });
+          _setPinned(chatId, nextIds.map(function (id) { return byId[id]; }).filter(Boolean));
+          if (typeof renderMessages === 'function') renderMessages(chatId);
+          _renderPinnedBar();
+          showToast(P.orderChangedText((MStore.user && (MStore.user.name || MStore.user.username)) || ''), 'info');
+        }
+        OrbitSheet.hide();
+      };
+    }, 60);
+  }
+
+  // A light poller for the same reason the transfer strip has one: a pin can change
+  // without this device rendering anything, and 1.5s is cheap.
+  setInterval(function () { try { _renderPinnedBar(); } catch (e) {} }, 1500);
+
+  window.showPinnedSheet = showPinnedSheet;
+  window._renderPinnedBar = _renderPinnedBar;
 
   // Exposed for the pinned bar and list, and for the harness.
   window._pinnedFor = _pinnedFor;

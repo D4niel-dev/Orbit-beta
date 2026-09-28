@@ -7682,3 +7682,67 @@ textarea#chat-input {
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
 }
+
+/* Pinned messages: the same card shape as the desktop's bar, above the composer. */
+#pinned-messages-bar {
+  margin: 6px 12px 2px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-hover);
+  font-size: 13px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#pinned-messages-bar .pin-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#pinned-messages-bar .pin-count {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+#pinned-messages-bar .pin-show-all {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--accent-primary);
+}
+/* The list sheet */
+.pinned-sheet-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--bg-base);
+  margin-bottom: 8px;
+}
+.pinned-sheet-row .pin-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.pinned-sheet-row .pin-move {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 15px;
+}
+.pinned-sheet-row .pin-move[disabled] { opacity: 0.3; }

@@ -85,11 +85,14 @@
     if (isPinned(clean, id)) return { ok: true, list: clean, unchanged: true };
     var allowed = canPin(clean, isGroup);
     if (!allowed.ok) return { ok: false, reason: 'limit', message: allowed.message, list: clean };
-    clean.push({
+    // Keep the entry's own fields and normalise only the ones this module owns. Rebuilding
+    // it from scratch dropped `text` — the same mistake normalise() made, in the function
+    // next door, and it made every pin render as "(attachment)" on mobile.
+    clean.push(Object.assign({}, entry, {
       msgId: id,
       pinnedAt: typeof entry.pinnedAt === 'number' ? entry.pinnedAt : Date.now(),
       pinnedBy: entry.pinnedBy == null ? '' : String(entry.pinnedBy)
-    });
+    }));
     return { ok: true, list: clean };
   }
 
