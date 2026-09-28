@@ -111,3 +111,75 @@ window.PinnedModal = {
     this._overlay = null;
   }
 };
+
+// A floating panel at the cursor: the pinned messages, right where the mouse is.
+//
+// Dan asked for this alongside the bar in the panel — "a floating panel where my mouse
+// is, you can keep the current one, just add the one that I asked". It uses the app's
+// existing ContextMenu, which is what every other right-click in the app uses, so it
+// positions, styles and dismisses exactly like the rest of them.
+window.PinnedMenu = {
+  showAt(x, y, chatId) {
+    var store = window.store;
+    var P = window.OrbitPinned;
+    if (!store || !window.ContextMenu) return;
+    var pinned = store.getPinnedMessages(chatId);
+    var items = [];
+
+    if (!pinned.length) {
+      items.push({ label: 'Nothing pinned here yet', icon: 'pin', color: 'var(--text-muted)', onClick: function () {} });
+      window.ContextMenu.show(x, y, items);
+      return;
+    }
+
+    // One row per pin, in the order they are pinned — the order the list shows, so the
+    // two never disagree about which is first.
+    pinned.forEach(function (p, i) {
+      var label = String(p.text || '(attachment)').replace(/\s+/g, ' ').trim();
+      if (label.length > 42) label = label.slice(0, 41) + '\u2026';
+      items.push({
+        label: (i + 1) + '. ' + label,
+        icon: 'pin',
+        onClick: function () { window.PinnedMenu.jumpTo(chatId, p.msgId); }
+      });
+    });
+
+    items.push('separator');
+    items.push({
+      label: 'Reorder\u2026',
+      icon: 'arrow-up-down',
+      onClick: function () { window.PinnedModal.show(chatId); }
+    });
+    items.push({
+      label: 'Unpin all',
+      icon: 'pin-off',
+      color: 'var(--accent-danger)',
+      onClick: function () {
+        // Through the store's own unpin so the peers hear about it, rather than editing
+        // the list here.
+        store.getPinnedMessages(chatId).forEach(function (p) {
+          if (store.sendUnpinMessage) store.sendUnpinMessage(chatId, p.msgId);
+          else store.unpinMessage(chatId, p.msgId);
+        });
+      }
+    });
+
+    window.ContextMenu.show(x, y, items);
+  },
+
+  // Scroll the chat to a pinned message, loading the chat first if it is not in the DOM.
+  jumpTo(chatId, msgId) {
+    var id = String(msgId);
+    var find = function () { return document.querySelector('[data-msg-id="' + id + '"].message-row'); };
+    var el = find();
+    if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); return true; }
+    if (window.store && window.store.loadFullChatMessages) {
+      window.store.loadFullChatMessages(chatId);
+      setTimeout(function () {
+        var again = find();
+        if (again) again.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 250);
+    }
+    return false;
+  }
+};

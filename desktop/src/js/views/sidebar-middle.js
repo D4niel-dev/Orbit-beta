@@ -2347,6 +2347,16 @@ window.SidebarMiddle = {
         if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       });
     }
+    // Right-click anywhere on the pinned block for the floating list at the cursor.
+    var _pinBox = document.getElementById('group-pinned');
+    if (_pinBox) {
+      _pinBox.addEventListener('contextmenu', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (window.PinnedMenu) window.PinnedMenu.showAt(e.clientX, e.clientY, groupId);
+      });
+    }
+
     var _pinAll = document.getElementById('group-pinned-show-all');
     if (_pinAll) {
       _pinAll.addEventListener('click', function () {

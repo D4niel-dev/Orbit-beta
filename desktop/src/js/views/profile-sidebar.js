@@ -176,6 +176,16 @@ window.ProfileSidebar = {
         if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       });
     }
+    // Right-click anywhere on the pinned block for the floating list at the cursor.
+    var _pinBox = this.contentArea.querySelector('#profile-pinned');
+    if (_pinBox) {
+      _pinBox.addEventListener('contextmenu', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (window.PinnedMenu) window.PinnedMenu.showAt(e.clientX, e.clientY, pinnedChatId);
+      });
+    }
+
     var _pinAll = this.contentArea.querySelector('#profile-pinned-show-all');
     if (_pinAll) {
       _pinAll.addEventListener('click', function () {
