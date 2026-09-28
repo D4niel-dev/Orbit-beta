@@ -85,15 +85,46 @@ window.UpdateNotice = {
       if (btn) { btn.disabled = true; btn.style.opacity = '0.75'; btn.textContent = txt; }
     };
 
-    // pct < 0 hides the bar; 0-100 shows it. Called from the streaming loop with the
-    // same number the label uses, so the two cannot disagree.
-    var setProgress = function (pct) {
+    var _dlStartedAt = Date.now();
+
+    var _bytes = function (n) {
+      if (!n || n < 0) return '0 MB';
+      return n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.round(n / 1024) + ' KB';
+    };
+
+    // Time remaining, from the rate actually observed so far.
+    //
+    // Nothing before 1.5s: the first chunk of a download says more about the round trip
+    // than about the throughput, and an estimate that starts at "2m left" and settles on
+    // "20s left" is worse than no estimate. Seconds under a minute, minutes above it.
+    var _eta = function (received, total) {
+      var elapsed = (Date.now() - _dlStartedAt) / 1000;
+      if (!received || !total || elapsed < 1.5) return '';
+      var rate = received / elapsed;
+      if (!rate) return '';
+      var left = (total - received) / rate;
+      if (!isFinite(left) || left <= 0.5) return '';
+      return left < 60 ? ('~' + Math.round(left) + 's left') : ('~' + Math.round(left / 60) + 'm left');
+    };
+
+    // pct < 0 hides the bar. Called from the streaming loop with the same numbers the
+    // label uses, so the three cannot disagree.
+    var setProgress = function (pct, received, total) {
       var wrap = overlay.querySelector('#update-modal-progress');
       var fill = overlay.querySelector('#update-modal-progress-fill');
+      var note = overlay.querySelector('#update-modal-progress-note');
       if (!wrap || !fill) return;
       if (pct == null || pct < 0) { wrap.style.display = 'none'; return; }
       wrap.style.display = 'block';
       fill.style.width = Math.max(0, Math.min(100, pct)) + '%';
+      if (note) {
+        // The desktop's wording, with the time appended.
+        var line = (total && received != null)
+          ? (_bytes(received) + ' of ' + _bytes(total) + ' \u00b7 ' + pct + '%')
+          : ('Downloading\u2026 ' + pct + '%');
+        var eta = _eta(received, total);
+        note.textContent = eta ? (line + ' \u00b7 ' + eta) : line;
+      }
     };
     setLabel('Starting download\u2026');
 
@@ -175,7 +206,7 @@ window.UpdateNotice = {
             if (r.done) return null;
             received += r.value.length;
             var pct = total ? Math.round(received / total * 100) : 0;
-            setProgress(total ? pct : -1);
+            setProgress(total ? pct : -1, received, total);
             setLabel(total
               ? 'Downloading\u2026 ' + pct + '% (' + Math.round(received / 1048576) + ' MB)'
               : 'Downloading\u2026 ' + Math.round(received / 1048576) + ' MB');
@@ -225,7 +256,7 @@ window.UpdateNotice = {
             throw new Error('The download stopped early (' + got + ' of ' + want + ') \u2014 try again');
           });
         }
-        setProgress(100);
+        setProgress(100, total || received, total || received);
         setLabel('Opening installer\u2026');
         return P2P.installApk({ path: APK_PATH }).then(function () {
           return bytes;
@@ -423,10 +454,14 @@ window.UpdateNotice = {
           // A bar, not just a percentage on the button. The download is tens of
           // megabytes and the button label was the only sign anything was happening —
           // and once the label reads "Opening installer…" there is no sign at all.
-          '<div id="update-modal-progress" style="display:none;height:5px;border-radius:3px;' +
-            'background:var(--border-subtle);overflow:hidden;">' +
-            '<div id="update-modal-progress-fill" style="height:100%;width:0%;' +
-              'background:var(--accent-primary);border-radius:3px;transition:width 0.25s ease;"></div>' +
+          // Same bar as the desktop's update modal: 6px, accent, .15s linear.
+          '<div id="update-modal-progress" style="display:none;">' +
+            '<div style="height:6px;border-radius:3px;background:var(--border-subtle);overflow:hidden;">' +
+              '<div id="update-modal-progress-fill" style="height:100%;width:0%;' +
+                'background:var(--accent-primary);transition:width .15s linear;"></div>' +
+            '</div>' +
+            '<div id="update-modal-progress-note" style="font-size:11px;color:var(--text-muted);' +
+              'margin-top:6px;">Starting\u2026</div>' +
           '</div>' +
           '<button id="update-modal-download" style="width:100%;padding:13px;border-radius:11px;border:none;' +
             'background:var(--accent-primary);color:#fff;font-size:14px;font-weight:600;cursor:pointer;">' +

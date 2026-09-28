@@ -375,6 +375,7 @@ window.UpdateNotice = {
       '<div id="update-download-note" style="font-size:11px;color:var(--text-muted);margin-top:6px;">Starting\u2026</div>');
 
     var unsub = null;
+    var startedAt = Date.now();
     if (typeof api.onUpdateDownloadProgress === 'function') {
       unsub = api.onUpdateDownloadProgress(function(p) {
         var pct = (p && typeof p.percent === 'number') ? p.percent : 0;
@@ -382,9 +383,24 @@ window.UpdateNotice = {
         if (bar) bar.style.width = pct + '%';
         var note = overlay.querySelector('#update-download-note');
         if (note) {
-          note.textContent = (p && p.total)
+          var line = (p && p.total)
             ? self._bytes(p.received) + ' of ' + self._bytes(p.total) + ' \u00b7 ' + pct + '%'
             : 'Downloading\u2026';
+          // Time remaining, from the observed rate. Nothing before 1.5s — the first
+          // chunk measures the round trip, not the throughput, and an estimate that
+          // starts at "2m left" and settles on "20s left" is worse than none.
+          var eta = '';
+          if (p && p.total && p.received) {
+            var elapsed = (Date.now() - startedAt) / 1000;
+            if (elapsed >= 1.5) {
+              var rate = p.received / elapsed;
+              var left = rate ? (p.total - p.received) / rate : 0;
+              if (isFinite(left) && left > 0.5) {
+                eta = left < 60 ? ('~' + Math.round(left) + 's left') : ('~' + Math.round(left / 60) + 'm left');
+              }
+            }
+          }
+          note.textContent = eta ? (line + ' \u00b7 ' + eta) : line;
         }
       });
     }
