@@ -2129,6 +2129,9 @@ window.SidebarMiddle = {
               '</div>'
             : '') +
         sectionEnd +
+        // Pinned messages, under the group's own info — the same idea as the profile
+        // panel, in the place a group keeps its details.
+        this._pinnedSectionHtml(groupId, group) +
         sectionStart('key-round', 'Invite', false) +
           '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">' +
             '<div style="min-width:0;">' +

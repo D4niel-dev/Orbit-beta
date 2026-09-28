@@ -85,6 +85,10 @@ window.ProfileSidebar = {
       lastSeenHtml = '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Last seen ' + lastSeenStr + '</div>';
     }
 
+    // A DM's chat id is the other person's user id.
+    var pinnedChatId = user.userId;
+    var pinnedSectionHtml = this._pinnedSectionHtml(pinnedChatId);
+
     this.contentArea.innerHTML =
       '<div style="display:flex;flex-direction:column;height:100%;">' +
         // Close button
@@ -121,6 +125,11 @@ window.ProfileSidebar = {
           '<div style="text-align:left;background:var(--bg-base);border-radius:8px;padding:12px;font-size:13px;color:var(--text-primary);line-height:1.6;border:1px solid var(--border-subtle);">' +
             bioHtml +
           '</div>' +
+
+          // Pinned messages — under the user info, alongside the bio and the user id, so
+          // the panel says everything about this person in one place. The bar in the
+          // conversation is separate and both are wanted.
+          pinnedSectionHtml +
 
           // Mute toggle
           '<div id="profile-mute-row" style="margin-top:16px;display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--bg-base);border-radius:8px;border:1px solid var(--border-subtle);cursor:pointer;">' +
