@@ -904,6 +904,13 @@ class Store {
       const payload = packet.payload;
       if (payload && payload.action === 'delete' && payload.msgId) {
         this.deleteMessage(payload.chatId || packet.from, payload.msgId);
+      } else if (payload && payload.action === 'pin_order' && Array.isArray(payload.order)) {
+        // Someone else rearranged the pins. Apply their order silently — we are not the
+        // one who changed it — then post the note with THEIR name on it.
+        var _chatId = payload.chatId || packet.from;
+        this.reorderPinned(_chatId, payload.order, { silent: true });
+        var _P = window.OrbitPinned;
+        if (_P) this._postSystemNote(_chatId, _P.orderChangedText(payload.by));
       }
     } else if (packet.type === window.Protocol.Types.PIN_MESSAGE) {
       const { msgId, groupId } = packet.payload;
@@ -1376,6 +1383,88 @@ class Store {
     return (this.state.groups || []).some(function (g) {
       return String(g.groupId || g.id) === String(chatId);
     });
+  }
+
+  // Put a system line into the chat. These carry no sender and are rendered centred,
+  // the way a "so-and-so joined" notice would be.
+  _postSystemNote(chatId, text) {
+    if (!text) return;
+    // A toast for now, NOT a message.
+    //
+    // The intent is a centred system line in the chat, and the message shape below is
+    // ready for it — but chat-panel.js renders messages through two separate paths, both
+    // keyed on isMine, and neither knows about `system`. Writing one without teaching
+    // them would put an empty-sender bubble in the feed, which is worse than a toast.
+    //
+    // Swap this for the stored message once those two paths handle `system`.
+    if (window.Toast && window.Toast.show) window.Toast.show(text, 'info');
+    return;
+    /* eslint-disable no-unreachable */
+    var note = {
+      id: 'sys-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+      text: text,
+      sender: '',
+      system: true,
+      timestamp: new Date().toISOString()
+    };
+    var msgs = { ...this.state.messages };
+    msgs[chatId] = (msgs[chatId] || []).concat([note]);
+    this.setState({ messages: msgs });
+  }
+
+  // Reorder the pinned list, and tell the chat about it.
+  //
+  // `orderedIds` is the full order the user settled on. Anything it does not mention is
+  // kept, appended in its old relative order, so a partial list cannot silently drop a
+  // pin. Nothing is announced when the order did not actually change — dragging a row
+  // and dropping it where it started is not news.
+  reorderPinned(chatId, orderedIds, opts) {
+    opts = opts || {};
+    var P = window.OrbitPinned;
+    var current = this.getPinnedMessages(chatId);
+    if (!P || !current.length) return { ok: false, reason: 'nothing-pinned' };
+
+    var byId = {};
+    current.forEach(function (p) { byId[String(p.msgId)] = p; });
+    var next = [];
+    (orderedIds || []).forEach(function (id) {
+      var key = String(id);
+      if (byId[key]) { next.push(byId[key]); delete byId[key]; }
+    });
+    current.forEach(function (p) { if (byId[String(p.msgId)]) next.push(p); });
+
+    if (!P.orderChanged(current, next)) return { ok: true, changed: false };
+
+    var pinned = { ...this.state.pinnedMessages };
+    pinned[chatId] = next;
+    this.setState({ pinnedMessages: pinned });
+
+    if (opts.silent) return { ok: true, changed: true, list: next };
+
+    var me = this.state.currentUser || {};
+    var myName = me.username || me.name || '';
+    this._postSystemNote(chatId, P.orderChangedText(myName));
+
+    // Tell the others. Reuses the SYSTEM packet with an action, which is how the delete
+    // sync already travels — no new packet type, and an older build simply ignores an
+    // action it does not know.
+    try {
+      if (window.orbitAPI && this.state.networkPeers) {
+        var ids = next.map(function (p) { return String(p.msgId); });
+        var targets = (this._isGroupChat(chatId) ? (this.state.groups || []).find(function (g) {
+          return String(g.groupId || g.id) === String(chatId);
+        }) : null);
+        var members = (targets && targets.members) ? targets.members : [{ userId: chatId }];
+        members.forEach(function (m) {
+          if (String(m.userId) === String(me.userId)) return;
+          window.orbitAPI.networkSend(m.userId, m.ip || '', window.Protocol.Types.SYSTEM, {
+            action: 'pin_order', chatId: chatId, order: ids, by: myName
+          });
+        });
+      }
+    } catch (e) { /* announcing is best-effort; the reorder itself is already saved */ }
+
+    return { ok: true, changed: true, list: next };
   }
 
   // The pinned list as it should be stored, with dead entries removed.
