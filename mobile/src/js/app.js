@@ -4216,6 +4216,70 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
+  /* ---- Transfer progress strip ----
+     Reads the counters the transfer code already keeps and shows them. Deliberately a
+     poller rather than a hook in every chunk: the chunk paths are the most delicate
+     code in the app (resume rewinds, checkpoints, reap sweeps) and a UI concern has no
+     business being threaded through them. 600ms is invisible for a progress bar and
+     costs nothing when no transfer is running. */
+  function _transferRows() {
+    var rows = [];
+    var sends = window.activeSends || {};
+    for (var k in sends) {
+      var sess = sends[k];
+      if (!sess || sess.done || sess.cancelled) continue;
+      var total = sess.total || 0;
+      var sent = Math.min(sess.ci || 0, total);
+      rows.push({
+        name: (sess.att && (sess.att.name || sess.att.fileName)) || 'File',
+        pct: total ? Math.round(sent / total * 100) : 0,
+        dir: 'up'
+      });
+    }
+    var recvs = window.activeTransfers || {};
+    for (var id in recvs) {
+      var t = recvs[id];
+      if (!t) continue;
+      var tot = t.total || 0;
+      var got = t.received || 0;
+      rows.push({
+        name: t.fileName || 'File',
+        pct: tot ? Math.round(got / tot * 100) : 0,
+        dir: 'down'
+      });
+    }
+    return rows;
+  }
+
+  function _renderTransferStrip() {
+    var strip = document.getElementById('transfer-progress-strip');
+    if (!strip) return;
+    var rows = _transferRows();
+    if (!rows.length) {
+      if (strip.style.display !== 'none') { strip.style.display = 'none'; strip.innerHTML = ''; }
+      return;
+    }
+    var esc = (window.Sanitize && window.Sanitize.escapeHtml)
+      ? window.Sanitize.escapeHtml
+      : function (v) { return String(v == null ? '' : v); };
+    var html = '';
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      html += '<div class="transfer-row">' +
+        '<span class="transfer-arrow" aria-hidden="true">' + (r.dir === 'up' ? '\u2191' : '\u2193') + '</span>' +
+        '<span class="transfer-name">' + esc(r.name) + '</span>' +
+        '<span class="transfer-bar"><span class="transfer-bar-fill" style="width:' + r.pct + '%"></span></span>' +
+        '<span class="transfer-pct">' + r.pct + '%</span>' +
+      '</div>';
+    }
+    strip.innerHTML = html;
+    strip.style.display = 'block';
+  }
+
+  setInterval(_renderTransferStrip, 600);
+  window._renderTransferStrip = _renderTransferStrip;
+  window._transferRows = _transferRows;
+
   /* ---- Slash Command Tooltip ---- */
   function showCommandTooltip(val) {
     // Group-only guard for the COMMANDS: they really are group utilities, so the
