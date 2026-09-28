@@ -33,6 +33,7 @@ plans/
 .agents/
 .opencode/
 .impeccable/
+.kilo/
 .claude/
 .workbuddy-ai/
 graphify/
