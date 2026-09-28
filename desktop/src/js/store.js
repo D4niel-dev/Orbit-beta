@@ -1331,6 +1331,35 @@ class Store {
     }
   }
 
+  // What a pinned message should be called in a list.
+  //
+  // A file-only message has no text, and the old fallback was the literal string
+  // "(attachment)" — so pinning a photo or a document produced a pin labelled
+  // "(attachment)", which tells you nothing about which one it is. The chat list already
+  // names attachments for exactly this reason; this uses the same vocabulary.
+  //
+  // The name first (the user knows the file), the kind second (a photo pasted from the
+  // clipboard has no name), and the old fallback only if there is nothing at all.
+  _pinLabel(msg) {
+    if (!msg) return '(attachment)';
+    var text = String(msg.text == null ? '' : msg.text).trim();
+    if (text) return text;
+    var att = (msg.attachments && msg.attachments[0]) || msg.attachment || null;
+    if (!att) return '(attachment)';
+    var kind = att.type || '';
+    if (!kind && att.mimeType) {
+      if (/^image\//.test(att.mimeType)) kind = 'image';
+      else if (/^video\//.test(att.mimeType)) kind = 'video';
+      else if (/^audio\//.test(att.mimeType)) kind = 'audio';
+    }
+    var name = String(att.name || att.fileName || '').trim();
+    if (name) return name;
+    if (kind === 'image') return 'Photo';
+    if (kind === 'video') return 'Video';
+    if (kind === 'audio') return 'Voice message';
+    return 'File';
+  }
+
   pinMessage(chatId, msgId) {
     var msgs = this.state.messages[chatId];
     if (!msgs) return;
@@ -1356,7 +1385,7 @@ class Store {
     
     pinned[chatId] = pinned[chatId].concat([{
       msgId: msg.id,
-      text: msg.text || '(attachment)',
+      text: this._pinLabel(msg),
       sender: msg.sender,
       timestamp: msg.timestamp || new Date().toISOString(),
       pinnedBy: this.state.currentUser.userId,
