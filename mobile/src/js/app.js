@@ -4218,12 +4218,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
   /* ---- Slash Command Tooltip ---- */
   function showCommandTooltip(val) {
-    // Group-only guard: tooltip only appears inside group chats
+    // Group-only guard for the COMMANDS: they really are group utilities, so the
+    // picker stays out of the way in a DM.
+    //
+    // /help is the exception, and it is the reason this looked broken. Typing /help
+    // in a DM — and a fresh install's only chat is Orbit Echo, a DM — produced no
+    // tooltip at all, so the command appeared dead on every version, even though the
+    // help sheet itself opens fine and explains the group-only rule. Help is a
+    // reference, not a utility, so it is offered wherever it is typed.
     var isGroupForTip = false;
     try {
       isGroupForTip = MStore.groups.some(function(g) { return g.id === activeChatId || g.groupId === activeChatId; });
     } catch(e) { isGroupForTip = false; }
-    if (!isGroupForTip) {
+    var typed = String(val || '').trim().toLowerCase();
+    var isHelpCommand = typed === '/h' || typed === '/help';
+    if (!isGroupForTip && !isHelpCommand) {
       hideCommandTooltip();
       return;
     }
