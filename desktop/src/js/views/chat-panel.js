@@ -1214,12 +1214,6 @@ window.ChatPanel = {
           '<button id="btn-chat-more" title="More" style="background:transparent; border:none; cursor:pointer; color:inherit;"><i data-lucide="more-vertical"></i></button>' +
         '</div>' +
       '</div>' +
-      '<!-- Pinned Messages Bar -->' +
-      '<div id="pinned-messages-bar" style="display:none;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--border-subtle);background:var(--bg-hover);font-size:13px;color:var(--text-secondary);">' +
-        '<i data-lucide="pin" style="width:14px;height:14px;flex-shrink:0;transform:rotate(45deg);"></i>' +
-        '<span id="pinned-messages-text" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>' +
-        '<button id="btn-unpin-all" style="background:none;border:none;cursor:pointer;color:var(--text-muted);padding:2px;font-size:18px;line-height:1;" title="Unpin all">×</button>' +
-      '</div>' +
       '<!-- Message Feed -->' +
       '<div class="message-feed" id="chat-message-feed" style="flex:1; overflow-y:auto; overflow-x:visible; padding: var(--spacing-lg);">' +
         messagesHtml + progressHtml + errorsHtml +
@@ -1302,6 +1296,22 @@ window.ChatPanel = {
       '</div>';
 
     this.container.insertAdjacentHTML('beforeend',
+      // Pinned messages, between the messages and the composer.
+      //
+      // It used to sit above the feed, and I first put it in the right-hand profile
+      // panel. Dan meant the third panel — the conversation itself — so it belongs here,
+      // under the messages and just above where you type. One bar for DMs and groups
+      // alike; only the limit differs, and the shared rules decide that.
+      '<!-- Pinned Messages Bar -->' +
+      '<div id="pinned-messages-bar" title="Click to jump to this message, right-click for the list" style="display:none;align-items:center;gap:8px;' +
+        'padding:6px 12px;margin:0 var(--spacing-lg) 4px;border-radius:10px;background:var(--bg-hover);font-size:13px;color:var(--text-secondary);cursor:pointer;">' +
+        '<i data-lucide="pin" style="width:14px;height:14px;flex-shrink:0;color:var(--accent-primary);"></i>' +
+        '<span id="pinned-messages-text" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>' +
+        '<span id="pinned-messages-count" style="flex-shrink:0;font-size:11px;color:var(--text-muted);"></span>' +
+        '<button id="btn-show-all-pinned" style="background:none;border:none;cursor:pointer;color:var(--accent-primary);padding:2px 4px;font-size:11.5px;font-weight:600;">Show all</button>' +
+        '<button id="btn-unpin-all" style="background:none;border:none;cursor:pointer;color:var(--text-muted);padding:2px;font-size:16px;line-height:1;" title="Unpin all">×</button>' +
+      '</div>' +
+
       '<!-- Chat Input -->' +
       '<div class="chat-input-area" style="padding: var(--spacing-md) var(--spacing-lg) 48px var(--spacing-lg); display: flex; flex-direction: column;">' +
         '<div id="file-preview-area" style="display:none; gap: 8px; padding: 12px; margin-bottom: 8px; overflow-x: auto; white-space: nowrap; border-radius: 16px; background: var(--bg-hover); border: 1px solid var(--border-subtle);"></div>' +
@@ -1343,8 +1353,30 @@ window.ChatPanel = {
 
     // Pinned messages bar
     var pinnedBar = document.getElementById('pinned-messages-bar');
+    var pinnedCountEl = document.getElementById('pinned-messages-count');
     if (pinnedBar) {
       var pinnedMsgs = window.store.getPinnedMessages(state.activeChatId);
+
+      // The count and the two controls. onclick rather than addEventListener: this runs
+      // on every render, and listeners would stack up on the same element.
+      if (pinnedCountEl) {
+        var _pinLimit = window.OrbitPinned
+          ? window.OrbitPinned.limitFor(window.store._isGroupChat(state.activeChatId))
+          : 0;
+        pinnedCountEl.textContent = pinnedMsgs.length ? (pinnedMsgs.length + ' of ' + _pinLimit) : '';
+      }
+      var _showAllBtn = document.getElementById('btn-show-all-pinned');
+      if (_showAllBtn) {
+        _showAllBtn.onclick = function (e) {
+          e.stopPropagation();
+          if (window.PinnedModal) window.PinnedModal.show(window.store.getState().activeChatId);
+        };
+      }
+      // Right-click the bar for the floating list at the cursor.
+      pinnedBar.oncontextmenu = function (e) {
+        e.preventDefault();
+        if (window.PinnedMenu) window.PinnedMenu.showAt(e.clientX, e.clientY, window.store.getState().activeChatId);
+      };
       if (pinnedMsgs.length > 0) {
         pinnedBar.style.display = 'flex';
         var textEl = document.getElementById('pinned-messages-text');

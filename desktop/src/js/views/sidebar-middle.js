@@ -2129,10 +2129,6 @@ window.SidebarMiddle = {
               '</div>'
             : '') +
         sectionEnd +
-        // Pinned messages — directly under the group's own info, the same place as in a
-        // DM. Same modal, same rules; only the limit differs, and that is decided by the
-        // shared module from the chat type.
-        this._pinnedSectionHtml(groupId, group) +
         sectionStart('key-round', 'Invite', false) +
           '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">' +
             '<div style="min-width:0;">' +
