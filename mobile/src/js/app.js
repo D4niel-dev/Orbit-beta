@@ -4338,6 +4338,7 @@ document.addEventListener('DOMContentLoaded', function() {
      Same card as the desktop's, so the two read alike. Rendered from _pinnedFor, so it is
      always the pruned list and always the store's, not a group's. */
   var _lastPinnedBarSig = '';
+  var _pinnedLongPressFired = false;
   // The chat id is passed in, not read from window: activeChatId is a module-local in this
   // app, so window.activeChatId is undefined and the bar silently rendered for no chat.
   // renderMessages already receives it; the poller reuses the last one seen.
@@ -4365,11 +4366,31 @@ document.addEventListener('DOMContentLoaded', function() {
       '<button class="pin-show-all" type="button">' + (list.length > 1 ? 'Show all' : 'Manage') + '</button>';
     el.style.display = 'flex';
     if (window.lucide) { try { lucide.createIcons({ root: el }); } catch (e) {} }
-    // Tap the row to jump to the top pin; the button opens the list.
+    // Tap the row to jump to the top pin; the button opens the list; a LONG PRESS opens the
+    // floating panel at the finger, which is the mobile equivalent of the desktop's
+    // right-click. The click is suppressed when the long press has fired, or the jump would
+    // run underneath the panel that just opened.
     el.onclick = function (e) {
+      if (_pinnedLongPressFired) { _pinnedLongPressFired = false; return; }
       if (e.target.closest('.pin-show-all')) { showPinnedSheet(chatId); return; }
       _jumpToPinned(chatId, list[0].msgId);
     };
+    if (!el._pinnedLongPressWired) {
+      el._pinnedLongPressWired = true;
+      var _lpTimer = null;
+      el.addEventListener('touchstart', function (e) {
+        var t = (e.touches && e.touches[0]) || null;
+        var px = t ? t.clientX : 0, py = t ? t.clientY : 0;
+        _pinnedLongPressFired = false;
+        clearTimeout(_lpTimer);
+        _lpTimer = setTimeout(function () {
+          _pinnedLongPressFired = true;
+          showPinnedMenuAt(px, py, chatId);
+        }, 450);
+      }, { passive: true });
+      el.addEventListener('touchmove', function () { clearTimeout(_lpTimer); }, { passive: true });
+      el.addEventListener('touchend', function () { clearTimeout(_lpTimer); }, { passive: true });
+    }
   }
 
   function _jumpToPinned(chatId, msgId) {
@@ -4471,6 +4492,78 @@ document.addEventListener('DOMContentLoaded', function() {
   // A light poller for the same reason the transfer strip has one: a pin can change
   // without this device rendering anything, and 1.5s is cheap.
   setInterval(function () { try { _renderPinnedBar(); } catch (e) {} }, 1500);
+
+  /* ---- The floating panel, at the touch ----
+     The mobile equivalent of the desktop's right-click menu: a small card where the finger
+     is, listing the pins with a jump on tap, then Reorder and Unpin all.
+
+     Clamped into the viewport rather than left where it was asked for. The desktop's
+     ContextMenu FLIPS when it would run off the bottom, and a menu half off-screen is worse
+     than one that has moved — this does the same job by clamping. */
+  function showPinnedMenuAt(x, y, chatId) {
+    var existing = document.getElementById('pinned-floating-panel');
+    if (existing) existing.remove();
+    var list = _pinnedFor(chatId);
+    var esc = (window.escapeHtml) || function (v) { return String(v == null ? '' : v); };
+
+    var panel = document.createElement('div');
+    panel.id = 'pinned-floating-panel';
+
+    var html = '';
+    if (!list.length) {
+      html += '<div class="pfp-empty">Nothing pinned here yet</div>';
+    } else {
+      list.forEach(function (p, i) {
+        html += '<button type="button" class="pfp-row" data-msg-id="' + esc(String(p.msgId)) + '">' +
+          '<span class="pfp-num">' + (i + 1) + '.</span>' +
+          '<span class="pfp-text">' + esc(p.text || '(attachment)') + '</span>' +
+        '</button>';
+      });
+      html += '<div class="pfp-sep"></div>';
+      html += '<button type="button" class="pfp-action" data-act="reorder">Reorder&hellip;</button>';
+      html += '<button type="button" class="pfp-action pfp-danger" data-act="unpin-all">Unpin all</button>';
+    }
+    panel.innerHTML = html;
+    document.body.appendChild(panel);
+
+    // Clamp: a menu that runs off the edge is worse than one that has moved.
+    var r = panel.getBoundingClientRect();
+    var left = Math.max(8, Math.min(x, window.innerWidth - r.width - 8));
+    var top = Math.max(8, Math.min(y, window.innerHeight - r.height - 8));
+    panel.style.left = left + 'px';
+    panel.style.top = top + 'px';
+
+    function dismiss() { panel.remove(); }
+    panel.addEventListener('click', function (e) {
+      var row = e.target.closest('.pfp-row');
+      var act = e.target.closest('.pfp-action');
+      if (row) {
+        var id = row.getAttribute('data-msg-id');
+        dismiss();
+        _jumpToPinned(chatId, id);
+        return;
+      }
+      if (act) {
+        var what = act.getAttribute('data-act');
+        dismiss();
+        if (what === 'reorder') showPinnedSheet(chatId);
+        if (what === 'unpin-all') {
+          _setPinned(chatId, []);
+          if (typeof renderMessages === 'function') renderMessages(chatId);
+          _renderPinnedBar();
+        }
+        return;
+      }
+      dismiss();
+    });
+    // Anywhere else, on the next interaction.
+    setTimeout(function () {
+      document.addEventListener('touchstart', dismiss, { once: true, passive: true });
+      document.addEventListener('mousedown', dismiss, { once: true });
+    }, 0);
+  }
+
+  window.showPinnedMenuAt = showPinnedMenuAt;
 
   window.showPinnedSheet = showPinnedSheet;
   window._renderPinnedBar = _renderPinnedBar;

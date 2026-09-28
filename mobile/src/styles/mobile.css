@@ -7746,3 +7746,67 @@ textarea#chat-input {
   font-size: 15px;
 }
 .pinned-sheet-row .pin-move[disabled] { opacity: 0.3; }
+
+/* The floating pinned panel, at the touch. Position is set in JS after clamping. */
+#pinned-floating-panel {
+  position: fixed;
+  z-index: 9600;
+  min-width: 210px;
+  max-width: 82vw;
+  border-radius: 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  animation: pinnedPanelIn 0.12s ease-out;
+}
+@keyframes pinnedPanelIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+#pinned-floating-panel .pfp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 11px 14px;
+  background: none;
+  border: none;
+  text-align: left;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+#pinned-floating-panel .pfp-num {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+#pinned-floating-panel .pfp-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#pinned-floating-panel .pfp-sep {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 4px 0;
+}
+#pinned-floating-panel .pfp-action {
+  display: block;
+  width: 100%;
+  padding: 11px 14px;
+  background: none;
+  border: none;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-primary);
+}
+#pinned-floating-panel .pfp-danger { color: var(--accent-danger); }
+#pinned-floating-panel .pfp-empty {
+  padding: 14px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
