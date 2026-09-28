@@ -108,7 +108,10 @@ window.ChatPanel = {
     
     // Subscribe to store
     this.unsubscribe = window.store.subscribe((state, changedState) => {
-      var relevant = ['messages', 'activeChatId', 'activeTab', 'groups', 'currentUser', 'settings'];
+      // pinnedMessages belongs here. It was missing, so pinning a message changed the store
+      // and nothing re-rendered: the menu correctly offered Unpin, and the bar never
+      // appeared, because its paint only runs on a render.
+      var relevant = ['messages', 'activeChatId', 'activeTab', 'groups', 'currentUser', 'settings', 'pinnedMessages'];
       if (!changedState || relevant.some(function(k) { return k in changedState; })) {
         // Save draft when switching away from a chat
         if (changedState && 'activeChatId' in changedState && this._prevChatId) {
