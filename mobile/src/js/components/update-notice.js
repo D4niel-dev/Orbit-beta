@@ -68,6 +68,9 @@ window.UpdateNotice = {
     var P2P = plugins.OrbitP2P;
 
     if (!FS || !P2P || typeof P2P.installApk !== 'function') {
+      // No native path: the bar would sit at 0% forever while the browser downloads.
+      var _w = overlay.querySelector('#update-modal-progress');
+      if (_w) _w.style.display = 'none';
       // Older native build: fall back to handing the URL to the browser.
       if (self._openExternal(url)) self._toast('Opening the APK download in your browser\u2026', 'success');
       else self._toast('Could not open the download link', 'error');
@@ -80,6 +83,17 @@ window.UpdateNotice = {
 
     var setLabel = function (txt) {
       if (btn) { btn.disabled = true; btn.style.opacity = '0.75'; btn.textContent = txt; }
+    };
+
+    // pct < 0 hides the bar; 0-100 shows it. Called from the streaming loop with the
+    // same number the label uses, so the two cannot disagree.
+    var setProgress = function (pct) {
+      var wrap = overlay.querySelector('#update-modal-progress');
+      var fill = overlay.querySelector('#update-modal-progress-fill');
+      if (!wrap || !fill) return;
+      if (pct == null || pct < 0) { wrap.style.display = 'none'; return; }
+      wrap.style.display = 'block';
+      fill.style.width = Math.max(0, Math.min(100, pct)) + '%';
     };
     setLabel('Starting download\u2026');
 
@@ -161,6 +175,7 @@ window.UpdateNotice = {
             if (r.done) return null;
             received += r.value.length;
             var pct = total ? Math.round(received / total * 100) : 0;
+            setProgress(total ? pct : -1);
             setLabel(total
               ? 'Downloading\u2026 ' + pct + '% (' + Math.round(received / 1048576) + ' MB)'
               : 'Downloading\u2026 ' + Math.round(received / 1048576) + ' MB');
@@ -210,6 +225,7 @@ window.UpdateNotice = {
             throw new Error('The download stopped early (' + got + ' of ' + want + ') \u2014 try again');
           });
         }
+        setProgress(100);
         setLabel('Opening installer\u2026');
         return P2P.installApk({ path: APK_PATH }).then(function () {
           return bytes;
@@ -404,6 +420,14 @@ window.UpdateNotice = {
 
         '<div style="padding:14px 18px 18px;border-top:1px solid var(--border-subtle);' +
           'display:flex;flex-direction:column;gap:10px;">' +
+          // A bar, not just a percentage on the button. The download is tens of
+          // megabytes and the button label was the only sign anything was happening —
+          // and once the label reads "Opening installer…" there is no sign at all.
+          '<div id="update-modal-progress" style="display:none;height:5px;border-radius:3px;' +
+            'background:var(--border-subtle);overflow:hidden;">' +
+            '<div id="update-modal-progress-fill" style="height:100%;width:0%;' +
+              'background:var(--accent-primary);border-radius:3px;transition:width 0.25s ease;"></div>' +
+          '</div>' +
           '<button id="update-modal-download" style="width:100%;padding:13px;border-radius:11px;border:none;' +
             'background:var(--accent-primary);color:#fff;font-size:14px;font-weight:600;cursor:pointer;">' +
             'Download APK' +
