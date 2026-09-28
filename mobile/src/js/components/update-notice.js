@@ -491,8 +491,11 @@ window.UpdateNotice = {
     document.addEventListener('keydown', this._onKeydown);
 
     overlay.querySelector('#update-modal-download').addEventListener('click', function() {
+      // The modal STAYS OPEN. The progress bar lives inside it, so closing here made the
+      // bar impossible to see: the download ran with no indication at all, which is the
+      // exact complaint this feature exists to fix. It is dismissed when the download
+      // ends (or by the user), not when it starts.
       self._downloadAndInstall(res, overlay);
-      self.closeModal();
     });
 
     overlay.querySelector('#update-modal-notes').addEventListener('click', function() {
