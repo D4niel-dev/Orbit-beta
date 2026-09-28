@@ -1432,17 +1432,10 @@ class Store {
   // the way a "so-and-so joined" notice would be.
   _postSystemNote(chatId, text) {
     if (!text) return;
-    // A toast for now, NOT a message.
-    //
-    // The intent is a centred system line in the chat, and the message shape below is
-    // ready for it — but chat-panel.js renders messages through two separate paths, both
-    // keyed on isMine, and neither knows about `system`. Writing one without teaching
-    // them would put an empty-sender bubble in the feed, which is worse than a toast.
-    //
-    // Swap this for the stored message once those two paths handle `system`.
-    if (window.Toast && window.Toast.show) window.Toast.show(text, 'info');
-    return;
-    /* eslint-disable no-unreachable */
+    // A real system line in the chat now. It was a toast while the renderer could not draw
+    // one: the two own/other branches are keyed on isMine and neither knew about `system`,
+    // so writing the message would have put an empty-sender bubble in the feed. That branch
+    // exists now, so this is the message it was always meant to be.
     var note = {
       id: 'sys-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
       text: text,

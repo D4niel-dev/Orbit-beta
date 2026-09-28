@@ -2096,6 +2096,21 @@ document.addEventListener('DOMContentLoaded', function() {
     var prevTime = null;
     var prevIsMine = null;
     msgs.forEach(function(m) {
+      // A system line: no sender, no bubble, centred. Handled before the own/other split,
+      // because neither branch can draw it.
+      //
+      // This loop is a forEach, so the exit is `return`. The desktop's equivalent is a
+      // `for` and needs `continue` — the two are deliberately not copy-paste twins.
+      if (m.system) {
+        html += '<div class="message-row message-system" data-msg-id="' + m.id + '"' +
+          ' style="display:flex;justify-content:center;margin:8px 0;">' +
+          '<span style="font-size:11.5px;color:var(--text-muted);background:var(--bg-hover);' +
+            'padding:4px 12px;border-radius:999px;text-align:center;">' +
+            escapeHtml(m.text || '') +
+          '</span>' +
+        '</div>';
+        return;
+      }
       var isMine = m.from === 'me';
       var currentSender = isGroup && !isMine ? m.from : null;
       // Group consecutive messages from same sender within 5 min
@@ -2363,72 +2378,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (tId && window.openThreadPanel) window.openThreadPanel(activeChatId, tId);
       });
     });
-    feed.querySelectorAll('.msg-pin-btn').forEach(function(btn) {
-      btn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        var msgId = this.getAttribute('data-msg-id');
-        if (!msgId || !activeChatId) return;
-        var group = MStore.groups.find(function(g) { return g.id === activeChatId; });
-        // A DM has no group, and it can have pins too — that is the whole point of the
-        // store map. Only a broadcast needs the member list, further down.
-        var _list = _pinnedFor(activeChatId).slice();
-        var _P = window.OrbitPinned;
-        var idx = _list.findIndex(function(p) { return String(p.msgId) === String(msgId); });
-        if (idx >= 0) {
-          _list.splice(idx, 1);
-          _setPinned(activeChatId, _list);
-        } else {
-          var msgs = MStore.getMessages(activeChatId);
-          var msg = msgs.find(function(m) { return String(m.id) === String(msgId); });
-          var _entry = {
-            msgId: msgId,
-            // The shared label, not '(attachment)': a pinned photo should be named. This
-            // used to truncate to 100 characters as well, which cut filenames in half.
-            text: _P ? _P.labelFor(msg) : (msg ? (msg.text || '(attachment)') : ''),
-            pinnedBy: MStore.user ? MStore.user.id : '',
-            pinnedAt: new Date().toISOString()
-          };
-          // The limit lives in the shared rules so both platforms agree: 3 in a DM, 5 in a
-          // group. A full list says why rather than silently ignoring the tap.
-          var _isGroup = _isGroupChat(activeChatId);
-          if (_P) {
-            var _added = _P.add(_list, _entry, _isGroup);
-            if (!_added.ok) {
-              showToast(_added.message || ('You can pin up to ' + (_isGroup ? 5 : 3) + ' messages here. Unpin one first.'), 'info');
-              return;
-            }
-            _list = _added.list;
-          } else {
-            _list.push(_entry);
-          }
-          _setPinned(activeChatId, _list);
-        }
-        renderMessages(activeChatId);
-        // Tell the other side. A group goes to its members; a DM goes to the one person.
-        // This used to read group.members unguarded, which was safe only while the toggle
-        // refused to run outside a group — and a DM can be pinned now.
-        if (window.Orbit && window.Orbit.P2P && Orbit.P2P.isAvailable()) {
-          var pktType = idx >= 0 ? Orbit.Protocol.Types.UNPIN_MESSAGE : Orbit.Protocol.Types.PIN_MESSAGE;
-          var _recipients = (group && group.members && group.members.length)
-            ? group.members
-            : [{ userId: activeChatId }];
-          _recipients.forEach(function(m) {
-            var mid = typeof m === 'string' ? m : m.userId;
-            if (mid !== (MStore.user ? MStore.user.id : '')) {
-              var pktPayload = { msgId: msgId, groupId: activeChatId };
-              if (pktType === Orbit.Protocol.Types.PIN_MESSAGE && msg) {
-                // The shared label, so the other side shows a file name rather than
-                // "(attachment)" — and no 100-character truncation, which cut names off.
-                pktPayload.text = window.OrbitPinned ? window.OrbitPinned.labelFor(msg) : (msg.text || '');
-                pktPayload.pinnedAt = new Date().toISOString();
-              }
-              var pkt = Orbit.Protocol.createPacket(pktType, MStore.user ? MStore.user.id : '', mid, pktPayload);
-              Orbit.P2P.send(mid, pkt);
-            }
-          });
-        }
-      });
-    });
+    // NOTE: a binding for '.msg-pin-btn' used to sit here. Nothing ever rendered that
+    // class, so it matched nothing on every render — dead code that looked like a control, and
+    // it cost a test run chasing a button that did not exist. Pinning goes through the message
+    // action sheet, which is where a user finds it.
     // Click on reply quote scrolls to target
     feed.querySelectorAll('.reply-quote').forEach(function(el) {
       el.addEventListener('click', function() {
@@ -4482,7 +4435,19 @@ document.addEventListener('DOMContentLoaded', function() {
           _setPinned(chatId, nextIds.map(function (id) { return byId[id]; }).filter(Boolean));
           if (typeof renderMessages === 'function') renderMessages(chatId);
           _renderPinnedBar();
-          showToast(P.orderChangedText((MStore.user && (MStore.user.name || MStore.user.username)) || ''), 'info');
+          // A real system line in the chat now, the same as the desktop's. It was a toast
+          // while the renderer had no `system` branch; that branch exists, so the note goes
+          // where the conversation is.
+          var _noteText = P.orderChangedText((MStore.user && (MStore.user.name || MStore.user.username)) || '');
+          MStore.messages[chatId] = (MStore.messages[chatId] || []).concat([{
+            id: 'sys-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+            text: _noteText,
+            from: 'me',
+            system: true,
+            time: new Date().toISOString()
+          }]);
+          MStore.save();
+          if (typeof renderMessages === 'function') renderMessages(chatId);
         }
         OrbitSheet.hide();
       };

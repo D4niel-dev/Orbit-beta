@@ -1042,6 +1042,23 @@ window.ChatPanel = {
       }
 
       var showAvatars = state.settings.showChatAvatars !== false;
+      // A system line: no sender, no bubble, centred. It carries its own text, so it is
+      // handled BEFORE the own/other split — neither branch can render it.
+      //
+      // This loop is a `for`, so the exit is `continue`. I checked, because `return` here
+      // would have ended the whole render and shown an empty feed, and `continue` inside a
+      // forEach would not have parsed at all.
+      if (msg.system) {
+        messagesHtml += '<div class="message-row message-system" data-msg-id="' + msg.id + '"' +
+          ' style="display:flex;justify-content:center;margin-bottom:var(--spacing-md);">' +
+          '<span style="font-size:11.5px;color:var(--text-muted);background:var(--bg-hover);' +
+            'padding:4px 12px;border-radius:999px;text-align:center;">' +
+            window.Sanitize.escapeHtml(msg.text || '') +
+          '</span>' +
+        '</div>';
+        continue;
+      }
+
         if (isMine) {
         var myFrame = window.Frames.getFrameForUser(state.currentUser.userId);
         const myAvatarImg = state.currentUser.avatar
