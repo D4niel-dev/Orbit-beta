@@ -22,6 +22,11 @@ window.Changelog = {
           ['Technical', [
             'The rules deciding which hosts the updater will download from, and what filename it writes, were closures inside the IPC handler \u2014 unreachable from any test. They live in desktop/lib/update-assets.js now and are covered, including the redirect host GitHub sends release assets to.'
           ]],
+          ['Pinned messages', [
+            'Pin up to three messages in a direct message, five in a group. A card at the top of the conversation shows the top pin and the count.',
+            'Click it to jump to that message, or right-click it for a floating list. Reordering is saved, and the chat is told about it.',
+            'A pinned file is named by its file name now, and a deleted message leaves the list at once.'
+          ]],
           ['Version', [
             'Version: Bumped to v0.7.4-beta.'
           ]]

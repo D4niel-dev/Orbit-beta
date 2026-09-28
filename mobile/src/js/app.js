@@ -7057,6 +7057,11 @@ document.addEventListener('DOMContentLoaded', function() {
             'Downloading now shows a progress bar and the time remaining, and the dialog stays open while it runs instead of closing the moment you press Download.',
             '"Update failed: total is not defined" is fixed too \u2014 it fired before the size check could even run.'
           ]],
+          ['Pinned messages', [
+            'Pin up to three messages in a direct message, five in a group \u2014 and a direct message can be pinned at all now, which it could not before.',
+            'A card above the message box shows the top pin. Tap it to jump there, or long-press it for a floating list where the order can be changed.',
+            'The change is saved and announced in the chat, and a pinned photo is named by its file name instead of "(attachment)".'
+          ]],
           ['File transfers', [
             'Sending or receiving a file shows a progress row above the message box: the direction, the file name, a bar and a percentage.',
             'It looks the same as the desktop now, so the two do not read differently for the same event.'

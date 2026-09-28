@@ -26,11 +26,11 @@
 
 ## Release Status
 
-| Channel           | Version     | Status                                                                                                                                |
-| ----------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Channel           | Version     | Status                                                                                                                                                                                                              |
+| ----------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Latest**        | v0.7.4-beta | The in-app Android update works at last — it had never once succeeded — with a progress bar and the time remaining on both platforms, transfer progress on mobile, and a `/help` that either works or tells you why |
-| **Stable**        | v0.6.0-beta | Reliability release — notification plumbing, an offline send queue, a vault you can back up and take with you, in-app Android updates |
-| Legacy **Stable** | v0.1.1-beta | Legacy stable release                                                                                                                 |
+| **Stable**        | v0.6.0-beta | Reliability release — notification plumbing, an offline send queue, a vault you can back up and take with you, in-app Android updates                                                                               |
+| Legacy **Stable** | v0.1.1-beta | Legacy stable release                                                                                                                                                                                               |
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
 
@@ -95,6 +95,7 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **The In-App Update Finally Works on Android** — It had never once succeeded, and the reason was one byte. The downloaded APK was written **one byte too long**: the trailing chunk was padded out to a base64 group boundary with zero bytes that were never in the file, so a 200,000-byte download landed as 200,001. Android checks an APK's zip against its signature, so a file one or two bytes long is refused with "There's a problem with the app file". It only happened when the byte count was not a multiple of three — which is most of the time. The size check passed all along because it compared against the bytes *read from the network*, never the bytes *written to the file*.
 * **A Progress Bar and the Time Remaining for Update Downloads** — On both platforms. Tens of megabytes used to be signalled by a percentage on the button, which then vanished once it read "Opening installer…". Now a bar and a line reading the bytes, the percentage and an estimate of the time left. The estimate is held back for the first second and a half on purpose: the first chunk measures the round trip, not the throughput, and an estimate that opens at "2m left" and settles on "20s left" is worse than none.
 * **File Transfers Show Progress on Mobile** — Sending or receiving gave no feedback at all, so a large transfer looked like nothing happening. A row above the composer now shows the direction, the file name, a bar and a percentage, in the same shape as the desktop's. The counters were already there; nothing had surfaced them.
+* **Pinned Messages** — Up to three in a direct message, five in a group. A card at the top of the conversation shows the top pin and the count; tapping it jumps there. Right-click it on desktop or long-press it on mobile for a floating list, where the order can be changed — and changing it is announced in the chat. A deleted message leaves the list at once, and a pinned file is named by its file name rather than "(attachment)".
 * **`/help` Works, and Says So When It Doesn't** — Two separate problems. In a direct message it showed nothing at all, because the command picker is suppressed outside groups — and a fresh install's only chat is a DM, which made it look broken on every version. And when the sheet failed to open it failed *silently*, clearing what you had typed. It is offered wherever you type it now, and a failure names itself and keeps your text.
 
 ## Version History
@@ -659,7 +660,6 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Idle audio bubbles** — unplayed bubbles show the track's waveform instead of a void; the draw loop stops on pause and restarts on play
 
 </details>
-
 <details>
 <summary>v0.6.5-beta</summary>
 
@@ -671,8 +671,6 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Emoji picker actually themed** — it had been rendering the library's defaults (stray outline included) because the CSS used variable names the library does not read; skin tone is remembered now
 
 </details>
-
-
 <details>
 <summary>v0.7.0-beta</summary>
 
@@ -685,8 +683,6 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **The people icons use their rounded variants** — `user`, `users`, `user-plus`, `user-x` and the Experimental flask
 
 </details>
-
-
 <details>
 <summary>v0.7.1-beta</summary>
 
@@ -695,7 +691,6 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **A drag could take over a scroll** — the body-drag was decided at touchstart, before the direction was known
 
 </details>
-
 <details>
 <summary>v0.7.2-beta</summary>
 
@@ -708,7 +703,6 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **A false security claim was removed from the tour** — it promised a key-change warning that is not implemented
 
 </details>
-
 <details>
 <summary>v0.7.3-beta</summary>
 
@@ -720,7 +714,6 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Groundwork for settings sync** — the packet type and the rules, with unit tests; nothing sends or receives yet
 
 </details>
-
 <details open>
 <summary>v0.7.4-beta</summary>
 
@@ -728,6 +721,7 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Update progress with the time remaining**, on both platforms
 * **Transfer progress on mobile**, matching the desktop
 * **`/help` offered in DMs**, and it reports a failure instead of failing silently
+* **Pinned messages** — a card in the conversation, a list with reordering, 3 in a DM and 5 in a group, and a note in the chat when the order changes
 
 </details>
 
@@ -739,15 +733,13 @@ See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
 Pre-built Windows installers are published on [GitHub Releases](https://github.com/D4niel-dev/Orbit-beta/releases).
 
-| Release                                                                          | Platform                    | Notes                                                                           |
-| -------------------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------- |
-| [All releases](https://github.com/D4niel-dev/Orbit-beta/releases)                | Win / Mac / Linux / Android | Most recent build first                                                         |
-| [v0.7.4-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.4-beta) | Win / Mac / Linux / Android | A working Android updater with a progress bar and time remaining, transfer progress on mobile, and a `/help` that works or explains itself |
+| Release                                                                          | Platform                    | Notes                                                                                                                                                                            |
+| -------------------------------------------------------------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [All releases](https://github.com/D4niel-dev/Orbit-beta/releases)                | Win / Mac / Linux / Android | Most recent build first                                                                                                                                                          |
+| [v0.7.4-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.4-beta) | Win / Mac / Linux / Android | A working Android updater with a progress bar and time remaining, pinned messages on both platforms, transfer progress on mobile, and a `/help` that works or explains itself |
 | [v0.7.3-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.3-beta) | Win / Mac / Linux / Android | Custom Colors across the whole theme and on Android, a themed emoji picker, drafts that stop when you send, and an owner’s Danger Zone in group info |
-| [v0.7.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.2-beta) | Win / Mac / Linux / Android | `/help` over the composer, a verified update download, one treatment for every empty state, and the welcome tour's atmosphere |
-| [v0.7.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.1-beta) | Win / Mac / Linux / Android | `/help` sheet sizing, the emoji picker's "undefined", and a drag that could take over a scroll |
-| [v0.0.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.2-beta) | Windows                     | SQLite storage, privacy mode, large file transfers                              |
-| [v0.0.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.1-beta) | Windows                     | Original release                                                                |
+| [v0.0.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.2-beta) | Windows                     | SQLite storage, privacy mode, large file transfers                                                                                                                               |
+| [v0.0.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.1-beta) | Windows                     | Original release                                                                                                                                                                 |
 
 > The **Releases** page is the source of truth — every current release is a prerelease (`-beta`), and GitHub's `releases/latest` shortcut deliberately skips prereleases, so it will not resolve to an Orbit build.
 
@@ -978,18 +970,18 @@ Notable settings (in-app **Settings**):
 
 Transparency matters in beta. Current constraints include:
 
-| Limitation                                        | Details                                                                                                                                                                                                                                                                                    |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **LAN-focused**                                   | Peers must be reachable on the local network. NAT traversal is not implemented.                                                                                                                                                                                                            |
-| **E2EE needs both peers on v0.5.2-beta or newer** | The unified scheme shipped in v0.5.2-beta. A peer running an older build still advertises the legacy key format, so encrypted DMs fall back to the legacy path — desktop↔Android encryption only works once **both** sides are updated.                                                    |
-| **Unsigned builds**                               | Installers are not code-signed; Windows SmartScreen warnings are expected.                                                                                                                                                                                                                 |
+| Limitation                                        | Details                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **LAN-focused**                                   | Peers must be reachable on the local network. NAT traversal is not implemented.                                                                                                                                                                                                                                                                                                                                                    |
+| **E2EE needs both peers on v0.5.2-beta or newer** | The unified scheme shipped in v0.5.2-beta. A peer running an older build still advertises the legacy key format, so encrypted DMs fall back to the legacy path — desktop↔Android encryption only works once **both** sides are updated.                                                                                                                                                                                            |
+| **Unsigned builds**                               | Installers are not code-signed; Windows SmartScreen warnings are expected.                                                                                                                                                                                                                                                                                                                                                         |
 | **Update checks contact GitHub**                  | At most once every 6 hours the app asks `api.github.com` for the newest release and, if the release body has no notes, reads `CHANGELOG.md` from `raw.githubusercontent.com`. Downloading an update (desktop: the installer; Android: the APK) additionally fetches that file and `SHA256SUMS.txt` from `github.com`. Nothing about you, your identity or your chats is sent, and the check can be turned off in Settings → About. |
-| **Third-party data egress**                       | Message Translate sends the message text to MyMemory (`api.mymemory.translated.net`); GIF search queries Giphy. Both are user-initiated and optional, but **neither is covered by Orbit's E2EE** — that content leaves your device in plaintext.                                           |
-| **Calls are LAN-only**                            | Like messaging, a call needs both peers on the same network. Media is peer-to-peer with STUN for address discovery — there is no relay and no NAT traversal, so calling across the internet is not supported.                                                                              |
-| **Group calls are desktop-only**                  | Desktop has mesh group calls; mobile handles 1:1 calls, and a group call offer is declined as busy rather than half-joined.                                                                                                                                                                |
-| **Queued messages do not survive a restart**      | A send that fails is queued and re-sent when the peer reconnects, but that queue lives in memory — killing the app loses anything still waiting. File bytes are held in memory too, so an interrupted transfer needs the app to stay open.                                                 |
-| **No key-change warning**                         | Peer keys are pinned on first use (QR pairing), but Orbit does not yet warn if a peer’s key later changes, and there is no fingerprint to compare out of band. For an app built on E2EE that is a real gap.                                                                                |
-| **No iOS support**                                | Android is the only mobile platform — iOS/iPadOS is not planned.                                                                                                                                                                                                                           |
+| **Third-party data egress**                       | Message Translate sends the message text to MyMemory (`api.mymemory.translated.net`); GIF search queries Giphy. Both are user-initiated and optional, but **neither is covered by Orbit's E2EE** — that content leaves your device in plaintext.                                                                                                                                                                                   |
+| **Calls are LAN-only**                            | Like messaging, a call needs both peers on the same network. Media is peer-to-peer with STUN for address discovery — there is no relay and no NAT traversal, so calling across the internet is not supported.                                                                                                                                                                                                                      |
+| **Group calls are desktop-only**                  | Desktop has mesh group calls; mobile handles 1:1 calls, and a group call offer is declined as busy rather than half-joined.                                                                                                                                                                                                                                                                                                        |
+| **Queued messages do not survive a restart**      | A send that fails is queued and re-sent when the peer reconnects, but that queue lives in memory — killing the app loses anything still waiting. File bytes are held in memory too, so an interrupted transfer needs the app to stay open.                                                                                                                                                                                         |
+| **No key-change warning**                         | Peer keys are pinned on first use (QR pairing), but Orbit does not yet warn if a peer’s key later changes, and there is no fingerprint to compare out of band. For an app built on E2EE that is a real gap.                                                                                                                                                                                                                        |
+| **No iOS support**                                | Android is the only mobile platform — iOS/iPadOS is not planned.                                                                                                                                                                                                                                                                                                                                                                   |
 
 ## Known Issues
 
@@ -1010,6 +1002,7 @@ Transparency matters in beta. Current constraints include:
 * **Update Progress** — a bar and the time remaining, on both platforms
 * **Transfer Progress on Mobile** — matching the desktop
 * **`/help` Fixed Twice** — offered in DMs, and loud instead of silent when it fails
+* **Pinned Messages** — the card, the list, the reordering and the note, on both platforms
 * **The Desktop Updater's Host and Filename Rules Tested** — extracted from the IPC handler so they could be
 
 ### In Progress / Planned
