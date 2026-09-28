@@ -1,7 +1,7 @@
 // src/js/store.js
 class Store {
   constructor(initialState = {}) {
-    var data, savedSettings, savedNetwork, dbFriends, dbMessages, dbGroups, uiState, savedMutedChats, lastReadIds, savedBlockedUsers;
+    var data, savedSettings, savedNetwork, dbFriends, dbMessages, dbGroups, uiState, savedMutedChats, savedPinnedMessages, lastReadIds, savedBlockedUsers;
 
     // Batch all DB reads into a single IPC call
     if (window.orbitAPI && window.orbitAPI.dbGetAllStartupData) {
@@ -22,6 +22,17 @@ class Store {
       dbGroups = data.groups || [];
       uiState = data.uiState || { activeTab: 'dms', activeChatId: 'local-echo' };
       savedMutedChats = data.mutedChats || {};
+      // Pinned messages have no entity of their own to hang off — a pin belongs to a chat,
+      // not to a friend or a group — so they persist through settings, the way mutedChats
+      // does. Without any of this they were gone on every restart, which is what Dan caught.
+      //
+      // Read with a direct dbGetSetting rather than from `data`: dbGetAllStartupData is a
+      // batched call in the main process with a fixed shape, and pinnedMessages is not in
+      // it. Writing the setting and never reading it back is exactly half a fix, and it is
+      // what the first attempt at this did.
+      savedPinnedMessages = (window.orbitAPI && typeof window.orbitAPI.dbGetSetting === 'function')
+        ? (window.orbitAPI.dbGetSetting('pinnedMessages', {}) || {})
+        : ((data && data.pinnedMessages) || {});
       lastReadIds = data.readStates || {};
       savedBlockedUsers = data.blockedUsers || [];
     } else {
@@ -140,7 +151,7 @@ class Store {
       messages: dbMessages,
       transferProgress: {},
       transferErrors: {},
-      pinnedMessages: {},
+      pinnedMessages: savedPinnedMessages || {},
       unreadCounts: {},
       mentionCounts: {},
       lastReadIds: lastReadIds,
@@ -1544,9 +1555,17 @@ class Store {
         window.Storage.set('appData', {
           friends: this.state.friends,
           messages: this.state.messages,
-          groups: this.state.groups
+          groups: this.state.groups,
+          pinnedMessages: this.state.pinnedMessages
         });
       }
+    }
+
+    // Pinned messages persist through settings on the Electron path, the way mutedChats
+    // does: there is no entity to attach them to, and the pins change rarely enough that
+    // a write per change is nothing.
+    if (window.orbitAPI && newState && newState.pinnedMessages) {
+      try { window.orbitAPI.dbSetSetting('pinnedMessages', this.state.pinnedMessages); } catch (e) { /* never break a state change over this */ }
     }
 
     // Groups are persisted individually by each mutating method (addGroup, addMemberToGroup, etc.)
