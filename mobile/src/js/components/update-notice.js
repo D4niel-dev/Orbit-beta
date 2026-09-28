@@ -170,13 +170,21 @@ window.UpdateNotice = {
 
         return pump().then(function () {
           if (carry.length) {
-            // trailing partial group — pad it out and write it once
-            var pad = new Uint8Array((3 - carry.length % 3) % 3);
-            var last = new Uint8Array(carry.length + pad.length);
-            last.set(carry, 0);
-            carry = new Uint8Array(0);
+            // The trailing bytes, written UNPADDED.
+            //
+            // The 3-byte grouping above exists because appending independently padded
+            // base64 corrupts the stream — but that only applies to appends with more
+            // data still to come. This is the last one, and padding it wrote zero bytes
+            // that were never in the file: a 200,000-byte download landed as 200,001.
+            //
+            // That is not a cosmetic off-by-one. Android checks an APK's zip against
+            // its signature, so a file one or two bytes long is refused with "There's a
+            // problem with the app file" — the very error this function's size check was
+            // written to prevent, arriving by a different route. It only shows up when
+            // the byte count is not a multiple of three, which is most of the time.
             var bin = '';
-            for (var i = 0; i < last.length; i++) bin += String.fromCharCode(last[i]);
+            for (var i = 0; i < carry.length; i++) bin += String.fromCharCode(carry[i]);
+            carry = new Uint8Array(0);
             return FS.appendFile({ path: APK_PATH, directory: 'CACHE', data: btoa(bin) });
           }
           return null;
@@ -194,9 +202,12 @@ window.UpdateNotice = {
         var short = (expected && bytes < expected) || (total && bytes < total);
         if (short) {
           return FS.deleteFile({ path: APK_PATH, directory: 'CACHE' }).catch(function () {}).then(function () {
-            var want = Math.round((expected || total) / 1048576);
-            var got = Math.round(bytes / 1048576);
-            throw new Error('The download stopped early (' + got + ' of ' + want + ' MB) \u2014 try again');
+            // KB under a megabyte: rounding a small file to "0 of 0 MB" tells the
+            // user nothing, and it is the message they get when a download fails.
+            var _mb = function (n) { return n >= 1048576 ? (Math.round(n / 1048576) + ' MB') : (Math.round(n / 1024) + ' KB'); };
+            var want = _mb(expected || total);
+            var got = _mb(bytes);
+            throw new Error('The download stopped early (' + got + ' of ' + want + ') \u2014 try again');
           });
         }
         setLabel('Opening installer\u2026');
@@ -205,7 +216,7 @@ window.UpdateNotice = {
         });
       })
       .then(function (bytes) {
-        self._toast('Downloaded ' + Math.round(bytes / 1048576) + ' MB \u2014 finish the install, then close Orbit', 'success');
+        self._toast('Downloaded ' + (bytes >= 1048576 ? Math.round(bytes / 1048576) + ' MB' : Math.round(bytes / 1024) + ' KB') + ' \u2014 finish the install, then close Orbit', 'success');
         if (window.Changelog && window.Changelog.close) window.Changelog.close();
         self._offerRestart(overlay);
       })
