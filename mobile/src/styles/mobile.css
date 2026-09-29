@@ -7837,3 +7837,21 @@ textarea#chat-input {
 }
 #jump-latest-chip.old i { color: var(--accent-primary); }
 #jump-latest-chip i { width: 14px; height: 14px; flex-shrink: 0; }
+
+/* Which pinned message the bar is showing. */
+#pinned-messages-bar .pin-dots {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+#pinned-messages-bar .pin-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  opacity: 0.45;
+}
+#pinned-messages-bar .pin-dot.on {
+  opacity: 1;
+  background: var(--accent-primary);
+}

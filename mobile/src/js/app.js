@@ -4383,6 +4383,8 @@ document.addEventListener('DOMContentLoaded', function() {
      always the pruned list and always the store's, not a group's. */
   var _lastPinnedBarSig = '';
   var _pinnedLongPressFired = false;
+  var _pinBarIndex = 0;
+  var _pinBarChatId = null;
   // The chat id is passed in, not read from window: activeChatId is a module-local in this
   // app, so window.activeChatId is undefined and the bar silently rendered for no chat.
   // renderMessages already receives it; the poller reuses the last one seen.
@@ -4400,12 +4402,31 @@ document.addEventListener('DOMContentLoaded', function() {
     var sig = chatId + '|' + list.map(function (p) { return p.msgId; }).join(',');
     if (sig === _lastPinnedBarSig && el.style.display !== 'none') return;
     _lastPinnedBarSig = sig;
+
+    // Which pin the bar is showing. Clamped, because a pin can disappear underneath it.
+    if (_pinBarChatId !== chatId) { _pinBarChatId = chatId; _pinBarIndex = 0; }
+    if (_pinBarIndex >= list.length) _pinBarIndex = 0;
+    var shown = list[_pinBarIndex] || list[0];
+
     var P = window.OrbitPinned;
     var limit = P ? P.limitFor(_isGroupChat(chatId)) : 3;
     var esc = (window.escapeHtml) || function (v) { return String(v == null ? '' : v); };
+
+    // Dots rather than a number: "2 of 3" beside "3 of 5" would read as two different
+    // counts of the same thing, and one of them is how many are pinned.
+    var dots = '';
+    if (list.length > 1) {
+      dots = '<span class="pin-dots">';
+      for (var di = 0; di < list.length; di++) {
+        dots += '<span class="pin-dot' + (di === _pinBarIndex ? ' on' : '') + '"></span>';
+      }
+      dots += '</span>';
+    }
+
     el.innerHTML =
       '<i data-lucide="pin" style="width:14px;height:14px;flex-shrink:0;color:var(--accent-primary);"></i>' +
-      '<span class="pin-name">' + esc(list[0].text || '(attachment)') + '</span>' +
+      '<span class="pin-name">' + esc(shown.text || '(attachment)') + '</span>' +
+      dots +
       '<span class="pin-count">' + list.length + ' of ' + limit + '</span>' +
       '<button class="pin-show-all" type="button">' + (list.length > 1 ? 'Show all' : 'Manage') + '</button>';
     el.style.display = 'flex';
@@ -4417,8 +4438,39 @@ document.addEventListener('DOMContentLoaded', function() {
     el.onclick = function (e) {
       if (_pinnedLongPressFired) { _pinnedLongPressFired = false; return; }
       if (e.target.closest('.pin-show-all')) { showPinnedSheet(chatId); return; }
-      _jumpToPinned(chatId, list[0].msgId);
+      _jumpToPinned(chatId, (list[_pinBarIndex] || list[0]).msgId);
     };
+    // Swipe the bar to move between pins. Horizontal only, and only past a threshold, so it
+    // does not fight the vertical scroll of the conversation underneath it.
+    if (!el._pinSwipeWired) {
+      el._pinSwipeWired = true;
+      var _sw = null;
+      el.addEventListener('touchstart', function (e) {
+        var t = e.touches && e.touches[0];
+        if (!t) return;
+        _sw = { x: t.clientX, y: t.clientY };
+      }, { passive: true });
+      el.addEventListener('touchmove', function (e) {
+        if (!_sw) return;
+        var t = e.touches && e.touches[0];
+        if (!t) return;
+        _sw.dx = t.clientX - _sw.x;
+        _sw.dy = t.clientY - _sw.y;
+      }, { passive: true });
+      el.addEventListener('touchend', function () {
+        if (!_sw) return;
+        var dx = _sw.dx || 0, dy = _sw.dy || 0;
+        _sw = null;
+        if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+        var list2 = _pinnedFor(chatId);
+        if (list2.length < 2) return;
+        _pinBarIndex = dx < 0
+          ? (_pinBarIndex + 1) % list2.length
+          : (_pinBarIndex - 1 + list2.length) % list2.length;
+        _lastPinnedBarSig = '';      // force a repaint of the same list
+        _renderPinnedBar(chatId);
+      }, { passive: true });
+    }
     if (!el._pinnedLongPressWired) {
       el._pinnedLongPressWired = true;
       var _lpTimer = null;
