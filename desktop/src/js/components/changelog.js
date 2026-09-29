@@ -15,6 +15,10 @@ window.Changelog = {
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
         versionBlock('0.7.5-beta', 'Latest', [
+          ['New', [
+            'Copy your user ID from your profile, and a setting for whether a group\'s info shows when it was created.',
+            'A group with no recorded date no longer says "Created Unknown" \u2014 the row is simply gone.'
+          ]],
           ['Fixes', [
             'The pinned messages bar and its list are new in this release, so most of the work here was on the shared bottom sheet they use.',
             'A sheet that opens off the bottom of the screen now says so instead of failing silently.'

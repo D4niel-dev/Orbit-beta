@@ -7195,6 +7195,11 @@ document.addEventListener('DOMContentLoaded', function() {
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
         vBlock('0.7.5-beta', 'Latest', [
+          ['New', [
+            'Scrolled up and lost? A chip now floats above the message box \u2014 tap it to get back to the bottom. If what you are reading is genuinely old, it says so.',
+            'The + button has a Commands entry, so the slash commands are findable without knowing to type one.',
+            'Copy your user ID from the pill at the bottom, and swipe the pinned bar to move between pins.'
+          ]],
           ['Fixes', [
             'Sending /help in a group cleared the box and then showed nothing. The tap that opened the command list was also closing it \u2014 one gesture, two jobs. It opens properly now.',
             'And if a list ever opens off the bottom of the screen, it says so rather than leaving you with nothing.'

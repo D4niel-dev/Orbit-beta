@@ -28,7 +28,7 @@
 
 | Channel           | Version     | Status                                                                                                                                                                                                              |
 | ----------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Latest** | v0.7.5-beta | `/help` works again on mobile — the tap that opened the command list also closed it — and a sheet that opens off-screen now says so instead of failing silently |
+| **Latest** | v0.7.5-beta | `/help` works again on mobile, a way back to the bottom of a conversation that says when you are reading old messages, a Commands entry, copyable user IDs, and the pinned bar is swipeable |
 | **Stable**        | v0.6.0-beta | Reliability release — notification plumbing, an offline send queue, a vault you can back up and take with you, in-app Android updates                                                                               |
 | Legacy **Stable** | v0.1.1-beta | Legacy stable release                                                                                                                                                                                               |
 
@@ -91,6 +91,16 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 Orbit is a **beta-stage app for desktop and Android** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
 ## Highlights (v0.7.5-beta)
+
+* **Jump to Latest** — A chip floats over the foot of the messages when you are scrolled up, and it is worded by what you are reading: *"Jump to latest"* over recent messages, *"Reading old messages"* past a week, *"Messages from months ago"* past two. Mobile had no way back to the bottom at all before this.
+* **Commands You Can Find** — Nineteen slash commands, and until now the only way in was knowing to type a `/`. There is a **Commands** entry in the `+` menu.
+* **Copy Your User ID** — On both platforms, from the desktop's profile and the mobile's profile pill.
+* **Swipe the Pinned Bar** — Move between pinned messages by swiping, with a dot per pin. The tap jumps to the one you are looking at.
+* **A Quieter Chat Header** — Members folded into the `⋮` menu, which already had Group Info.
+* **The Search ✕ Behaves** — Clears when there is text, closes when there is not.
+* **Show Group Created Date** — A setting, on by default. And no group says "Created Unknown" any more; the row is simply absent.
+* **`/help` Works Again on Mobile** — Pressing send cleared the input and showed nothing, because the tap that opened the command list also closed it.
+
 
 * **`/help` Works Again on Mobile** — Pressing send on `/help` in a group cleared the input and then showed nothing, and the command came back if you left the chat and returned. Both were one bug: the send button binds **touchstart** to dodge the 300ms click delay, so the sheet opened *during* the gesture — and the same gesture's `click` then landed on the backdrop, whose handler is `hide()`. It opened and closed inside a single tap. The fix is in the shared sheet, so **every** sheet benefits, not just this one.
 * **A Sheet That Opened Off-Screen No Longer Reports Success** — The check read the overlay's class, and the class said `active` while the sheet sat below the bottom of the screen. It now confirms the sheet is actually on screen and says so if it is not, rather than clearing what you typed and leaving you nothing.
@@ -734,6 +744,11 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 <summary>v0.7.5-beta</summary>
 
 * **`/help` opens the command list again on mobile** — the tap that opened it also closed it
+* **Jump to latest**, with a word when you are reading old messages
+* **Commands** in the `+` menu, and **copyable user IDs** on both platforms
+* **Swipe the pinned bar** between pins
+* **Members folded** into the `⋮` menu, and a **search ✕** that clears before it closes
+* **No more "Created Unknown"**, and a setting for the group created date
 * **A sheet that opens off-screen says so**, instead of eating what you typed
 
 </details>
@@ -749,7 +764,7 @@ Pre-built Windows installers are published on [GitHub Releases](https://github.c
 | Release                                                                          | Platform                    | Notes                                                                                                                                                                            |
 | -------------------------------------------------------------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [All releases](https://github.com/D4niel-dev/Orbit-beta/releases)                | Win / Mac / Linux / Android | Most recent build first                                                                                                                                                          |
-| [v0.7.5-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.5-beta) | Win / Mac / Linux / Android | A `/help` that opens the command list on mobile again, and a sheet that reports an off-screen open instead of failing silently |
+| [v0.7.5-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.5-beta) | Win / Mac / Linux / Android | A `/help` that opens on mobile again, jump-to-latest with an old-messages warning, discoverable commands, copyable user IDs, a swipeable pinned bar, and a quieter chat header |
 | [v0.7.4-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.4-beta) | Win / Mac / Linux / Android | A working Android updater with a progress bar and time remaining, pinned messages on both platforms, transfer progress on mobile, and a `/help` that works or explains itself |
 | [v0.7.3-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.3-beta) | Win / Mac / Linux / Android | Custom Colors across the whole theme and on Android, a themed emoji picker, drafts that stop when you send, and an owner’s Danger Zone in group info |
 | [v0.0.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.2-beta) | Windows                     | SQLite storage, privacy mode, large file transfers                                                                                                                               |
@@ -1011,6 +1026,17 @@ Transparency matters in beta. Current constraints include:
 ## Roadmap
 
 ### Shipped (v0.7.5-beta)
+
+* **`/help` Fixed on Mobile** — it opened and closed inside one tap
+* **Jump to Latest** — and a chip that says when you are reading old messages
+* **Commands in the `+` Menu** — nineteen of them, no longer hidden behind a guessed `/`
+* **Copyable User IDs** — desktop profile and mobile profile pill
+* **Swipeable Pinned Bar** — dots per pin, and the tap follows the one you are on
+* **A Quieter Chat Header** — members folded into the more menu
+* **The Search ✕** — clears first, closes second
+* **No More "Created Unknown"** — a row that is absent beats a row that admits it does not know
+
+
 
 * **`/help` Fixed on Mobile** — it opened and closed inside one tap
 * **The Shared Sheet Ignores Its Own Opening Tap** — so every sheet benefits

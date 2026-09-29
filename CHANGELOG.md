@@ -2,10 +2,25 @@
 
 ## v0.7.5-beta
 
+### Features
+
+- **Jump to Latest, and a Word When You Are Reading Old Messages** — Mobile had no way back to the bottom of a conversation, which the desktop has had all along. A chip now floats over the foot of the messages when you are scrolled up, and it is worded by what you are actually looking at: *"Jump to latest"* over recent messages, *"Reading old messages"* past a week, and *"Messages from months ago"* past two. Being 400 messages behind is a scroll; reading last month while the conversation moved on is a user who does not know they are lost, and those are not the same problem.
+- **Nineteen Slash Commands You Could Only Find by Guessing** — The only door to the command reference was knowing to type a `/`. There is now a **Commands** entry in the `+` menu.
+- **Copy Your User ID** — On both platforms. It is a monospace string whose entire purpose is to be handed to someone else, and there was no way to get it out of the app. The desktop's profile has a copy button beside it; the mobile's profile pill has one beside the gear.
+- **Swipe the Pinned Bar** — With several pins the bar showed only the first, and "Show all" was the only way to reach the rest — fine for reordering, wrong for glancing. Swiping moves through them, with a dot per pin, and the tap jumps to the pin **being shown**.
+- **A Quieter Chat Header** — The members button is folded into the `⋮` menu beside it, which already offers Group Info. Four icons on a 390px header was one too many, and that was the least-used.
+- **The Search ✕ Behaves Like One** — It used to clear the query *and* close the search in a single tap. Now it clears when there is text and closes when there is not.
+- **Show Group Created Date** — A setting, on by default, for whether a group's info says when it was created. A group with no recorded date no longer prints **"Created Unknown"**; the row is simply absent, which is what it should always have done.
+
 ### Bug Fixes
 
 - **`/help` Opened and Closed Inside One Tap on Mobile** — Pressing send on `/help` in a group cleared the input and then showed nothing at all, and the command came back if you left the chat and returned. Both halves were the same bug: the send button binds **touchstart** to dodge the 300ms click delay, so the sheet opened *during* the gesture — and the same gesture's `click` then landed on the backdrop, whose handler is `hide()`. It opened and closed inside a single tap. The input was cleared because the sheet genuinely had opened; the text came back because nothing had been sent and the draft was still there. The shared sheet now ignores a backdrop tap within 400ms of becoming active, which is the same shape as the `_touchTap` guard the input area already carries, and it fixes every sheet rather than just this one.
 - **A Sheet That Opened Off-Screen Reported Success** — The caller decided whether the command list had opened by reading the overlay's class, and the class said `active` while the sheet sat parked below the bottom of the screen. It now checks the class for the immediate decision — the sheet is mid-animation at that instant — and confirms 700ms later that it is actually on screen, saying so if it is not. A silent failure that eats what you typed is the worst possible outcome, and this one had already survived a round of instrumentation.
+
+
+### Technical
+
+- **The Cache Stamps, and a Fix That Might Not Have Reached Anyone** — Chasing the `/help` bug turned up something worse than the bug: `bottom-sheet.js` had changed for that fix and **its cache stamp was never moved**, so a device holding a cached copy would still have had the fault. That is exactly the version-skew case AGENTS.md warns about, and it means a released fix can be sitting behind a stale file. Stamps are now moved for every file that changed, and the helper that does it takes the stamp as an argument so a run is reproducible.
 
 ## v0.7.4-beta
 
