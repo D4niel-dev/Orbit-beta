@@ -83,6 +83,8 @@ window.UpdateNotice = {
 
     var setLabel = function (txt) {
       if (btn) { btn.disabled = true; btn.style.opacity = '0.75'; btn.textContent = txt; }
+      var note = document.querySelector('#orbit-download-modal #orbit-dl-note');
+      if (note) note.textContent = txt;
     };
 
     var _dlStartedAt = Date.now();
@@ -110,13 +112,19 @@ window.UpdateNotice = {
     // pct < 0 hides the bar. Called from the streaming loop with the same numbers the
     // label uses, so the three cannot disagree.
     var setProgress = function (pct, received, total) {
-      var wrap = overlay.querySelector('#update-modal-progress');
-      var fill = overlay.querySelector('#update-modal-progress-fill');
-      var note = overlay.querySelector('#update-modal-progress-note');
-      if (!wrap || !fill) return;
-      if (pct == null || pct < 0) { wrap.style.display = 'none'; return; }
-      wrap.style.display = 'block';
-      fill.style.width = Math.max(0, Math.min(100, pct)) + '%';
+      // The download modal is the one on screen now, so it takes the bar. The changelog's
+      // copy stays wired as a fallback: this function must not depend on which modal is up.
+      var dl = document.getElementById('orbit-download-modal');
+      var wrap = dl ? dl.querySelector('#orbit-dl-fill') : overlay.querySelector('#update-modal-progress');
+      var fill = dl ? dl.querySelector('#orbit-dl-fill') : overlay.querySelector('#update-modal-progress-fill');
+      var note = dl ? dl.querySelector('#orbit-dl-note') : overlay.querySelector('#update-modal-progress-note');
+      if (!fill) return;
+      if (!dl) {
+        if (!wrap) return;
+        if (pct == null || pct < 0) { wrap.style.display = 'none'; return; }
+        wrap.style.display = 'block';
+      }
+      fill.style.width = Math.max(0, Math.min(100, pct < 0 ? 0 : pct)) + '%';
       if (note) {
         // The desktop's wording, with the time appended.
         var line = (total && received != null)
@@ -273,6 +281,7 @@ window.UpdateNotice = {
       .then(function (bytes) {
         self._toast('Downloaded ' + (bytes >= 1048576 ? Math.round(bytes / 1048576) + ' MB' : Math.round(bytes / 1024) + ' KB') + ' \u2014 finish the install, then close Orbit', 'success');
         if (window.Changelog && window.Changelog.close) window.Changelog.close();
+        self._hideDownloadModal();
         self._offerRestart(overlay);
       })
       .catch(function (err) {
@@ -282,12 +291,47 @@ window.UpdateNotice = {
         } else {
           self._toast('Update failed: ' + msg, 'error');
         }
+        self._hideDownloadModal();
         if (btn) { btn.disabled = false; btn.style.opacity = ''; btn.textContent = 'Download APK'; }
       });
   },
 
   /* After the installer has been launched, the update only applies once Orbit is
      not running — so make that one tap rather than a manual trip to the launcher. */
+  /* The download gets its own modal, and the changelog is dismissed when it starts.
+     Dan's read on it is right: you have already read the release notes by the time you tap
+     Download, so watching a progress bar inside a list of notes you are not reading is the
+     wrong place for it. Tens of megabytes takes a while, and it deserves the whole screen. */
+  _showDownloadModal() {
+    var old = document.getElementById('orbit-download-modal');
+    if (old) old.remove();
+    var box = document.createElement('div');
+    box.id = 'orbit-download-modal';
+    box.style.cssText = 'position:fixed;inset:0;z-index:100000;display:flex;align-items:center;' +
+      'justify-content:center;padding:16px;box-sizing:border-box;background:rgba(0,0,0,0.6);';
+    box.innerHTML =
+      '<div style="background:var(--bg-surface);border-radius:16px;padding:20px;max-width:340px;width:100%;' +
+        'border:1px solid var(--border-subtle);box-shadow:0 20px 60px rgba(0,0,0,0.4);">' +
+        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">' +
+          '<i data-lucide="download-cloud" style="width:18px;height:18px;color:var(--accent-primary);"></i>' +
+          '<div style="font-weight:700;font-size:15px;color:var(--text-primary);">Downloading Orbit\u2026</div>' +
+        '</div>' +
+        '<div style="height:6px;border-radius:3px;background:var(--border-subtle);overflow:hidden;margin-bottom:10px;">' +
+          '<div id="orbit-dl-fill" style="height:100%;width:0%;background:var(--accent-primary);' +
+            'transition:width .15s linear;"></div>' +
+        '</div>' +
+        '<div id="orbit-dl-note" style="font-size:12px;color:var(--text-secondary);">Starting\u2026</div>' +
+      '</div>';
+    document.body.appendChild(box);
+    if (window.lucide) { try { window.lucide.createIcons({ root: box }); } catch (e) { /* non-fatal */ } }
+    return box;
+  },
+
+  _hideDownloadModal() {
+    var box = document.getElementById('orbit-download-modal');
+    if (box) box.remove();
+  },
+
   _offerRestart(overlay) {
     var self = this;
     var plugins = (window.Capacitor && window.Capacitor.Plugins) || {};
@@ -313,12 +357,45 @@ window.UpdateNotice = {
           'margin-bottom:8px;">Close Orbit</button>' +
         '<button id="orbit-restart-later" style="width:100%;padding:10px;border-radius:11px;border:none;' +
           'background:transparent;color:var(--text-secondary);font-size:13px;cursor:pointer;">Later</button>' +
+        '<div id="orbit-restart-count" style="font-size:11.5px;color:var(--text-muted);text-align:center;' +
+          'margin-top:10px;"></div>' +
       '</div>';
 
+    // Closes itself after a countdown, as Dan asked.
+    //
+    // Worth being exact about what closing does, because it is easy to assume it does more:
+    // **closing Orbit does not install the update.** The installer already has the APK and
+    // Android runs the install in its own process — it kills this app partway through
+    // regardless. What closing does is make the NEW version the one that starts next, and
+    // that matters because an app cannot replace itself while it is running.
+    //
+    // So the countdown is a convenience, not the mechanism. It is cancellable, and both
+    // buttons stop it — closing someone's app out from under them without a way out would be
+    // the wrong trade for saving one tap.
+    var secs = 10;
+    var countEl = box.querySelector('#orbit-restart-count');
+    var timer = null;
+    var stopCountdown = function () { if (timer) { clearInterval(timer); timer = null; } };
+    var tick = function () {
+      if (countEl) countEl.textContent = 'Closing Orbit in ' + secs + 's\u2026';
+      if (secs <= 0) {
+        stopCountdown();
+        if (P2P && typeof P2P.exitApp === 'function') P2P.exitApp().catch(function () {});
+        return;
+      }
+      secs--;
+    };
+    tick();
+    timer = setInterval(tick, 1000);
+
     box.querySelector('#orbit-restart-close').addEventListener('click', function () {
+      stopCountdown();
       if (P2P && typeof P2P.exitApp === 'function') P2P.exitApp().catch(function () {});
     });
-    box.querySelector('#orbit-restart-later').addEventListener('click', function () { box.remove(); });
+    box.querySelector('#orbit-restart-later').addEventListener('click', function () {
+      stopCountdown();
+      box.remove();
+    });
     document.body.appendChild(box);
   },
 
@@ -499,10 +576,14 @@ window.UpdateNotice = {
     document.addEventListener('keydown', this._onKeydown);
 
     overlay.querySelector('#update-modal-download').addEventListener('click', function() {
-      // The modal STAYS OPEN. The progress bar lives inside it, so closing here made the
-      // bar impossible to see: the download ran with no indication at all, which is the
-      // exact complaint this feature exists to fix. It is dismissed when the download
-      // ends (or by the user), not when it starts.
+      // The changelog gets out of the way and the download takes the screen.
+      //
+      // It used to stay open because the progress bar lived inside it — but you have read
+      // the notes by the time you tap Download, so the bar was sitting in a list nobody was
+      // reading. Dan's flow, and it is the better one: dismiss this, show a small modal that
+      // is only about the download, then ask about the install when it lands.
+      self.closeModal();
+      self._showDownloadModal();
       self._downloadAndInstall(res, overlay);
     });
 
