@@ -12351,6 +12351,23 @@ document.addEventListener('DOMContentLoaded', function() {
   var dropupMenu = document.getElementById('dropup-menu');
 
   if (fileInput && dropupMenu) {
+    // Copy my own user ID from the profile pill. The ID's whole purpose is to be handed to
+    // someone else, and on mobile there was no way to get it out at all.
+    var btnPillCopy = document.getElementById('btn-pill-copy-id');
+    if (btnPillCopy) {
+      btnPillCopy.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var id = (MStore.user && (MStore.user.id || MStore.user.userId)) || '';
+        if (!id) return;
+        var done = function () { showToast('User ID copied', 'info'); };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(id).then(done).catch(function () { showToast('Could not copy', 'error'); });
+        } else {
+          showToast('Could not copy', 'error');
+        }
+      });
+    }
+
     var btnPlus = document.getElementById('btn-plus');
     btnPlus.addEventListener('click', function(e) {
       e.stopPropagation();

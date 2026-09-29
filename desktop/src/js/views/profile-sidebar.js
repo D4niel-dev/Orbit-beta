@@ -142,10 +142,16 @@ window.ProfileSidebar = {
             '</div>' +
           '</div>' +
 
-          // User ID
+          // User ID, with a way to copy it. It is a monospace string whose whole purpose
+          // is to be handed to someone else, and there was no way to get it out.
           '<div style="margin-top:16px;text-align:left;">' +
             '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;font-weight:600;margin-bottom:4px;">User ID</div>' +
-            '<div style="font-size:12px;color:var(--text-secondary);font-family:var(--font-mono);word-break:break-all;padding:8px;background:var(--bg-base);border-radius:4px;">' + window.Sanitize.escapeHtml(user.userId) + '</div>' +
+            '<div style="display:flex;align-items:stretch;gap:6px;">' +
+              '<div style="flex:1;min-width:0;font-size:12px;color:var(--text-secondary);font-family:var(--font-mono);word-break:break-all;padding:8px;background:var(--bg-base);border-radius:4px;">' + window.Sanitize.escapeHtml(user.userId) + '</div>' +
+              '<button id="profile-copy-id" data-user-id="' + window.Sanitize.escapeHtml(user.userId) + '" title="Copy user ID" style="flex-shrink:0;width:34px;border-radius:4px;border:1px solid var(--border-subtle);background:transparent;color:var(--text-secondary);cursor:pointer;">' +
+                '<i data-lucide="copy" style="width:14px;height:14px;"></i>' +
+              '</button>' +
+            '</div>' +
           '</div>' +
 
           // Block/Unblock button
@@ -190,6 +196,19 @@ window.ProfileSidebar = {
     if (_pinAll) {
       _pinAll.addEventListener('click', function () {
         if (window.PinnedModal) window.PinnedModal.show(pinnedChatId);
+      });
+    }
+
+    var _copyId = this.contentArea.querySelector('#profile-copy-id');
+    if (_copyId) {
+      _copyId.addEventListener('click', function () {
+        var id = _copyId.getAttribute('data-user-id') || '';
+        var done = function () { if (window.Toast && window.Toast.show) window.Toast.show('User ID copied', 'info'); };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(id).then(done).catch(function () {
+            if (window.Toast && window.Toast.show) window.Toast.show('Could not copy', 'error');
+          });
+        }
       });
     }
 
