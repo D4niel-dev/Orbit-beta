@@ -917,18 +917,11 @@ document.addEventListener('DOMContentLoaded', function() {
     var moreBtn = document.getElementById('btn-chat-more');
     if (group) {
       galleryBtn.style.display = 'flex';
-      // Add members button next to gallery if not exists
-      var membersBtn = document.getElementById('btn-chat-members');
-      if (!membersBtn) {
-        membersBtn = document.createElement('button');
-        membersBtn.id = 'btn-chat-members';
-        membersBtn.title = 'Members';
-        membersBtn.innerHTML = '<i data-lucide="users-round"></i>';
-        galleryBtn.parentNode.insertBefore(membersBtn, moreBtn);
-        membersBtn.addEventListener('click', function() { showGroupInfo(); });
-        renderLucide({ root: membersBtn });
-      }
-      membersBtn.style.display = 'flex';
+      // The members button is gone. Four icons in a 390px header was one too many, and
+      // this was the least-used: the ⋮ menu directly beside it already offers "Group
+      // Info", which opens the same sheet. Folded rather than lost.
+      var _membersBtn = document.getElementById('btn-chat-members');
+      if (_membersBtn) _membersBtn.style.display = 'none';
     } else {
       var membersBtn = document.getElementById('btn-chat-members');
       if (membersBtn) membersBtn.style.display = 'none';
@@ -12372,6 +12365,12 @@ document.addEventListener('DOMContentLoaded', function() {
         e.stopPropagation();
         dropupMenu.classList.remove('active');
         var type = this.getAttribute('data-upload');
+        // Commands is not an upload — it opens the reference, which is the only place the
+        // nineteen of them are listed. Until now the only door was knowing to type a "/".
+        if (type === 'commands') {
+          if (typeof showHelpModal === 'function') showHelpModal();
+          return;
+        }
         if (type === 'images') {
           fileInput.accept = 'image/*';
           fileInput.removeAttribute('webkitdirectory');

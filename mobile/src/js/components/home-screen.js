@@ -1262,6 +1262,16 @@ document.addEventListener('DOMContentLoaded', function() {
     searchClose.addEventListener('click', function() {
       var searchInline = document.getElementById('home-search-inline');
       var searchInput = document.getElementById('home-search-input');
+      // With text in the box an ✕ reads as "clear", so it clears and leaves the search
+      // open. Empty, it reads as "close", so it closes. Doing both in one tap was the
+      // ambiguity: a single press threw away the query AND the search you were in.
+      if (searchInput && searchInput.value) {
+        searchInput.value = '';
+        window._chatSearchQuery = '';
+        if (window.renderChatList) window.renderChatList();
+        searchInput.focus();
+        return;
+      }
       if (searchInline) searchInline.classList.remove('open');
       if (searchInput) {
         searchInput.value = '';
