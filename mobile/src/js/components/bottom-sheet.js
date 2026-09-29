@@ -123,6 +123,31 @@ var OrbitSheet = {
    * is that opening a sheet dismisses the keyboard, and it guarantees the sheet
    * is visible even on WebView builds where visualViewport is unreliable.
    */
+  /**
+   * Dismiss on a backdrop tap — but NOT the tap that opened the sheet.
+   *
+   * This is the bug Dan hit with /help, and it is worth naming: the send button binds
+   * touchstart (to dodge the 300ms click delay), so the sheet opens DURING the gesture.
+   * The same gesture then fires a `click`, which lands on the backdrop that now covers
+   * the screen — and backdrop.onclick is hide(). The sheet opened and closed inside one
+   * tap, the input was cleared because the sheet really had opened, and the user was left
+   * with neither the text nor the list.
+   *
+   * The app already knows this shape: see the _touchTap guard noted in the input area.
+   * 400ms is comfortably longer than the delay it exists to absorb and far shorter than
+   * anyone can tap twice on purpose.
+   */
+  _openGuardMs: 400,
+
+  _wireBackdrop: function(backdrop) {
+    if (!backdrop) return;
+    var openedAt = Date.now();
+    backdrop.onclick = function() {
+      if (Date.now() - openedAt < OrbitSheet._openGuardMs) return;
+      OrbitSheet.hide();
+    };
+  },
+
   _dismissKeyboard: function() {
     try {
       var el = document.activeElement;
@@ -213,10 +238,8 @@ var OrbitSheet = {
       })(btns[j]);
     }
     
-    // Backdrop click to dismiss
-    if (backdrop) {
-      backdrop.onclick = function() { OrbitSheet.hide(); };
-    }
+    // Backdrop click to dismiss — guarded, see _wireBackdrop.
+    OrbitSheet._wireBackdrop(backdrop);
     requestAnimationFrame(function() { OrbitSheet._syncScrollHint(); });
   },
 
@@ -245,10 +268,10 @@ var OrbitSheet = {
     OrbitSheet._addCloseButton();
     overlay.classList.add('active');
     if (window.lucide) lucide.createIcons();
-    
-    if (backdrop) {
-      backdrop.onclick = function() { OrbitSheet.hide(); };
-    }
+
+    // Guarded, and re-stamped here rather than in show(): the sheet becomes active at
+    // this moment, so this is when the gesture to ignore began.
+    OrbitSheet._wireBackdrop(backdrop);
     requestAnimationFrame(function() { OrbitSheet._syncScrollHint(); });
   },
 

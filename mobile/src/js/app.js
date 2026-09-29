@@ -4204,6 +4204,22 @@ document.addEventListener('DOMContentLoaded', function() {
       sheet.showCustom(html, { tall: true });
       var _ov = document.getElementById('bottom-sheet-overlay');
       opened = !!(_ov && _ov.classList.contains('active'));
+      // ...and confirm it is actually on screen a beat later. The class alone was not
+      // enough: the bug this was written for left the overlay active with the sheet parked
+      // off the bottom of the screen, so "active" read true, the input was cleared and
+      // nothing was visible. But checking the rect HERE is too early — the sheet settles
+      // over 0/180/450/900/1500ms and is mid-animation now — so the immediate decision uses
+      // the class and this reports a sheet that never arrived.
+      setTimeout(function () {
+        var _sh = document.getElementById('bottom-sheet');
+        var _r = _sh ? _sh.getBoundingClientRect() : null;
+        var _onScreen = !!(_r && _r.height > 50 && _r.bottom > 0 && _r.top < window.innerHeight);
+        var _stillActive = _ov && _ov.classList.contains('active');
+        if (_stillActive && !_onScreen) {
+          if (window.console && console.error) console.error('[help] sheet opened but is not on screen', _r && _r.top, _r && _r.height);
+          showToast('The command list did not appear on screen', 'error');
+        }
+      }, 700);
     } catch (e) {
       if (window.console && console.error) console.error('[help] sheet failed', e);
       showToast('Could not open the command list: ' + ((e && e.message) || e), 'error');
