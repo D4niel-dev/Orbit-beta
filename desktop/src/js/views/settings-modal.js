@@ -743,6 +743,10 @@ window.SettingsModal = {
               '<div><div>Show Avatars</div><div style="font-size:11px;color:var(--text-muted);font-weight:400;">Display user avatars next to messages</div></div>' +
             '</label>' +
             '<label style="display:flex;align-items:center;gap:12px;font-size:13px;color:var(--text-primary);cursor:pointer;padding:8px 0;border-top:1px solid var(--border-subtle);">' +
+              '<input id="set-group-created" type="checkbox" '+(s.showGroupCreated!==false?'checked':'')+' style="accent-color:var(--accent-primary);">' +
+              '<div><div>Show Group Created Date</div><div style="font-size:11px;color:var(--text-muted);font-weight:400;">Show when a group was created in its info</div></div>' +
+            '</label>' +
+            '<label style="display:flex;align-items:center;gap:12px;font-size:13px;color:var(--text-primary);cursor:pointer;padding:8px 0;border-top:1px solid var(--border-subtle);">' +
               '<input id="set-image-previews" type="checkbox" '+(s.showImagePreviews!==false?'checked':'')+' style="accent-color:var(--accent-primary);">' +
               '<div><div>Image Previews</div><div style="font-size:11px;color:var(--text-muted);font-weight:400;">Show inline image previews in chat</div></div>' +
             '</label>' +
@@ -993,6 +997,9 @@ window.SettingsModal = {
       content.querySelector('#set-pattern').addEventListener('change', function(e) { updateSettings('bgPattern', e.target.value); });
       content.querySelector('#set-enter-send').addEventListener('change', function(e) { updateSettings('enterToSend', e.target.checked); });
       content.querySelector('#set-chat-avatars').addEventListener('change', function(e) { updateSettings('showChatAvatars', e.target.checked); });
+      if (content.querySelector('#set-group-created')) {
+        content.querySelector('#set-group-created').addEventListener('change', function(e) { updateSettings('showGroupCreated', e.target.checked); });
+      }
       content.querySelector('#set-image-previews').addEventListener('change', function(e) { updateSettings('showImagePreviews', e.target.checked); });
       content.querySelector('#set-link-previews').addEventListener('change', function(e) { updateSettings('showLinkPreviews', e.target.checked); });
       content.querySelector('#set-compact-spacing').addEventListener('change', function(e) { updateSettings('experimentalCompactSpacing', e.target.checked); });

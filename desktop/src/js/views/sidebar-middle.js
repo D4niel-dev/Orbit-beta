@@ -2070,7 +2070,13 @@ window.SidebarMiddle = {
         ? '<img src="' + window.Sanitize.escapeHtml(group.avatarDataUrl) + '" id="group-info-preview-avatar-img" style="position:absolute;left:24px;bottom:-38px;width:76px;height:76px;border-radius:18px;object-fit:cover;border:4px solid var(--bg-surface);">'
         : '<div id="group-info-preview-avatar-img" style="position:absolute;left:24px;bottom:-38px;width:76px;height:76px;border-radius:18px;overflow:hidden;background:var(--bg-surface);border:4px solid var(--bg-surface);">' + previewFallback + '</div>';
 
-    var createdDate = group.createdAt ? new Date(group.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'Unknown';
+    // No 'Unknown' fallback: a row that says "Created Unknown" is worse than no row at all.
+    // Whether the row shows is a setting — Dan was unsure whether he wanted it, so it is his
+    // call rather than mine.
+    var showCreated = !window.store || window.store.getState().settings.showGroupCreated !== false;
+    var createdDate = group.createdAt
+      ? new Date(group.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+      : null;
     var collapsibleClick = "var b=this.nextElementSibling;var i=this.querySelector('.collapse-icon');if(b.style.display==='none'){b.style.display='block';i.style.transform='rotate(0deg)'}else{b.style.display='none';i.style.transform='rotate(-90deg)'}";
     var sectionStart = function(icon, title, open) {
       return '<div class="settings-collapsible" style="margin-bottom:12px;border-radius:10px;border:1px solid var(--border-subtle);overflow:hidden;">' +
@@ -2101,7 +2107,9 @@ window.SidebarMiddle = {
         '</div>' +
         '<div style="display:flex;flex-direction:column;gap:8px;margin-top:4px;">' +
           '<div style="padding:10px 12px;border-radius:8px;background:var(--bg-hover);color:var(--text-primary);font-size:13px;font-weight:600;">Overview</div>' +
-          '<div style="padding:10px 12px;border-radius:8px;color:var(--text-secondary);font-size:13px;">Created ' + createdDate + '</div>' +
+          ((showCreated && createdDate)
+            ? '<div style="padding:10px 12px;border-radius:8px;color:var(--text-secondary);font-size:13px;">Created ' + createdDate + '</div>'
+            : '') +
           '<div style="padding:10px 12px;border-radius:8px;color:var(--text-secondary);font-size:13px;">Role: ' + (isOwner ? 'Owner' : (isAdmin ? 'Admin' : 'Member')) + '</div>' +
         '</div>' +
         '<div style="flex:1;"></div>' +
@@ -2123,7 +2131,7 @@ window.SidebarMiddle = {
           '<input id="group-info-name" type="text" value="' + window.Sanitize.escapeHtml(group.groupName || '') + '" style="' + fieldStyle + (isOwner ? '' : 'opacity:0.7;') + '" ' + (isOwner ? '' : 'disabled') + '></div>' +
           '<div><label style="display:block;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;margin-bottom:6px;">Description</label>' +
           '<textarea id="group-info-desc" rows="3" style="' + fieldStyle + 'resize:none;' + (isOwner ? '' : 'opacity:0.7;') + '" ' + (isOwner ? '' : 'disabled') + '>' + window.Sanitize.escapeHtml(group.description || '') + '</textarea></div>' +
-          (group.createdAt
+          ((showCreated && group.createdAt)
             ? '<div style="font-size:11px;color:var(--text-muted);">Created ' +
               window.Sanitize.escapeHtml(new Date(group.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })) +
               '</div>'

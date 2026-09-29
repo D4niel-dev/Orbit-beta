@@ -83,6 +83,10 @@ class Store {
         enterToSend: true,
         swipeToReply: true,
         showChatAvatars: true,
+        // Whether a group's info shows when it was created. On by default, which is what it
+        // did before — but when a group has no recorded date the row is now hidden rather
+        // than printing "Created Unknown", which is what Dan saw.
+        showGroupCreated: true,
         showImagePreviews: true,
         galleryViewMode: 'grid',
         showLinkPreviews: true,
