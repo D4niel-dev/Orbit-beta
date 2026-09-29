@@ -7811,3 +7811,29 @@ textarea#chat-input {
   font-size: 13px;
   color: var(--text-muted);
 }
+
+/* Jump to latest: floats over the foot of the messages, never in the composer's way.
+   `bottom` is set in JS because the composer grows with a multi-line message. */
+#jump-latest-chip {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  max-width: 86%;
+  text-align: center;
+}
+#jump-latest-chip.old {
+  color: var(--text-primary);
+  border-color: var(--accent-primary);
+}
+#jump-latest-chip.old i { color: var(--accent-primary); }
+#jump-latest-chip i { width: 14px; height: 14px; flex-shrink: 0; }

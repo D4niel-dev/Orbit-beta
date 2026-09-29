@@ -1944,6 +1944,7 @@ document.addEventListener('DOMContentLoaded', function() {
   function renderMessages(chatId) {
     // The pinned bar belongs to the chat, so it repaints whenever the chat does.
     try { _renderPinnedBar(chatId); } catch (e) { /* the bar must never break the messages */ }
+    try { _wireJumpChip(); _updateJumpChip(); } catch (e) { /* nor the chip */ }
     // Never render without a chat.
     //
     // MStore.getMessages(undefined) does not fail — it lazily creates
@@ -4295,6 +4296,87 @@ document.addEventListener('DOMContentLoaded', function() {
   function _isGroupChat(chatId) {
     return (MStore.groups || []).some(function (g) { return g.id === chatId || g.groupId === chatId; });
   }
+
+  /* ---- Jump to latest ----
+     Dan: a chip when you are scrolled up, and something more explicit when what you are
+     looking at is genuinely old — a week, a month — because "you are 400 messages behind" is
+     not the same problem as "you are reading last month and the conversation has moved on".
+
+     The chip floats over the foot of the messages rather than sitting above the composer:
+     the composer grows with a multi-line message, and the pinned bar and the transfer strip
+     already live in that column. `bottom` is measured from the composer for the same reason.
+     */
+  var _jumpChipBound = false;
+  var _jumpChipRaf = 0;
+
+  function _updateJumpChip() {
+    var chip = document.getElementById('jump-latest-chip');
+    var feed = document.getElementById('message-feed');
+    if (!chip || !feed) return;
+
+    var area = document.getElementById('chat-input-area');
+    var bottomPad = (area ? area.getBoundingClientRect().height : 64) + 12;
+
+    var behind = feed.scrollHeight - feed.scrollTop - feed.clientHeight;
+    if (behind < 60) {
+      chip.style.display = 'none';
+      return;
+    }
+
+    // How old is the first thing actually in view?
+    var ageDays = null;
+    var feedTop = feed.getBoundingClientRect().top;
+    var rows = feed.querySelectorAll('.message-row[data-msg-id]');
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i].getBoundingClientRect();
+      if (r.bottom > feedTop + 8) {
+        var id = rows[i].getAttribute('data-msg-id');
+        var msgs = (typeof MStore !== 'undefined' && MStore.getMessages) ? (MStore.getMessages(activeChatId) || []) : [];
+        for (var j = 0; j < msgs.length; j++) {
+          if (String(msgs[j].id) === String(id)) {
+            var t = msgs[j].timestamp || msgs[j].time;
+            if (t) ageDays = (Date.now() - new Date(t).getTime()) / 86400000;
+            break;
+          }
+        }
+        break;
+      }
+    }
+
+    chip.style.bottom = bottomPad + 'px';
+    chip.style.display = 'flex';
+    var label = chip.querySelector('.jump-latest-text');
+    if (ageDays !== null && ageDays >= 7) {
+      chip.classList.add('old');
+      if (label) {
+        label.textContent = (ageDays >= 60 ? 'Messages from months ago' : 'Reading old messages') +
+          ' \u00b7 tap to jump to latest';
+      }
+    } else {
+      chip.classList.remove('old');
+      if (label) label.textContent = 'Jump to latest';
+    }
+  }
+
+  function _wireJumpChip() {
+    var feed = document.getElementById('message-feed');
+    var chip = document.getElementById('jump-latest-chip');
+    if (!feed || !chip || _jumpChipBound) return;
+    _jumpChipBound = true;
+    feed.addEventListener('scroll', function () {
+      if (_jumpChipRaf) return;
+      _jumpChipRaf = requestAnimationFrame(function () {
+        _jumpChipRaf = 0;
+        _updateJumpChip();
+      });
+    }, { passive: true });
+    chip.addEventListener('click', function () {
+      feed.scrollTo({ top: feed.scrollHeight, behavior: 'smooth' });
+      chip.style.display = 'none';
+    });
+  }
+
+  window._updateJumpChip = _updateJumpChip;
 
   /* ---- The pinned bar, above the composer ----
      Same card as the desktop's, so the two read alike. Rendered from _pinnedFor, so it is
