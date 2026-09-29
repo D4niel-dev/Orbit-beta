@@ -128,11 +128,16 @@ window.UpdateNotice = {
     };
     setLabel('Starting download\u2026');
 
-    // Declared here, at the top of the function, so every step of the chain below can
-    // see it. It used to be declared inside the response callback and read in the
-    // verification step — a different callback — which threw
-    // "Update failed: total is not defined".
+    // Both declared here, at the top of the function, so every step of the chain below can
+    // see them. `total` was hoisted when it threw "total is not defined" — declared inside
+    // the response callback and read in the verification step, a different callback.
+    //
+    // `received` had the SAME bug and was left behind, which is what Dan hit: the progress
+    // callback declares it, and the verification step two callbacks later reads it, so the
+    // whole download died with "Update failed: received is not defined" before it could
+    // install anything. Fixing one variable of a pair is how this happens.
     var total = 0;
+    var received = 0;
 
     FS.mkdir({ path: APK_DIR, directory: 'CACHE', recursive: true })
       .catch(function () { /* already there */ })
@@ -180,7 +185,7 @@ window.UpdateNotice = {
         }
 
         var reader = resp.body.getReader();
-        var received = 0;
+        received = 0;          // assigned, not declared: the outer one is the one that counts
         var carry = new Uint8Array(0);
 
         // Filesystem takes strings, so chunks are written as base64. base64 only
@@ -256,7 +261,10 @@ window.UpdateNotice = {
             throw new Error('The download stopped early (' + got + ' of ' + want + ') \u2014 try again');
           });
         }
-        setProgress(100, total || received, total || received);
+        // `bytes` is the count that actually arrived — the streaming path returns `received`
+        // and the buffered path returns bytes.length, so this is right for both. Reading
+        // `received` directly here was the crash.
+        setProgress(100, bytes, total || bytes);
         setLabel('Opening installer\u2026');
         return P2P.installApk({ path: APK_PATH }).then(function () {
           return bytes;
