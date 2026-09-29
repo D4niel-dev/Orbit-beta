@@ -14,7 +14,16 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.7.4-beta', 'Latest', [
+        versionBlock('0.7.5-beta', 'Latest', [
+          ['Fixes', [
+            'The pinned messages bar and its list are new in this release, so most of the work here was on the shared bottom sheet they use.',
+            'A sheet that opens off the bottom of the screen now says so instead of failing silently.'
+          ]],
+          ['Version', [
+            'Version: Bumped to v0.7.5-beta.'
+          ]]
+        ]) +
+        versionBlock('0.7.4-beta', '', [
           ['Updates', [
             'Downloading an update shows a progress bar and the time remaining, instead of a percentage that vanished the moment the button said "Opening installer".',
             'The estimate is held back for the first second and a half: the first chunk measures the round trip rather than the throughput, and a number that starts at "2m left" and settles on "20s left" is worse than no number.'

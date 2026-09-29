@@ -7067,7 +7067,16 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button id="changelog-close-mobile" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;font-size:20px;">✕</button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
-        vBlock('0.7.4-beta', 'Latest', [
+        vBlock('0.7.5-beta', 'Latest', [
+          ['Fixes', [
+            'Sending /help in a group cleared the box and then showed nothing. The tap that opened the command list was also closing it \u2014 one gesture, two jobs. It opens properly now.',
+            'And if a list ever opens off the bottom of the screen, it says so rather than leaving you with nothing.'
+          ]],
+          ['Version', [
+            'Version: Bumped to v0.7.5-beta.'
+          ]]
+        ]) +
+        vBlock('0.7.4-beta', '', [
           ['Updates', [
             'The in-app update works. It never once succeeded before, and the reason was one byte: the downloaded APK was written a byte too long, so Android refused it with "There\u2019s a problem with the app file".',
             'Downloading now shows a progress bar and the time remaining, and the dialog stays open while it runs instead of closing the moment you press Download.',

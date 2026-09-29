@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v074-beta">v0.7.4-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v075-beta">v0.7.5-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@
 
 | Channel           | Version     | Status                                                                                                                                                                                                              |
 | ----------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Latest**        | v0.7.4-beta | The in-app Android update works at last — it had never once succeeded — with a progress bar and the time remaining on both platforms, transfer progress on mobile, and a `/help` that either works or tells you why |
+| **Latest** | v0.7.5-beta | `/help` works again on mobile — the tap that opened the command list also closed it — and a sheet that opens off-screen now says so instead of failing silently |
 | **Stable**        | v0.6.0-beta | Reliability release — notification plumbing, an offline send queue, a vault you can back up and take with you, in-app Android updates                                                                               |
 | Legacy **Stable** | v0.1.1-beta | Legacy stable release                                                                                                                                                                                               |
 
@@ -89,6 +89,11 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 | **Open & approachable** | MIT-licensed, readable stack (Electron + SQLite), built for transparency.     |
 
 Orbit is a **beta-stage app for desktop and Android** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
+
+## Highlights (v0.7.5-beta)
+
+* **`/help` Works Again on Mobile** — Pressing send on `/help` in a group cleared the input and then showed nothing, and the command came back if you left the chat and returned. Both were one bug: the send button binds **touchstart** to dodge the 300ms click delay, so the sheet opened *during* the gesture — and the same gesture's `click` then landed on the backdrop, whose handler is `hide()`. It opened and closed inside a single tap. The fix is in the shared sheet, so **every** sheet benefits, not just this one.
+* **A Sheet That Opened Off-Screen No Longer Reports Success** — The check read the overlay's class, and the class said `active` while the sheet sat below the bottom of the screen. It now confirms the sheet is actually on screen and says so if it is not, rather than clearing what you typed and leaving you nothing.
 
 ## Highlights (v0.7.4-beta)
 
@@ -714,7 +719,7 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Groundwork for settings sync** — the packet type and the rules, with unit tests; nothing sends or receives yet
 
 </details>
-<details open>
+<details>
 <summary>v0.7.4-beta</summary>
 
 * **The in-app Android update works** — the APK was one byte too long, so Android refused it every time
@@ -722,6 +727,14 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Transfer progress on mobile**, matching the desktop
 * **`/help` offered in DMs**, and it reports a failure instead of failing silently
 * **Pinned messages** — a card in the conversation, a list with reordering, 3 in a DM and 5 in a group, and a note in the chat when the order changes
+
+</details>
+
+<details open>
+<summary>v0.7.5-beta</summary>
+
+* **`/help` opens the command list again on mobile** — the tap that opened it also closed it
+* **A sheet that opens off-screen says so**, instead of eating what you typed
 
 </details>
 
@@ -736,6 +749,7 @@ Pre-built Windows installers are published on [GitHub Releases](https://github.c
 | Release                                                                          | Platform                    | Notes                                                                                                                                                                            |
 | -------------------------------------------------------------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [All releases](https://github.com/D4niel-dev/Orbit-beta/releases)                | Win / Mac / Linux / Android | Most recent build first                                                                                                                                                          |
+| [v0.7.5-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.5-beta) | Win / Mac / Linux / Android | A `/help` that opens the command list on mobile again, and a sheet that reports an off-screen open instead of failing silently |
 | [v0.7.4-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.4-beta) | Win / Mac / Linux / Android | A working Android updater with a progress bar and time remaining, pinned messages on both platforms, transfer progress on mobile, and a `/help` that works or explains itself |
 | [v0.7.3-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.3-beta) | Win / Mac / Linux / Android | Custom Colors across the whole theme and on Android, a themed emoji picker, drafts that stop when you send, and an owner’s Danger Zone in group info |
 | [v0.0.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.2-beta) | Windows                     | SQLite storage, privacy mode, large file transfers                                                                                                                               |
@@ -995,6 +1009,12 @@ Transparency matters in beta. Current constraints include:
 * Beta stability: occasional UI quirks and forced reflow warnings in DevTools
 
 ## Roadmap
+
+### Shipped (v0.7.5-beta)
+
+* **`/help` Fixed on Mobile** — it opened and closed inside one tap
+* **The Shared Sheet Ignores Its Own Opening Tap** — so every sheet benefits
+* **An Off-Screen Sheet Is Reported** — not silently swallowed
 
 ### Shipped (v0.7.4-beta)
 

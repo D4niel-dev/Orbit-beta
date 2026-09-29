@@ -1,5 +1,12 @@
 # Orbit Changelog
 
+## v0.7.5-beta
+
+### Bug Fixes
+
+- **`/help` Opened and Closed Inside One Tap on Mobile** — Pressing send on `/help` in a group cleared the input and then showed nothing at all, and the command came back if you left the chat and returned. Both halves were the same bug: the send button binds **touchstart** to dodge the 300ms click delay, so the sheet opened *during* the gesture — and the same gesture's `click` then landed on the backdrop, whose handler is `hide()`. It opened and closed inside a single tap. The input was cleared because the sheet genuinely had opened; the text came back because nothing had been sent and the draft was still there. The shared sheet now ignores a backdrop tap within 400ms of becoming active, which is the same shape as the `_touchTap` guard the input area already carries, and it fixes every sheet rather than just this one.
+- **A Sheet That Opened Off-Screen Reported Success** — The caller decided whether the command list had opened by reading the overlay's class, and the class said `active` while the sheet sat parked below the bottom of the screen. It now checks the class for the immediate decision — the sheet is mid-animation at that instant — and confirms 700ms later that it is actually on screen, saying so if it is not. A silent failure that eats what you typed is the worst possible outcome, and this one had already survived a round of instrumentation.
+
 ## v0.7.4-beta
 
 ### Features
