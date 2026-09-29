@@ -317,46 +317,46 @@ window.SettingsModal = {
         }
       }
 
+      function openAvatarCropper(source) {
+      if (window.ImageCropper) {
+        window.ImageCropper.open(source, {
+          aspectRatio: 1,
+          cropWidth: 300,
+          cropHeight: 300,
+          title: 'Crop Avatar'
+        }, function(result) {
+          if (result) {
+            var input = content.querySelector('#input-avatar');
+            if (input) {
+              input.value = result;
+              updatePreview();
+            }
+          }
+        });
+      }
+    }
+
+    function openBannerCropper(source) {
+      if (window.ImageCropper) {
+        window.ImageCropper.open(source, {
+          aspectRatio: 3,
+          cropWidth: 600,
+          cropHeight: 200,
+          title: 'Crop Banner'
+        }, function(result) {
+          if (result) {
+            var input = content.querySelector('#input-banner');
+            if (input) {
+              input.value = result;
+              updatePreview();
+            }
+          }
+        });
+      }
+    }
+
       var avatarFileInput = content.querySelector('#input-avatar-file');
       if (avatarFileInput) {
-        function openAvatarCropper(source) {
-        if (window.ImageCropper) {
-          window.ImageCropper.open(source, {
-            aspectRatio: 1,
-            cropWidth: 300,
-            cropHeight: 300,
-            title: 'Crop Avatar'
-          }, function(result) {
-            if (result) {
-              var input = content.querySelector('#input-avatar');
-              if (input) {
-                input.value = result;
-                updatePreview();
-              }
-            }
-          });
-        }
-      }
-
-      function openBannerCropper(source) {
-        if (window.ImageCropper) {
-          window.ImageCropper.open(source, {
-            aspectRatio: 3,
-            cropWidth: 600,
-            cropHeight: 200,
-            title: 'Crop Banner'
-          }, function(result) {
-            if (result) {
-              var input = content.querySelector('#input-banner');
-              if (input) {
-                input.value = result;
-                updatePreview();
-              }
-            }
-          });
-        }
-      }
-
       avatarFileInput.addEventListener('change', function(e) {
           var file = e.target.files[0];
           if (!file) return;
