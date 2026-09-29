@@ -7685,7 +7685,8 @@ textarea#chat-input {
 
 /* Pinned messages: the same card shape as the desktop's bar, above the composer. */
 #pinned-messages-bar {
-  margin: 6px 12px 2px;
+  /* 2px at the bottom read as part of the composer rather than a card above it. */
+  margin: 6px 12px 8px;
   padding: 8px 12px;
   border-radius: 12px;
   border: 1px solid var(--border-subtle);
