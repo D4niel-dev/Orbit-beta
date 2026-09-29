@@ -140,14 +140,15 @@ window.SettingsModal = {
             '<div style="display:flex;flex-wrap:wrap;gap:6px;" id="frame-picker">' +
               '<button class="frame-option" data-frame="0" style="width:44px;height:44px;border-radius:50%;border:2px solid ' + (!frameNum ? 'var(--accent-primary)' : 'var(--border-subtle)') + ';background:var(--bg-base);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-muted);">None</button>' +
               (function() {
-                // The numbers that have an asset, listed rather than ranged: 17, 18, 19,
-                // 26 and 27 do not exist, and a range would render five broken tiles.
-                // Regenerate if the frame assets change.
+                // The numbers that have an asset, listed rather than ranged, so a missing
+                // asset cannot put a broken tile in the picker. All of 1..55 exist as of the
+                // latest batch. Regenerate if the frame assets change.
                 var FRAME_NUMBERS = [
                   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
-                  13, 14, 15, 16, 20, 21, 22, 23, 24, 25, 28, 29,
-                  30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41,
-                  42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53
+                  13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+                  25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36,
+                  37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
+                  49, 50, 51, 52, 53, 54, 55
                 ];
                 var html = '';
                 for (var fi = 0; fi < FRAME_NUMBERS.length; fi++) {
