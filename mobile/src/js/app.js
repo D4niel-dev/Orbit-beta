@@ -4345,16 +4345,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
     chip.style.bottom = bottomPad + 'px';
     chip.style.display = 'flex';
-    var label = chip.querySelector('.jump-latest-text');
+    var title = chip.querySelector('.jump-latest-title');
+    var sub = chip.querySelector('.jump-latest-sub');
     if (ageDays !== null && ageDays >= 7) {
       chip.classList.add('old');
-      if (label) {
-        label.textContent = (ageDays >= 60 ? 'Messages from months ago' : 'Reading old messages') +
-          ' \u00b7 tap to jump to latest';
-      }
+      if (title) title.textContent = ageDays >= 60 ? 'Messages from months ago' : 'Reading old messages';
+      if (sub) { sub.textContent = 'Tap to jump to latest'; sub.style.display = 'block'; }
     } else {
       chip.classList.remove('old');
-      if (label) label.textContent = 'Jump to latest';
+      if (title) title.textContent = 'Jump to latest';
+      if (sub) { sub.textContent = ''; sub.style.display = 'none'; }
     }
   }
 

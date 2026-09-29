@@ -7820,16 +7820,45 @@ textarea#chat-input {
   transform: translateX(-50%);
   z-index: 40;
   align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  border-radius: 999px;
+  gap: 8px;
+  padding: 8px 15px;
+  border-radius: 18px;
   background: var(--bg-surface);
   border: 1px solid var(--border-strong);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
   font-size: 12.5px;
   color: var(--text-secondary);
-  max-width: 86%;
-  text-align: center;
+  max-width: 88%;
+  text-align: left;
+}
+/* A state line and an action line, rather than one sentence with a separator wedged in
+   the middle of it. The state is what the user needs to read; the action is what to do. */
+#jump-latest-chip .jump-latest-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+#jump-latest-chip .jump-latest-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  /* The chip sizes to its content, but the body still shrank and wrapped the headline at
+     half its width. Neither line should wrap; the chip is short enough for both. */
+  white-space: nowrap;
+}
+#jump-latest-chip .jump-latest-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+#jump-latest-chip.old .jump-latest-title {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+#jump-latest-chip.old .jump-latest-sub {
+  color: var(--accent-primary);
+  font-weight: 600;
 }
 #jump-latest-chip.old {
   color: var(--text-primary);

@@ -24,7 +24,7 @@
   <link rel="stylesheet" href="styles/base.css?v=20260912">
   <link rel="stylesheet" href="styles/components.css?v=20260918">
   <link rel="stylesheet" href="styles/animations.css?v=20260801">
-  <link rel="stylesheet" href="styles/mobile.css?v=20260929e">
+  <link rel="stylesheet" href="styles/mobile.css?v=20260929f">
 
   <!-- Syntax Highlighting (Prism) -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
@@ -173,7 +173,10 @@
            different when what you are looking at is genuinely old. -->
       <div id="jump-latest-chip" style="display:none;">
         <i data-lucide="arrow-down"></i>
-        <span class="jump-latest-text">Jump to latest</span>
+        <span class="jump-latest-body">
+          <span class="jump-latest-title">Jump to latest</span>
+          <span class="jump-latest-sub" style="display:none;"></span>
+        </span>
       </div>
       <div id="typing-indicator" style="display:none; padding:8px 16px; font-size:12px; color:var(--text-muted); align-items:center; gap:8px;">
         <span class="typing-dots" style="display:inline-flex;">
@@ -338,7 +341,7 @@
   <script src="shared/utils/format.js?v=20260912"></script>
   <script src="shared/utils/sanitize.js?v=20260912"></script>
   <script src="shared/utils/audio-cover.js?v=20260922"></script>
-  <script src="shared/utils/pinned.js?v=20260929e"></script>
+  <script src="shared/utils/pinned.js?v=20260929f"></script>
   <script src="shared/network/protocol.js?v=20260912"></script>
   <script src="shared/network/qr-pairing.js?v=20260912"></script>
   <script src="shared/network/update-check.js?v=20260914"></script>
@@ -356,11 +359,11 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
 
   <!-- Data Store -->
-  <script src="js/version.js?v=20260929e"></script>
+  <script src="js/version.js?v=20260929f"></script>
   <script src="js/store.js?v=20260804"></script>
 
-  <script src="js/components/bottom-sheet.js?v=20260929e"></script>
-  <script src="js/components/update-notice.js?v=20260929e"></script>
+  <script src="js/components/bottom-sheet.js?v=20260929f"></script>
+  <script src="js/components/update-notice.js?v=20260929f"></script>
   <script src="js/components/group-avatar.js?v=20260915"></script>
   <script src="js/components/call-manager.js?v=20260918"></script>
   <script src="js/components/vault.js?v=20260918"></script>
@@ -388,11 +391,11 @@
   setTimeout(function() { window._loadImageCropper(); }, 1500);
   </script>
 
-  <script src="js/app.js?v=20260929e"></script>
+  <script src="js/app.js?v=20260929f"></script>
 
   <!-- v0.2.8 Components -->
   <script src="js/components/navigation.js?v=20260912"></script>
   <script src="js/components/chat-screen.js?v=20260927c"></script>
-  <script src="js/components/home-screen.js?v=20260929e"></script>
+  <script src="js/components/home-screen.js?v=20260929f"></script>
 </body>
 </html>
