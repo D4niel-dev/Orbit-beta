@@ -140,8 +140,18 @@ window.SettingsModal = {
             '<div style="display:flex;flex-wrap:wrap;gap:6px;" id="frame-picker">' +
               '<button class="frame-option" data-frame="0" style="width:44px;height:44px;border-radius:50%;border:2px solid ' + (!frameNum ? 'var(--accent-primary)' : 'var(--border-subtle)') + ';background:var(--bg-base);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-muted);">None</button>' +
               (function() {
+                // The numbers that have an asset, listed rather than ranged: 17, 18, 19,
+                // 26 and 27 do not exist, and a range would render five broken tiles.
+                // Regenerate if the frame assets change.
+                var FRAME_NUMBERS = [
+                  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+                  13, 14, 15, 16, 20, 21, 22, 23, 24, 25, 28, 29,
+                  30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41,
+                  42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53
+                ];
                 var html = '';
-                for (var i = 1; i <= 43; i++) {   // 43 assets exist; the picker stopped one short
+                for (var fi = 0; fi < FRAME_NUMBERS.length; fi++) {
+                  var i = FRAME_NUMBERS[fi];
                   html += '<button class="frame-option" data-frame="' + i + '" style="width:44px;height:44px;border-radius:50%;border:2px solid ' + (frameNum === i ? 'var(--accent-primary)' : 'var(--border-subtle)') + ';cursor:pointer;overflow:hidden;padding:0;background:var(--bg-base);">' +
                     '<img src="icons/frames/pfp_frame_' + i + '.png" style="width:100%;height:100%;object-fit:contain;" draggable="false">' +
                   '</button>';
