@@ -16,6 +16,7 @@ window.Changelog = {
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
         versionBlock('0.7.5-beta', 'Latest', [
           ['New', [
+            '55 profile frames, up from 43 \u2014 and the picker now shows the frames that actually exist, so a missing file can never leave a broken tile.',
             'Copy your user ID from your profile, and a setting for whether a group\'s info shows when it was created.',
             'A group with no recorded date no longer says "Created Unknown" \u2014 the row is simply gone.'
           ]],

@@ -4,6 +4,7 @@
 
 ### Features
 
+- **55 Profile Frames** — Up from 43. The picker had stopped one short of the art it already had, so the last frame could not be reached at all, and it drew its options from a range rather than from the files: a missing asset would have shown as a broken tile. It now lists the numbers that actually exist, and every tile was checked against the frame it shows rather than the count being trusted.
 - **Jump to Latest, and a Word When You Are Reading Old Messages** — Mobile had no way back to the bottom of a conversation, which the desktop has had all along. A chip now floats over the foot of the messages when you are scrolled up, and it is worded by what you are actually looking at: *"Jump to latest"* over recent messages, *"Reading old messages"* past a week, and *"Messages from months ago"* past two. Being 400 messages behind is a scroll; reading last month while the conversation moved on is a user who does not know they are lost, and those are not the same problem.
 - **Nineteen Slash Commands You Could Only Find by Guessing** — The only door to the command reference was knowing to type a `/`. There is now a **Commands** entry in the `+` menu.
 - **Copy Your User ID** — On both platforms. It is a monospace string whose entire purpose is to be handed to someone else, and there was no way to get it out of the app. The desktop's profile has a copy button beside it; the mobile's profile pill has one beside the gear.

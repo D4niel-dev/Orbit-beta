@@ -28,7 +28,7 @@
 
 | Channel           | Version     | Status                                                                                                                                                                                                              |
 | ----------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Latest** | v0.7.5-beta | `/help` works again on mobile, a way back to the bottom of a conversation that says when you are reading old messages, a Commands entry, copyable user IDs, and the pinned bar is swipeable |
+| **Latest** | v0.7.5-beta | `/help` works again on mobile, a way back to the bottom of a conversation that says when you are reading old messages, a Commands entry, copyable user IDs, and the pinned bar is swipeable, and 55 profile frames |
 | **Stable**        | v0.6.0-beta | Reliability release — notification plumbing, an offline send queue, a vault you can back up and take with you, in-app Android updates                                                                               |
 | Legacy **Stable** | v0.1.1-beta | Legacy stable release                                                                                                                                                                                               |
 
@@ -91,6 +91,7 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 Orbit is a **beta-stage app for desktop and Android** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
 ## Highlights (v0.7.5-beta)
+* **55 Profile Frames** — Up from 43, and the picker now lists the frames that actually exist rather than a range, so a missing asset cannot leave a broken tile.
 
 * **Jump to Latest** — A chip floats over the foot of the messages when you are scrolled up, and it is worded by what you are reading: *"Jump to latest"* over recent messages, *"Reading old messages"* past a week, *"Messages from months ago"* past two. Mobile had no way back to the bottom at all before this.
 * **Commands You Can Find** — Nineteen slash commands, and until now the only way in was knowing to type a `/`. There is a **Commands** entry in the `+` menu.
@@ -751,6 +752,8 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **No more "Created Unknown"**, and a setting for the group created date
 * **A sheet that opens off-screen says so**, instead of eating what you typed
 
+* **55 profile frames**, up from 43, with a picker that lists what exists
+
 </details>
 
 See [CHANGELOG.md](CHANGELOG.md) for the full version history.
@@ -764,7 +767,7 @@ Pre-built Windows installers are published on [GitHub Releases](https://github.c
 | Release                                                                          | Platform                    | Notes                                                                                                                                                                            |
 | -------------------------------------------------------------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [All releases](https://github.com/D4niel-dev/Orbit-beta/releases)                | Win / Mac / Linux / Android | Most recent build first                                                                                                                                                          |
-| [v0.7.5-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.5-beta) | Win / Mac / Linux / Android | A `/help` that opens on mobile again, jump-to-latest with an old-messages warning, discoverable commands, copyable user IDs, a swipeable pinned bar, and a quieter chat header |
+| [v0.7.5-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.5-beta) | Win / Mac / Linux / Android | A `/help` that opens on mobile again, jump-to-latest with an old-messages warning, discoverable commands, copyable user IDs, a swipeable pinned bar, and a quieter chat header, and 55 profile frames |
 | [v0.7.4-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.4-beta) | Win / Mac / Linux / Android | A working Android updater with a progress bar and time remaining, pinned messages on both platforms, transfer progress on mobile, and a `/help` that works or explains itself |
 | [v0.7.3-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.3-beta) | Win / Mac / Linux / Android | Custom Colors across the whole theme and on Android, a themed emoji picker, drafts that stop when you send, and an owner’s Danger Zone in group info |
 | [v0.0.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.2-beta) | Windows                     | SQLite storage, privacy mode, large file transfers                                                                                                                               |
@@ -1026,6 +1029,7 @@ Transparency matters in beta. Current constraints include:
 ## Roadmap
 
 ### Shipped (v0.7.5-beta)
+* **55 Profile Frames** — up from 43, and the picker lists the frames that exist
 
 * **`/help` Fixed on Mobile** — it opened and closed inside one tap
 * **Jump to Latest** — and a chip that says when you are reading old messages

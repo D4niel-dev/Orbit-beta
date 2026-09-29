@@ -7196,6 +7196,7 @@ document.addEventListener('DOMContentLoaded', function() {
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
         vBlock('0.7.5-beta', 'Latest', [
           ['New', [
+            'The desktop build now has 55 profile frames. This build ships its own set, so frames beyond it will not appear here until that art is added.',
             'Scrolled up and lost? A chip now floats above the message box \u2014 tap it to get back to the bottom. If what you are reading is genuinely old, it says so.',
             'The + button has a Commands entry, so the slash commands are findable without knowing to type one.',
             'Copy your user ID from the pill at the bottom, and swipe the pinned bar to move between pins.'
