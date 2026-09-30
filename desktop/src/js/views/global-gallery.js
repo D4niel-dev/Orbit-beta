@@ -47,6 +47,9 @@ window.GlobalGallery = {
     var wasHidden = this.container.style.display === 'none';
     this.container.style.display = 'flex';
     if (wasHidden) {
+      // The Shared Media panel is an overlay anchored to the chat, and the gallery takes the
+      // full width. Leaving it open shows two galleries side by side.
+      if (window.GallerySidebar && window.GallerySidebar.isOpen) window.GallerySidebar.close();
       var el = this.container;
       el.classList.remove('gallery-in');
       requestAnimationFrame(function () { el.classList.add('gallery-in'); });
@@ -466,8 +469,18 @@ window.GlobalGallery = {
     var count = document.getElementById('gallery-bulk-count');
     if (!bar) return;
     var n = Object.keys(this.gallerySelected || {}).length;
-    bar.style.display = (this.gallerySelect && n > 0) ? 'flex' : 'none';
-    if (count) count.textContent = n === 1 ? '1 item selected' : n + ' items selected';
+    // The bar shows whenever select mode is ON, not only once something is picked. Hiding it
+    // until then left no visible way to leave the mode — which is exactly what Dan hit.
+    bar.style.display = this.gallerySelect ? 'flex' : 'none';
+    if (count) {
+      count.textContent = n === 0 ? 'Pick items to delete' : (n === 1 ? '1 item selected' : n + ' items selected');
+    }
+    var del = document.getElementById('gallery-bulk-delete');
+    if (del) {
+      del.disabled = n === 0;
+      del.style.opacity = n === 0 ? '.45' : '1';
+      del.style.cursor = n === 0 ? 'default' : 'pointer';
+    }
   },
 
   /* Deleting media means deleting the MESSAGE it came from, for both sides — which is what Dan

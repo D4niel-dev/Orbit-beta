@@ -49,7 +49,11 @@ window.GallerySidebar = {
       if (it.senderName && users.indexOf(it.senderName) === -1) users.push(it.senderName);
     });
 
-    var kinds = (this.currentTab === 'links') ? [] : ['image', 'video', 'audio', 'file'];
+    // Only offer kinds this tab can actually contain. The Images tab is images, so offering
+    // "Videos" there would be a filter that can never match anything.
+    var kinds = (this.currentTab === 'links') ? []
+      : (this.currentTab === 'images') ? ['image']
+      : ['video', 'audio', 'file'];
     var kindLabels = { image: 'Images', video: 'Videos', audio: 'Audio', file: 'Files' };
     var dates = [['today', 'Today'], ['week', 'Past week'], ['month', 'Past month']];
 
@@ -335,9 +339,13 @@ window.GallerySidebar = {
           msg.attachments.forEach(att => {
             var aType = (att.type || '').toLowerCase();
             var aMime = (att.mimeType || '').toLowerCase();
-            var isMedia = aType === 'image' || aType === 'video' || aType === 'audio' || aMime.startsWith('image/') || aMime.startsWith('video/') || aMime.startsWith('audio/');
-            if ((this.currentTab === 'images' && isMedia) || 
-                (this.currentTab === 'files' && !isMedia)) {
+            // IMAGES means images. Video and audio used to count as "media" and landed in this
+            // tab, where their thumbnails cannot load — a video has no image to show and an audio
+            // file has none at all, so both rendered as broken images. They belong in Files,
+            // which gives them a proper type icon by extension.
+            var isImage = aType === 'image' || aMime.startsWith('image/');
+            if ((this.currentTab === 'images' && isImage) || 
+                (this.currentTab === 'files' && !isImage)) {
               items.push({
                 ...att,
                 msgId: msg.id,
@@ -671,9 +679,18 @@ window.GallerySidebar = {
   updateBulkBar: function () {
     if (!this.bulkBar) return;
     var n = Object.keys(this.selected || {}).length;
-    this.bulkBar.style.display = (this.selectMode && n > 0) ? 'flex' : 'none';
+    // Visible whenever select mode is on — hiding it until something was picked left no visible
+    // way out of the mode.
+    this.bulkBar.style.display = this.selectMode ? 'flex' : 'none';
     if (this.bulkCount) {
-      this.bulkCount.textContent = n === 1 ? '1 item selected' : n + ' items selected';
+      this.bulkCount.textContent = n === 0 ? 'Pick items to download'
+        : (n === 1 ? '1 item selected' : n + ' items selected');
+    }
+    var dl = document.getElementById('btn-gallery-bulk-download');
+    if (dl) {
+      dl.disabled = n === 0;
+      dl.style.opacity = n === 0 ? '.45' : '1';
+      dl.style.cursor = n === 0 ? 'default' : 'pointer';
     }
   },
 
