@@ -630,8 +630,17 @@ window.GallerySidebar = {
     this.selectMode = !!on;
     if (!on) this.selected = {};
     if (this.selectBtn) {
-      this.selectBtn.textContent = on ? 'Cancel' : 'Select';
       this.selectBtn.style.color = on ? 'var(--accent-primary)' : 'var(--text-secondary)';
+      this.selectBtn.title = on ? 'Cancel selection' : 'Select items';
+      var want = on ? 'x' : 'list-checks';
+      var cur = this.selectBtn.querySelector('svg, i');
+      if (cur && cur.getAttribute('data-lucide') !== want) {
+        var ni = document.createElement('i');
+        ni.setAttribute('data-lucide', want);
+        ni.style.cssText = 'width:15px;height:15px;';
+        cur.replaceWith(ni);
+        if (window.lucide) window.lucide.createIcons({ root: this.selectBtn });
+      }
     }
     this.render(window.store.getState());
   },
