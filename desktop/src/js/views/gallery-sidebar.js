@@ -4,10 +4,25 @@ window.GallerySidebar = {
   isOpen: false,
   currentTab: 'images',
 
+  /* Message timestamps are not reliably Dates or ISO strings: they come back from storage as
+     a STRING holding an epoch with a trailing ".0" — "1785589248803.0" — and
+     `new Date("1785589248803.0")` is an Invalid Date. Every age and every day group computed
+     from one was NaN. Parse the number first, then fall back. Same helper as the jump chip. */
+  _ts: function (t) {
+    if (t == null) return 0;
+    if (typeof t === 'number') return t;
+    var n = parseFloat(t);
+    if (!isNaN(n) && n > 1e11) return n;
+    var d = new Date(t).getTime();
+    return isNaN(d) ? 0 : d;
+  },
+
   init() {
     this.container = document.getElementById('panel-gallery');
     this.contentArea = document.getElementById('gallery-content');
     this.btnClose = document.getElementById('btn-close-gallery');
+    this.searchInput = document.getElementById('gallery-search-input');
+    if (this.searchQuery === undefined) this.searchQuery = '';
 
     if (!this.container) return;
 
@@ -25,6 +40,14 @@ window.GallerySidebar = {
   },
 
   attachEvents() {
+    var self = this;
+    if (this.searchInput && !this.searchInput._wired) {
+      this.searchInput._wired = true;
+      this.searchInput.addEventListener('input', function () {
+        self.searchQuery = this.value.trim().toLowerCase();
+        self.render(window.store.getState());
+      });
+    }
     var self = this;
     if (this.btnClose) {
       this.btnClose.addEventListener('click', function() {
@@ -115,7 +138,7 @@ window.GallerySidebar = {
 
     // Gather data based on tab
     messages.forEach(msg => {
-      var ts = msg.timestamp ? new Date(msg.timestamp).getTime() : 0;
+      var ts = this._ts(msg.timestamp);
       var senderName = this.getSenderName(msg.sender, state);
 
       if (this.currentTab === 'images' || this.currentTab === 'files') {
@@ -156,7 +179,28 @@ window.GallerySidebar = {
       }
     });
 
+    // Filter by the search box. Matching on name, url, domain and sender: those are the four
+    // things a person would type to find something again — what it was called, where it came
+    // from, or who sent it.
+    if (this.searchQuery) {
+      var q = this.searchQuery;
+      items = items.filter(function (it) {
+        return String(it.name || '').toLowerCase().indexOf(q) !== -1 ||
+               String(it.url || '').toLowerCase().indexOf(q) !== -1 ||
+               String(it.domain || '').toLowerCase().indexOf(q) !== -1 ||
+               String(it.senderName || '').toLowerCase().indexOf(q) !== -1;
+      });
+    }
+
     if (items.length === 0) {
+      if (this.searchQuery) {
+        this.contentArea.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-muted);gap:10px;text-align:center;">' +
+          '<i data-lucide="search-x" style="width:26px;height:26px;"></i>' +
+          '<div style="font-size:13px;">Nothing here matches \u201c' + window.Sanitize.escapeHtml(this.searchQuery) + '\u201d</div>' +
+        '</div>';
+        if (window.lucide) window.lucide.createIcons({ root: this.contentArea });
+        return;
+      }
       var emptyTxt = this.currentTab === 'images' ? 'No images shared yet.' : (this.currentTab === 'files' ? 'No files shared yet.' : 'No links shared yet.');
       var emptyIcon = this.currentTab === 'images' ? 'image' : (this.currentTab === 'files' ? 'file' : 'link-2');
       this.contentArea.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-muted);text-align:center;gap:12px;opacity:0.6;"><i data-lucide="' + emptyIcon + '" style="width:48px;height:48px;"></i><div style="font-size:14px;">' + emptyTxt + '</div></div>';
