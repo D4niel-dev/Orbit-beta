@@ -107,6 +107,7 @@ window.GallerySidebar = {
   },
 
   applyFilters: function () {
+    this.visibleCount = 60;   // same reason: a filtered list is a different list
     this.render(window.store.getState());
   },
 
@@ -123,6 +124,7 @@ window.GallerySidebar = {
     this.bulkBar = document.getElementById('gallery-bulk-bar');
     this.bulkCount = document.getElementById('gallery-bulk-count');
     if (!this.selected) this.selected = {};
+    if (!this.visibleCount) this.visibleCount = 60;
     if (this.selectMode === undefined) this.selectMode = false;
     if (!this.panelViewMode) {
       this.panelViewMode = (window.store.getState().settings || {}).galleryPanelViewMode || 'grid';
@@ -217,6 +219,7 @@ window.GallerySidebar = {
       this.searchInput._wired = true;
       this.searchInput.addEventListener('input', function () {
         self.searchQuery = this.value.trim().toLowerCase();
+        self.visibleCount = 60;
         self.render(window.store.getState());
       });
     }
@@ -242,6 +245,7 @@ window.GallerySidebar = {
           tab.style.color = 'var(--text-primary)';
           tab.style.borderBottomColor = 'var(--accent-primary)';
           self.currentTab = tab.getAttribute('data-tab');
+          self.visibleCount = 60;   // a new tab is a new list; keep any expansion out of it
           self.render(window.store.getState());
         });
       });
@@ -256,6 +260,12 @@ window.GallerySidebar = {
     // File download handler
     if (this.container) {
       this.container.addEventListener('click', function(e) {
+        if (e.target.closest('#btn-gallery-more')) {
+          self.visibleCount += 60;
+          self.render(window.store.getState());
+          return;
+        }
+
         var jumpBtn = e.target.closest('.gallery-jump');
         if (jumpBtn) {
           var jChat = jumpBtn.getAttribute('data-chat') || window.store.getState().activeChatId;
@@ -429,6 +439,9 @@ window.GallerySidebar = {
     // Sort descending
     items.sort((a, b) => b.ts - a.ts);
 
+    var totalItems = items.length;
+    if (totalItems > this.visibleCount) items = items.slice(0, this.visibleCount);
+
     // Group by date
     var groups = {};
     items.forEach(item => {
@@ -577,6 +590,16 @@ window.GallerySidebar = {
       
       html += '</div>';
     });
+
+    if (totalItems > this.visibleCount) {
+      html += '<div style="padding:4px 0 12px; text-align:center;">' +
+        '<button id="btn-gallery-more" style="padding:7px 18px; border-radius:10px; border:1px solid var(--border-subtle); ' +
+        'background:var(--bg-base); color:var(--text-secondary); cursor:pointer; font-size:12px; font-weight:600;">' +
+        'Show more <span style="color:var(--text-muted); font-weight:500;">(' + (totalItems - this.visibleCount) + ' more)</span>' +
+        '</button>' +
+        '<div style="margin-top:6px; font-size:10.5px; color:var(--text-muted);">Showing ' + items.length + ' of ' + totalItems + '</div>' +
+      '</div>';
+    }
 
     this.contentArea.innerHTML = html;
 
