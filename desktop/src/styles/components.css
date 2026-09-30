@@ -2434,3 +2434,17 @@ html[data-theme="light"] #chat-welcome-host::before { opacity: 0.3; }
 .tutorial-card .tutorial-btn-skip:active {
   transform: scale(.95);
 }
+
+/* ---- Shared Media panel motion ----
+   The panel is a display flip, and a display flip has no from-state to animate out of. It
+   rises and slides in from the right, and close() waits for the exit before hiding it. */
+@keyframes panelSlideIn {
+  from { opacity: 0; transform: translateX(18px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes panelSlideOut {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translateX(18px); }
+}
+.panel-in  { animation: panelSlideIn .22s cubic-bezier(.22, 1, .36, 1) both; }
+.panel-out { animation: panelSlideOut .16s ease-in both; }

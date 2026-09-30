@@ -309,14 +309,30 @@ window.GallerySidebar = {
     if (!this.container) return;
     var state = window.store.getState();
     this.render(state);
+    if (this._closeTimer) { clearTimeout(this._closeTimer); this._closeTimer = null; }
+    this.container.classList.remove('panel-out');
     this.container.style.display = 'flex';
+    // The class has to land a frame after display flips: an element going from display:none
+    // has no from-state to animate out of, so the animation would be skipped entirely.
+    var el = this.container;
+    requestAnimationFrame(function () { el.classList.add('panel-in'); });
     this.isOpen = true;
   },
 
   close() {
     if (!this.container) return;
-    this.container.style.display = 'none';
+    var el = this.container;
     this.isOpen = false;
+    el.classList.remove('panel-in');
+    el.classList.add('panel-out');
+    if (this._closeTimer) clearTimeout(this._closeTimer);
+    // Hide it once the exit animation has finished, rather than cutting it off.
+    this._closeTimer = setTimeout(function () {
+      el.style.display = 'none';
+      el.classList.remove('panel-out');
+      el.classList.remove('panel-in');
+      this._closeTimer = null;
+    }.bind(this), 170);
   }
 };
 
