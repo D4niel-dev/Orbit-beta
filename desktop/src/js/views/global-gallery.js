@@ -112,6 +112,23 @@ window.GlobalGallery = {
     // Sort newest first
     allAttachments.sort(function(a, b) { return new Date(b.timestamp) - new Date(a.timestamp); });
 
+    var self = this;
+
+    // The months that actually have media, newest first, each remembering the first item so the
+    // rail can scroll to it. Built from the sorted list, so the order is already right.
+    this._months = [];
+    (function () {
+      var seen = {};
+      allAttachments.forEach(function (a) {
+        var t = a.timestamp ? new Date(a.timestamp) : null;
+        if (!t || isNaN(t.getTime())) return;
+        var key = t.getFullYear() + '-' + t.getMonth();
+        if (seen[key]) return;
+        seen[key] = true;
+        self._months.push({ key: key, label: t.toLocaleString(undefined, { month: 'short' }) + ' ' + t.getFullYear(), anchor: a.msgId });
+      });
+    })();
+
     function fileIconHtml(name) {
       var ext = (name || '').split('.').pop().toLowerCase();
       var icon = 'file';
@@ -372,6 +389,22 @@ window.GlobalGallery = {
 
     lucide.createIcons({ root: this.container });
 
+    // The month rail. Only worth showing when there is more than one month to choose between.
+    var oldRail = document.getElementById('gallery-month-rail');
+    if (oldRail) oldRail.remove();
+    if (this._months && this._months.length > 1) {
+      var rail = '<div id="gallery-month-rail" style="position:absolute; right:12px; top:120px; bottom:20px; display:flex; ' +
+        'flex-direction:column; justify-content:center; gap:1px; z-index:40; pointer-events:none;">';
+      this._months.forEach(function (m) {
+        rail += '<button class="gallery-month-btn" data-anchor="' + m.anchor + '" title="Jump to ' + m.label + '" ' +
+          'style="pointer-events:auto; background:transparent; border:none; cursor:pointer; font-size:10px; font-weight:600; ' +
+          'color:var(--text-muted); padding:3px 7px; border-radius:6px; text-align:right; transition:color .15s, background .15s;">' +
+          m.label + '</button>';
+      });
+      rail += '</div>';
+      this.container.insertAdjacentHTML('beforeend', rail);
+    }
+
     // Marks re-applied from state, because anything that re-renders rebuilds these elements and
     // a class toggled on click would be lost. Same lesson as the Shared Media panel.
     if (this.gallerySelect) {
@@ -518,6 +551,44 @@ window.GlobalGallery = {
     // Jump buttons are inside the items, so this listens on the container. It runs before the
     // item's own inline onclick only in select mode (the capture listener above); outside it,
     // the jump button stops the event itself.
+    // The rail is rebuilt every render, so its listener is attached to the CONTAINER (once) and
+    // delegated, not to the rail itself.
+    if (this.container && !this.container._monthWired) {
+      this.container._monthWired = true;
+      this.container.addEventListener('click', function (e) {
+        var b = e.target.closest('.gallery-month-btn');
+        if (!b) return;
+        e.preventDefault();
+        e.stopPropagation();
+        var anchor = String(b.getAttribute('data-anchor')).replace(/"/g, '');
+        var target = self.container.querySelector('[data-msg-id="' + anchor + '"]');
+        if (!target) return;
+        // The scroll container is the wrapper the render opens; find it from the item.
+        // Walk up to the element that actually scrolls, by its overflow. Comparing
+        // scrollHeight to clientHeight finds the GRID first: it overflows by a few pixels of
+        // gap, so the walk stopped there and scrollTop never moved.
+        var scroller = target.parentElement;
+        while (scroller && scroller !== self.container) {
+          var oy = window.getComputedStyle(scroller).overflowY;
+          if (oy === 'auto' || oy === 'scroll') break;
+          scroller = scroller.parentElement;
+        }
+        if (!scroller || scroller === self.container) return;
+        var sr = scroller.getBoundingClientRect();
+        var tr = target.getBoundingClientRect();
+        scroller.scrollTop += (tr.top - sr.top) - 16;
+        var rail = document.getElementById('gallery-month-rail');
+        if (rail) {
+          Array.prototype.forEach.call(rail.querySelectorAll('.gallery-month-btn'), function (x) {
+            x.style.color = 'var(--text-muted)';
+            x.style.background = 'transparent';
+          });
+        }
+        b.style.color = 'var(--accent-primary)';
+        b.style.background = 'var(--bg-hover)';
+      });
+    }
+
     if (this.container && !this.container._jumpWired) {
       this.container._jumpWired = true;
       this.container.addEventListener('click', function (e) {
