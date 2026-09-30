@@ -453,7 +453,10 @@ window.GallerySidebar = {
             (isVideo ? '<div style="position:absolute;bottom:6px;left:6px;background:rgba(0,0,0,0.7);border-radius:4px;padding:2px 6px;font-size:10px;color:white;font-weight:600;pointer-events:none;"><i data-lucide="video" style="width:10px;height:10px;margin-right:3px;vertical-align:middle;"></i>Video</div>' : '') +
             (isAudio ? '<div style="position:absolute;bottom:6px;left:6px;background:rgba(0,0,0,0.7);border-radius:4px;padding:2px 6px;font-size:10px;color:white;font-weight:600;pointer-events:none;">Audio</div>' : '') +
             '<div class="gallery-hover-overlay" style="position:absolute;inset:0;background:rgba(0,0,0,0.6);display:flex;flex-direction:column;justify-content:space-between;padding:8px;opacity:0;transition:opacity 0.2s;">' +
-              '<div style="align-self:flex-end;"><button style="background:rgba(255,255,255,0.2);border:none;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:white;cursor:pointer;"><i data-lucide="' + overlayIcon + '" style="width:14px;height:14px;"></i></button></div>' +
+              '<div style="align-self:flex-end;display:flex;gap:6px;">' +
+                '<button class="gallery-jump" data-msg-id="' + img.msgId + '" title="Go to message" style="background:rgba(255,255,255,0.2);border:none;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:white;cursor:pointer;"><i data-lucide="corner-up-left" style="width:14px;height:14px;"></i></button>' +
+                '<button style="background:rgba(255,255,255,0.2);border:none;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:white;cursor:pointer;"><i data-lucide="' + overlayIcon + '" style="width:14px;height:14px;"></i></button>' +
+              '</div>' +
               '<div style="font-size:11px;color:white;font-weight:500;">Sent by ' + safeSender + '</div>' +
             '</div>' +
           '</div>';
@@ -472,7 +475,7 @@ window.GallerySidebar = {
           if (['pdf', 'doc', 'docx', 'txt', 'rtf'].indexOf(gext) !== -1) gicon = 'file-text';
           if (['zip', 'rar', '7z', 'gz', 'tar'].indexOf(gext) !== -1) gicon = 'archive';
           if (['js', 'ts', 'py', 'java', 'c', 'cpp', 'html', 'css', 'json', 'xml', 'sh'].indexOf(gext) !== -1) gicon = 'code';
-          html += '<div class="gallery-file-card" data-url="' + gu + '" data-name="' + gn + '" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:14px 8px;border-radius:12px;background:var(--bg-base);border:1px solid var(--border-subtle);cursor:pointer;">' +
+          html += '<div class="gallery-file-card gallery-jump" data-msg-id="' + file.msgId + '" title="Go to message" data-url="' + gu + '" data-name="' + gn + '" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:14px 8px;border-radius:12px;background:var(--bg-base);border:1px solid var(--border-subtle);cursor:pointer;">' +
             '<div style="width:36px;height:36px;border-radius:9px;background:var(--bg-hover);display:flex;align-items:center;justify-content:center;">' +
               '<i data-lucide="' + gicon + '" style="width:17px;height:17px;color:var(--text-secondary);"></i>' +
             '</div>' +
@@ -517,6 +520,7 @@ window.GallerySidebar = {
               '<div style="font-size:13px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">' + safeDomain + '</div>' +
               '<div style="font-size:11px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + safeUrl + '</div>' +
             '</div>' +
+            '<button class="gallery-jump" data-msg-id="' + link.msgId + '" title="Go to message" style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;padding:4px;flex-shrink:0;"><i data-lucide="corner-up-left" style="width:14px;height:14px;"></i></button>' +
             '<div style="font-size:11px;color:var(--text-muted);flex-shrink:0;">' + safeSender + '</div>' +
           '</div>';
         });
