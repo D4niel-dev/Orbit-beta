@@ -2358,6 +2358,20 @@ html[data-theme="light"] #chat-welcome-host::before { opacity: 0.3; }
 .composer-send.ready {
   opacity: 1;
   cursor: pointer;
+  /* A theme-coloured disc under the arrow. The filled glyph alone is a subtle signal at the
+     far edge of a wide window; a disc reads as "press me" from across the room. */
+  background: var(--accent-primary);
+  color: #fff;
+  border-radius: 50%;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .28);
+}
+/* Scoped with .chat-input-wrapper so it outranks the base button:hover rule, which sets a
+   background of its own and would otherwise turn the disc grey the moment the pointer
+   touched it. */
+.chat-input-wrapper .composer-send.ready:hover {
+  background: var(--accent-primary);
+  color: #fff;
+  filter: brightness(1.1);
 }
 .composer-send.ready:hover {
   transform: scale(1.06);

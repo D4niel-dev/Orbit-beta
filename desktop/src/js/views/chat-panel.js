@@ -1752,9 +1752,11 @@ window.ChatPanel = {
         svg.setAttribute('fill', filled ? 'currentColor' : 'none');
         return svg;
       };
+      var _lastIconSwap = 0;
       var _setSendIcon = function (name, filled) {
         var old = btnSend.querySelector('svg, i');
         var el = _iconEl(name, filled);
+        _lastIconSwap = Date.now();
         if (old) old.replaceWith(el); else btnSend.appendChild(el);
         if (el.tagName === 'I' && window.lucide) window.lucide.createIcons({ root: btnSend });
       };
@@ -1791,6 +1793,11 @@ window.ChatPanel = {
       var _eggIcons = null;
       btnSend.addEventListener('mouseenter', function () {
         if (!btnSend.disabled) return;
+        // Swapping the icon replaces the element under the pointer, and the browser treats the
+        // new element as freshly entered — so the swap fires a mouseenter, which fires another
+        // swap. That loop is why a random glyph sometimes survived a hover, and why it was
+        // worse the faster the pointer moved. Ignore an enter that is our own echo.
+        if (Date.now() - _lastIconSwap < 150) return;
         if (!_eggIcons) {
           try {
             _eggIcons = (window.lucide && window.lucide.icons) ? Object.keys(window.lucide.icons) : null;
