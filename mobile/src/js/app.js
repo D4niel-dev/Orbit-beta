@@ -4318,20 +4318,29 @@ document.addEventListener('DOMContentLoaded', function() {
     var bottomPad = (area ? area.getBoundingClientRect().height : 64) + 12;
 
     var behind = feed.scrollHeight - feed.scrollTop - feed.clientHeight;
-    if (behind < 60) {
-      chip.style.display = 'none';
+    // A larger threshold than it had. At 60px the chip appeared the instant a scroll began,
+    // which is why it read as "you have scrolled" rather than "there is something below".
+    if (behind < 140) {
+      _hideJumpChip();
       return;
     }
 
-    // How old is the first thing actually in view?
+    // How old is what you are READING — the middle of the visible area, not the top row.
+    //
+    // This was the actual complaint: it measured the row at the very top of the viewport,
+    // which is the message you scrolled PAST. In a chat whose last message is a month old,
+    // nudging the feed up put an old row at the top and the chip announced "reading old
+    // messages" while the user was looking at yesterday. The middle of the view is what is
+    // on screen; the top edge is what is leaving it.
     var ageDays = null;
-    var feedTop = feed.getBoundingClientRect().top;
+    var fr = feed.getBoundingClientRect();
+    var probe = fr.top + (fr.height / 2);
     var rows = feed.querySelectorAll('.message-row[data-msg-id]');
+    var msgs = (typeof MStore !== 'undefined' && MStore.getMessages) ? (MStore.getMessages(activeChatId) || []) : [];
     for (var i = 0; i < rows.length; i++) {
       var r = rows[i].getBoundingClientRect();
-      if (r.bottom > feedTop + 8) {
+      if (r.bottom >= probe) {
         var id = rows[i].getAttribute('data-msg-id');
-        var msgs = (typeof MStore !== 'undefined' && MStore.getMessages) ? (MStore.getMessages(activeChatId) || []) : [];
         for (var j = 0; j < msgs.length; j++) {
           if (String(msgs[j].id) === String(id)) {
             var t = msgs[j].timestamp || msgs[j].time;
@@ -4344,9 +4353,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     chip.style.bottom = bottomPad + 'px';
-    chip.style.display = 'flex';
+    _showJumpChip();
     var title = chip.querySelector('.jump-latest-title');
     var sub = chip.querySelector('.jump-latest-sub');
+    // A week is the line. Yesterday is current, and so is last Tuesday — the panel is for
+    // conversations that have genuinely moved on, which is Dan's rule and the right one.
     if (ageDays !== null && ageDays >= 7) {
       chip.classList.add('old');
       if (title) title.textContent = ageDays >= 60 ? 'Messages from months ago' : 'Reading old messages';
@@ -4356,6 +4367,40 @@ document.addEventListener('DOMContentLoaded', function() {
       if (title) title.textContent = 'Jump to latest';
       if (sub) { sub.textContent = ''; sub.style.display = 'none'; }
     }
+  }
+
+  /* Show and hide with the transition, rather than flipping `display`.
+     A display change has no from-state to animate out of, so the chip needs a frame at
+     display:flex before the class that drives the transition is added — otherwise it
+     appears instantly, which is what Dan saw. */
+  var _jumpChipHideTimer = null;
+  function _showJumpChip() {
+    var chip = document.getElementById('jump-latest-chip');
+    if (!chip) return;
+    if (_jumpChipHideTimer) { clearTimeout(_jumpChipHideTimer); _jumpChipHideTimer = null; }
+    if (chip.style.display === 'none') chip.style.display = 'flex';
+    if (chip.classList.contains('shown')) return;
+    requestAnimationFrame(function () { chip.classList.add('shown'); });
+  }
+
+  function _hideJumpChip() {
+    var chip = document.getElementById('jump-latest-chip');
+    if (!chip || chip.style.display === 'none') return;
+    chip.classList.remove('shown');
+    // Reset the wording as well as the visibility. It used to keep its last state while
+    // hidden, so scrolling back up in a different part of the chat animated it in still
+    // reading "messages from months ago" for a frame before correcting itself — which is
+    // exactly how this looked like a wrong age judgement when it was a stale label.
+    chip.classList.remove('old');
+    var _t = chip.querySelector('.jump-latest-title');
+    var _s = chip.querySelector('.jump-latest-sub');
+    if (_t) _t.textContent = 'Jump to latest';
+    if (_s) { _s.textContent = ''; _s.style.display = 'none'; }
+    if (_jumpChipHideTimer) clearTimeout(_jumpChipHideTimer);
+    _jumpChipHideTimer = setTimeout(function () {
+      chip.style.display = 'none';
+      _jumpChipHideTimer = null;
+    }, 200);
   }
 
   function _wireJumpChip() {
@@ -4372,7 +4417,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }, { passive: true });
     chip.addEventListener('click', function () {
       feed.scrollTo({ top: feed.scrollHeight, behavior: 'smooth' });
-      chip.style.display = 'none';
+      _hideJumpChip();
     });
   }
 

@@ -7817,19 +7817,32 @@ textarea#chat-input {
 #jump-latest-chip {
   position: absolute;
   left: 50%;
-  transform: translateX(-50%);
   z-index: 40;
   align-items: center;
   gap: 8px;
   padding: 8px 15px;
   border-radius: 18px;
   background: var(--bg-surface);
-  border: 1px solid var(--border-strong);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--border-subtle);
   font-size: 12.5px;
   color: var(--text-secondary);
   max-width: 88%;
   text-align: left;
+  /* Lift, not outline. A ring around a floating chip reads as focus — as though the chip
+     were a text field waiting for input — where what it needs to say is "I am above the
+     page". Shadow does that; a coloured border does not. */
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.35);
+  /* Fades and rises into place rather than blinking into existence. The transform includes
+     the centring translate, because a second transform rule would replace it, not add to it. */
+  opacity: 0;
+  transform: translateX(-50%) translateY(8px);
+  transition: opacity .18s ease, transform .18s ease;
+  pointer-events: none;
+}
+#jump-latest-chip.shown {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  pointer-events: auto;
 }
 /* A state line and an action line, rather than one sentence with a separator wedged in
    the middle of it. The state is what the user needs to read; the action is what to do. */
@@ -7862,7 +7875,9 @@ textarea#chat-input {
 }
 #jump-latest-chip.old {
   color: var(--text-primary);
-  border-color: var(--accent-primary);
+  /* No border-colour here any more: the blue ring was the complaint. The old-messages state
+     is carried by the text weight and the accent on the action line, which is where the eye
+     should go anyway. */
 }
 #jump-latest-chip.old i { color: var(--accent-primary); }
 #jump-latest-chip i { width: 14px; height: 14px; flex-shrink: 0; }
