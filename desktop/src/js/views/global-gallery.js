@@ -301,12 +301,34 @@ window.GlobalGallery = {
       chatFilterHtml += '<button class="gallery-filter-btn active" data-id="' + window.Sanitize.escapeHtml(this.currentFilter) + '" style="padding:4px 10px; border-radius:12px; border:1px solid var(--border-subtle); background:var(--accent-primary); color:white; cursor:pointer; font-size:11px; white-space:nowrap;">' + window.Sanitize.escapeHtml(chatNameFor(this.currentFilter)) + '</button>';
     }
 
+    // Where the space actually goes. Every attachment is on the user's own disk in a local-first
+    // app, so the useful number is not "how many" but "how much, and from where".
+    var totalBytes = 0;
+    var byChat = {};
+    allAttachments.forEach(function (a) {
+      var sz = parseInt(a.size, 10) || 0;
+      totalBytes += sz;
+      var name = a.chatName || 'Unknown';
+      if (!byChat[name]) byChat[name] = { bytes: 0, count: 0 };
+      byChat[name].bytes += sz;
+      byChat[name].count += 1;
+    });
+    var totalSize = window.Format && window.Format.fileSize ? window.Format.fileSize(totalBytes) : (totalBytes + ' B');
+    this._storageByChat = Object.keys(byChat).map(function (k) {
+      return { name: k, bytes: byChat[k].bytes, count: byChat[k].count };
+    }).sort(function (a, b) { return b.bytes - a.bytes; });
+    this._storageTotal = { bytes: totalBytes, size: totalSize, count: allAttachments.length };
+
     this.container.innerHTML =
       '<div style="height:64px; border-bottom:1px solid var(--border-subtle); display:flex; align-items:center; justify-content:space-between; padding:0 var(--spacing-lg);">' +
         '<div style="display:flex; align-items:center; gap:12px;">' +
           '<img src="icons/app/orbit.ico" style="width:24px; height:24px; object-fit:contain;">' +
           '<h2 style="font-family:var(--font-display); font-size:20px; font-weight:600; margin:0;">Global Gallery</h2>' +
-          '<span style="font-size:12px; color:var(--text-muted);">' + allAttachments.length + ' items</span>' +
+          '<button id="gallery-storage-stat" title="Where the space goes" style="background:transparent; border:none; cursor:pointer; ' +
+            'font-size:12px; color:var(--text-muted); padding:4px 8px; border-radius:7px; display:flex; align-items:center; gap:5px;">' +
+            '<span>' + allAttachments.length + ' items &middot; ' + totalSize + '</span>' +
+            '<i data-lucide="chevron-down" style="width:12px;height:12px;"></i>' +
+          '</button>' +
         '</div>' +
         '<div style="display:flex; align-items:center; gap:16px;">' +
           '<div style="position:relative; width: 240px;">' +
@@ -321,6 +343,9 @@ window.GlobalGallery = {
           '</div>' +
         '</div>' +
       '</div>' +
+      '<div id="gallery-storage-pop" style="display:none; position:absolute; top:60px; left:var(--spacing-lg); z-index:60; width:320px; ' +
+        'max-height:60vh; overflow-y:auto; padding:14px; border-radius:14px; background:var(--bg-surface); border:1px solid var(--border-subtle); ' +
+        'box-shadow:var(--shadow-xl);"></div>' +
       '<div style="display:flex; gap:8px; padding:8px var(--spacing-lg); border-bottom:1px solid var(--border-subtle); overflow-x:auto; align-items:center;">' +
         typeFilterHtml +
         (typeFilterHtml ? '<span style="color:var(--border-subtle);">|</span>' : '') +
@@ -332,8 +357,73 @@ window.GlobalGallery = {
     this.attachEvents();
   },
 
+  /* The breakdown, biggest first, with a bar so the ranking is readable at a glance rather than
+     requiring you to compare numbers. */
+  renderStoragePop: function () {
+    var pop = document.getElementById('gallery-storage-pop');
+    if (!pop) return;
+    var rows = this._storageByChat || [];
+    var total = (this._storageTotal || {}).bytes || 0;
+    var esc = window.Sanitize.escapeHtml;
+
+    var html = '<div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:10px;">' +
+      '<div style="font-size:13px; font-weight:700; color:var(--text-primary);">Where the space goes</div>' +
+      '<div style="font-size:11px; color:var(--text-muted);">' + ((this._storageTotal || {}).size || '0 B') + '</div>' +
+    '</div>';
+
+    if (!rows.length) {
+      html += '<div style="font-size:12px; color:var(--text-muted);">Nothing stored yet.</div>';
+    } else {
+      rows.forEach(function (r) {
+        var pct = total > 0 ? Math.max(1, Math.round((r.bytes / total) * 100)) : 0;
+        var size = window.Format && window.Format.fileSize ? window.Format.fileSize(r.bytes) : (r.bytes + ' B');
+        html += '<div style="margin-bottom:10px;">' +
+          '<div style="display:flex; justify-content:space-between; gap:10px; font-size:11.5px; margin-bottom:4px;">' +
+            '<span style="color:var(--text-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + esc(r.name) + '</span>' +
+            '<span style="color:var(--text-muted); flex-shrink:0;">' + size + ' &middot; ' + r.count + '</span>' +
+          '</div>' +
+          '<div style="height:5px; border-radius:3px; background:var(--bg-hover); overflow:hidden;">' +
+            '<div style="height:100%; width:' + pct + '%; background:var(--accent-primary); border-radius:3px;"></div>' +
+          '</div>' +
+        '</div>';
+      });
+    }
+
+    pop.innerHTML = html;
+  },
+
+  toggleStoragePop: function () {
+    var pop = document.getElementById('gallery-storage-pop');
+    if (!pop) return;
+    if (pop.style.display === 'none') {
+      this.renderStoragePop();
+      pop.style.display = 'block';
+    } else {
+      pop.style.display = 'none';
+    }
+  },
+
   attachEvents() {
     var self = this;
+
+    // The header is rebuilt on every render, so the button needs re-wiring each time — but the
+    // document listener must not be, or one would accumulate per render.
+    var stat = document.getElementById('gallery-storage-stat');
+    if (stat) {
+      stat.addEventListener('click', function (e) {
+        e.stopPropagation();
+        self.toggleStoragePop();
+      });
+    }
+    if (!window._galleryStoragePopWired) {
+      window._galleryStoragePopWired = true;
+      document.addEventListener('click', function (e) {
+        var pop = document.getElementById('gallery-storage-pop');
+        if (!pop || pop.style.display === 'none') return;
+        if (pop.contains(e.target) || e.target.closest('#gallery-storage-stat')) return;
+        pop.style.display = 'none';
+      });
+    }
     var filterBtns = this.container.querySelectorAll('.gallery-filter-btn');
     filterBtns.forEach(function(btn) {
       btn.addEventListener('click', function(e) {
