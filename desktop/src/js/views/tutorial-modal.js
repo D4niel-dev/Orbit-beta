@@ -109,13 +109,13 @@ window.TutorialModal = {
           }.bind(this)).join('') +
         '</div>' +
         // Icon
-        '<div style="display:flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:14px;background:var(--accent-soft);margin-bottom:20px;">' + iconHtml + '</div>' +
+        '<div class="tutorial-icon" style="display:flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:14px;background:var(--accent-soft);margin-bottom:20px;">' + iconHtml + '</div>' +
         // Title
-        '<h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;color:var(--text-primary);margin:0 0 10px;">' + page.title + '</h2>' +
+        '<h2 class="tutorial-title" style="font-family:var(--font-display);font-size:20px;font-weight:700;color:var(--text-primary);margin:0 0 10px;">' + page.title + '</h2>' +
         // Description
-        '<p style="font-size:13px;line-height:1.6;color:var(--text-secondary);margin:0 0 24px;">' + page.desc + '</p>' +
+        '<p class="tutorial-desc" style="font-size:13px;line-height:1.6;color:var(--text-secondary);margin:0 0 24px;">' + page.desc + '</p>' +
         // Navigation
-        '<div style="display:flex;align-items:center;justify-content:space-between;">' +
+        '<div class="tutorial-nav" style="display:flex;align-items:center;justify-content:space-between;">' +
           '<div>' +
             (isFirst
               ? '<button class="tutorial-btn-skip" style="padding:8px 16px;border-radius:10px;background:transparent;color:var(--text-muted);border:1px solid var(--border-subtle);cursor:pointer;font-size:12px;font-weight:500;"><i data-lucide="x" style="width:13px;height:13px;vertical-align:middle;margin-right:3px;"></i>Skip</button>'

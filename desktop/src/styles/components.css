@@ -2390,3 +2390,47 @@ html[data-theme="light"] #chat-welcome-host::before { opacity: 0.3; }
 .composer-emoji.active {
   color: var(--accent-primary);
 }
+
+/* ---- Tutorial card motion ----
+   The card's innerHTML is rebuilt on every next()/prev(), so the elements are fresh each time
+   and these animations run without any JS re-triggering them. The stagger is the effect:
+   everything arriving at once reads as a swap, the same content 60ms apart reads as a
+   sequence. The easing overshoots slightly, which is where the "pop" comes from. */
+@keyframes tutorialCardIn {
+  from { opacity: 0; transform: translateY(14px) scale(.97); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes tutorialPop {
+  from { opacity: 0; transform: translateY(9px) scale(.95); }
+  to   { opacity: 1; transform: none; }
+}
+.tutorial-card {
+  animation: tutorialCardIn .26s ease-out both;
+}
+.tutorial-card .tutorial-icon,
+.tutorial-card .tutorial-title,
+.tutorial-card .tutorial-desc,
+.tutorial-card .tutorial-nav {
+  animation: tutorialPop .34s cubic-bezier(.34, 1.4, .64, 1) both;
+}
+.tutorial-card .tutorial-title { animation-delay: .06s; }
+.tutorial-card .tutorial-desc  { animation-delay: .12s; }
+.tutorial-card .tutorial-nav   { animation-delay: .18s; }
+
+/* The nav buttons get a press of their own — they are the thing being clicked. */
+.tutorial-card .tutorial-btn-next,
+.tutorial-card .tutorial-btn-back,
+.tutorial-card .tutorial-btn-finish,
+.tutorial-card .tutorial-btn-skip {
+  transition: transform .12s ease, filter .15s ease, background .15s ease;
+}
+.tutorial-card .tutorial-btn-next:hover,
+.tutorial-card .tutorial-btn-finish:hover {
+  filter: brightness(1.1);
+}
+.tutorial-card .tutorial-btn-next:active,
+.tutorial-card .tutorial-btn-finish:active,
+.tutorial-card .tutorial-btn-back:active,
+.tutorial-card .tutorial-btn-skip:active {
+  transform: scale(.95);
+}
