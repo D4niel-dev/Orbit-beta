@@ -101,11 +101,19 @@
           <div class="gallery-tab" data-tab="files" style="padding:12px 0; cursor:pointer; font-size:13px; font-weight:500; color:var(--text-secondary); border-bottom:2px solid transparent;">Files</div>
           <div class="gallery-tab" data-tab="links" style="padding:12px 0; cursor:pointer; font-size:13px; font-weight:500; color:var(--text-secondary); border-bottom:2px solid transparent;">Links</div>
         </div>
-        <div style="padding:8px 16px; border-bottom:1px solid var(--border-subtle); flex-shrink:0;">
+        <div style="padding:8px 16px; border-bottom:1px solid var(--border-subtle); flex-shrink:0; display:flex; gap:8px; align-items:center;">
           <input id="gallery-search-input" type="text" placeholder="Search this chat..." autocomplete="off"
-            style="width:100%; box-sizing:border-box; padding:7px 11px; border-radius:9px; border:1px solid var(--border-subtle);
+            style="flex:1; min-width:0; box-sizing:border-box; padding:7px 11px; border-radius:9px; border:1px solid var(--border-subtle);
                    background:var(--bg-base); color:var(--text-primary); font-size:12.5px; outline:none;">
+          <button id="btn-gallery-filter" title="Filter" style="position:relative; flex-shrink:0; width:32px; height:32px; border-radius:9px;
+            border:1px solid var(--border-subtle); background:var(--bg-base); color:var(--text-secondary); cursor:pointer;
+            display:flex; align-items:center; justify-content:center;">
+            <i data-lucide="list-filter" style="width:15px;height:15px;"></i>
+            <span id="gallery-filter-dot" style="display:none; position:absolute; top:-3px; right:-3px; width:8px; height:8px;
+              border-radius:50%; background:var(--accent-primary); border:1.5px solid var(--bg-surface);"></span>
+          </button>
         </div>
+        <div id="gallery-filter-pop" style="display:none; padding:10px 16px 12px; border-bottom:1px solid var(--border-subtle); background:var(--bg-base); flex-shrink:0;"></div>
         <div id="gallery-content" style="flex:1; overflow-y:auto; padding:var(--spacing-md); display:flex; flex-direction:column; gap:16px;"></div>
       </aside>
 

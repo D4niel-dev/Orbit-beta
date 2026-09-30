@@ -17,12 +17,109 @@ window.GallerySidebar = {
     return isNaN(d) ? 0 : d;
   },
 
+  /* What KIND of thing an item is, for the type filter. Images, videos and audio come from the
+     Images tab; everything else from Files. */
+  _kindOf: function (it) {
+    var t = String(it.type || '').toLowerCase();
+    var m = String(it.mimeType || '').toLowerCase();
+    if (t === 'image' || m.indexOf('image/') === 0) return 'image';
+    if (t === 'video' || m.indexOf('video/') === 0) return 'video';
+    if (t === 'audio' || m.indexOf('audio/') === 0) return 'audio';
+    return 'file';
+  },
+
+  _dateCutoff: function (key) {
+    var DAY = 86400000;
+    if (key === 'today') { var d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); }
+    if (key === 'week') return Date.now() - 7 * DAY;
+    if (key === 'month') return Date.now() - 30 * DAY;
+    return 0;
+  },
+
+  /* The filter popover. Three labelled rows of chips; one choice per row, and clicking the
+     active chip clears that row — which is how you get back to "all" without a separate
+     control for it. */
+  renderFilterPop: function (items) {
+    var pop = this.filterPop;
+    if (!pop) return;
+    var f = this.filters || {};
+
+    var users = [];
+    (items || []).forEach(function (it) {
+      if (it.senderName && users.indexOf(it.senderName) === -1) users.push(it.senderName);
+    });
+
+    var kinds = (this.currentTab === 'links') ? [] : ['image', 'video', 'audio', 'file'];
+    var kindLabels = { image: 'Images', video: 'Videos', audio: 'Audio', file: 'Files' };
+    var dates = [['today', 'Today'], ['week', 'Past week'], ['month', 'Past month']];
+
+    var self = this;
+    var chip = function (label, active, onClick) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = label;
+      b.style.cssText = 'padding:4px 10px; border-radius:11px; cursor:pointer; font-size:11px; white-space:nowrap; ' +
+        'border:1px solid ' + (active ? 'var(--accent-primary)' : 'var(--border-subtle)') + '; ' +
+        'background:' + (active ? 'var(--accent-primary)' : 'transparent') + '; ' +
+        'color:' + (active ? '#fff' : 'var(--text-secondary)') + ';';
+      b.addEventListener('click', onClick);
+      return b;
+    };
+
+    var row = function (label, children) {
+      var wrap = document.createElement('div');
+      wrap.style.cssText = 'display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;';
+      var l = document.createElement('div');
+      l.textContent = label;
+      l.style.cssText = 'font-size:10.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-muted); width:38px; flex-shrink:0;';
+      wrap.appendChild(l);
+      children.forEach(function (c) { wrap.appendChild(c); });
+      return wrap;
+    };
+
+    pop.innerHTML = '';
+    pop.appendChild(row('User', [chip('All', !f.user, function () { self.filters.user = ''; self.applyFilters(); })]
+      .concat(users.map(function (u) {
+        return chip(u, f.user === u, function () { self.filters.user = (f.user === u ? '' : u); self.applyFilters(); });
+      }))));
+
+    if (kinds.length) {
+      pop.appendChild(row('Type', [chip('All', !f.type, function () { self.filters.type = ''; self.applyFilters(); })]
+        .concat(kinds.map(function (k) {
+          return chip(kindLabels[k], f.type === k, function () { self.filters.type = (f.type === k ? '' : k); self.applyFilters(); });
+        }))));
+    }
+
+    pop.appendChild(row('Date', [chip('Any time', !f.date, function () { self.filters.date = ''; self.applyFilters(); })]
+      .concat(dates.map(function (d) {
+        return chip(d[1], f.date === d[0], function () { self.filters.date = (f.date === d[0] ? '' : d[0]); self.applyFilters(); });
+      }))));
+  },
+
+  toggleFilterPop: function () {
+    if (!this.filterPop) return;
+    if (this.filterPop.style.display === 'none') {
+      this.renderFilterPop(this._lastItems || []);
+      this.filterPop.style.display = 'block';
+    } else {
+      this.filterPop.style.display = 'none';
+    }
+  },
+
+  applyFilters: function () {
+    this.render(window.store.getState());
+  },
+
   init() {
     this.container = document.getElementById('panel-gallery');
     this.contentArea = document.getElementById('gallery-content');
     this.btnClose = document.getElementById('btn-close-gallery');
     this.searchInput = document.getElementById('gallery-search-input');
+    this.filterBtn = document.getElementById('btn-gallery-filter');
+    this.filterPop = document.getElementById('gallery-filter-pop');
+    this.filterDot = document.getElementById('gallery-filter-dot');
     if (this.searchQuery === undefined) this.searchQuery = '';
+    if (!this.filters) this.filters = { user: '', type: '', date: '' };
 
     if (!this.container) return;
 
@@ -41,6 +138,20 @@ window.GallerySidebar = {
 
   attachEvents() {
     var self = this;
+    if (this.filterBtn && !this.filterBtn._wired) {
+      this.filterBtn._wired = true;
+      this.filterBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        self.toggleFilterPop();
+      });
+      // clicking anywhere else closes it, the way every other popover in the app behaves
+      document.addEventListener('click', function (e) {
+        if (!self.filterPop || self.filterPop.style.display === 'none') return;
+        if (self.filterPop.contains(e.target) || e.target.closest('#btn-gallery-filter')) return;
+        self.filterPop.style.display = 'none';
+      });
+    }
+
     if (this.searchInput && !this.searchInput._wired) {
       this.searchInput._wired = true;
       this.searchInput.addEventListener('input', function () {
@@ -206,6 +317,23 @@ window.GallerySidebar = {
       this.contentArea.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-muted);text-align:center;gap:12px;opacity:0.6;"><i data-lucide="' + emptyIcon + '" style="width:48px;height:48px;"></i><div style="font-size:14px;">' + emptyTxt + '</div></div>';
       if (window.lucide) window.lucide.createIcons({ root: this.contentArea });
       return;
+    }
+
+    this._lastItems = items.slice();   // unfiltered, so the filter popover can list every sender
+
+    // Dan's filters: by sender, by kind, by age.
+    var f = this.filters || {};
+    var self = this;   // the filter callbacks below are plain functions, so they need the panel
+    if (f.user) items = items.filter(function (it) { return it.senderName === f.user; });
+    if (f.type) items = items.filter(function (it) { return self._kindOf(it) === f.type; });
+    if (f.date) {
+      var cutoff = self._dateCutoff(f.date);
+      if (cutoff) items = items.filter(function (it) { return it.ts >= cutoff; });
+    }
+
+    if (this.filterDot) {
+      var anyFilter = !!(f.user || f.type || f.date);
+      this.filterDot.style.display = anyFilter ? 'block' : 'none';
     }
 
     // Sort descending
