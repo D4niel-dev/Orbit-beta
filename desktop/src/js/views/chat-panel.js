@@ -31,6 +31,18 @@ var CHAT_COMMANDS = [
   { name: '/kick', desc: 'Remove member from group (owner/admin)', usage: '/kick <username>', handler: 'kick' }
 ];
 
+/* Timestamps are not reliably Dates or ISO strings.
+   On the desktop they come back from storage as a STRING holding an epoch with a trailing
+   ".0" — "1785589248803.0" — and `new Date("1785589248803.0")` is an Invalid Date, so any age
+   computed from it silently becomes NaN. Parse the number first, then fall back. */
+function _msgTime(t) {
+  if (t == null) return NaN;
+  if (typeof t === 'number') return t;
+  var n = parseFloat(t);
+  if (!isNaN(n) && n > 1e11) return n;
+  return new Date(t).getTime();
+}
+
 window.ChatPanel = {
   init() {
     this.container = document.getElementById('chat-container');
@@ -1256,9 +1268,10 @@ window.ChatPanel = {
       '<!-- Message Feed -->' +
       '<div class="message-feed" id="chat-message-feed" style="flex:1; overflow-y:auto; overflow-x:visible; padding: var(--spacing-lg);">' +
         messagesHtml + progressHtml + errorsHtml +
-        '<div id="jump-to-unread" class="jump-to-unread" style="' + (hasUnreadInFeed ? '' : 'display:none;') + 'position:sticky;bottom:8px;left:50%;transform:translateX(-50%);z-index:10;" title="Jump to first unread">' +
-          '<button style="background:var(--accent-primary);color:#fff;border:none;border-radius:20px;padding:6px 16px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(0,0,0,0.3);" onclick="window.ChatPanel.jumpToFirstUnread()">' +
-            '<i data-lucide="arrow-down" style="width:14px;height:14px;"></i> Jump to first unread' +
+        '<div id="jump-to-unread" class="jump-to-latest" style="display:none;">' +
+          '<span class="jump-latest-title">Jump to latest</span>' +
+          '<button class="jump-latest-go" type="button" title="Jump to the latest messages">' +
+            '<i data-lucide="arrow-down-to-line" style="width:16px;height:16px;"></i>' +
           '</button>' +
         '</div>' +
       '</div>';
@@ -1442,24 +1455,78 @@ window.ChatPanel = {
       }
     }
 
-    // Jump-to-unread scroll listener
+    // Jump to latest. The same rule as mobile: it appears when you are scrolled up, and it
+    // says something different when what you are looking at is genuinely old.
+    //
+    // This replaced an unread-divider check that only fired when there was an unread marker
+    // below the fold, which meant the button was absent exactly when you had scrolled up in a
+    // chat with nothing unread — the common case. The divider is still honoured for its own
+    // wording, but the chip no longer depends on it.
     if (feed) {
       var jumpBtn = document.getElementById('jump-to-unread');
       if (jumpBtn) {
         feed.removeEventListener('scroll', this._jumpScrollHandler);
-        this._jumpScrollHandler = function() {
-          var divider = feed.querySelector('.unread-divider');
-          if (!divider) { jumpBtn.style.display = 'none'; return; }
-          var feedRect = feed.getBoundingClientRect();
-          var dividerRect = divider.getBoundingClientRect();
-          // Hide button if divider is already visible or above the feed
-          if (dividerRect.top < feedRect.bottom - 60) {
-            jumpBtn.style.display = 'none';
-          } else {
-            jumpBtn.style.display = '';
+        this._jumpScrollHandler = function () {
+          var behind = feed.scrollHeight - feed.scrollTop - feed.clientHeight;
+          if (behind < 140) { jumpBtn.style.display = 'none'; return; }
+
+          // What you are READING: the middle of the visible area, not the top row — that is
+          // the message you scrolled past, and using it made the chip cry "older messages"
+          // while the user was looking at yesterday.
+          var ageDays = null;
+          var fr = feed.getBoundingClientRect();
+          var probe = fr.top + fr.height / 2;
+          var rows = feed.querySelectorAll('.message-row[data-msg-id]');
+          var st = window.store ? window.store.getState() : null;
+          var msgs = (st && st.messages && st.messages[st.activeChatId]) || [];
+          for (var i = 0; i < rows.length; i++) {
+            var r = rows[i].getBoundingClientRect();
+            if (r.bottom >= probe) {
+              var id = rows[i].getAttribute('data-msg-id');
+              for (var j = 0; j < msgs.length; j++) {
+                if (String(msgs[j].id) === String(id)) {
+                  var _t = _msgTime(msgs[j].timestamp != null ? msgs[j].timestamp : msgs[j].time);
+                  if (!isNaN(_t)) ageDays = (Date.now() - _t) / 86400000;
+                  break;
+                }
+              }
+              break;
+            }
           }
+
+          var title = jumpBtn.querySelector('.jump-latest-title');
+          var divider = feed.querySelector('.unread-divider');
+          var dividerBelow = false;
+          if (divider) {
+            var dr = divider.getBoundingClientRect();
+            dividerBelow = dr.top > fr.bottom - 60;
+          }
+          if (dividerBelow) {
+            jumpBtn.classList.remove('old');
+            if (title) title.textContent = 'Jump to first unread';
+          } else if (ageDays !== null && ageDays >= 7) {
+            jumpBtn.classList.add('old');
+            if (title) title.textContent = ageDays >= 60
+              ? 'You\u2019re viewing messages from months ago'
+              : 'You\u2019re viewing older messages';
+          } else {
+            jumpBtn.classList.remove('old');
+            if (title) title.textContent = 'Jump to latest';
+          }
+          jumpBtn.style.display = 'flex';
         };
         feed.addEventListener('scroll', this._jumpScrollHandler);
+
+        // The button did nothing: there was no click handler anywhere on it.
+        if (!jumpBtn._jumpWired) {
+          jumpBtn._jumpWired = true;
+          jumpBtn.addEventListener('click', function () {
+            var f = document.getElementById('chat-message-feed');
+            if (f) f.scrollTo({ top: f.scrollHeight, behavior: 'smooth' });
+            jumpBtn.style.display = 'none';
+          });
+        }
+
         // Initial check
         setTimeout(this._jumpScrollHandler, 100);
       }

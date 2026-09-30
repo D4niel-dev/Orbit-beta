@@ -4309,6 +4309,18 @@ document.addEventListener('DOMContentLoaded', function() {
   var _jumpChipBound = false;
   var _jumpChipRaf = 0;
 
+  /* Message timestamps are not reliably Dates or ISO strings.
+     On the desktop they come back from storage as a STRING holding an epoch with a trailing
+     ".0" — "1785589248803.0" — and `new Date("1785589248803.0")` is an Invalid Date, so any
+     age computed from it silently becomes NaN. Parse the number first, then fall back. */
+  function _msgTime(t) {
+    if (t == null) return NaN;
+    if (typeof t === 'number') return t;
+    var n = parseFloat(t);
+    if (!isNaN(n) && n > 1e11) return n;
+    return new Date(t).getTime();
+  }
+
   function _updateJumpChip() {
     var chip = document.getElementById('jump-latest-chip');
     var feed = document.getElementById('message-feed');
@@ -4343,8 +4355,9 @@ document.addEventListener('DOMContentLoaded', function() {
         var id = rows[i].getAttribute('data-msg-id');
         for (var j = 0; j < msgs.length; j++) {
           if (String(msgs[j].id) === String(id)) {
-            var t = msgs[j].timestamp || msgs[j].time;
-            if (t) ageDays = (Date.now() - new Date(t).getTime()) / 86400000;
+            // A desktop peer's timestamp arrives as an epoch string; _msgTime handles both.
+            var _t = _msgTime(msgs[j].timestamp != null ? msgs[j].timestamp : msgs[j].time);
+            if (!isNaN(_t)) ageDays = (Date.now() - _t) / 86400000;
             break;
           }
         }
