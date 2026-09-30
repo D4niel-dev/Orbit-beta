@@ -1354,11 +1354,11 @@ window.ChatPanel = {
         replyEditBar +
         typingHtml +
         '<div class="chat-input-wrapper">' +
-          '<button id="btn-plus"><i data-lucide="plus-circle"></i></button>' +
+          '<button id="btn-plus" class="composer-plus" title="Attach"><i data-lucide="plus"></i></button>' +
           '<textarea id="chat-input" class="chat-input-field" placeholder="Message ' + window.Sanitize.escapeHtml(activeName) + '..." rows="1">' + (this.editingMsg ? window.Sanitize.escapeHtml(this.editingMsg.text) : '') + '</textarea>' +
           '<button id="btn-mic" title="Voice Memo (Click to start/stop)"><i data-lucide="mic"></i></button>' +
           '<button id="btn-emoji"><i data-lucide="smile"></i></button>' +
-          '<button id="btn-send"><i data-lucide="send"></i></button>' +
+          '<button id="btn-send" class="composer-send" title="Send" disabled><i data-lucide="send-horizontal"></i></button>' +
           '<input type="file" id="file-input" style="display:none;" multiple>' +
         '</div>' +
       '</div>');
@@ -1649,6 +1649,8 @@ window.ChatPanel = {
         });
       };
       input.addEventListener('input', function() {
+        // The send button lights up as soon as there is something to send.
+        if (self._refreshSend) self._refreshSend();
         var now = Date.now();
         if (now - lastTypingSent > 2000) {
           lastTypingSent = now;
@@ -1723,12 +1725,86 @@ window.ChatPanel = {
 
     var btnSend = document.getElementById('btn-send');
     if (btnSend) {
+      // Render the button's icon from scratch. lucide replaces the <i> with an inline <svg>,
+      // so swapping the icon means putting a fresh <i> back and re-running it — and the fill
+      // has to be set on the svg afterwards, because lucide writes fill="none" itself.
+      // Build the icon node SYNCHRONOUSLY rather than going through lucide's createIcons pass.
+      //
+      // That pass is timing-sensitive in this app — the transfer strip keeps inline SVG for
+      // exactly this reason, because its markup is rewritten on a poller. Here a rapid hover
+      // in and out could leave a stale random glyph on the button, which the stress test
+      // caught. createElement has no timing to lose.
+      var _iconEl = function (name, filled) {
+        var key = name.replace(/(^|-)([a-z])/g, function (m, p, c) { return c.toUpperCase(); });
+        var icons = (window.lucide && window.lucide.icons) || null;
+        var node = icons ? (icons[key] || icons[name]) : null;
+        var svg = (node && window.lucide.createElement) ? window.lucide.createElement(node) : null;
+        if (!svg) {
+          // a build without createElement: fall back to the async pass
+          var i = document.createElement('i');
+          i.setAttribute('data-lucide', name);
+          return i;
+        }
+        svg.setAttribute('class', 'lucide lucide-' + name);
+        svg.setAttribute('data-lucide', name);
+        svg.setAttribute('width', '24');
+        svg.setAttribute('height', '24');
+        svg.setAttribute('fill', filled ? 'currentColor' : 'none');
+        return svg;
+      };
+      var _setSendIcon = function (name, filled) {
+        var old = btnSend.querySelector('svg, i');
+        var el = _iconEl(name, filled);
+        if (old) old.replaceWith(el); else btnSend.appendChild(el);
+        if (el.tagName === 'I' && window.lucide) window.lucide.createIcons({ root: btnSend });
+      };
+
+      // Whether there is anything to send. Files count: an image with no caption is a
+      // perfectly good message, and the old code let you press the button and then did
+      // nothing, which is worse than a button that says so.
+      self._refreshSend = function () {
+        var has = (input.value.trim() !== '') || (self.stagedFiles && self.stagedFiles.length > 0);
+        btnSend.disabled = !has;
+        btnSend.classList.toggle('ready', has);
+        // Always authoritative. It used to skip while an easter-egg icon was showing, which
+        // made the restore conditional and left a random glyph behind on a fast hover in and
+        // out. Nothing else can fire while the pointer is on the button anyway — you cannot
+        // type or stage a file with the cursor parked there.
+        _setSendIcon('send-horizontal', has);
+      };
+      self._setSendIcon = _setSendIcon;
+      self._refreshSend();
+
       btnSend.addEventListener('click', async function() {
         var text = input.value.trim();
         if (text !== '' || self.stagedFiles.length > 0) {
           await self.sendMessage(text);
           input.value = '';
+          if (self._refreshSend) self._refreshSend();
         }
+      });
+
+      // ── 4. the easter egg ──────────────────────────────────────────────────
+      // Hovering a send button you cannot press shows a random lucide icon. Only when it is
+      // disabled: when it is live, the filled arrow is the thing that tells you so, and
+      // hiding it behind a random glyph would be a worse button to make a joke with.
+      var _eggIcons = null;
+      btnSend.addEventListener('mouseenter', function () {
+        if (!btnSend.disabled) return;
+        if (!_eggIcons) {
+          try {
+            _eggIcons = (window.lucide && window.lucide.icons) ? Object.keys(window.lucide.icons) : null;
+          } catch (e) { _eggIcons = null; }
+          if (!_eggIcons || !_eggIcons.length) {
+            _eggIcons = ['send', 'rocket', 'sparkles', 'ghost', 'cat', 'coffee', 'zap', 'heart', 'star', 'moon',
+                         'feather', 'anchor', 'apple', 'banana', 'bird', 'bug', 'cake', 'candy', 'cloud', 'crown'];
+          }
+        }
+        var pick = _eggIcons[Math.floor(Math.random() * _eggIcons.length)];
+        _setSendIcon(pick, false);
+      });
+      btnSend.addEventListener('mouseleave', function () {
+        if (self._refreshSend) self._refreshSend();
       });
     }
 
@@ -1787,9 +1863,17 @@ window.ChatPanel = {
     var btnPlus = document.getElementById('btn-plus');
     var fileInput = document.getElementById('file-input');
     if (btnPlus && fileInput) {
+      // The plus rotates 45° into an x while its menu is open. That is the whole trick: a +
+      // turned 45° IS an x, so there is no second icon to load or keep in sync.
+      var _plusOpen = function (open) {
+        btnPlus.classList.toggle('open', !!open);
+      };
+      self._closePlus = function () { _plusOpen(false); };
+      document.addEventListener('click', function () { _plusOpen(false); });
       btnPlus.addEventListener('click', function(e) {
         e.stopPropagation();
         if (!window.ContextMenu) return;
+        _plusOpen(true);
         var rect = btnPlus.getBoundingClientRect();
         window.ContextMenu.show(rect.left, rect.top - 120, [
           { label: 'Upload Images', action: 'upload-image', icon: 'images', onClick: function() { 
@@ -2240,6 +2324,10 @@ window.ChatPanel = {
 
   renderPreviewArea() {
     const area = document.getElementById('file-preview-area');
+    // Staging or removing a file changes whether there is anything to send, and the send
+    // button has to follow. This is the one place the preview is rebuilt, so one call here
+    // covers both directions.
+    if (this._refreshSend) this._refreshSend();
     if (!area) return;
     
     if (this.stagedFiles.length === 0) {

@@ -2335,3 +2335,36 @@ html[data-theme="light"] #chat-welcome-host::before { opacity: 0.3; }
 .jump-to-latest .jump-latest-go:hover {
   filter: brightness(1.1);
 }
+
+/* The attach button: a plain plus that turns as you touch it. */
+.composer-plus svg {
+  transition: transform .2s cubic-bezier(.34, 1.4, .64, 1);
+}
+.composer-plus:hover svg {
+  transform: rotate(90deg);
+}
+/* A + turned 45 degrees is an x — so the open state needs no second icon. */
+.composer-plus.open svg {
+  transform: rotate(45deg);
+}
+
+/* The send button says whether it can be pressed.
+   Dimmed and inert with nothing to send; lit and filled when there is. */
+.composer-send {
+  opacity: .4;
+  cursor: default;
+  transition: opacity .15s ease, background .15s ease, transform .12s ease;
+}
+.composer-send.ready {
+  opacity: 1;
+  cursor: pointer;
+}
+.composer-send.ready:hover {
+  transform: scale(1.06);
+}
+.composer-send.ready:active {
+  transform: scale(.94);
+}
+.composer-send svg {
+  transition: transform .15s ease;
+}
