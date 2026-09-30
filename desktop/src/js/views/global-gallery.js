@@ -152,6 +152,7 @@ window.GlobalGallery = {
           mediaHtml +
           '<div class="gallery-label">' + window.Sanitize.escapeHtml(a.chatName) + '</div>' +
           '<div class="gallery-overlay">' +
+            '<button class="gallery-action-btn gallery-jump" data-msg-id="' + a.msgId + '" data-chat="' + a.chatId + '" title="Go to message"><i data-lucide="corner-up-left" style="width:18px;height:18px;"></i></button>' +
             '<button class="gallery-action-btn" title="View"><i data-lucide="' + (isVideo || isAudio ? 'play' : 'eye') + '" style="width:18px;height:18px;"></i></button>' +
             '<a href="' + safeUrl + '" download="' + window.Sanitize.escapeHtml(a.name || 'Media') + '" class="gallery-action-btn" title="Download" onclick="event.stopPropagation()"><i data-lucide="download" style="width:18px;height:18px;"></i></a>' +
           '</div>' +
@@ -184,6 +185,8 @@ window.GlobalGallery = {
           mediaHtml = '<img src="' + safeUrl + '" style="width:100%; height:100%; object-fit:cover;" onerror="if(window.handleMediaError) window.handleMediaError(this, \'' + safeUrl + '\')">';
         }
 
+        var jumpBtn = '<button class="gallery-jump" data-msg-id="' + a.msgId + '" data-chat="' + a.chatId + '" title="Go to message" ' +
+          'style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;padding:4px;flex-shrink:0;"><i data-lucide="corner-up-left" style="width:16px;height:16px;"></i></button>';
         return '<div class="gallery-list-row" data-msg-id="' + a.msgId + '" data-chat="' + a.chatId + '" style="display:flex; gap:16px; align-items:center; border-radius:12px; padding:12px; border:1px solid var(--border-subtle); background:var(--bg-surface); cursor:pointer;" onclick="if(window.ImageViewer){ if(' + (isVideo ? 'true' : 'false') + ') window.ImageViewer.openVideo(\'' + safeUrl + '\',\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\'); else if(' + (isAudio ? 'true' : 'false') + ') window.ImageViewer.openAudio({url:\'' + safeUrl + '\',name:\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\',size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'}); else window.ImageViewer.open({url:\'' + safeUrl + '\',name:\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\',size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'}); }">' +
           '<div style="width:80px; height:80px; border-radius:8px; overflow:hidden; flex-shrink:0;">' +
             mediaHtml +
@@ -193,6 +196,7 @@ window.GlobalGallery = {
             '<div style="color:var(--text-secondary); font-size:13px; margin-top:4px;">Shared in ' + window.Sanitize.escapeHtml(a.chatName) + '</div>' +
             '<div style="color:var(--text-muted); font-size:12px; margin-top:4px;">' + dateStr + '</div>' +
           '</div>' +
+          jumpBtn +
         '</div>';
       }
       var fic = fileIconHtml(a.name);
@@ -262,6 +266,7 @@ window.GlobalGallery = {
           contentHtml += '<div class="gallery-grid-item" data-msg-id="' + a.msgId + '" data-chat="' + a.chatId + '" onclick="if(window.ImageViewer){ if(' + (isVideo ? 'true' : 'false') + ') window.ImageViewer.openVideo(\'' + safeUrl + '\',\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\'); else if(' + (isAudio ? 'true' : 'false') + ') window.ImageViewer.openAudio({url:\'' + safeUrl + '\',name:\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\',size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'}); else window.ImageViewer.open({url:\'' + safeUrl + '\',name:\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\',size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'}); }" style="margin-bottom:16px;">' +
             mediaHtml +
             '<div class="gallery-overlay">' +
+              '<button class="gallery-action-btn gallery-jump" data-msg-id="' + a.msgId + '" data-chat="' + a.chatId + '" title="Go to message"><i data-lucide="corner-up-left" style="width:18px;height:18px;"></i></button>' +
               '<button class="gallery-action-btn" title="View"><i data-lucide="' + (isVideo || isAudio ? 'play' : 'eye') + '" style="width:18px;height:18px;"></i></button>' +
               '<a href="' + safeUrl + '" download="' + window.Sanitize.escapeHtml(a.name || 'Media') + '" class="gallery-action-btn" title="Download" onclick="event.stopPropagation()"><i data-lucide="download" style="width:18px;height:18px;"></i></a>' +
             '</div>' +
@@ -380,6 +385,29 @@ window.GlobalGallery = {
     this.attachEvents();
   },
 
+  /* Leave the gallery, then hand the scroll to the chat panel's own mechanism. Switching tab and
+     setting the pending id in the same turn works because the chat panel reads the id when its
+     render runs — the same approach the Shared Media panel uses, and for the same reason: a
+     scroll issued by hand gets undone by the re-render. */
+  jumpToMessage: function (chatId, msgId) {
+    if (!chatId || msgId == null) return;
+    window.store.setState({ activeTab: 'dms', activeChatId: chatId });
+    window._pendingActivityScrollMsgId = msgId;
+    if (window.ChatPanel && typeof window.ChatPanel.render === 'function') {
+      window.ChatPanel.render();
+    }
+    setTimeout(function () {
+      var row = document.querySelector('.message-row[data-msg-id="' + String(msgId).replace(/"/g, '') + '"]');
+      if (!row) return;
+      row.style.transition = 'background-color .25s';
+      row.style.backgroundColor = 'var(--accent-soft)';
+      setTimeout(function () {
+        row.style.backgroundColor = '';
+        setTimeout(function () { row.style.transition = ''; }, 400);
+      }, 1100);
+    }, 400);
+  },
+
   setGallerySelect: function (on) {
     this.gallerySelect = !!on;
     if (!on) this.gallerySelected = {};
@@ -486,6 +514,20 @@ window.GlobalGallery = {
 
     if (this.gallerySelected === undefined) this.gallerySelected = {};
     if (this.gallerySelect === undefined) this.gallerySelect = false;
+
+    // Jump buttons are inside the items, so this listens on the container. It runs before the
+    // item's own inline onclick only in select mode (the capture listener above); outside it,
+    // the jump button stops the event itself.
+    if (this.container && !this.container._jumpWired) {
+      this.container._jumpWired = true;
+      this.container.addEventListener('click', function (e) {
+        var jb = e.target.closest('.gallery-jump');
+        if (!jb) return;
+        e.preventDefault();
+        e.stopPropagation();
+        self.jumpToMessage(jb.getAttribute('data-chat'), jb.getAttribute('data-msg-id'));
+      });
+    }
 
     var selBtn = document.getElementById('gallery-select-btn');
     if (selBtn) {
