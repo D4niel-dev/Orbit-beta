@@ -118,6 +118,10 @@ window.GallerySidebar = {
     this.filterBtn = document.getElementById('btn-gallery-filter');
     this.filterPop = document.getElementById('gallery-filter-pop');
     this.filterDot = document.getElementById('gallery-filter-dot');
+    this.viewBtn = document.getElementById('btn-gallery-view');
+    if (!this.panelViewMode) {
+      this.panelViewMode = (window.store.getState().settings || {}).galleryPanelViewMode || 'grid';
+    }
     if (this.searchQuery === undefined) this.searchQuery = '';
     if (!this.filters) this.filters = { user: '', type: '', date: '' };
 
@@ -138,6 +142,18 @@ window.GallerySidebar = {
 
   attachEvents() {
     var self = this;
+    if (this.viewBtn && !this.viewBtn._wired) {
+      this.viewBtn._wired = true;
+      this.viewBtn.addEventListener('click', function () {
+        self.panelViewMode = (self.panelViewMode === 'grid') ? 'list' : 'grid';
+        var st = window.store.getState();
+        var next = Object.assign({}, st.settings, { galleryPanelViewMode: self.panelViewMode });
+        window.store.setState({ settings: next });
+        if (window.Storage) window.Storage.set('settings', next);
+        self.render(window.store.getState());
+      });
+    }
+
     if (this.filterBtn && !this.filterBtn._wired) {
       this.filterBtn._wired = true;
       this.filterBtn.addEventListener('click', function (e) {
@@ -303,21 +319,6 @@ window.GallerySidebar = {
       });
     }
 
-    if (items.length === 0) {
-      if (this.searchQuery) {
-        this.contentArea.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-muted);gap:10px;text-align:center;">' +
-          '<i data-lucide="search-x" style="width:26px;height:26px;"></i>' +
-          '<div style="font-size:13px;">Nothing here matches \u201c' + window.Sanitize.escapeHtml(this.searchQuery) + '\u201d</div>' +
-        '</div>';
-        if (window.lucide) window.lucide.createIcons({ root: this.contentArea });
-        return;
-      }
-      var emptyTxt = this.currentTab === 'images' ? 'No images shared yet.' : (this.currentTab === 'files' ? 'No files shared yet.' : 'No links shared yet.');
-      var emptyIcon = this.currentTab === 'images' ? 'image' : (this.currentTab === 'files' ? 'file' : 'link-2');
-      this.contentArea.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-muted);text-align:center;gap:12px;opacity:0.6;"><i data-lucide="' + emptyIcon + '" style="width:48px;height:48px;"></i><div style="font-size:14px;">' + emptyTxt + '</div></div>';
-      if (window.lucide) window.lucide.createIcons({ root: this.contentArea });
-      return;
-    }
 
     this._lastItems = items.slice();   // unfiltered, so the filter popover can list every sender
 
@@ -334,6 +335,40 @@ window.GallerySidebar = {
     if (this.filterDot) {
       var anyFilter = !!(f.user || f.type || f.date);
       this.filterDot.style.display = anyFilter ? 'block' : 'none';
+    }
+
+    // The toggle only means something on the tabs that have two layouts. Dan's instruction was
+    // explicit that Links keeps the display it has.
+    if (this.viewBtn) {
+      var twoLayouts = this.currentTab !== 'links';
+      this.viewBtn.style.display = twoLayouts ? 'flex' : 'none';
+      var vi = this.viewBtn.querySelector('svg, i');
+      if (vi) {
+        var want = (this.panelViewMode === 'grid') ? 'layout-grid' : 'list';
+        if (vi.getAttribute('data-lucide') !== want) {
+          var ni = document.createElement('i');
+          ni.setAttribute('data-lucide', want);
+          ni.style.cssText = 'width:15px;height:15px;';
+          vi.replaceWith(ni);
+          if (window.lucide) window.lucide.createIcons({ root: this.viewBtn });
+        }
+      }
+    }
+
+    if (items.length === 0) {
+      if (this.searchQuery) {
+        this.contentArea.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-muted);gap:10px;text-align:center;">' +
+          '<i data-lucide="search-x" style="width:26px;height:26px;"></i>' +
+          '<div style="font-size:13px;">Nothing here matches \u201c' + window.Sanitize.escapeHtml(this.searchQuery) + '\u201d</div>' +
+        '</div>';
+        if (window.lucide) window.lucide.createIcons({ root: this.contentArea });
+        return;
+      }
+      var emptyTxt = this.currentTab === 'images' ? 'No images shared yet.' : (this.currentTab === 'files' ? 'No files shared yet.' : 'No links shared yet.');
+      var emptyIcon = this.currentTab === 'images' ? 'image' : (this.currentTab === 'files' ? 'file' : 'link-2');
+      this.contentArea.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-muted);text-align:center;gap:12px;opacity:0.6;"><i data-lucide="' + emptyIcon + '" style="width:48px;height:48px;"></i><div style="font-size:14px;">' + emptyTxt + '</div></div>';
+      if (window.lucide) window.lucide.createIcons({ root: this.contentArea });
+      return;
     }
 
     // Sort descending
@@ -354,7 +389,29 @@ window.GallerySidebar = {
       html += '<div style="margin-bottom:16px;">';
       html += '<div style="font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;margin-bottom:8px;letter-spacing:0.5px;position:sticky;top:-16px;background:var(--bg-surface);padding:8px 0;z-index:2;">' + category + '</div>';
       
-      if (this.currentTab === 'images') {
+      if (this.currentTab === 'images' && this.panelViewMode === 'list') {
+        // Rows instead of tiles: a thumbnail, the name, and who sent it. At 340px a two-column
+        // grid shows very little of a filename, which is the thing you are usually looking for.
+        html += '<div style="display:flex;flex-direction:column;gap:6px;">';
+        groupItems.forEach(img => {
+          var lu = window.Sanitize.escapeHtml(img.url);
+          var ln = window.Sanitize.escapeHtml(String(img.name || 'Media'));
+          var ls = window.Sanitize.escapeHtml(String(img.senderName || ''));
+          var lthumb = lu;
+          if (lthumb.indexOf('orbit-file://') !== 0) lthumb = lthumb.replace('orbit-db://attachment/', 'orbit-db://thumbnail/');
+          html += '<div style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:10px;background:var(--bg-base);border:1px solid var(--border-subtle);">' +
+            '<div class="gallery-thumb" data-url="' + lu + '" data-name="' + ln + '" data-type="' + (img.type || 'image') + '" style="width:40px;height:40px;border-radius:8px;overflow:hidden;flex-shrink:0;background:var(--bg-hover);cursor:pointer;">' +
+              '<img src="' + lthumb + '" data-fallback-src="' + lu + '" style="width:100%;height:100%;object-fit:cover;">' +
+            '</div>' +
+            '<div style="flex:1;min-width:0;">' +
+              '<div style="font-size:12.5px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + ln + '</div>' +
+              '<div style="font-size:11px;color:var(--text-muted);">' + ls + ' &middot; ' + window.Format.fileSize(img.size || 0) + '</div>' +
+            '</div>' +
+            '<button class="gallery-file-download" data-url="' + lu + '" data-name="' + ln + '" style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;padding:4px;"><i data-lucide="download" style="width:14px;height:14px;"></i></button>' +
+          '</div>';
+        });
+        html += '</div>';
+      } else if (this.currentTab === 'images') {
         html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">';
         groupItems.forEach(img => {
           const safeUrl = window.Sanitize.escapeHtml(img.url);
@@ -391,6 +448,27 @@ window.GallerySidebar = {
               '<div style="align-self:flex-end;"><button style="background:rgba(255,255,255,0.2);border:none;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:white;cursor:pointer;"><i data-lucide="' + overlayIcon + '" style="width:14px;height:14px;"></i></button></div>' +
               '<div style="font-size:11px;color:white;font-weight:500;">Sent by ' + safeSender + '</div>' +
             '</div>' +
+          '</div>';
+        });
+        html += '</div>';
+      } else if (this.currentTab === 'files' && this.panelViewMode === 'grid') {
+        // Cards: the file-type icon and the name. Two per row at this width.
+        html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">';
+        groupItems.forEach(file => {
+          var gu = window.Sanitize.escapeHtml(file.url);
+          var gn = window.Sanitize.escapeHtml(String(file.name || 'File'));
+          var gext = gn.split('.').pop().toLowerCase();
+          var gicon = 'file';
+          if (['mp3', 'wav', 'ogg', 'webm', 'flac', 'aac', 'm4a', 'wma'].indexOf(gext) !== -1) gicon = 'music';
+          if (['mp4', 'mov', 'avi', 'mkv', 'wmv'].indexOf(gext) !== -1) gicon = 'video';
+          if (['pdf', 'doc', 'docx', 'txt', 'rtf'].indexOf(gext) !== -1) gicon = 'file-text';
+          if (['zip', 'rar', '7z', 'gz', 'tar'].indexOf(gext) !== -1) gicon = 'archive';
+          if (['js', 'ts', 'py', 'java', 'c', 'cpp', 'html', 'css', 'json', 'xml', 'sh'].indexOf(gext) !== -1) gicon = 'code';
+          html += '<div class="gallery-file-card" data-url="' + gu + '" data-name="' + gn + '" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:14px 8px;border-radius:12px;background:var(--bg-base);border:1px solid var(--border-subtle);cursor:pointer;">' +
+            '<div style="width:36px;height:36px;border-radius:9px;background:var(--bg-hover);display:flex;align-items:center;justify-content:center;">' +
+              '<i data-lucide="' + gicon + '" style="width:17px;height:17px;color:var(--text-secondary);"></i>' +
+            '</div>' +
+            '<div style="font-size:11.5px;color:var(--text-primary);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;">' + gn + '</div>' +
           '</div>';
         });
         html += '</div>';
