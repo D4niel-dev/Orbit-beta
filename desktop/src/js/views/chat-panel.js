@@ -1357,7 +1357,7 @@ window.ChatPanel = {
           '<button id="btn-plus" class="composer-plus" title="Attach"><i data-lucide="plus"></i></button>' +
           '<textarea id="chat-input" class="chat-input-field" placeholder="Message ' + window.Sanitize.escapeHtml(activeName) + '..." rows="1">' + (this.editingMsg ? window.Sanitize.escapeHtml(this.editingMsg.text) : '') + '</textarea>' +
           '<button id="btn-mic" title="Voice Memo (Click to start/stop)"><i data-lucide="mic"></i></button>' +
-          '<button id="btn-emoji"><i data-lucide="smile"></i></button>' +
+          '<button id="btn-emoji" class="composer-emoji"><i data-lucide="smile"></i></button>' +
           '<button id="btn-send" class="composer-send" title="Send" disabled><i data-lucide="send-horizontal"></i></button>' +
           '<input type="file" id="file-input" style="display:none;" multiple>' +
         '</div>' +
@@ -1718,6 +1718,37 @@ window.ChatPanel = {
 
     var btnEmoji = document.getElementById('btn-emoji');
     if (btnEmoji && window.EmojiPicker) {
+      // The picker owns open/close and closes itself on an outside click, so the button's lit
+      // state follows the picker rather than our own click. Wrapping the two methods covers
+      // every path in and out, including the ones we do not initiate.
+      var _setEmojiIcon = function (open) {
+        // Looked up fresh rather than closing over the render-time button: the composer is
+        // re-rendered on chat switches, and the wrapper below is installed only once, so a
+        // captured reference would point at a button that is no longer on screen.
+        var b = document.getElementById('btn-emoji');
+        if (!b) return;
+        b.classList.toggle('active', !!open);
+        var icon = self._iconEl ? self._iconEl('smile', !!open) : null;
+        if (!icon) return;
+        var old = b.querySelector('svg, i');
+        if (old) old.replaceWith(icon); else b.appendChild(icon);
+        if (icon.tagName === 'I' && window.lucide) window.lucide.createIcons({ root: b });
+      };
+      if (!window.EmojiPicker._orbitWrapped) {
+        window.EmojiPicker._orbitWrapped = true;
+        var _origOpen = window.EmojiPicker.open;
+        var _origClose = window.EmojiPicker.close;
+        window.EmojiPicker.open = function () {
+          var r = _origOpen.apply(this, arguments);
+          _setEmojiIcon(true);
+          return r;
+        };
+        window.EmojiPicker.close = function () {
+          var r = _origClose.apply(this, arguments);
+          _setEmojiIcon(false);
+          return r;
+        };
+      }
       btnEmoji.addEventListener('click', function() {
         window.EmojiPicker.toggle(input);
       });
@@ -1775,6 +1806,7 @@ window.ChatPanel = {
         _setSendIcon('send-horizontal', has);
       };
       self._setSendIcon = _setSendIcon;
+      self._iconEl = _iconEl;
       self._refreshSend();
 
       btnSend.addEventListener('click', async function() {

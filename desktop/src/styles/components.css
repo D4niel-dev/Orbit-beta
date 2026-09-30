@@ -2384,3 +2384,9 @@ html[data-theme="light"] #chat-welcome-host::before { opacity: 0.3; }
 .composer-send svg {
   transition: transform .15s ease;
 }
+
+/* The emoji button lights up while its picker is open, the way the send button lights up
+   when there is something to send. */
+.composer-emoji.active {
+  color: var(--accent-primary);
+}
