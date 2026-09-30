@@ -211,6 +211,13 @@ window.GallerySidebar = {
     // File download handler
     if (this.container) {
       this.container.addEventListener('click', function(e) {
+        var jumpBtn = e.target.closest('.gallery-jump');
+        if (jumpBtn) {
+          var jChat = jumpBtn.getAttribute('data-chat') || window.store.getState().activeChatId;
+          self.jumpToMessage(jChat, jumpBtn.getAttribute('data-msg-id'));
+          return;
+        }
+
         var downloadBtn = e.target.closest('.gallery-file-download');
         if (downloadBtn) {
           var url = downloadBtn.getAttribute('data-url');
@@ -407,6 +414,7 @@ window.GallerySidebar = {
               '<div style="font-size:12.5px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + ln + '</div>' +
               '<div style="font-size:11px;color:var(--text-muted);">' + ls + ' &middot; ' + window.Format.fileSize(img.size || 0) + '</div>' +
             '</div>' +
+            '<button class="gallery-jump" data-msg-id="' + img.msgId + '" title="Go to message" style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;padding:4px;"><i data-lucide="corner-up-left" style="width:14px;height:14px;"></i></button>' +
             '<button class="gallery-file-download" data-url="' + lu + '" data-name="' + ln + '" style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;padding:4px;"><i data-lucide="download" style="width:14px;height:14px;"></i></button>' +
           '</div>';
         });
@@ -492,6 +500,7 @@ window.GallerySidebar = {
               '<div style="font-size:13px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">' + safeName + '</div>' +
               '<div style="font-size:11px;color:var(--text-muted);">' + safeSender + ' &middot; ' + window.Format.fileSize(file.size || 0) + '</div>' +
             '</div>' +
+            '<button class="gallery-jump" data-msg-id="' + file.msgId + '" title="Go to message" style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;padding:4px;"><i data-lucide="corner-up-left" style="width:14px;height:14px;"></i></button>' +
             '<button class="gallery-file-download" data-url="' + safeUrl + '" data-name="' + safeName + '" style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;"><i data-lucide="download" style="width:16px;height:16px;"></i></button>' +
           '</div>';
         });
@@ -548,6 +557,62 @@ window.GallerySidebar = {
     });
 
     if (window.lucide) window.lucide.createIcons({ root: this.contentArea });
+  },
+
+  /* Scroll the chat feed to a message and flash it. Same shape as the pinned modal's jump:
+     look for the row, and if it is not rendered yet ask the store to load the full chat and
+     try again — the feed is virtualised for long conversations. */
+  jumpToMessage: function (chatId, msgId) {
+    if (!chatId || msgId == null) return false;
+    this.close();
+    var id = String(msgId).replace(/"/g, '');
+    var find = function () {
+      return document.querySelector('.message-row[data-msg-id="' + id + '"]') ||
+             document.querySelector('[data-msg-id="' + id + '"]');
+    };
+    var flash = function (el) {
+      if (!el) return false;
+      // Scroll the feed by hand rather than calling scrollIntoView.
+      //
+      // scrollIntoView did nothing here: the panel is position:absolute over the chat, so
+      // hiding it reflows the feed, and the reflow undoes a scroll issued in the same turn.
+      // Even deferred, the smooth behaviour never started. Moving scrollTop directly is
+      // deterministic and cannot be cancelled by a reflow.
+      var feed = document.getElementById('chat-message-feed');
+      if (feed) {
+        var fr = feed.getBoundingClientRect();
+        var er = el.getBoundingClientRect();
+        var delta = (er.top + er.height / 2) - (fr.top + fr.height / 2);
+        feed.scrollTop = Math.max(0, feed.scrollTop + delta);
+      } else {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      var prev = el.style.backgroundColor;
+      el.style.transition = 'background-color .25s';
+      el.style.backgroundColor = 'var(--accent-soft)';
+      setTimeout(function () {
+        el.style.backgroundColor = prev;
+        setTimeout(function () { el.style.transition = ''; }, 400);
+      }, 1100);
+      return true;
+    };
+    // Scrolled a tick after the panel closes. The panel is position:absolute over the chat, so
+    // hiding it reflows the feed — scrolling in the same turn gets undone by that reflow, which
+    // is why the first version closed the panel and then did not move at all.
+    // Uses the chat panel's OWN mechanism rather than scrolling by hand.
+    //
+    // The panel already supports "scroll to this message on the next render" via
+    // window._pendingActivityScrollMsgId — it is how the activity centre jumps. My first three
+    // attempts scrolled the feed directly and every one was undone, because the chat re-renders
+    // when the side panel closes and that render scrolls to the bottom. Setting the pending id
+    // and asking for a render puts the scroll inside the render, where it survives.
+    window._pendingActivityScrollMsgId = msgId;
+    if (window.ChatPanel && typeof window.ChatPanel.render === 'function') {
+      window.ChatPanel.render();
+    }
+    // Flash it once it has landed, so you can see which message it was.
+    setTimeout(function () { flash(find()); }, 400);
+    return true;
   },
 
   toggle() {
