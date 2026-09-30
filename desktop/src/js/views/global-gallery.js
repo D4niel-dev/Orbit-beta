@@ -80,6 +80,7 @@ window.GlobalGallery = {
             if (this.mediaType === 'files' && isMedia) return;
             allAttachments.push({
               ...att,
+              msgId: msg.id,
               chatId: chatId,
               chatName: chatName,
               timestamp: msg.timestamp
@@ -147,7 +148,7 @@ window.GlobalGallery = {
           mediaHtml = '<img src="' + safeUrl + '" style="width:100%; height:100%; object-fit:cover;" onerror="if(window.handleMediaError) window.handleMediaError(this, \'' + safeUrl + '\')">';
         }
 
-        return '<div class="gallery-grid-item" style="aspect-ratio:1;" onclick="if(window.ImageViewer){ if(' + (isVideo ? 'true' : 'false') + ') window.ImageViewer.openVideo(\'' + safeUrl + '\',\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\'); else if(' + (isAudio ? 'true' : 'false') + ') window.ImageViewer.openAudio({url:\'' + safeUrl + '\',name:\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\',size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'}); else window.ImageViewer.open({url:\'' + safeUrl + '\',name:\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\',size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'}); }">' +
+        return '<div class="gallery-grid-item" data-msg-id="' + a.msgId + '" data-chat="' + a.chatId + '" style="aspect-ratio:1;" onclick="if(window.ImageViewer){ if(' + (isVideo ? 'true' : 'false') + ') window.ImageViewer.openVideo(\'' + safeUrl + '\',\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\'); else if(' + (isAudio ? 'true' : 'false') + ') window.ImageViewer.openAudio({url:\'' + safeUrl + '\',name:\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\',size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'}); else window.ImageViewer.open({url:\'' + safeUrl + '\',name:\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\',size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'}); }">' +
           mediaHtml +
           '<div class="gallery-label">' + window.Sanitize.escapeHtml(a.chatName) + '</div>' +
           '<div class="gallery-overlay">' +
@@ -183,7 +184,7 @@ window.GlobalGallery = {
           mediaHtml = '<img src="' + safeUrl + '" style="width:100%; height:100%; object-fit:cover;" onerror="if(window.handleMediaError) window.handleMediaError(this, \'' + safeUrl + '\')">';
         }
 
-        return '<div style="display:flex; gap:16px; align-items:center; border-radius:12px; padding:12px; border:1px solid var(--border-subtle); background:var(--bg-surface); cursor:pointer;" onclick="if(window.ImageViewer){ if(' + (isVideo ? 'true' : 'false') + ') window.ImageViewer.openVideo(\'' + safeUrl + '\',\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\'); else if(' + (isAudio ? 'true' : 'false') + ') window.ImageViewer.openAudio({url:\'' + safeUrl + '\',name:\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\',size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'}); else window.ImageViewer.open({url:\'' + safeUrl + '\',name:\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\',size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'}); }">' +
+        return '<div class="gallery-list-row" data-msg-id="' + a.msgId + '" data-chat="' + a.chatId + '" style="display:flex; gap:16px; align-items:center; border-radius:12px; padding:12px; border:1px solid var(--border-subtle); background:var(--bg-surface); cursor:pointer;" onclick="if(window.ImageViewer){ if(' + (isVideo ? 'true' : 'false') + ') window.ImageViewer.openVideo(\'' + safeUrl + '\',\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\'); else if(' + (isAudio ? 'true' : 'false') + ') window.ImageViewer.openAudio({url:\'' + safeUrl + '\',name:\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\',size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'}); else window.ImageViewer.open({url:\'' + safeUrl + '\',name:\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\',size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'}); }">' +
           '<div style="width:80px; height:80px; border-radius:8px; overflow:hidden; flex-shrink:0;">' +
             mediaHtml +
           '</div>' +
@@ -258,7 +259,7 @@ window.GlobalGallery = {
             mediaHtml = '<img src="' + safeUrl + '" style="width:100%; display:block;" onerror="if(window.handleMediaError) window.handleMediaError(this, \'' + safeUrl + '\')">';
           }
 
-          contentHtml += '<div class="gallery-grid-item" onclick="if(window.ImageViewer){ if(' + (isVideo ? 'true' : 'false') + ') window.ImageViewer.openVideo(\'' + safeUrl + '\',\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\'); else if(' + (isAudio ? 'true' : 'false') + ') window.ImageViewer.openAudio({url:\'' + safeUrl + '\',name:\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\',size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'}); else window.ImageViewer.open({url:\'' + safeUrl + '\',name:\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\',size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'}); }" style="margin-bottom:16px;">' +
+          contentHtml += '<div class="gallery-grid-item" data-msg-id="' + a.msgId + '" data-chat="' + a.chatId + '" onclick="if(window.ImageViewer){ if(' + (isVideo ? 'true' : 'false') + ') window.ImageViewer.openVideo(\'' + safeUrl + '\',\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\'); else if(' + (isAudio ? 'true' : 'false') + ') window.ImageViewer.openAudio({url:\'' + safeUrl + '\',name:\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\',size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'}); else window.ImageViewer.open({url:\'' + safeUrl + '\',name:\'' + window.Sanitize.escapeHtml(a.name || 'Media') + '\',size:\'' + window.Sanitize.escapeHtml(String(a.size || 0)) + '\'}); }" style="margin-bottom:16px;">' +
             mediaHtml +
             '<div class="gallery-overlay">' +
               '<button class="gallery-action-btn" title="View"><i data-lucide="' + (isVideo || isAudio ? 'play' : 'eye') + '" style="width:18px;height:18px;"></i></button>' +
@@ -319,6 +320,7 @@ window.GlobalGallery = {
     }).sort(function (a, b) { return b.bytes - a.bytes; });
     this._storageTotal = { bytes: totalBytes, size: totalSize, count: allAttachments.length };
 
+    this._galleryRenderSeq = (this._galleryRenderSeq || 0) + 1;
     this.container.innerHTML =
       '<div style="height:64px; border-bottom:1px solid var(--border-subtle); display:flex; align-items:center; justify-content:space-between; padding:0 var(--spacing-lg);">' +
         '<div style="display:flex; align-items:center; gap:12px;">' +
@@ -335,6 +337,10 @@ window.GlobalGallery = {
             '<i data-lucide="search" style="position:absolute; left:12px; top:50%; transform:translateY(-50%); width:16px; height:16px; color:var(--text-muted);"></i>' +
             '<input type="text" id="gallery-search" value="' + window.Sanitize.escapeHtml(this.searchQuery) + '" placeholder="Search media..." style="width:100%; height:36px; border-radius:18px; border:1px solid var(--border-subtle); background:var(--bg-hover); padding:0 16px 0 36px; color:var(--text-primary); outline:none;">' +
           '</div>' +
+          '<button id="gallery-select-btn" title="Select items" style="width:30px; height:30px; border-radius:8px; border:1px solid var(--border-subtle); ' +
+            'background:var(--bg-base); color:var(--text-secondary); cursor:pointer; display:flex; align-items:center; justify-content:center;">' +
+            '<i data-lucide="list-checks" style="width:15px;height:15px;"></i>' +
+          '</button>' +
           '<div style="display:flex; background:var(--bg-hover); border-radius:8px; padding:4px; border:1px solid var(--border-subtle);">' +
             '<button class="view-mode-btn ' + (this.displayMode === 'grid' ? 'active' : '') + '" data-mode="grid" title="Grid View" style="width:28px; height:28px; border-radius:6px; border:none; background:' + (this.displayMode === 'grid' ? 'var(--bg-surface)' : 'transparent') + '; color:' + (this.displayMode === 'grid' ? 'var(--text-primary)' : 'var(--text-muted)') + '; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:' + (this.displayMode === 'grid' ? 'var(--shadow-sm)' : 'none') + ';"><i data-lucide="grid" style="width:16px; height:16px;"></i></button>' +
             '<button class="view-mode-btn ' + (this.displayMode === 'compact' ? 'active' : '') + '" data-mode="compact" title="Compact View" style="width:28px; height:28px; border-radius:6px; border:none; background:' + (this.displayMode === 'compact' ? 'var(--bg-surface)' : 'transparent') + '; color:' + (this.displayMode === 'compact' ? 'var(--text-primary)' : 'var(--text-muted)') + '; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:' + (this.displayMode === 'compact' ? 'var(--shadow-sm)' : 'none') + ';"><i data-lucide="layout-grid" style="width:16px; height:16px;"></i></button>' +
@@ -346,6 +352,12 @@ window.GlobalGallery = {
       '<div id="gallery-storage-pop" style="display:none; position:absolute; top:60px; left:var(--spacing-lg); z-index:60; width:320px; ' +
         'max-height:60vh; overflow-y:auto; padding:14px; border-radius:14px; background:var(--bg-surface); border:1px solid var(--border-subtle); ' +
         'box-shadow:var(--shadow-xl);"></div>' +
+      '<div id="gallery-bulk-bar" style="display:none; padding:8px var(--spacing-lg); border-bottom:1px solid var(--border-subtle); ' +
+        'background:var(--bg-base); align-items:center; gap:10px;">' +
+        '<span id="gallery-bulk-count" style="font-size:12px; color:var(--text-secondary); flex:1;"></span>' +
+        '<button id="gallery-bulk-delete" style="padding:6px 14px; border-radius:8px; border:none; background:var(--accent-danger); color:#fff; cursor:pointer; font-size:12px; font-weight:600;">Delete</button>' +
+        '<button id="gallery-bulk-clear" style="padding:6px 12px; border-radius:8px; border:1px solid var(--border-subtle); background:transparent; color:var(--text-secondary); cursor:pointer; font-size:12px;">Clear</button>' +
+      '</div>' +
       '<div style="display:flex; gap:8px; padding:8px var(--spacing-lg); border-bottom:1px solid var(--border-subtle); overflow-x:auto; align-items:center;">' +
         typeFilterHtml +
         (typeFilterHtml ? '<span style="color:var(--border-subtle);">|</span>' : '') +
@@ -354,7 +366,73 @@ window.GlobalGallery = {
       contentHtml;
 
     lucide.createIcons({ root: this.container });
+
+    // Marks re-applied from state, because anything that re-renders rebuilds these elements and
+    // a class toggled on click would be lost. Same lesson as the Shared Media panel.
+    if (this.gallerySelect) {
+      var seld = this.gallerySelected || {};
+      this.container.querySelectorAll('[data-msg-id]').forEach(function (el) {
+        var k = el.getAttribute('data-msg-id') + '|' + (el.getAttribute('data-chat') || '');
+        if (seld[k]) el.classList.add('selected');
+      });
+    }
+    this.updateGalleryBulkBar();
     this.attachEvents();
+  },
+
+  setGallerySelect: function (on) {
+    this.gallerySelect = !!on;
+    if (!on) this.gallerySelected = {};
+    var btn = document.getElementById('gallery-select-btn');
+    if (btn) {
+      btn.style.color = on ? 'var(--accent-primary)' : 'var(--text-secondary)';
+      btn.title = on ? 'Cancel selection' : 'Select items';
+      var want = on ? 'x' : 'list-checks';
+      var cur = btn.querySelector('svg, i');
+      if (cur && cur.getAttribute('data-lucide') !== want) {
+        var ni = document.createElement('i');
+        ni.setAttribute('data-lucide', want);
+        ni.style.cssText = 'width:15px;height:15px;';
+        cur.replaceWith(ni);
+        if (window.lucide) window.lucide.createIcons({ root: btn });
+      }
+    }
+    this.render(window.store.getState());
+  },
+
+  updateGalleryBulkBar: function () {
+    var bar = document.getElementById('gallery-bulk-bar');
+    var count = document.getElementById('gallery-bulk-count');
+    if (!bar) return;
+    var n = Object.keys(this.gallerySelected || {}).length;
+    bar.style.display = (this.gallerySelect && n > 0) ? 'flex' : 'none';
+    if (count) count.textContent = n === 1 ? '1 item selected' : n + ' items selected';
+  },
+
+  /* Deleting media means deleting the MESSAGE it came from, for both sides — which is what Dan
+     chose, and what store.deleteMessage already does. The confirm says so plainly, because
+     "delete" in a gallery could reasonably mean three different things and the wrong guess
+     destroys history. */
+  deleteGallerySelected: function () {
+    var sel = this.gallerySelected || {};
+    var keys = Object.keys(sel);
+    if (!keys.length) return;
+    var self = this;
+    var n = keys.length;
+    window.ConfirmModal.show({
+      title: 'Delete ' + n + (n === 1 ? ' item' : ' items') + '?',
+      message: 'The message' + (n === 1 ? '' : 's') + ' will be removed for both you and the other person, along with the media. This cannot be undone.',
+      confirmText: 'Delete',
+      danger: true,
+      onConfirm: function () {
+        keys.forEach(function (k) {
+          var parts = String(k).split('|');
+          if (parts[0] && parts[1]) window.store.deleteMessage(parts[1], parts[0]);
+        });
+        self.gallerySelected = {};
+        self.setGallerySelect(false);
+      }
+    });
   },
 
   /* The breakdown, biggest first, with a bar so the ranking is readable at a glance rather than
@@ -405,6 +483,39 @@ window.GlobalGallery = {
 
   attachEvents() {
     var self = this;
+
+    if (this.gallerySelected === undefined) this.gallerySelected = {};
+    if (this.gallerySelect === undefined) this.gallerySelect = false;
+
+    var selBtn = document.getElementById('gallery-select-btn');
+    if (selBtn) {
+      selBtn.addEventListener('click', function () { self.setGallerySelect(!self.gallerySelect); });
+    }
+    var delBtn = document.getElementById('gallery-bulk-delete');
+    if (delBtn) delBtn.addEventListener('click', function () { self.deleteGallerySelected(); });
+    var clrBtn = document.getElementById('gallery-bulk-clear');
+    if (clrBtn) clrBtn.addEventListener('click', function () {
+      self.gallerySelected = {};
+      self.render(window.store.getState());
+    });
+
+    // Capture phase: every item carries an inline onclick that opens the viewer, and those fire
+    // before any bubble-phase listener on a parent.
+    if (this.container && !this.container._selectWired) {
+      this.container._selectWired = true;
+      this.container.addEventListener('click', function (e) {
+        if (!self.gallerySelect) return;
+        var item = e.target.closest('[data-msg-id]');
+        if (!item || !self.container.contains(item)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        var key = item.getAttribute('data-msg-id') + '|' + (item.getAttribute('data-chat') || '');
+        if (self.gallerySelected[key]) delete self.gallerySelected[key];
+        else self.gallerySelected[key] = true;
+        item.classList.toggle('selected', !!self.gallerySelected[key]);
+        self.updateGalleryBulkBar();
+      }, true);
+    }
 
     // The header is rebuilt on every render, so the button needs re-wiring each time — but the
     // document listener must not be, or one would accumulate per render.
