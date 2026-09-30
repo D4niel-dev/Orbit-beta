@@ -119,6 +119,11 @@ window.GallerySidebar = {
     this.filterPop = document.getElementById('gallery-filter-pop');
     this.filterDot = document.getElementById('gallery-filter-dot');
     this.viewBtn = document.getElementById('btn-gallery-view');
+    this.selectBtn = document.getElementById('btn-gallery-select');
+    this.bulkBar = document.getElementById('gallery-bulk-bar');
+    this.bulkCount = document.getElementById('gallery-bulk-count');
+    if (!this.selected) this.selected = {};
+    if (this.selectMode === undefined) this.selectMode = false;
     if (!this.panelViewMode) {
       this.panelViewMode = (window.store.getState().settings || {}).galleryPanelViewMode || 'grid';
     }
@@ -142,6 +147,46 @@ window.GallerySidebar = {
 
   attachEvents() {
     var self = this;
+    if (this.selectBtn && !this.selectBtn._wired) {
+      this.selectBtn._wired = true;
+      this.selectBtn.addEventListener('click', function () {
+        self.setSelectMode(!self.selectMode);
+      });
+      var bd = document.getElementById('btn-gallery-bulk-download');
+      if (bd) bd.addEventListener('click', function () { self.downloadSelected(); });
+      var bc = document.getElementById('btn-gallery-bulk-clear');
+      if (bc) bc.addEventListener('click', function () {
+        self.selected = {};
+        self.render(window.store.getState());
+      });
+    }
+
+    // Capture phase, so it beats the inline onclick on each item.
+    if (this.container && !this.container._selectWired) {
+      this.container._selectWired = true;
+      this.container.addEventListener('click', function (e) {
+        if (!self.selectMode) return;
+        var item = e.target.closest('.gallery-item, .gallery-file-card, [data-item-key]');
+        if (!item) return;
+        e.preventDefault();
+        e.stopPropagation();
+        var key = item.getAttribute('data-item-key');
+        if (!key) {
+          var idEl = item.querySelector('[data-msg-id]');
+          var urlEl = item.querySelector('[data-url]');
+          // data-item-url first, matching the key the render builds when it re-applies the
+          // marks — the two have to agree or a selection silently stops being visible.
+          key = (idEl ? idEl.getAttribute('data-msg-id') : '') + '|' +
+                (item.getAttribute('data-item-url') || (urlEl ? urlEl.getAttribute('data-url') : ''));
+        }
+        if (!key || key === '|') return;
+        if (self.selected[key]) delete self.selected[key];
+        else self.selected[key] = item.getAttribute('data-item-url') || '';
+        item.classList.toggle('selected', !!self.selected[key]);
+        self.updateBulkBar();
+      }, true);
+    }
+
     if (this.viewBtn && !this.viewBtn._wired) {
       this.viewBtn._wired = true;
       this.viewBtn.addEventListener('click', function () {
@@ -339,6 +384,9 @@ window.GallerySidebar = {
       if (cutoff) items = items.filter(function (it) { return it.ts >= cutoff; });
     }
 
+    if (this.selectBtn) this.selectBtn.style.display = 'block';
+    this.updateBulkBar();
+
     if (this.filterDot) {
       var anyFilter = !!(f.user || f.type || f.date);
       this.filterDot.style.display = anyFilter ? 'block' : 'none';
@@ -448,7 +496,7 @@ window.GallerySidebar = {
             mediaContent = '<img src="' + thumbUrl + '" data-fallback-src="' + safeUrl + '" style="width:100%;height:100%;object-fit:cover;transition:transform 0.3s;" onerror="if(window.mediaImgOnError) window.mediaImgOnError(this)">';
           }
 
-          html += '<div class="gallery-item group" data-media-type="' + (isVideo ? 'video' : (isAudio ? 'audio' : 'image')) + '" style="position:relative;border-radius:12px;overflow:hidden;aspect-ratio:1/1;cursor:pointer;border:1px solid var(--border-subtle);" onclick="if(window.ImageViewer){ if(' + (isVideo ? 'true' : 'false') + ') window.ImageViewer.openVideo(\'' + safeUrl + '\',\'' + safeName + '\'); else if(' + (isAudio ? 'true' : 'false') + ') window.ImageViewer.openAudio({url:\'' + safeUrl + '\',name:\'' + safeName + '\',size:\'' + safeSize + '\'}); else window.ImageViewer.open({url:\'' + safeUrl + '\',name:\'' + safeName + '\',size:\'' + safeSize + '\'}); }">' +
+          html += '<div class="gallery-item group" data-item-url="' + safeUrl + '" data-media-type="' + (isVideo ? 'video' : (isAudio ? 'audio' : 'image')) + '" style="position:relative;border-radius:12px;overflow:hidden;aspect-ratio:1/1;cursor:pointer;border:1px solid var(--border-subtle);" onclick="if(window.ImageViewer){ if(' + (isVideo ? 'true' : 'false') + ') window.ImageViewer.openVideo(\'' + safeUrl + '\',\'' + safeName + '\'); else if(' + (isAudio ? 'true' : 'false') + ') window.ImageViewer.openAudio({url:\'' + safeUrl + '\',name:\'' + safeName + '\',size:\'' + safeSize + '\'}); else window.ImageViewer.open({url:\'' + safeUrl + '\',name:\'' + safeName + '\',size:\'' + safeSize + '\'}); }">' +
             mediaContent +
             (isVideo ? '<div style="position:absolute;bottom:6px;left:6px;background:rgba(0,0,0,0.7);border-radius:4px;padding:2px 6px;font-size:10px;color:white;font-weight:600;pointer-events:none;"><i data-lucide="video" style="width:10px;height:10px;margin-right:3px;vertical-align:middle;"></i>Video</div>' : '') +
             (isAudio ? '<div style="position:absolute;bottom:6px;left:6px;background:rgba(0,0,0,0.7);border-radius:4px;padding:2px 6px;font-size:10px;color:white;font-weight:600;pointer-events:none;">Audio</div>' : '') +
@@ -531,6 +579,18 @@ window.GallerySidebar = {
     });
 
     this.contentArea.innerHTML = html;
+
+    // Re-apply the selection marks from state. The capture listener toggles the class on click,
+    // but anything that re-renders the panel rebuilds these elements and the class is lost —
+    // so the render is the authority and the click just gives instant feedback.
+    if (this.selectMode) {
+      var sel = this.selected || {};
+      this.contentArea.querySelectorAll('.gallery-item, .gallery-file-card').forEach(function (el) {
+        var idEl = el.querySelector('[data-msg-id]');
+        var k = (idEl ? idEl.getAttribute('data-msg-id') : '') + '|' + (el.getAttribute('data-item-url') || '');
+        if (sel[k]) el.classList.add('selected');
+      });
+    }
     
     // Inject hover css via JS for .gallery-item.group since inline hover on complex elements is tricky
     this.contentArea.querySelectorAll('.gallery-item.group').forEach(el => {
@@ -566,6 +626,47 @@ window.GallerySidebar = {
   /* Scroll the chat feed to a message and flash it. Same shape as the pinned modal's jump:
      look for the row, and if it is not rendered yet ask the store to load the full chat and
      try again — the feed is virtualised for long conversations. */
+  setSelectMode: function (on) {
+    this.selectMode = !!on;
+    if (!on) this.selected = {};
+    if (this.selectBtn) {
+      this.selectBtn.textContent = on ? 'Cancel' : 'Select';
+      this.selectBtn.style.color = on ? 'var(--accent-primary)' : 'var(--text-secondary)';
+    }
+    this.render(window.store.getState());
+  },
+
+  updateBulkBar: function () {
+    if (!this.bulkBar) return;
+    var n = Object.keys(this.selected || {}).length;
+    this.bulkBar.style.display = (this.selectMode && n > 0) ? 'flex' : 'none';
+    if (this.bulkCount) {
+      this.bulkCount.textContent = n === 1 ? '1 item selected' : n + ' items selected';
+    }
+  },
+
+  downloadSelected: function () {
+    var keys = Object.keys(this.selected || {});
+    if (!keys.length) return;
+    var self = this;
+    keys.forEach(function (k, i) {
+      var url = self.selected[k];
+      if (!url) return;
+      // Staggered: browsers drop a burst of simultaneous downloads, and a user who picked
+      // twenty files wants twenty files, not the four the browser felt like allowing.
+      setTimeout(function () {
+        if (window.orbitAPI && window.orbitAPI.downloadFile) {
+          window.orbitAPI.downloadFile(url, (url.split('/').pop() || 'file'));
+        } else {
+          var a = document.createElement('a');
+          a.href = url;
+          a.download = url.split('/').pop() || 'file';
+          a.click();
+        }
+      }, i * 220);
+    });
+  },
+
   jumpToMessage: function (chatId, msgId) {
     if (!chatId || msgId == null) return false;
     this.close();
