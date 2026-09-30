@@ -4360,8 +4360,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // conversations that have genuinely moved on, which is Dan's rule and the right one.
     if (ageDays !== null && ageDays >= 7) {
       chip.classList.add('old');
-      if (title) title.textContent = ageDays >= 60 ? 'Messages from months ago' : 'Reading old messages';
-      if (sub) { sub.textContent = 'Tap to jump to latest'; sub.style.display = 'block'; }
+      if (title) title.textContent = ageDays >= 60 ? 'You\u2019re viewing messages from months ago' : 'You\u2019re viewing older messages';
+      // No sub line any more: the button beside it says what to do, and two instructions in
+      // one small chip is one too many.
+      if (sub) { sub.textContent = ''; sub.style.display = 'none'; }
     } else {
       chip.classList.remove('old');
       if (title) title.textContent = 'Jump to latest';
@@ -4415,10 +4417,16 @@ document.addEventListener('DOMContentLoaded', function() {
         _updateJumpChip();
       });
     }, { passive: true });
-    chip.addEventListener('click', function () {
+    // The button is the stated target, but the whole chip still works: a small button on a
+    // floating chip is an awkward thing to hit, and there is nothing else the chip could mean.
+    var go = function (e) {
+      if (e) e.stopPropagation();
       feed.scrollTo({ top: feed.scrollHeight, behavior: 'smooth' });
       _hideJumpChip();
-    });
+    };
+    chip.addEventListener('click', go);
+    var goBtn = chip.querySelector('.jump-latest-go');
+    if (goBtn) goBtn.addEventListener('click', go);
   }
 
   window._updateJumpChip = _updateJumpChip;

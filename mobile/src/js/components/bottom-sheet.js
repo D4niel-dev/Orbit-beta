@@ -441,20 +441,27 @@ var OrbitSheet = {
     });
   }, { passive: true });
 
-  sheet.addEventListener('touchend', function () {
+  var finishDrag = function () {
     if (!dragging) return;
     var dy = curY - startY;
     var elapsed = Math.max(1, Date.now() - startTime);
     var velocity = dy / elapsed;
     endDrag();
     if (dy > 120 || velocity > 0.5) OrbitSheet.hide();
-  });
+  };
+
+  sheet.addEventListener('touchend', finishDrag);
 
   // Android cancels the touch stream whenever the WebView takes the gesture over
-  // (a scroll, a system edge swipe, the keyboard appearing). Without this the
-  // drag never ends, so the sheet keeps the inline transform it was left with
-  // and hide() becomes a no-op. Always reset.
-  sheet.addEventListener('touchcancel', function () { endDrag(); }, { passive: true });
+  // (a scroll, a system edge swipe, the keyboard appearing). This used to reset the
+  // transform and nothing else, which is Dan's report: "dragging the pill down to close it,
+  // it didn't go all the way and is still visible" — the sheet snapped back to where it
+  // started and stayed on screen.
+  //
+  // A cancel means the BROWSER took the gesture, not that the user changed their mind. If
+  // the drag had already gone far enough to close, it should close; only Android's
+  // bookkeeping differed. So this now runs the same decision as a touchend.
+  sheet.addEventListener('touchcancel', finishDrag, { passive: true });
 })();
 
 /* ---- Keep the sheet inside the visible area while the keyboard moves ----

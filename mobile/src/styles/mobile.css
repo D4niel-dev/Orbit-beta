@@ -7819,8 +7819,8 @@ textarea#chat-input {
   left: 50%;
   z-index: 40;
   align-items: center;
-  gap: 8px;
-  padding: 8px 15px;
+  gap: 12px;
+  padding: 8px 8px 8px 15px;
   border-radius: 18px;
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
@@ -7898,4 +7898,29 @@ textarea#chat-input {
 #pinned-messages-bar .pin-dot.on {
   opacity: 1;
   background: var(--accent-primary);
+}
+
+/* The action is a button now, not a line of text — so the chip reads as a statement with one
+   obvious thing to do about it, which is the shape Dan pointed at. */
+#jump-latest-chip .jump-latest-go {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 12px;
+  background: var(--accent-primary);
+  color: #fff;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+#jump-latest-chip .jump-latest-go:active {
+  filter: brightness(0.9);
+}
+#jump-latest-chip .jump-latest-go i,
+#jump-latest-chip .jump-latest-go svg {
+  width: 16px;
+  height: 16px;
 }
