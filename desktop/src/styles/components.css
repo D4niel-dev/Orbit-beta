@@ -2358,22 +2358,22 @@ html[data-theme="light"] #chat-welcome-host::before { opacity: 0.3; }
 .composer-send.ready {
   opacity: 1;
   cursor: pointer;
-  /* A theme-coloured disc under the arrow, in the theme's SOFT accent rather than the full
-     one. The solid accent was loud: it is the same weight as a primary button, and this sits
-     between a mic and an emoji, not at the end of a dialog. The soft tint still reads as
-     "press me" and lets the arrow carry the contrast. */
-  background: var(--accent-soft);
-  color: var(--text-primary);
-  border-radius: 50%;
+  /* No disc at all. The mic and the emoji beside it have no backgrounds, so a filled circle
+     here was the only shape in the row and read as a different KIND of control. The colour
+     carries the state instead: a grey outline arrow when there is nothing to send, a
+     theme-blue filled arrow when there is. */
+  color: var(--accent-primary);
 }
 /* Scoped with .chat-input-wrapper so it outranks the base button:hover rule, which sets a
    background of its own and would otherwise turn the disc grey the moment the pointer
    touched it. The hover keeps the disc and adds a faint accent glow — a hint that it is
    live, without going back to the solid weight. */
-.chat-input-wrapper .composer-send.ready:hover {
-  background: var(--accent-soft);
-  color: var(--text-primary);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-primary) 30%, transparent);
+/* No hover override: the base .chat-input-wrapper button:hover supplies the same soft surface
+   the mic and emoji get, which is the house behaviour for every button in this row. The accent
+   colour above survives it — colour and background are different properties, so there is
+   nothing to out-rank any more. */
+.composer-send.ready:hover {
+  color: var(--accent-primary);
 }
 .composer-send.ready:hover {
   transform: scale(1.06);
