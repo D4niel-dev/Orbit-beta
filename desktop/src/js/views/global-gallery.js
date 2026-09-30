@@ -41,7 +41,16 @@ window.GlobalGallery = {
       return;
     }
 
+    // Fade the view in when it is first shown, not on every re-render. render() runs on any
+    // store change, so an unconditional animation would flicker the whole gallery every time
+    // a message arrived.
+    var wasHidden = this.container.style.display === 'none';
     this.container.style.display = 'flex';
+    if (wasHidden) {
+      var el = this.container;
+      el.classList.remove('gallery-in');
+      requestAnimationFrame(function () { el.classList.add('gallery-in'); });
+    }
 
     var allAttachments = [];
     const messages = state.messages || {};

@@ -1728,7 +1728,10 @@ window.ChatPanel = {
         var b = document.getElementById('btn-emoji');
         if (!b) return;
         b.classList.toggle('active', !!open);
-        var icon = self._iconEl ? self._iconEl('smile', !!open) : null;
+        // NOT filled. Filling lucide's smile fills its outer circle, so the icon becomes a solid
+        // disc with no face in it — Dan: "its just a blue circle! i don't see any icon". The
+        // lit state is the accent colour alone, which is what the send button does too.
+        var icon = self._iconEl ? self._iconEl('smile', false) : null;
         if (!icon) return;
         var old = b.querySelector('svg, i');
         if (old) old.replaceWith(icon); else b.appendChild(icon);
