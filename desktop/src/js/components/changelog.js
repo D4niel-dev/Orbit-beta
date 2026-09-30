@@ -14,7 +14,28 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.7.5-beta', 'Latest', [
+        versionBlock('0.7.6-beta', 'Latest', [
+          ['New', [
+            'Shared Media has grown up: search, filters by sender, kind and age, a grid/list toggle, jump-to-message on every item, and multi-select with download-all. It also renders 60 items at a time with a count, rather than building the whole list on every keystroke.',
+            'Storage stats in the gallery header \u2014 how much your media takes and which chats it came from, biggest first. Orbit keeps your files on your own disk, so this is a fair question to ask.',
+            'Select and delete media from the gallery. The confirm says plainly that the message goes for both people, because "delete" here could reasonably mean three different things.',
+            'A month scrubber down the side of the gallery, so "that photo from March" is a click rather than a scroll.',
+            'The composer says what it can do: the plus rotates into an \u00d7 while its menu is open, the send button lights up and fills when there is something to send, and hovering a disabled send shows a random icon.',
+            'The tutorial and welcome slides animate their parts in sequence instead of swapping all at once.'
+          ]],
+          ['Fixes', [
+            'The Images tab was showing video and audio \u2014 and their thumbnails cannot load, so they appeared as broken images. Images means images now.',
+            'Changing the display no longer refreshes the whole window. It was writing a preference through the store, which every part of the app listens to.',
+            'Opening the gallery closes the Shared Media panel, instead of showing two galleries at once.',
+            'Select mode has a visible way out, even before you pick anything.',
+            'Long filenames truncate in their cards instead of spilling over the next one.',
+            'The filled emoji icon was a solid blue disc with no face in it. It is the accent colour now.'
+          ]],
+          ['Version', [
+            'Version: Bumped to v0.7.6-beta.'
+          ]]
+        ]) +
+        versionBlock('0.7.5-beta', '', [
           ['New', [
             '55 profile frames, up from 43 \u2014 and the picker now shows the frames that actually exist, so a missing file can never leave a broken tile.',
             'Copy your user ID from your profile, and a setting for whether a group\'s info shows when it was created.',

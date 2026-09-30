@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v075-beta">v0.7.5-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v076-beta">v0.7.6-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@
 
 | Channel           | Version     | Status                                                                                                                                                                                                              |
 | ----------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Latest** | v0.7.5-beta | `/help` works again on mobile, a way back to the bottom of a conversation that says when you are reading old messages, a Commands entry, copyable user IDs, and the pinned bar is swipeable, and 55 profile frames |
+| **Latest** | v0.7.6-beta | Shared Media rebuilt with search, filters, grid/list, jump-to-message and multi-select download; storage stats and bulk delete in the gallery; a month scrubber; and a composer that says when it can send |
 | **Stable**        | v0.6.0-beta | Reliability release — notification plumbing, an offline send queue, a vault you can back up and take with you, in-app Android updates                                                                               |
 | Legacy **Stable** | v0.1.1-beta | Legacy stable release                                                                                                                                                                                               |
 
@@ -89,6 +89,26 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 | **Open & approachable** | MIT-licensed, readable stack (Electron + SQLite), built for transparency.     |
 
 Orbit is a **beta-stage app for desktop and Android** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
+
+## Highlights (v0.7.6-beta)
+
+* **The Shared Media Panel Grew Up** — Search, filters by sender, kind and age, a grid/list toggle, jump-to-message on every item, multi-select with download-all, and it renders sixty items at a time with a *"Showing 60 of 412"* count rather than building the whole list on every keystroke. It was a list you could only scroll before.
+* **Storage Stats** — Orbit is local-first, so every attachment is on *your* disk, and there was no way to see how much or where it went. The gallery header reads **"3 items · 4.9 MB"**, and clicking it opens a per-chat breakdown **biggest first**. A total does not answer the question; the ranking does.
+* **Select and Delete Media** — With the stats in place, the next question is *"so let me reclaim some"*. The confirm says plainly that the message goes for **both people**, because "delete" here could reasonably mean three different things.
+* **A Month Scrubber** — A rail down the side of the gallery listing the months that actually have media, so *that photo from March* is a click rather than a scroll.
+* **The Composer Says What It Can Do** — The attach button is a plain plus that rotates into an **×** while its menu is open. The send button is **dimmed and inert** with an empty box and **lit with a filled arrow** when there is something to send — including when the only thing staged is a file. It used to be always pressable with a handler that silently did nothing.
+* **A Reason to Hover a Button You Cannot Press** — Hovering a disabled send shows a random icon from the 1,958 in lucide. Only while it is disabled: when it can be pressed, the filled arrow is what says so.
+* **The Slides Have Some Pop** — The first-run carousel and the tutorial animate their parts on a 60ms stagger instead of swapping all at once.
+
+### Fixed in v0.7.6-beta
+
+* **The Images Tab Was Not Showing Images** — Video and audio counted as "media", and their thumbnails cannot load: a video has no still to show and an audio file has none at all. They appeared as broken images.
+* **Changing the Display Refreshed the Whole Window** — The grid/list toggle wrote its preference through the store, which every part of the app listens to. Flipping it now causes **zero** chat renders.
+* **Two Galleries at Once** — Opening the gallery now closes the Shared Media panel.
+* **No Way Out of Select Mode** — The bulk bar only appeared once something was picked. It is visible whenever the mode is on.
+* **"NaN" Was Not a Date** — The panel's day groups were labelled `NaN`; the timestamps come back from storage as strings with a trailing `.0`. Third appearance of that bug, so it uses one shared parse now.
+* **Long Filenames Spilled Out of Their Cards** — A grid item refuses to shrink below its content without `min-width:0`, so a long name pushed the card over its neighbour.
+* **The Filled Emoji Was a Blue Disc** — Filling lucide's `smile` fills its outer circle, leaving a solid blob with no face in it.
 
 ## Highlights (v0.7.5-beta)
 * **55 Profile Frames** — Up from 43, and the picker now lists the frames that actually exist rather than a range, so a missing asset cannot leave a broken tile.
@@ -742,7 +762,7 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 </details>
 
 <details open>
-<summary>v0.7.5-beta</summary>
+<summary>v0.7.6-beta</summary>
 
 * **`/help` opens the command list again on mobile** — the tap that opened it also closed it
 * **Jump to latest**, with a word when you are reading old messages
@@ -767,6 +787,7 @@ Pre-built Windows installers are published on [GitHub Releases](https://github.c
 | Release                                                                          | Platform                    | Notes                                                                                                                                                                            |
 | -------------------------------------------------------------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [All releases](https://github.com/D4niel-dev/Orbit-beta/releases)                | Win / Mac / Linux / Android | Most recent build first                                                                                                                                                          |
+| [v0.7.6-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.6-beta) | Win / Mac / Linux / Android | Shared Media gets search, filters, a grid/list toggle, jump-to-message and multi-select download; the gallery gets storage stats, bulk delete and a month scrubber; the composer lights up when it can send |
 | [v0.7.5-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.5-beta) | Win / Mac / Linux / Android | A `/help` that opens on mobile again, jump-to-latest with an old-messages warning, discoverable commands, copyable user IDs, a swipeable pinned bar, and a quieter chat header, and 55 profile frames |
 | [v0.7.4-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.4-beta) | Win / Mac / Linux / Android | A working Android updater with a progress bar and time remaining, pinned messages on both platforms, transfer progress on mobile, and a `/help` that works or explains itself |
 | [v0.7.3-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.3-beta) | Win / Mac / Linux / Android | Custom Colors across the whole theme and on Android, a themed emoji picker, drafts that stop when you send, and an owner’s Danger Zone in group info |
@@ -1027,6 +1048,14 @@ Transparency matters in beta. Current constraints include:
 * Beta stability: occasional UI quirks and forced reflow warnings in DevTools
 
 ## Roadmap
+
+### Shipped (v0.7.6-beta)
+* **Shared Media Rebuilt** — search, filters, grid/list, jump-to-message, multi-select download, and lazy rendering
+* **Storage Stats** — how much your media takes, and which chats it came from, biggest first
+* **Select and Delete Media** — with a confirm that says it goes for both people
+* **A Month Scrubber** — jump to any month that has media
+* **The Composer** — a plus that becomes an ×, a send button that lights up and fills, and an easter egg on a disabled one
+* **Fixed** — the Images tab showing video and audio, the display toggle re-rendering the window, two galleries at once, no way out of select mode, NaN day groups, and overflowing file cards
 
 ### Shipped (v0.7.5-beta)
 * **55 Profile Frames** — up from 43, and the picker lists the frames that exist

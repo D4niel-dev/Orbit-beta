@@ -1,5 +1,35 @@
 # Orbit Changelog
 
+## v0.7.6-beta
+
+### Features
+
+- **The Shared Media Panel Grew Up** — It was a list of pictures and files with no way to find anything in it. It now has a **search box**, a **filter** by sender, kind and age, a **grid/list toggle**, a **jump to message** on every item, **multi-select with download-all**, and it renders **sixty items at a time** with a *"Showing 60 of 412"* count instead of building the whole list on every keystroke. The filter is three rows of chips in its own popover rather than a menu, because a flat action list cannot express "pick one sender, one kind, one age"; clicking the active chip clears that row, and the button carries a dot while anything is filtered so a filtered panel is never mistaken for an empty one.
+- **Storage Stats, Because Orbit Keeps Your Files** — Orbit is local-first: every attachment is on *your* disk, and until now there was no way to see how much there was or where it went. The gallery header reads **"3 items · 4.9 MB"** and clicking it opens a per-chat breakdown, **biggest first**, with a bar each. A total does not answer the question a local-first app raises — the ranking does.
+- **Select and Delete Media** — With the stats in place, the obvious next question is "so let me reclaim some". Select mode in the gallery picks items and deletes them, and the confirm says plainly that **the message goes for both people**, because "delete" in a gallery could reasonably mean three different things and the wrong guess destroys history.
+- **A Month Scrubber** — The gallery is a flat list, so finding *that photo from March* meant scrolling and hoping. A rail down the right lists the months that actually have media and jumps to the first item of each.
+- **The Composer Says What It Can Do** — The attach button is a plain plus that rotates into an **×** while its menu is open (a `+` turned 45° *is* an ×, so the open state needs no second icon). The send button is **dimmed and inert** with an empty box and **lit with a filled arrow** when there is something to send — including when the only thing staged is a file, because an image with no caption is a perfectly good message. It used to be always pressable with a handler that silently did nothing, which is worse than a button that tells you.
+- **A Reason to Hover a Button You Cannot Press** — Hovering a disabled send shows a random icon from the 1,958 in lucide. Only while it is disabled: when it can be pressed, the filled arrow is the thing that says so, and hiding that behind a joke would make it a worse button.
+- **The Slides Have Some Pop** — The first-run carousel and the tutorial card now rise in, then animate their parts on a 60ms stagger with a slight overshoot. Everything arriving at once reads as a swap; the same content arriving in sequence reads as something happening.
+
+### Bug Fixes
+
+- **The Images Tab Was Not Showing Images** — Video and audio counted as "media" and landed in the Images tab, where their thumbnails **cannot** load: a video has no still to show and an audio file has none at all. Both rendered as broken images. Images now means images, video and audio go to Files where they get a proper type icon, and the Type filter only offers kinds the current tab can contain.
+- **Changing the Display Refreshed the Whole Window** — The grid/list toggle wrote its preference through `store.setState`, which notifies **every** subscriber — the chat panel, both sidebars, the gallery — so flipping the view re-rendered the entire app. The setting only needs persisting; it no longer touches the store. Flipping it now causes **zero** chat renders.
+- **Two Galleries at Once** — The Shared Media panel is an overlay anchored to the chat and the gallery takes the full width, so opening the gallery with the panel open showed both. The gallery now closes it.
+- **No Way Out of Select Mode** — The bulk bar only appeared once something was picked, so entering select mode with nothing selected showed no bar and no way back. It is now visible whenever the mode is on and its action button is disabled until something is chosen.
+- **The Filter Emptied the Panel Instead of Saying So** — The search filter ran *after* the empty-state check, so it emptied the list and the render carried on with nothing, leaving a blank panel rather than *"Nothing here matches"*.
+- **"NaN" Was Not a Date** — The panel's day groups were labelled `NaN`. `new Date("1785589248803.0")` is an Invalid Date — the timestamps come back from storage as strings with a trailing `.0` — and this is the third place that bug has appeared, so it now uses one shared parse.
+- **Long Filenames Spilled Out of Their Cards** — A grid item defaults to `min-width:auto` and **refuses to shrink below its content**, so a long name pushed the card wider than its column. The ellipsis was already on the name; it just had nothing to work with.
+- **The Filled Emoji Was a Blue Disc** — Filling lucide's `smile` fills its outer circle, so the icon became a solid blob with no face in it. The lit state is the accent colour alone now.
+
+### Technical
+
+- **`setState` Is for State the App Reacts To** — The display-toggle bug above is the general shape: a preference that only one view reads does not belong in the store, because every subscriber pays for it. It belongs in `Storage.set`.
+- **The Scroll Had to Go Through the Render** — Jumping to a message scrolled the feed by hand, and the scroll was undone every time, because closing a side panel sets off a re-render and that render scrolls to the bottom. It now sets `_pendingActivityScrollMsgId` and asks for a render, so the scroll happens *inside* the render where it survives. The mechanism already existed — it is how the activity centre jumps.
+- **Icons Built Synchronously** — The send and emoji icons are built with `lucide.createElement` rather than a `createIcons` pass. That pass is timing-sensitive in this app — the transfer strip keeps inline SVG for exactly this reason — and `createElement` has no timing to lose.
+- **The Cache Stamps** — Moved for every file this release touches, per the note in v0.7.5 about a released fix sitting behind a stale file.
+
 ## v0.7.5-beta
 
 ### Features
