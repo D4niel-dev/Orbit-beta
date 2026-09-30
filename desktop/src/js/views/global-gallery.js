@@ -684,7 +684,9 @@ window.GlobalGallery = {
         self.displayMode = mode;
         var state = window.store.getState();
         var newSettings = { ...(state.settings || {}), galleryViewMode: mode };
-        window.store.setState({ settings: newSettings });
+        // Same reason as the panel: persisting through the store re-rendered the whole app on
+        // every view-mode click. displayMode already holds the new value.
+        
         // Delegate to the store's own persist rather than writing a store directly.
         //
         // This used `if (orbitAPI) { ... } else if (Storage) { ... }` — so in the real

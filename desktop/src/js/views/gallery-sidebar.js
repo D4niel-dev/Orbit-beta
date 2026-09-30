@@ -197,9 +197,11 @@ window.GallerySidebar = {
       this.viewBtn._wired = true;
       this.viewBtn.addEventListener('click', function () {
         self.panelViewMode = (self.panelViewMode === 'grid') ? 'list' : 'grid';
+        // Persist WITHOUT touching the store. store.setState notifies every subscriber — the
+        // chat panel, both sidebars, the gallery — so writing settings here re-rendered the whole
+        // window every time someone flipped grid/list. The local mode already holds the new value.
         var st = window.store.getState();
         var next = Object.assign({}, st.settings, { galleryPanelViewMode: self.panelViewMode });
-        window.store.setState({ settings: next });
         if (window.Storage) window.Storage.set('settings', next);
         self.render(window.store.getState());
       });
@@ -544,11 +546,14 @@ window.GallerySidebar = {
           if (['pdf', 'doc', 'docx', 'txt', 'rtf'].indexOf(gext) !== -1) gicon = 'file-text';
           if (['zip', 'rar', '7z', 'gz', 'tar'].indexOf(gext) !== -1) gicon = 'archive';
           if (['js', 'ts', 'py', 'java', 'c', 'cpp', 'html', 'css', 'json', 'xml', 'sh'].indexOf(gext) !== -1) gicon = 'code';
-          html += '<div class="gallery-file-card gallery-jump" data-msg-id="' + file.msgId + '" title="Go to message" data-url="' + gu + '" data-name="' + gn + '" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:14px 8px;border-radius:12px;background:var(--bg-base);border:1px solid var(--border-subtle);cursor:pointer;">' +
+          // min-width:0 and box-sizing are what make the filename truncate. A grid item defaults
+          // to min-width:auto, so it refuses to shrink below its content and a long name pushes
+          // the card wider than its column.
+          html += '<div class="gallery-file-card gallery-jump" data-msg-id="' + file.msgId + '" title="Go to message" data-url="' + gu + '" data-name="' + gn + '" style="min-width:0; box-sizing:border-box; overflow:hidden; display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:14px 8px;border-radius:12px;background:var(--bg-base);border:1px solid var(--border-subtle);cursor:pointer;">' +
             '<div style="width:36px;height:36px;border-radius:9px;background:var(--bg-hover);display:flex;align-items:center;justify-content:center;">' +
               '<i data-lucide="' + gicon + '" style="width:17px;height:17px;color:var(--text-secondary);"></i>' +
             '</div>' +
-            '<div style="font-size:11.5px;color:var(--text-primary);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;">' + gn + '</div>' +
+            '<div style="font-size:11.5px;color:var(--text-primary);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;max-width:100%;" title="' + gn + '">' + gn + '</div>' +
           '</div>';
         });
         html += '</div>';
