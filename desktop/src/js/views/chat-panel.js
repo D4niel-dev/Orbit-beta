@@ -2544,6 +2544,29 @@ window.ChatPanel = {
         var myId = state.currentUser.userId;
 
         var chatIds = isChatSearch ? [chatId] : Object.keys(state.messages);
+
+        // Ask the FTS5 index which messages match, once, before walking the store. It returns []
+        // both when nothing matches and when this build has no FTS5 — the two are not
+        // distinguishable from here, so an empty set falls back to scanning below. A slow correct
+        // answer beats a fast empty one.
+        var ftsIds = null;
+        if (query && !filterFrom && window.orbitAPI && typeof window.orbitAPI.dbSearchMessages === 'function') {
+          try {
+            // NOT  — that is the results array this function builds, and  here would
+            // redeclare it (function scope), pushing raw database rows into the results.
+            // FTS5's operators must be UPPERCASE. query has been lowercased for the scoring
+            // below, so 'project and cancelled' would reach SQLite with a lowercase 'and' —
+            // which FTS5 reads as a search TERM, not an operator, and the query then matches
+            // nothing. Restore the operators for the engine and leave query alone for scoring.
+            var ftsQuery = query.replace(/\b(and|or|not|near)\b/g, function (m) { return m.toUpperCase(); });
+            var ftsRows = window.orbitAPI.dbSearchMessages(ftsQuery, isChatSearch ? { chatId: chatId } : {}) || [];
+            if (ftsRows.length) {
+              ftsIds = {};
+              ftsRows.forEach(function(h) { ftsIds[String(h.id)] = true; });
+            }
+          } catch (e) { ftsIds = null; }
+        }
+
         chatIds.forEach(function(cId) {
           var msgs = state.messages[cId] || [];
           var chatName = cId;
@@ -2581,10 +2604,16 @@ window.ChatPanel = {
             if (msg.text) {
               var lower = msg.text.toLowerCase();
               var q = query;
-              if (lower === q) { match = true; score = 100; }
-              else if (lower.startsWith(q)) { match = true; score = 80; }
-              else if (lower.includes(' ' + q) || lower.includes(q + ' ')) { match = true; score = 60; }
-              else if (lower.includes(q)) { match = true; score = 40; }
+              // The index decided whether this message matches; the scoring below still decides
+              // how well. Without an index, fall back to testing the text directly.
+              var textMatches = ftsIds ? !!ftsIds[String(msg.id)] : lower.includes(q);
+              if (textMatches) {
+                if (lower === q) { match = true; score = 100; }
+                else if (lower.startsWith(q)) { match = true; score = 80; }
+                else if (lower.includes(' ' + q) || lower.includes(q + ' ')) { match = true; score = 60; }
+                else if (lower.includes(q)) { match = true; score = 40; }
+                else { match = true; score = 30; }   // the index matched on a stem or a token the plain scan cannot see
+              }
             }
             if (msg.attachments) {
               msg.attachments.forEach(function(att) {
