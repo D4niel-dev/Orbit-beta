@@ -800,13 +800,22 @@ window.SettingsModal = {
             });
           }
         }
-        var newSettings = { ...window.store.getState().settings };
+        var beforeSettings = window.store.getState().settings;
+        var newSettings = { ...beforeSettings };
         newSettings[key] = val;
         window.store.setState({ settings: newSettings });
         window.Storage.set('settings', newSettings);
         
         if (window.App && window.App.applySettings) {
           window.App.applySettings(newSettings);
+        }
+
+        // Tell my other devices, if anything on the whitelist actually moved. worthSending()
+        // compares the BUILT payloads rather than the settings objects, so a change to a key
+        // outside the whitelist costs nothing and a keystroke in a colour field does not send a
+        // packet per character.
+        if (window.OrbitSettingsSync && window.OrbitSettingsSync.worthSending(beforeSettings, newSettings)) {
+          window.store.broadcastSettings(newSettings);
         }
 
         // Sync profileFrame to currentUser for beacon broadcast

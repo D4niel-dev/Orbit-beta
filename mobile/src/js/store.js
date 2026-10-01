@@ -347,6 +347,29 @@ class Store {
   }
 
   // Save all data to localStorage
+  /* Send the whitelisted settings to my OTHER DEVICES — the friends whose id is my own id.
+     build() returns null when nothing on the whitelist is worth sending. */
+  broadcastSettings() {
+    if (!window.OrbitSettingsSync || typeof Orbit === 'undefined' || !Orbit.P2P) return false;
+    var payload = window.OrbitSettingsSync.build(this.settings);
+    if (!payload) return false;
+
+    var me = this.currentUser ? (this.currentUser.id || this.currentUser.userId) : null;
+    if (!me) return false;
+
+    var sent = 0;
+    (this.friends || []).forEach(function (f) {
+      if (window.OrbitSettingsSync.isOwnDevice(f.id, me)) {
+        try {
+          Orbit.P2P.send(f.id, Orbit.Protocol.createPacket(
+            Orbit.Protocol.Types.SETTINGS_SYNC, me, f.id, payload));
+          sent++;
+        } catch (e) { /* unreachable right now; it will sync on the next change */ }
+      }
+    });
+    return sent > 0;
+  }
+
   save() {
     this.set('friends', this.friends);
     this.set('chats', this.chats);
@@ -367,6 +390,16 @@ class Store {
     this.set('activityClearedAt', this.activityClearedAt);
     this.set('systemLogClearedAt', this.systemLogClearedAt);
     this.set('scheduledMessages', this.scheduledMessages);
+
+    // Tell my other devices if the whitelisted settings actually moved. save() runs for many
+    // reasons, so worthSending() compares against the last payload we SENT rather than against
+    // the previous save — otherwise every unrelated save would look like a settings change.
+    if (window.OrbitSettingsSync) {
+      if (window.OrbitSettingsSync.worthSending(this._lastSyncedSettings || {}, this.settings)) {
+        this.broadcastSettings();
+        try { this._lastSyncedSettings = JSON.parse(JSON.stringify(this.settings)); } catch (e) {}
+      }
+    }
   }
 
   addActivityLogEntry(type, message) {

@@ -7,6 +7,9 @@ const Protocol = {
     MESSAGE: 'MESSAGE',
     TYPING: 'TYPING',
     REACTION: 'REACTION',
+    // Carries a whitelisted slice of settings between a user's OWN devices. See
+    // shared/network/settings-sync.js — kept in step with the shared/ copy of this file.
+    SETTINGS_SYNC: 'SETTINGS_SYNC',
     MESSAGE_EDIT: 'MESSAGE_EDIT',
     MESSAGE_DELETE: 'MESSAGE_DELETE',
     READ: 'READ',

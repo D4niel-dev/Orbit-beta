@@ -14895,6 +14895,22 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         return;
       }
+
+      if (packet.type === Orbit.Protocol.Types.SETTINGS_SYNC) {
+        // A settings payload from another device of MINE. The sender is checked first: the
+        // module validates the contents, but only this decides whether we listen at all.
+        if (!window.OrbitSettingsSync) return;
+        var ssMe = MStore.currentUser ? (MStore.currentUser.id || MStore.currentUser.userId) : null;
+        if (!window.OrbitSettingsSync.isOwnDevice(packet.from, ssMe)) return;
+
+        var ssRes = window.OrbitSettingsSync.apply(MStore.settings, packet.payload);
+        if (!ssRes) return;   // older than what we have, or nothing usable
+
+        MStore.settings = ssRes.settings;
+        MStore.save();
+        if (ssRes.changed) applyTheme(MStore.settings.theme || 'dark');
+        return;
+      }
     } catch(e) { console.error('[P2P] onMessage crash:', e); if (typeof showToast === 'function') showToast('P2P crash:'+_errLoc(e)+' '+e.message,'error'); }
     };
     Orbit.P2P.onMessage(_handleP2PPacketData);

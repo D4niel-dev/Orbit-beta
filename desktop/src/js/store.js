@@ -831,6 +831,23 @@ class Store {
     }
 
     // Typing indicator — handled via direct listener in app.js
+    if (packet.type === window.Protocol.Types.SETTINGS_SYNC) {
+      // A settings payload from ANOTHER DEVICE OF MINE. Anyone else's theme is their business,
+      // so the sender is checked before the payload is even looked at — the module validates the
+      // contents, but only this check decides whether we should be listening at all.
+      if (!window.OrbitSettingsSync) return;
+      var syncMe = this.state.currentUser ? this.state.currentUser.userId : null;
+      if (!window.OrbitSettingsSync.isOwnDevice(packet.from, syncMe)) return;
+
+      var syncRes = window.OrbitSettingsSync.apply(this.state.settings, packet.payload);
+      if (!syncRes) return;   // older than what we have, or nothing usable in it
+
+      this.setState({ settings: syncRes.settings });
+      if (window.Storage) window.Storage.set('settings', syncRes.settings);
+      if (window.App && window.App.applySettings) window.App.applySettings(syncRes.settings);
+      return;
+    }
+
     if (packet.type === window.Protocol.Types.TYPING) {
       return;
     }
@@ -1293,6 +1310,30 @@ class Store {
       // alternative is a pinned row that scrolls to nothing, which reads as a bug.
       this._prunePinned(chatId);
     }
+  }
+
+  /* Send the whitelisted settings to my OTHER DEVICES — the friends whose userId is my own.
+     Deliberately not "to everyone": a peer with my userId is me on another machine, and a peer
+     without it is someone else.
+
+     build() returns null when nothing on the whitelist is worth sending, so a caller can fire
+     this on every settings change without checking first. */
+  broadcastSettings(settings) {
+    if (!window.OrbitSettingsSync || !window.orbitAPI) return false;
+    var payload = window.OrbitSettingsSync.build(settings);
+    if (!payload) return false;
+
+    var me = this.state.currentUser ? this.state.currentUser.userId : null;
+    if (!me) return false;
+
+    var sent = 0;
+    this.state.friends.forEach(function (f) {
+      if (window.OrbitSettingsSync.isOwnDevice(f.userId, me)) {
+        window.orbitAPI.networkSend(f.userId, f.ip || '', window.Protocol.Types.SETTINGS_SYNC, payload);
+        sent++;
+      }
+    });
+    return sent > 0;
   }
 
   sendReaction(chatId, msgId, emoji, action) {

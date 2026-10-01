@@ -73,6 +73,9 @@
     for (var i = 0; i < keys.length && i < MAX_COLOUR_KEYS; i++) {
       var k = keys[i];
       // Custom property names only, and short ones.
+      // Keys are stored WITHOUT the leading -- : app.js prepends it when it applies them
+      // (setProperty('--' + key, ...)). Requiring the dashes here rejected every real key, and
+      // the unit test caught exactly that when I tried it.
       if (!/^[a-z][a-z0-9-]{0,31}$/.test(k)) continue;
       if (!isColour(value[k])) continue;
       out[k] = value[k].trim();
