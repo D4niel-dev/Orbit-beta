@@ -216,6 +216,43 @@ const migrations = [
     if (!cols.some(function(c) { return c.name === 'call'; })) {
       try { db.exec('ALTER TABLE messages ADD COLUMN call TEXT'); } catch(e) {}
     }
+  },
+
+  // v12 — FTS5 full-text search over message text.
+  //
+  // An external-content index: it stores the words, not a second copy of every message, and
+  // joins back on rowid for the chat, sender and timestamp. Triggers keep it in step, and the
+  // backfill indexes everything already on disk.
+  //
+  // Guarded, because FTS5 is a compile-time option. If the build lacks it we say so and return —
+  // a missing search index must never stop the app from starting. The app falls back to scanning
+  // in JS, which is exactly what it does today.
+  (db) => {
+    try {
+      db.exec("CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(text, content='messages', content_rowid='rowid')");
+    } catch (e) {
+      console.warn('[Migration] FTS5 unavailable, message search will fall back to a scan:', e.message);
+      return;
+    }
+
+    // Keep the index in step. The delete form is FTS5's own convention for external content:
+    // you insert a 'delete' row carrying the OLD values, not a DELETE.
+    db.exec("CREATE TRIGGER IF NOT EXISTS messages_fts_ai AFTER INSERT ON messages BEGIN " +
+      "INSERT INTO messages_fts(rowid, text) VALUES (new.rowid, new.text); END");
+    db.exec("CREATE TRIGGER IF NOT EXISTS messages_fts_ad AFTER DELETE ON messages BEGIN " +
+      "INSERT INTO messages_fts(messages_fts, rowid, text) VALUES ('delete', old.rowid, old.text); END");
+    db.exec("CREATE TRIGGER IF NOT EXISTS messages_fts_au AFTER UPDATE ON messages BEGIN " +
+      "INSERT INTO messages_fts(messages_fts, rowid, text) VALUES ('delete', old.rowid, old.text); " +
+      "INSERT INTO messages_fts(rowid, text) VALUES (new.rowid, new.text); END");
+
+    // Backfill. Safe to re-run: the index is emptied first, so a partially-applied migration
+    // cannot leave duplicate rows behind.
+    try {
+      db.exec("INSERT INTO messages_fts(messages_fts) VALUES ('rebuild')");
+      console.log('[Migration] FTS5 index built for message search');
+    } catch (e) {
+      console.warn('[Migration] FTS5 backfill failed:', e.message);
+    }
   }
 ];
 

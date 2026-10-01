@@ -1130,4 +1130,37 @@ class OrbitDatabase {
   }
 }
 
+/* Full-text search over message text, via the FTS5 index built in migrations v12.
+ *
+ * Returns [] rather than throwing when the index is missing, so a build without FTS5 degrades to
+ * "no results from here" and the caller can fall back to a scan.
+ *
+ * The query is passed through as FTS5 syntax — "project AND deadline", quoted phrases, prefix
+ * `foo*` — which is the point of using the engine rather than a LIKE. A malformed query throws
+ * inside SQLite, so that is caught and reported as no results too.
+ */
+OrbitDatabase.prototype.searchMessages = function (query, options) {
+  if (!query || !String(query).trim()) return [];
+  var opts = options || {};
+  var limit = Math.min(parseInt(opts.limit, 10) || 200, 1000);
+
+  try {
+    var sql = 'SELECT m.id, m.chatId, m.sender, m.text, m.timestamp ' +
+      'FROM messages_fts f JOIN messages m ON m.rowid = f.rowid ' +
+      'WHERE messages_fts MATCH ? ';
+    var params = [String(query)];
+    if (opts.chatId) {
+      sql += 'AND m.chatId = ? ';
+      params.push(opts.chatId);
+    }
+    // bm25 is FTS5's relevance ranking; lower is a better match, so ascending.
+    sql += 'ORDER BY bm25(messages_fts) LIMIT ?';
+    params.push(limit);
+    return this.db.prepare(sql).all(params);
+  } catch (e) {
+    console.warn('[DB] searchMessages failed:', e.message);
+    return [];
+  }
+};
+
 module.exports = OrbitDatabase;

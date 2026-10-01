@@ -1139,6 +1139,9 @@ app.whenReady().then(() => {
   ipcMain.on('db-all-messages-raw', (event) => {
     event.returnValue = globalDb.getAllMessagesRaw();
   });
+  ipcMain.on('db-search-messages', (event, query, options) => {
+    event.returnValue = globalDb.searchMessages(query, options);
+  });
   ipcMain.on('db-add-message', (event, chatId, msg) => {
     globalDb.addMessage(chatId, msg);
     event.returnValue = true;

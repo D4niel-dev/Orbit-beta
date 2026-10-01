@@ -106,6 +106,7 @@ contextBridge.exposeInMainWorld('orbitAPI', {
   dbSaveFriend: (friend) => ipcRenderer.sendSync('db-save-friend', friend),
   dbGetMessages: (chatId) => ipcRenderer.sendSync('db-get-messages', chatId),
   dbAllMessagesRaw: () => ipcRenderer.sendSync('db-all-messages-raw'),
+  dbSearchMessages: (query, options) => ipcRenderer.sendSync('db-search-messages', query, options),
   dbAddMessage: (chatId, msg) => ipcRenderer.sendSync('db-add-message', chatId, msg),
   dbDeleteMessage: (chatId, msgId) => ipcRenderer.sendSync('db-delete-message', chatId, msgId),
   dbEditMessage: (chatId, msgId, newText) => ipcRenderer.sendSync('db-edit-message', chatId, msgId, newText),
