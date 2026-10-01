@@ -28,8 +28,7 @@
 
 | Channel           | Version     | Status                                                                                                                                                                                                              |
 | ----------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Latest** | v0.8.0-beta | Your theme and custom colours follow you between your own devices, message search runs on SQLite FTS5, and the update progress bar actually moves |
-| **Stable**        | v0.6.0-beta | Reliability release — notification plumbing, an offline send queue, a vault you can back up and take with you, in-app Android updates                                                                               |
+| **Latest Stable** | v0.8.0-beta | Your theme and custom colours follow you between your own devices, message search runs on SQLite FTS5, and the update progress bar actually moves |
 | Legacy **Stable** | v0.1.1-beta | Legacy stable release                                                                                                                                                                                               |
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
@@ -752,7 +751,7 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 
 </details>
 
-<details open>
+<details>
 <summary>v0.7.5-beta</summary>
 
 * **`/help` opens the command list again on mobile** — the tap that opened it also closed it
@@ -781,8 +780,8 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 
 </details>
 
-<details>
-<summary>v0.8.0-beta</summary>
+<details open>
+<summary>v0.8.0-beta (Stable)</summary>
 
 * **Your theme follows you between your own devices** — including a custom theme's colours
 * **Message search runs on SQLite's FTS5** — boolean queries, prefix matching, relevance ranking, per-chat scoping
@@ -806,7 +805,6 @@ Pre-built Windows installers are published on [GitHub Releases](https://github.c
 | [All releases](https://github.com/D4niel-dev/Orbit-beta/releases)                | Win / Mac / Linux / Android | Most recent build first                                                                                                                                                          |
 | [v0.8.0-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.8.0-beta) | Win / Mac / Linux / Android | SETTINGS_SYNC between your own devices, FTS5 message search with boolean and prefix queries, and the update progress bar fixed |
 | [v0.7.6-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.6-beta) | Win / Mac / Linux / Android | Shared Media gets search, filters, a grid/list toggle, jump-to-message and multi-select download; the gallery gets storage stats, bulk delete and a month scrubber; the composer lights up when it can send |
-| [v0.7.5-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.5-beta) | Win / Mac / Linux / Android | A `/help` that opens on mobile again, jump-to-latest with an old-messages warning, discoverable commands, copyable user IDs, a swipeable pinned bar, and a quieter chat header, and 55 profile frames |
 | [v0.0.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.2-beta) | Windows                     | SQLite storage, privacy mode, large file transfers                                                                                                                               |
 | [v0.0.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.1-beta) | Windows                     | Original release                                                                                                                                                                 |
 
@@ -1077,33 +1075,6 @@ Transparency matters in beta. Current constraints include:
 * **A Month Scrubber** — jump to any month that has media
 * **The Composer** — a plus that becomes an ×, a send button that lights up and fills, and an easter egg on a disabled one
 * **Fixed** — the Images tab showing video and audio, the display toggle re-rendering the window, two galleries at once, no way out of select mode, NaN day groups, and overflowing file cards
-
-### Shipped (v0.7.5-beta)
-* **55 Profile Frames** — up from 43, and the picker lists the frames that exist
-
-* **`/help` Fixed on Mobile** — it opened and closed inside one tap
-* **Jump to Latest** — and a chip that says when you are reading old messages
-* **Commands in the `+` Menu** — nineteen of them, no longer hidden behind a guessed `/`
-* **Copyable User IDs** — desktop profile and mobile profile pill
-* **Swipeable Pinned Bar** — dots per pin, and the tap follows the one you are on
-* **A Quieter Chat Header** — members folded into the more menu
-* **The Search ✕** — clears first, closes second
-* **No More "Created Unknown"** — a row that is absent beats a row that admits it does not know
-
-
-
-* **`/help` Fixed on Mobile** — it opened and closed inside one tap
-* **The Shared Sheet Ignores Its Own Opening Tap** — so every sheet benefits
-* **An Off-Screen Sheet Is Reported** — not silently swallowed
-
-### Shipped (v0.7.4-beta)
-
-* **A Working Android Updater** — the byte-count corruption is fixed, so Android accepts the APK
-* **Update Progress** — a bar and the time remaining, on both platforms
-* **Transfer Progress on Mobile** — matching the desktop
-* **`/help` Fixed Twice** — offered in DMs, and loud instead of silent when it fails
-* **Pinned Messages** — the card, the list, the reordering and the note, on both platforms
-* **The Desktop Updater's Host and Filename Rules Tested** — extracted from the IPC handler so they could be
 
 ### In Progress / Planned
 

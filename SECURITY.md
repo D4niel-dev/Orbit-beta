@@ -1,6 +1,6 @@
 # Security Policy
 
-## Supported Versions
+## Supported Versions (v0.3.x >=)
 
 Orbit is in beta. Security fixes are issued for the **latest release and the one
 immediately prior**. Anything older is not maintained.
