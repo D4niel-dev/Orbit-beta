@@ -1,5 +1,31 @@
 # Orbit Changelog
 
+## v0.8.0-beta
+
+### Features
+
+- **Your Theme Now Follows You to Your Phone** — The pieces for this had been sitting in the codebase since v0.7.3: a whitelist of what may travel, validation on receive, last-write-wins by timestamp. What was missing was the wire. Changing your theme on the desktop now sends it to **your own devices** — a peer with your userId is you on another machine, and a peer without it is someone else — and the phone applies it. **A custom theme's colours travel too**, which is the half that matters: the colours *are* the theme, and until now the name went and the colours stayed behind.
+- **Search That Uses the Database** — Message search was pulling every message into JavaScript and running `includes` over it. It now goes through **SQLite's FTS5**, so `project AND deadline` is answered by the engine in milliseconds regardless of how much history you have. Prefix matching (`deadl*`) works, results are ranked by relevance rather than recency, and search can be scoped to one chat. The old scan remains as a fallback for builds without FTS5.
+- **A Search Icon in the Shared Media Bar** — Inside the field, where it belongs.
+
+### Bug Fixes
+
+- **The Update Progress Bar Never Moved** — It sat at 0% for the whole download while the label counted megabytes. The total came only from `Content-Length`, and the mobile's Response is patched to buffer the whole body, so that header is often absent — which left the bar with nothing to divide by. The release asset's declared size was already being read further down to *verify* the download; it works just as well as the denominator.
+- **A Custom Theme's Colours Never Reached the Phone** — The module has always whitelisted them and the mobile has always applied them. The colour editor writes to the store **directly** rather than through the settings funnel, so the broadcast never fired for it. Theme changes went through the funnel and synced; colour changes did not. The apply handler also skips a re-render for the same reason, now fixed with it.
+- **The Images Tab Was Showing Video and Audio** — And their thumbnails **cannot** load: a video has no still to show and an audio file has none at all, so both appeared as broken images. Images means images; video and audio go to Files where they get a proper type icon, and the Type filter only offers kinds the current tab can contain.
+- **Changing the Display Refreshed the Whole Window** — The grid/list toggle wrote its preference through `store.setState`, which notifies **every** subscriber — the chat panel, both sidebars, the gallery. Flipping the view now causes **zero** chat renders.
+- **Two Galleries at Once** — The Shared Media panel is an overlay anchored to the chat and the gallery takes the full width. Opening the gallery closes the panel.
+- **No Way Out of Select Mode** — The bulk bar only appeared once something was picked, so entering the mode with nothing selected showed no bar and no way back. It is visible whenever the mode is on, with the action button disabled until something is chosen.
+- **Long Filenames Spilled Out of Their Cards** — A grid item refuses to shrink below its content without `min-width:0`, so a long name pushed the card over its neighbour. The ellipsis was already on the name; it had nothing to work with.
+
+### Technical
+
+- **Two `protocol.js` Files, and the One That Matters** — The desktop has its own copy and loads that one, not `shared/`. It never received `SETTINGS_SYNC` — the shared twin has had it since v0.7.3 — so the packet type did not exist on that platform and the receive branch could never match. Found by probing the constant: it was `undefined`. **When adding a packet type, check both files.**
+- **FTS5 Is a Compile-Time Option** — The migration that builds the index catches the failure and returns rather than letting the app fail to boot, and `searchMessages` returns `[]` instead of throwing — including for a malformed query, which throws inside SQLite. A missing search index must never stop the app starting.
+- **FTS5's Operators Are Uppercase** — The query is lowercased for the scoring, so `project and cancelled` reached SQLite with a lowercase `and`, which FTS5 reads as a search **term** rather than an operator. The engine's syntax and the app's normalisation are two different concerns; they are handled separately now.
+- **`var` Is Function-Scoped, Which Bit Me** — A local named `hits` inside the search function **shadowed** the results array of the same name, so raw database rows were pushed into the results and the render read `.msg` off a row that has no such property.
+- **Cache Stamps Moved** — For `app.js`, `store.js` and `version.js`. `store.js` had not been stamped since August.
+
 ## v0.7.6-beta
 
 ### Features

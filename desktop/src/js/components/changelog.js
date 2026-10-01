@@ -14,7 +14,25 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.7.6-beta', 'Latest', [
+        versionBlock('0.8.0-beta', 'Latest', [
+          ['New', [
+            'Your theme follows you to your phone. Change it on the desktop and it reaches your own devices \u2014 including a custom theme\u2019s colours, which is the part that actually is the theme.',
+            'Message search now runs on SQLite\u2019s full-text index. "project AND deadline" is answered by the database in milliseconds however much history you have, with prefix matching, relevance ranking, and an option to search just one chat.',
+            'A search icon inside the Shared Media search bar.'
+          ]],
+          ['Fixes', [
+            'The update progress bar actually moves. It had no total to divide by, so it sat at 0% while the label counted megabytes.',
+            'A custom theme\u2019s colours now reach your phone. The colour editor saves differently from everything else, and the broadcast never fired for it.',
+            'The Images tab shows images. Video and audio were landing there, where their thumbnails cannot load.',
+            'Changing the display no longer refreshes the whole window.',
+            'Opening the gallery closes the Shared Media panel, instead of showing two galleries at once.',
+            'Select mode has a visible way out, and long filenames truncate instead of spilling over the next card.'
+          ]],
+          ['Version', [
+            'Version: Bumped to v0.8.0-beta.'
+          ]]
+        ]) +
+        versionBlock('0.7.6-beta', '', [
           ['New', [
             'Shared Media has grown up: search, filters by sender, kind and age, a grid/list toggle, jump-to-message on every item, and multi-select with download-all. It also renders 60 items at a time with a count, rather than building the whole list on every keystroke.',
             'Storage stats in the gallery header \u2014 how much your media takes and which chats it came from, biggest first. Orbit keeps your files on your own disk, so this is a fair question to ask.',

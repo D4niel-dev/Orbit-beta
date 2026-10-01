@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v076-beta">v0.7.6-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v080-beta">v0.8.0-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@
 
 | Channel           | Version     | Status                                                                                                                                                                                                              |
 | ----------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Latest** | v0.7.6-beta | Shared Media rebuilt with search, filters, grid/list, jump-to-message and multi-select download; storage stats and bulk delete in the gallery; a month scrubber; and a composer that says when it can send |
+| **Latest** | v0.8.0-beta | Your theme and custom colours follow you between your own devices, message search runs on SQLite FTS5, and the update progress bar actually moves |
 | **Stable**        | v0.6.0-beta | Reliability release — notification plumbing, an offline send queue, a vault you can back up and take with you, in-app Android updates                                                                               |
 | Legacy **Stable** | v0.1.1-beta | Legacy stable release                                                                                                                                                                                               |
 
@@ -89,6 +89,20 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 | **Open & approachable** | MIT-licensed, readable stack (Electron + SQLite), built for transparency.     |
 
 Orbit is a **beta-stage app for desktop and Android** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
+
+## Highlights (v0.8.0-beta)
+
+* **Your Theme Follows You to Your Phone** — The whitelist, the validation and the last-write-wins logic have been in the codebase since v0.7.3; the wire was missing. Change your theme on the desktop and it reaches **your own devices** — a peer with your userId is you on another machine. **A custom theme's colours travel too**, which is the half that matters: the colours *are* the theme.
+* **Search That Uses the Database** — Message search no longer pulls every message into JavaScript to run `includes` over it. It goes through **SQLite's FTS5**, so `project AND deadline` is answered by the engine in milliseconds no matter how much history you have. Prefix matching works, results are ranked by **relevance** rather than recency, and search can be scoped to a single chat.
+* **A Search Icon in the Shared Media Bar** — Inside the field, where it belongs.
+
+### Fixed in v0.8.0-beta
+
+* **The Update Progress Bar Never Moved** — It sat at 0% for the whole download while the label counted megabytes, because the only source of a total was a header the mobile's patched Response usually omits.
+* **A Custom Theme's Colours Never Reached the Phone** — The colour editor writes to the store directly rather than through the settings funnel, so the broadcast never fired for it. The name went and the colours stayed behind.
+* **The Images Tab Was Showing Video and Audio** — And their thumbnails cannot load, so they appeared as broken images.
+* **Changing the Display Refreshed the Whole Window** — The toggle wrote its preference through the store, which every part of the app listens to.
+* **Two Galleries at Once**, **no way out of select mode**, and **long filenames spilling out of their cards**.
 
 ## Highlights (v0.7.6-beta)
 
@@ -766,6 +780,18 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 
 </details>
 
+<details>
+<summary>v0.8.0-beta</summary>
+
+* **Your theme follows you between your own devices** — including a custom theme's colours
+* **Message search runs on SQLite's FTS5** — boolean queries, prefix matching, relevance ranking, per-chat scoping
+* **The update progress bar moves** — it had no denominator to divide by
+* **The Images tab is images** — video and audio went to Files, where their icons work
+* **Changing the display no longer refreshes the whole window**
+* **Fixed** — two galleries at once, no way out of select mode, and file cards spilling over their neighbours
+
+</details>
+
 See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
 ## Quick Start
@@ -777,6 +803,7 @@ Pre-built Windows installers are published on [GitHub Releases](https://github.c
 | Release                                                                          | Platform                    | Notes                                                                                                                                                                            |
 | -------------------------------------------------------------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [All releases](https://github.com/D4niel-dev/Orbit-beta/releases)                | Win / Mac / Linux / Android | Most recent build first                                                                                                                                                          |
+| [v0.8.0-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.8.0-beta) | Win / Mac / Linux / Android | SETTINGS_SYNC between your own devices, FTS5 message search with boolean and prefix queries, and the update progress bar fixed |
 | [v0.7.6-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.6-beta) | Win / Mac / Linux / Android | Shared Media gets search, filters, a grid/list toggle, jump-to-message and multi-select download; the gallery gets storage stats, bulk delete and a month scrubber; the composer lights up when it can send |
 | [v0.7.5-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.5-beta) | Win / Mac / Linux / Android | A `/help` that opens on mobile again, jump-to-latest with an old-messages warning, discoverable commands, copyable user IDs, a swipeable pinned bar, and a quieter chat header, and 55 profile frames |
 | [v0.0.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.2-beta) | Windows                     | SQLite storage, privacy mode, large file transfers                                                                                                                               |
@@ -1036,6 +1063,11 @@ Transparency matters in beta. Current constraints include:
 * Beta stability: occasional UI quirks and forced reflow warnings in DevTools
 
 ## Roadmap
+
+### Shipped (v0.8.0-beta)
+* **SETTINGS_SYNC** — your theme and custom colours follow you between your own devices
+* **FTS5 Message Search** — boolean queries, prefix matching, relevance ranking, per-chat scoping
+* **Fixed** — the update progress bar, custom colours not syncing, the Images tab showing video and audio, the display toggle refreshing the window, two galleries at once, no way out of select mode, and overflowing file cards
 
 ### Shipped (v0.7.6-beta)
 * **Shared Media Rebuilt** — search, filters, grid/list, jump-to-message, multi-select download, and lazy rendering
