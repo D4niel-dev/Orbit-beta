@@ -1,6 +1,6 @@
 # Orbit Changelog
 
-## v0.8.0-beta
+## v0.8.0-beta — **Stable Release**
 
 ### Features
 
