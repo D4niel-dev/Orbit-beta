@@ -221,6 +221,14 @@ window.CustomThemeModal = {
       newSettings.theme = 'custom';
       window.store.setState({ settings: newSettings });
       window.Storage.set('settings', newSettings);
+      if (window.App && window.App.applySettings) window.App.applySettings(newSettings);
+
+      // This path does NOT go through updateSettings, so it needs the broadcast hook itself.
+      // Without it a theme built here never reached the phone — the colours are the whole point
+      // of a custom theme, and they were the one thing that did not travel.
+      if (window.OrbitSettingsSync && window.OrbitSettingsSync.worthSending(settings, newSettings)) {
+        window.store.broadcastSettings(newSettings);
+      }
       self.close();
     });
 
