@@ -103,6 +103,7 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **The Images Tab Was Showing Video and Audio** — And their thumbnails cannot load, so they appeared as broken images.
 * **Changing the Display Refreshed the Whole Window** — The toggle wrote its preference through the store, which every part of the app listens to.
 * **Two Galleries at Once**, **no way out of select mode**, and **long filenames spilling out of their cards**.
+* **The send button can no longer strand you**, and **a toast no longer swallows the send click**.
 
 ## Highlights (v0.7.6-beta)
 

@@ -26,7 +26,9 @@ window.Changelog = {
             'The Images tab shows images. Video and audio were landing there, where their thumbnails cannot load.',
             'Changing the display no longer refreshes the whole window.',
             'Opening the gallery closes the Shared Media panel, instead of showing two galleries at once.',
-            'Select mode has a visible way out, and long filenames truncate instead of spilling over the next card.'
+            'Select mode has a visible way out, and long filenames truncate instead of spilling over the next card.',
+            'The send button can no longer leave you stuck: it shows when it can send, but a re-render can never leave it inert with no way forward.',
+            'A toast arriving as you went to send used to swallow the click. The stack now clears the composer.'
           ]],
           ['Version', [
             'Version: Bumped to v0.8.0-beta.'

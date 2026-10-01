@@ -17,6 +17,8 @@
 - **Two Galleries at Once** — The Shared Media panel is an overlay anchored to the chat and the gallery takes the full width. Opening the gallery closes the panel.
 - **No Way Out of Select Mode** — The bulk bar only appeared once something was picked, so entering the mode with nothing selected showed no bar and no way back. It is visible whenever the mode is on, with the action button disabled until something is chosen.
 - **Long Filenames Spilled Out of Their Cards** — A grid item refuses to shrink below its content without `min-width:0`, so a long name pushed the card over its neighbour. The ellipsis was already on the name; it had nothing to work with.
+- **The Send Button Could Strand You** — The composer is rebuilt when a chat re-renders, and anything typed into the old input goes with it. With the button carrying `disabled`, a rebuild left a visible composer with an inert button and nothing to explain why. It still shows when it can send — the fill and the accent colour — but it no longer carries an attribute that can leave you with no way forward.
+- **A Toast Could Swallow the Send Button** — The toast stack sits at the bottom-right, which is exactly where the send button is, and its close button takes pointer events. A toast arriving as you went to send ate the click. The stack now clears the composer. This one predates the composer work; the button used to sit differently, which is why nobody had hit it.
 
 ### Technical
 
