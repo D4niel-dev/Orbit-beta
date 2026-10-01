@@ -1358,7 +1358,7 @@ window.ChatPanel = {
           '<textarea id="chat-input" class="chat-input-field" placeholder="Message ' + window.Sanitize.escapeHtml(activeName) + '..." rows="1">' + (this.editingMsg ? window.Sanitize.escapeHtml(this.editingMsg.text) : '') + '</textarea>' +
           '<button id="btn-mic" title="Voice Memo (Click to start/stop)"><i data-lucide="mic"></i></button>' +
           '<button id="btn-emoji" class="composer-emoji"><i data-lucide="smile"></i></button>' +
-          '<button id="btn-send" class="composer-send" title="Send" disabled><i data-lucide="send-horizontal"></i></button>' +
+          '<button id="btn-send" class="composer-send" title="Send"><i data-lucide="send-horizontal"></i></button>' +
           '<input type="file" id="file-input" style="display:none;" multiple>' +
         '</div>' +
       '</div>');
@@ -1787,26 +1787,39 @@ window.ChatPanel = {
         return svg;
       };
       var _lastIconSwap = 0;
-      var _setSendIcon = function (name, filled) {
-        var old = btnSend.querySelector('svg, i');
+      var _setSendIcon = function (btn, name, filled) {
+        if (!btn) return;
+        var old = btn.querySelector('svg, i');
         var el = _iconEl(name, filled);
         _lastIconSwap = Date.now();
-        if (old) old.replaceWith(el); else btnSend.appendChild(el);
-        if (el.tagName === 'I' && window.lucide) window.lucide.createIcons({ root: btnSend });
+        if (old) old.replaceWith(el); else btn.appendChild(el);
+        if (el.tagName === 'I' && window.lucide) window.lucide.createIcons({ root: btn });
       };
 
       // Whether there is anything to send. Files count: an image with no caption is a
       // perfectly good message, and the old code let you press the button and then did
       // nothing, which is worse than a button that says so.
       self._refreshSend = function () {
-        var has = (input.value.trim() !== '') || (self.stagedFiles && self.stagedFiles.length > 0);
-        btnSend.disabled = !has;
-        btnSend.classList.toggle('ready', has);
+        // BOTH elements are looked up fresh. The composer's markup is re-rendered when a group's
+        // welcome state is replaced, which detaches the nodes captured above — reading a detached
+        // input returns '' and would disable a button that is visibly fine.
+        var btn = document.getElementById('btn-send');
+        var inp = document.getElementById('chat-input');
+        if (!btn) return;
+        var value = inp ? inp.value : '';
+        var has = (value.trim() !== '') || (self.stagedFiles && self.stagedFiles.length > 0);
+        // Deliberately NOT `btn.disabled`. The composer is rebuilt by renderChat, and a rebuild
+        // can drop what was typed — a disabled button then leaves the user with no way to send
+        // and nothing to tell them why. The `ready` class and the icon carry the state instead,
+        // and the click handler already guards on the value, so a press with nothing to send is
+        // simply ignored. State you can see, without a state you can get stuck in.
+        btn.classList.toggle('ready', has);
+        btn.setAttribute('aria-disabled', has ? 'false' : 'true');
         // Always authoritative. It used to skip while an easter-egg icon was showing, which
         // made the restore conditional and left a random glyph behind on a fast hover in and
         // out. Nothing else can fire while the pointer is on the button anyway — you cannot
         // type or stage a file with the cursor parked there.
-        _setSendIcon('send-horizontal', has);
+        _setSendIcon(btn, 'send-horizontal', has);
       };
       self._setSendIcon = _setSendIcon;
       self._iconEl = _iconEl;
@@ -1827,7 +1840,7 @@ window.ChatPanel = {
       // hiding it behind a random glyph would be a worse button to make a joke with.
       var _eggIcons = null;
       btnSend.addEventListener('mouseenter', function () {
-        if (!btnSend.disabled) return;
+        if (btnSend.classList.contains('ready')) return;
         // Swapping the icon replaces the element under the pointer, and the browser treats the
         // new element as freshly entered — so the swap fires a mouseenter, which fires another
         // swap. That loop is why a random glyph sometimes survived a hover, and why it was
@@ -1843,7 +1856,7 @@ window.ChatPanel = {
           }
         }
         var pick = _eggIcons[Math.floor(Math.random() * _eggIcons.length)];
-        _setSendIcon(pick, false);
+        _setSendIcon(document.getElementById('btn-send') || btnSend, pick, false);
       });
       btnSend.addEventListener('mouseleave', function () {
         if (self._refreshSend) self._refreshSend();

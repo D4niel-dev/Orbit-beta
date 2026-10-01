@@ -4,7 +4,7 @@ window.Toast = {
   init() {
     this.container = document.createElement('div');
     this.container.id = 'toast-container';
-    this.container.style.cssText = 'position:fixed;bottom:24px;right:24px;display:flex;flex-direction:column;gap:12px;z-index:9999;pointer-events:none;';
+    this.container.style.cssText = 'position:fixed;bottom:96px;right:24px;display:flex;flex-direction:column;gap:12px;z-index:9999;pointer-events:none;'  // 96px clears the composer: at 24px the stack sat over the send button, and the close button swallowed the click;
     document.body.appendChild(this.container);
   },
 
