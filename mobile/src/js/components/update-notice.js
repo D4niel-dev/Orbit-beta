@@ -165,6 +165,11 @@ window.UpdateNotice = {
         try {
           if (resp.headers && typeof resp.headers.get === 'function') {
             total = parseInt(resp.headers.get('content-length') || '0', 10) || 0;
+            // The mobile Response is patched to buffer the whole body, so Content-Length is
+            // often absent — and with total 0 the bar was pinned at 0% for the entire download
+            // while the label counted megabytes. The release asset's declared size is already
+            // used further down to VERIFY the download; it works just as well as the denominator.
+            if (!total && res.asset && res.asset.size) total = res.asset.size;
           }
         } catch (e) { total = 0; }
 
