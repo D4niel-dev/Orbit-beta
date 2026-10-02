@@ -1377,13 +1377,18 @@
    The bottom padding was 9px, and with the card's 13px row padding the label
    ended up 27px from the card ABOVE it but 34px from the title BELOW it —
    floating closer to the wrong neighbour. 2px below puts it with its own card. */
+/* padding-left must be 0. It was 4px, which put the label at 20px while the card
+   edge is at 16px and the row icons at 32px — so it lined up with NEITHER and read
+   as an accidental indent (the " General" look). Flush with the card's left edge
+   is the standard: the label is a heading for the card, so it starts where the
+   card starts. Measured: label 16px, card 16px, icons 32px. */
 .settings-category-header {
   font-size: 11px !important;
   font-weight: 600 !important;
   letter-spacing: .09em !important;
   text-transform: uppercase;
   color: var(--text-muted) !important;
-  padding: 22px 4px 2px !important;
+  padding: 22px 0 2px !important;
   margin: 0 !important;
 }
 
