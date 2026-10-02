@@ -151,6 +151,107 @@ window.OrbitAccountTransfer = (function () {
     };
   }
 
+  /**
+   * Convert a desktop backup (SQLite rows) into the shape the mobile stores per
+   * account, so an imported account looks exactly like a locally-created one and
+   * nothing downstream needs to know where it came from.
+   *
+   * The one non-obvious mapping: the mobile marks YOUR OWN messages with
+   * `from === 'me'` rather than with your user id. So `sender` has to be compared
+   * against the account's own id on the way across, or every message you ever
+   * sent would import as if the other person had sent it.
+   *
+   * Settings come across as parsed values (the desktop stores them as TEXT), and
+   * the IMPORT side only applies keys it already knows — see the mobile importer.
+   */
+  function toMobileAccount(backup, opts) {
+    opts = opts || {};
+    if (!backup || typeof backup !== 'object' || !backup.data) return null;
+    var d = backup.data;
+
+    var users = Array.isArray(d.users) ? d.users : [];
+    var me = users[0] || null;
+    var myId = String(opts.userId || (me && me.userId) || '');
+
+    var friends = (Array.isArray(d.friends) ? d.friends : []).map(function (f) {
+      return {
+        id: String(f.userId || ''),
+        name: f.username || '',
+        tag: f.usertag || '',
+        status: f.status || 'offline',
+        avatar: f.avatar || null,
+        bio: f.bio || ''
+      };
+    }).filter(function (f) { return !!f.id; });
+
+    var messages = {};
+    (Array.isArray(d.messages) ? d.messages : []).forEach(function (m) {
+      var chatId = String(m.chatId || '');
+      if (!chatId) return;
+      if (!messages[chatId]) messages[chatId] = [];
+      messages[chatId].push({
+        id: String(m.id || ''),
+        from: String(m.sender || '') === myId ? 'me' : String(m.sender || ''),
+        text: m.text || '',
+        time: m.timestamp || ''
+      });
+    });
+
+    // One chat row per conversation. The mobile's list reads lastMessage and
+    // lastTime off these, so they have to be derived from the messages.
+    var chats = Object.keys(messages).map(function (chatId) {
+      var list = messages[chatId];
+      var last = list[list.length - 1] || {};
+      var f = friends.filter(function (x) { return x.id === chatId; })[0];
+      return {
+        id: chatId,
+        name: f ? f.name : chatId,
+        lastMessage: last.text || '',
+        lastTime: last.time || '',
+        unread: 0
+      };
+    }).sort(function (a, b) {
+      return String(b.lastTime).localeCompare(String(a.lastTime));
+    });
+
+    var groups = (Array.isArray(d.groups) ? d.groups : []).map(function (g) {
+      return {
+        id: String(g.groupId || ''),
+        name: g.groupName || '',
+        ownerId: g.ownerId || '',
+        createdAt: g.createdAt || ''
+      };
+    }).filter(function (g) { return !!g.id; });
+
+    var settings = {};
+    (Array.isArray(d.settings) ? d.settings : []).forEach(function (row) {
+      if (!row || typeof row.key !== 'string' || !row.key) return;
+      var v = row.value;
+      if (typeof v === 'string') {
+        // The desktop stores these as TEXT. "true" has to arrive as a boolean or
+        // the mobile's toggles read every setting as truthy.
+        try { v = JSON.parse(v); } catch (e) { /* a plain string, keep it */ }
+      }
+      settings[row.key] = v;
+    });
+
+    return {
+      user: me ? {
+        id: myId,
+        name: me.username || '',
+        tag: me.usertag || '',
+        status: me.status || 'online',
+        avatar: me.avatar || null,
+        bio: me.bio || ''
+      } : null,
+      friends: friends,
+      chats: chats,
+      groups: groups,
+      messages: messages,
+      settings: settings
+    };
+  }
+
   /* -- validation (receive side) -- */
 
   function fail(reason) { return { ok: false, reason: reason }; }
@@ -243,6 +344,7 @@ window.OrbitAccountTransfer = (function () {
     open: open,
     chunkString: chunkString,
     buildBundle: buildBundle,
+    toMobileAccount: toMobileAccount,
 
     validateOffer: validateOffer,
     validateChunk: validateChunk,
