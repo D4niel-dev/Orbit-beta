@@ -61,6 +61,12 @@
   --radius-md: 12px;
   --radius-lg: 18px;
 
+  /* Pill heights. A pill is a stadium — fully rounded, radius = half its height
+     — so the RADIUS is never a choice, only the height is. Pick from here. */
+  --pill-sm: 20px;   /* inline chips: badges, reactions, "This device" */
+  --pill-md: 30px;   /* notices: the encryption note, jump-to-latest */
+  --pill-lg: 44px;   /* fields: composer, search */
+
   --ease: cubic-bezier(.22, .61, .36, 1);
   --dur: 200ms;
 }
@@ -1698,6 +1704,103 @@
   animation: acct-spin .7s linear infinite;
 }
 @keyframes acct-spin { to { transform: rotate(360deg); } }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   16. PILL SYSTEM
+
+   A pill is a STADIUM — fully rounded, radius = half its height. So the radius
+   is never a design decision; only the height is. Before this the app declared
+   pill-ish things at 9, 10, 12, 12, 14, 18, 26 and 36px, which produced a row of
+   subtly different shapes that all read as "almost a pill" — the reason the set
+   looked inconsistent even though nothing was broken.
+
+   Rule: a stadium declares `border-radius: var(--radius-pill)` and takes its
+   height from the scale. Nothing declares an arbitrary pill radius again.
+
+     --pill-sm  20px   inline chips  — badges, reactions, "This device"
+     --pill-md  30px   notices       — the encryption note, jump-to-latest
+     --pill-lg  44px   fields        — composer, search
+
+   Three surfaces, and nothing else:
+     neutral       --bg-raised   + --border-subtle
+     accent-soft   --accent-soft + --accent-ring, accent text
+     accent-solid  --accent-primary, white text  (counts only)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Fields ── */
+.chat-input-wrapper,
+.header-search-wrapper,
+#panel-chats .home-search-inline,
+#message-search-bar > div {
+  border-radius: var(--radius-pill) !important;
+}
+
+/* ── Notices ── */
+.e2ee-note,
+#jump-latest-chip {
+  border-radius: var(--radius-pill) !important;
+}
+
+/* ── Inline chips ──
+   One height, one radius, centred content. */
+.chat-row-badge,
+.mention-badge,
+.reaction-pill,
+.acct-this {
+  border-radius: var(--radius-pill) !important;
+  min-height: var(--pill-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 7px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+/* accent-solid — counts. The only filled accent chip in the app. */
+.chat-row-badge,
+.mention-badge {
+  background: var(--accent-primary) !important;
+  color: #FFFFFF !important;
+  border: none !important;
+  min-width: var(--pill-sm);
+}
+
+/* accent-soft — selected or informational. */
+.reaction-pill.mine,
+.acct-this,
+.msg-thread-chip {
+  background: var(--accent-soft) !important;
+  border: 1px solid var(--accent-ring) !important;
+  color: var(--accent-primary) !important;
+}
+
+/* neutral — everything else. */
+.reaction-pill {
+  background: var(--bg-raised-2) !important;
+  border: 1px solid var(--border-strong) !important;
+  color: var(--text-secondary) !important;
+  gap: 3px;
+}
+.msg-thread-chip {
+  border-radius: var(--radius-pill) !important;
+  min-height: var(--pill-sm);
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* ── Containers ──
+   Same stadium rule, so the tab bar and its tabs stop disagreeing (36 vs 26). */
+.orbit-tabbar .pill,
+.orbit-tabbar .tab,
+.settings-toggle {
+  border-radius: var(--radius-pill) !important;
+}
 
 
 /* ═══════════════════════════════════════════════════════════════════════════
