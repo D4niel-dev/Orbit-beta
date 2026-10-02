@@ -1545,19 +1545,50 @@
   opacity: 1 !important;
 }
 
-/* Toggles and selects inside a row. */
+/* Toggle.
+   mobile.css sizes the track 48x28 with a 22px knob at inset 3 and
+   translateX(20px). I had shrunk the track to 44x26 and left the knob alone — so
+   the knob sat 3px from the top but 1px from the bottom, and overhung the track
+   by 1px on the right. Track and knob have to be sized together, or the knob
+   ends up off-centre and out of bounds.
+
+   Geometry: 44x28 border-box, 1px border -> 42x26 of content.
+   Knob 22x22 at inset 2 -> 2+22+2 = 26 vertically, and 2+22+2 = 42 horizontally
+   once translated by 18. Centred in both states, knob 85% of the track height —
+   the proportion a switch reads as, rather than a dot floating in a pill. */
 .settings-toggle {
   width: 44px !important;
-  height: 26px !important;
-  border-radius: var(--radius-pill) !important;
+  height: 28px !important;
+  border-radius: 14px !important;
   background: var(--bg-raised-2) !important;
-  border: 1px solid var(--border-subtle) !important;
+  border: 1px solid var(--border-strong) !important;
+  box-shadow: none !important;
   position: relative;
-  transition: background var(--dur) var(--ease);
+  flex-shrink: 0;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
 }
 .settings-toggle.on {
   background: var(--accent-primary) !important;
   border-color: var(--accent-primary) !important;
+}
+
+.settings-toggle::after {
+  content: '' !important;
+  top: 2px !important;
+  left: 2px !important;
+  width: 22px !important;
+  height: 22px !important;
+  border-radius: 50% !important;
+  background: var(--text-primary) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .25) !important;
+  transition: transform var(--dur) var(--ease) !important;
+}
+/* 16, not 18: the knob sits at left 2 and is 22 wide, so its right edge is at 24.
+   To leave a 2px gap inside a 42px content box it has to end at 40 — a 16px
+   translate. 18 put it flush against the right edge, which is exactly the
+   asymmetry this whole block exists to fix. Measured, not calculated. */
+.settings-toggle.on::after {
+  transform: translateX(16px) !important;
 }
 .settings-select,
 .settings-input {
