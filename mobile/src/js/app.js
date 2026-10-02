@@ -823,6 +823,37 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
+  /* -- Read receipts --
+     The desktop sends a READ packet when a chat is read, and mobile has always
+     HANDLED them (see the Types.READ branch further down, which sets m.read).
+     But mobile never SENT one, so a desktop peer never saw ticks for a message
+     read on the phone — the indicator existed on one platform only.
+     Payload matches the desktop exactly: { chatId, lastReadMsgId }. */
+  var _lastReadSent = {};
+
+  function sendReadReceipt(chatId) {
+    if (!chatId || !window.Orbit || !Orbit.P2P || typeof Orbit.P2P.send !== 'function') return;
+    if (!MStore.user || !Orbit.Protocol) return;
+
+    var msgs = MStore.getMessages(chatId);
+    if (!msgs || !msgs.length) return;
+    var lastId = msgs[msgs.length - 1].id;
+    if (lastId == null) return;
+    // Only when there is something new to acknowledge.
+    if (_lastReadSent[chatId] === String(lastId)) return;
+    _lastReadSent[chatId] = String(lastId);
+
+    var me = MStore.user.id || MStore.user.userId;
+    try {
+      Orbit.P2P.send(chatId, Orbit.Protocol.createPacket(
+        Orbit.Protocol.Types.READ, me, chatId,
+        { chatId: chatId, lastReadMsgId: lastId }));
+    } catch (e) {
+      // Peer unreachable. Clear the guard so the next read tries again.
+      delete _lastReadSent[chatId];
+    }
+  }
+
   /* -- Render Chat View -- */
   function openChat(chatId) {
     // Save the draft for the chat we are leaving. Through the helper, so an emptied
@@ -2240,13 +2271,23 @@ document.addEventListener('DOMContentLoaded', function() {
           rxGroups[r.emoji].push(r.userId);
         });
         var rxHtml = '';
-        for (var emoji in rxGroups) {
+        // ONE line, at most MAX_RX pills. Anything past that collapses into a
+        // "+N" chip; long-press the row to see them all. A reaction row that
+        // wraps makes every message a different height and shoves the timestamp
+        // around, so it never wraps.
+        var MAX_RX = 5;
+        var rxEmojis = Object.keys(rxGroups);
+        var rxHidden = Math.max(0, rxEmojis.length - MAX_RX);
+        rxEmojis.slice(0, MAX_RX).forEach(function(emoji) {
           var count = rxGroups[emoji].length;
           var hasMe = rxGroups[emoji].indexOf(MStore.user ? MStore.user.id : '') !== -1;
           rxHtml += '<div class="reaction-pill' + (hasMe ? ' mine' : '') + '">' +
             '<span>' + escapeHtml(emoji) + '</span>' +
             (count > 1 ? '<span class="reaction-pill-count">' + count + '</span>' : '') +
             '</div>';
+        });
+        if (rxHidden > 0) {
+          rxHtml += '<div class="reaction-pill reaction-more">+' + rxHidden + '</div>';
         }
         reactionsHtml = '<div class="reactions-row" data-msg-id="' + m.id + '">' + rxHtml + '</div>';
       }
@@ -2293,8 +2334,20 @@ document.addEventListener('DOMContentLoaded', function() {
           callLogHtml +
           reactionsHtml +
           threadChipHtml +
-          '<div class="message-time">' + (m.pending ? '<span class="msg-pending-indicator" title="Waiting for them to come back — sends automatically">⏳</span>' : '') + (_getDisappearTimer(chatId) !== 'off' ? '<span class="msg-disappear-indicator" title="Auto-deletes after ' + _getDisappearTimer(chatId) + '">⏱</span>' : '') + formatTime(m.time) + '</div>' +
           (MStore.settings.showMessageIds ? '<div style="font-size:9px;color:var(--text-muted);opacity:0.5;margin-top:2px;">' + m.id + '</div>' : '') +
+        '</div>' +
+        // Timestamp and delivery state sit BELOW the bubble, on the bubble's
+        // outer edge — the same place the desktop puts them. Inside the bubble
+        // they competed with the message text for the same corner.
+        '<div class="message-time">' +
+          (m.pending ? '<span class="msg-pending-indicator" title="Waiting for them to come back — sends automatically">⏳</span>' : '') +
+          (_getDisappearTimer(chatId) !== 'off' ? '<span class="msg-disappear-indicator" title="Auto-deletes after ' + _getDisappearTimer(chatId) + '">⏱</span>' : '') +
+          formatTime(m.time) +
+          // Double check. `m.read` is set by the READ packet handler above, so
+          // this reflects a real receipt from the peer, not an assumption.
+          (isMine && !m.pending
+            ? '<span class="msg-ticks' + (m.read ? ' read' : '') + '" title="' + (m.read ? 'Read' : 'Sent') + '">✓✓</span>'
+            : '') +
         '</div>' +
       '</div>';
     });
@@ -2311,6 +2364,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (window.lucide && lucide.createIcons) {
       try { lucide.createIcons({ root: feed }); } catch (e) {}
     }
+    // Tell the peer what we have seen. Guarded inside, so this only goes out
+    // when the newest message actually changed.
+    sendReadReceipt(chatId);
     // Wire the message long-press context menu (idempotent — safe on every render).
     // The live chat path is window.openChat → this renderMessages; the old
     // OrbitChat.renderMessages path that used to own this is no longer the entry point.

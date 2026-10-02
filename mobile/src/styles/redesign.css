@@ -943,11 +943,19 @@
   stroke-width: 2;
 }
 
+/* The row is a COLUMN now: bubble, then the timestamp underneath it. It used to
+   be a row with the timestamp INSIDE the bubble, which is why the time shared a
+   corner with the message text instead of sitting below it like the desktop. */
 .message-row {
-  margin-bottom: 7px !important;
+  flex-direction: column !important;
+  align-items: flex-end;
+  margin-bottom: 12px !important;
+}
+.message-row.other {
+  align-items: flex-start;
 }
 .message-row.grouped {
-  margin-bottom: 2px !important;
+  margin-bottom: 4px !important;
 }
 
 .message-bubble {
@@ -981,13 +989,28 @@
   display: none !important;
 }
 
+/* Timestamp + delivery state, under the bubble, on the bubble's outer edge. */
 .message-time {
   font-size: 10.5px !important;
-  margin-top: 4px !important;
-  font-variant-numeric: tabular-nums;
-}
-.message-row.mine .message-time {
+  margin-top: 3px !important;
   color: var(--text-muted) !important;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+/* Double check. Muted while sent, accent once the peer's READ receipt lands.
+   (The desktop only shows the ticks once read — but a sent message with no
+   indicator at all reads as broken, so mobile shows the state either way.) */
+.msg-ticks {
+  font-size: 10px;
+  letter-spacing: -1.5px;
+  color: var(--text-muted);
+}
+.msg-ticks.read {
+  color: var(--accent-primary);
 }
 
 /* Links and inline code inside a bubble must stay legible on accent. */
@@ -1104,19 +1127,30 @@
   left: auto !important;
 }
 
-/* The row is absolutely positioned, so the bubble reserves no room for it and
-   the next message would sit on top. `:has()` gives the height back only to the
-   messages that actually carry reactions. */
-.message-row:has(.reactions-row) {
-  margin-bottom: 32px !important;
+/* The pills sit about 10px proud of the bubble's bottom edge, so the bubble
+   reserves a band for them — otherwise they cover the last line of the message.
+   The timestamp is in flow BELOW the bubble now, so it needs to clear the pills
+   too; 14px puts it under them. */
+.message-row:has(.reactions-row) .message-bubble {
+  padding-bottom: 20px !important;
+}
+.message-row:has(.reactions-row) .message-time {
+  margin-top: 14px !important;
 }
 
-/* The pills sit about 10px proud of the bubble's bottom edge and the timestamp
-   is right-aligned on that same edge, so on a SHORT message ("ok", "sure") the
-   pills land on top of the time. Reserve a band for them inside the bubble —
-   the timestamp then clears the pills at any message length. */
-.message-row:has(.reactions-row) .message-bubble {
-  padding-bottom: 22px !important;
+/* One line, always. The renderer caps the row at five pills and collapses the
+   rest into a "+N" chip, so this is belt and braces. */
+.reactions-row {
+  flex-wrap: nowrap !important;
+  overflow: visible;
+}
+
+/* The "+N" chip — same shape as a pill, deliberately quieter. */
+.reaction-pill.reaction-more {
+  background: var(--bg-raised) !important;
+  border-style: dashed !important;
+  color: var(--text-muted) !important;
+  cursor: pointer;
 }
 
 .reaction-pill {
@@ -1800,6 +1834,61 @@
 .orbit-tabbar .tab,
 .settings-toggle {
   border-radius: var(--radius-pill) !important;
+}
+
+/* ── Reaction sheet ──
+   Long-press the reaction row to see every reaction, since the row itself only
+   shows five. Content is built in chat-screen.js (_showAllReactions). */
+.rx-sheet { padding: 4px 0 6px; }
+
+.rx-sheet-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 0 4px 10px;
+}
+
+.rx-sheet-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 4px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.rx-sheet-row:last-child { border-bottom: none; }
+
+.rx-sheet-emoji {
+  font-size: 18px;
+  line-height: 1;
+  width: 24px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.rx-sheet-who {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rx-sheet-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-raised-2);
+  border-radius: var(--radius-pill);
+  min-width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 

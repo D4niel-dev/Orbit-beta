@@ -447,6 +447,63 @@ var OrbitChat = {
   },
 
   /** Initialize long-press context menu (event delegation on #message-feed) */
+  _esc: function(s) {
+    var d = document.createElement('div');
+    d.appendChild(document.createTextNode(s == null ? '' : String(s)));
+    return d.innerHTML;
+  },
+
+  /**
+   * Every reaction on a message, in a sheet.
+   *
+   * The reaction row is capped at five pills so it stays one line, which means
+   * anything past the fifth is invisible on the message itself. Long-press is
+   * the way in.
+   */
+  _showAllReactions: function(msgId) {
+    if (typeof OrbitSheet === 'undefined' || typeof OrbitSheet.showCustom !== 'function') return;
+    if (!window.MStore) return;
+
+    var chatId = window.activeChatId ||
+                 (window.OrbitChat && OrbitChat._currentChatId) || null;
+    if (!chatId) return;
+
+    var msgs = MStore.getMessages(chatId) || [];
+    var msg = null;
+    for (var i = 0; i < msgs.length; i++) {
+      if (String(msgs[i].id) === String(msgId)) { msg = msgs[i]; break; }
+    }
+    if (!msg || !msg.reactions || !msg.reactions.length) return;
+
+    var groups = {};
+    msg.reactions.forEach(function(r) {
+      if (!r || !r.emoji) return;
+      if (!groups[r.emoji]) groups[r.emoji] = [];
+      groups[r.emoji].push(r.userId);
+    });
+
+    var self = this;
+    var html = '<div class="rx-sheet">' +
+               '<div class="rx-sheet-title">Reactions</div>';
+
+    Object.keys(groups).forEach(function(emoji) {
+      var names = groups[emoji].map(function(uid) {
+        if (MStore.user && String(uid) === String(MStore.user.id)) return 'You';
+        var f = (MStore.friends || []).filter(function(x) {
+          return x.id === uid || x.userId === uid;
+        })[0];
+        return f ? (f.name || 'Someone') : 'Someone';
+      });
+      html += '<div class="rx-sheet-row">' +
+                '<span class="rx-sheet-emoji">' + self._esc(emoji) + '</span>' +
+                '<span class="rx-sheet-who">' + self._esc(names.join(', ')) + '</span>' +
+                '<span class="rx-sheet-count">' + groups[emoji].length + '</span>' +
+              '</div>';
+    });
+    html += '</div>';
+    OrbitSheet.showCustom(html);
+  },
+
   _initContextMenu: function() {
     if (this._contextMenuInitialized) return;
     
@@ -463,6 +520,21 @@ var OrbitChat = {
       // Sender names/avatars carry [data-user-id] — the global long-press handler (app.js)
       // owns those and opens the user actions sheet; don't start the message-menu timer.
       if (e.target.closest && e.target.closest('[data-user-id]')) return;
+
+      // A long-press on the reaction row shows EVERY reaction rather than the
+      // message menu. The row is capped at five pills, so this is the only way
+      // to see the rest.
+      var rxRow = e.target.closest ? e.target.closest('.reactions-row') : null;
+      if (rxRow) {
+        var rxMsgId = rxRow.getAttribute('data-msg-id');
+        pressTimer = setTimeout(function() {
+          pressTimer = null;
+          if (rxMsgId) OrbitChat._showAllReactions(rxMsgId);
+          if (e.cancelable) { e.preventDefault(); }
+        }, 400);
+        return;
+      }
+
       startX = e.touches[0].clientX;
       startY = e.touches[0].clientY;
       pressTimer = setTimeout(function() {
