@@ -12244,10 +12244,49 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Friends buttons
   document.getElementById('btn-add-friend').addEventListener('click', showAddFriendModal);
+  // The scanner is one screen used for two jobs: pairing a desktop (which will
+  // carry an account across) and adding a contact from a code. The copy differs,
+  // so the caller sets it before opening.
+  function setScanCopy(mode) {
+    var isDesktop = mode === 'desktop';
+    var t = document.querySelector('.qr-scan-title');
+    var h = document.querySelector('.qr-scan-head');
+    var l = document.querySelector('.qr-scan-lead');
+    var p = document.querySelector('.qr-scan-path');
+    var alt = document.getElementById('btn-qr-show-mine');
+    if (t) t.textContent = isDesktop ? 'Link a desktop' : 'Scan a code';
+    if (h) h.textContent = isDesktop ? 'Point at the code on your computer'
+                                     : 'Point at their Orbit code';
+    if (l) {
+      l.textContent = isDesktop
+        ? 'Both devices need to be on the same Wi-Fi. Your messages and contacts move directly between them — nothing is uploaded anywhere.'
+        : 'Scanning adds them as a contact and opens a direct connection, so it works even when the network blocks discovery.';
+    }
+    if (p) p.style.display = isDesktop ? '' : 'none';
+    if (alt) alt.style.display = isDesktop ? '' : 'none';
+  }
+  window.openScanner = function(mode) { setScanCopy(mode); startQRScanner(); };
+
   var scanBtn = document.getElementById('btn-scan-qr');
-  if (scanBtn) scanBtn.addEventListener('click', startQRScanner);
+  if (scanBtn) scanBtn.addEventListener('click', function() { setScanCopy(null); startQRScanner(); });
   var closeScannerBtn = document.getElementById('btn-close-scanner');
   if (closeScannerBtn) closeScannerBtn.addEventListener('click', stopQRScanner);
+
+  // "Show my code instead" — the other half of pairing. Close the camera and open
+  // the Add Friend modal on its QR tab, which already renders the payload.
+  var showMineBtn = document.getElementById('btn-qr-show-mine');
+  if (showMineBtn) {
+    showMineBtn.addEventListener('click', function() {
+      stopQRScanner();
+      if (typeof showAddFriendModal === 'function') {
+        showAddFriendModal();
+        setTimeout(function() {
+          var tab = document.querySelector('.modal-tab[data-tab="qr"]');
+          if (tab) tab.click();
+        }, 60);
+      }
+    });
+  }
 
   // Gallery button
   var btnGallery = document.getElementById('btn-gallery');

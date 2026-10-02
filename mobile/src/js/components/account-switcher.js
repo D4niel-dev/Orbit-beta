@@ -192,12 +192,13 @@ var OrbitAccounts = {
   },
 
   _pairDesktop: function() {
-    // The transfer feature is not built yet. Say so plainly rather than opening
-    // a screen that cannot do anything.
+    // Opens the scanner. Scanning a desktop's code pairs the device and opens a
+    // direct connection (QR pairing v2, already shipped) — that part works today.
+    // Carrying the account ACROSS that connection is the next piece.
     this.close();
-    if (typeof window.showToast === 'function') {
-      window.showToast('Pairing a desktop arrives with the account transfer feature', 'info');
-    }
+    setTimeout(function() {
+      if (typeof window.openScanner === 'function') window.openScanner('desktop');
+    }, 220);   // let the sheet finish closing so the camera does not fight it
   },
 
   _signOut: function(btn) {

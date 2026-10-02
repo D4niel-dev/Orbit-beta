@@ -1893,6 +1893,196 @@
 
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   17. PAIR A DESKTOP (the QR scanner screen)
+
+   This is the overlay startQRScanner()/stopQRScanner() toggle. They only touch
+   the outer element's `display`, so everything inside is restyled freely — the
+   old version was a bare 280px square with a Cancel button and no explanation of
+   what you were supposed to point the camera at.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+#qr-scanner-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: var(--bg-base);
+  flex-direction: column;   /* startQRScanner sets display:flex */
+  padding-top: var(--safe-area-top);
+}
+
+.qr-scan-bar {
+  height: 56px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+}
+
+.qr-scan-back {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.qr-scan-back:active { background: var(--bg-hover); color: var(--text-primary); }
+.qr-scan-back i, .qr-scan-back svg { width: 20px; height: 20px; stroke-width: 1.8; }
+
+.qr-scan-title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -.02em;
+  color: var(--text-primary);
+}
+
+.qr-scan-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 8px 32px calc(24px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Viewfinder. The corner brackets are four <i> elements inside the frame. */
+.qr-scan-frame {
+  position: relative;
+  width: 250px;
+  height: 250px;
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  margin-top: 14px;
+  flex-shrink: 0;
+  border: 1px solid var(--border-subtle);
+  background:
+    radial-gradient(120% 120% at 50% 40%, rgba(77, 124, 254, .10), transparent 62%),
+    var(--bg-base);
+}
+.qr-scan-frame video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* nth-of-type, not nth-child — video and canvas are siblings ahead of these. */
+.qr-scan-frame i {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border: 2.5px solid var(--accent-primary);
+  pointer-events: none;
+}
+.qr-scan-frame i:nth-of-type(1) { top: 18px;    left: 18px;  border-right: none; border-bottom: none; border-radius: 8px 0 0 0; }
+.qr-scan-frame i:nth-of-type(2) { top: 18px;    right: 18px; border-left: none;  border-bottom: none; border-radius: 0 8px 0 0; }
+.qr-scan-frame i:nth-of-type(3) { bottom: 18px; left: 18px;  border-right: none; border-top: none;    border-radius: 0 0 0 8px; }
+.qr-scan-frame i:nth-of-type(4) { bottom: 18px; right: 18px; border-left: none;  border-top: none;    border-radius: 0 0 8px 0; }
+
+.qr-scan-line {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent-primary), transparent);
+  box-shadow: 0 0 14px rgba(77, 124, 254, .7);
+  animation: qr-scan 2.4s var(--ease) infinite;
+  pointer-events: none;
+}
+@keyframes qr-scan {
+  0%   { top: 24px;  opacity: 0; }
+  18%  { opacity: 1; }
+  82%  { opacity: 1; }
+  100% { top: 222px; opacity: 0; }
+}
+
+.qr-scan-head {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -.02em;
+  color: var(--text-primary);
+  margin-top: 30px;
+}
+
+.qr-scan-lead {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  margin-top: 9px;
+  max-width: 290px;
+}
+
+.qr-scan-path {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 16px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+  padding: 8px 13px;
+  border-radius: var(--radius-sm);
+}
+.qr-scan-path i, .qr-scan-path svg { width: 13px; height: 13px; color: var(--text-muted); }
+
+.qr-scan-status {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 26px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+  padding: 9px 16px;
+  border-radius: var(--radius-pill);
+}
+.qr-scan-pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  animation: qr-pulse 1.4s ease-in-out infinite;
+}
+@keyframes qr-pulse {
+  0%, 100% { opacity: .35; transform: scale(.85); }
+  50%      { opacity: 1;   transform: scale(1.15); }
+}
+
+.qr-scan-spacer { flex: 1; }
+
+.qr-scan-alt {
+  width: 100%;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 14.5px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  transition: background var(--dur) var(--ease);
+}
+.qr-scan-alt:active { background: var(--bg-raised); }
+.qr-scan-alt i, .qr-scan-alt svg { width: 18px; height: 18px; stroke-width: 1.9; }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
    11. POLISH — issues found by rendering the build and looking at it
    ═══════════════════════════════════════════════════════════════════════════ */
 

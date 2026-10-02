@@ -35,7 +35,7 @@
   <!-- v0.8.1-beta redesign layer. MUST load last: mobile.css redefines several
        selectors more than once, and this sheet restates what the redesign
        changes rather than editing that file in place. -->
-  <link rel="stylesheet" href="styles/redesign.css?v=20261002p">
+  <link rel="stylesheet" href="styles/redesign.css?v=20261002r">
 
   <!-- Syntax Highlighting (Prism) -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
@@ -120,15 +120,41 @@
       <div id="friends-list" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
     </aside>
 
-    <!-- QR Scanner Overlay -->
-    <div id="qr-scanner-overlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:300;background:rgba(0,0,0,0.9);flex-direction:column;align-items:center;justify-content:center;">
-      <div style="position:relative;width:280px;height:280px;border:2px solid var(--accent-primary);border-radius:12px;overflow:hidden;">
-        <video id="qr-scanner-video" style="width:100%;height:100%;object-fit:cover;" playsinline></video>
-        <canvas id="qr-scanner-canvas" style="display:none;"></canvas>
-        <div style="position:absolute;top:0;left:0;right:0;bottom:0;border:2px solid rgba(255,255,255,0.3);border-radius:10px;pointer-events:none;"></div>
+    <!-- QR Scanner Overlay — this is also the "Pair a desktop" screen.
+         startQRScanner()/stopQRScanner() only toggle `display` on the outer
+         element, so everything inside is free to change. -->
+    <div id="qr-scanner-overlay" style="display:none;">
+      <div class="qr-scan-bar">
+        <button id="btn-close-scanner" class="qr-scan-back" aria-label="Close"><i data-lucide="arrow-left"></i></button>
+        <span class="qr-scan-title">Link a desktop</span>
       </div>
-      <p style="color:#fff;font-size:14px;margin:16px 0 0;opacity:0.8;">Point at a QR code</p>
-      <button id="btn-close-scanner" style="margin-top:24px;padding:10px 32px;border-radius:24px;border:none;background:var(--accent-primary);color:#fff;font-size:15px;font-weight:600;cursor:pointer;">Cancel</button>
+
+      <div class="qr-scan-body">
+        <div class="qr-scan-frame">
+          <video id="qr-scanner-video" playsinline></video>
+          <canvas id="qr-scanner-canvas" style="display:none;"></canvas>
+          <!-- camera corner brackets -->
+          <i></i><i></i><i></i><i></i>
+          <div class="qr-scan-line"></div>
+        </div>
+
+        <h3 class="qr-scan-head">Point at the code on your computer</h3>
+        <p class="qr-scan-lead">Both devices need to be on the same Wi-Fi. Your messages and contacts move directly between them — nothing is uploaded anywhere.</p>
+
+        <div class="qr-scan-path">
+          <i data-lucide="settings"></i><span>Orbit → Settings → Link a phone</span>
+        </div>
+
+        <div class="qr-scan-status" id="qr-scan-status">
+          <span class="qr-scan-pulse"></span><span id="qr-scan-status-text">Looking for a code…</span>
+        </div>
+
+        <div class="qr-scan-spacer"></div>
+
+        <button class="qr-scan-alt" id="btn-qr-show-mine">
+          <i data-lucide="qr-code"></i>Show my code instead
+        </button>
+      </div>
     </div>
 
     <!-- Activity Panel -->
@@ -397,12 +423,12 @@
   setTimeout(function() { window._loadImageCropper(); }, 1500);
   </script>
 
-  <script src="js/app.js?v=20261002q"></script>
+  <script src="js/app.js?v=20261002r"></script>
 
   <!-- v0.2.8 Components -->
   <script src="js/components/navigation.js?v=20261002f"></script>
   <script src="js/components/chat-screen.js?v=20261002p"></script>
   <script src="js/components/home-screen.js?v=20261002f"></script>
-  <script src="js/components/account-switcher.js?v=20261002h"></script>
+  <script src="js/components/account-switcher.js?v=20261002r"></script>
 </body>
 </html>
