@@ -212,7 +212,11 @@ var OrbitNav = {
     btn.addEventListener('click', function(e) {
       e.stopPropagation();
       if (longFired) { longFired = false; return; }
-      if (typeof window.showProfileSheet === 'function') {
+      // The avatar is the account control now, so it opens the switcher. The
+      // profile editor is one tap further in — tapping the current-account card.
+      if (window.OrbitAccounts) {
+        window.OrbitAccounts.open();
+      } else if (typeof window.showProfileSheet === 'function') {
         window.showProfileSheet();
       }
     });

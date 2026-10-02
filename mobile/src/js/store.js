@@ -4,6 +4,12 @@
 
 class Store {
   constructor(initialState = {}) {
+    // ── Account ──
+    // Which identity's data this store is currently reading. null means "no
+    // account yet", which reads the un-prefixed keys — exactly the pre-v0.8.1
+    // layout. See initAccounts().
+    this.accountId = null;
+
     // ── Data properties (direct access, backward compat with MStore) ──
     this.friends = [];
     this.chats = [];
@@ -105,15 +111,229 @@ class Store {
   }
 
   // ════════════════════════════════════════════
+  // Accounts
+  //
+  // Multi-account works by namespacing the storage keys. Everything the store
+  // owns goes through get()/set(), so prefixing there covers friends, chats,
+  // groups, messages, settings and the user record in one place.
+  //
+  // It does NOT cover the ~15 sites outside this class that write `orbit_*`
+  // directly (drafts, the E2EE keypair, the vault backup, the outbox). Those are
+  // swept onto window.OrbitKeys — see the note on it below.
+  //
+  // Layout:
+  //   orbit_accounts         registry          (raw, never namespaced)
+  //   orbit_active_account   which one is live (raw)
+  //   orbit_acct_<id>_<key>  everything else
+  // ════════════════════════════════════════════
+
+  /** Storage prefix for the active account. '' before the first account exists. */
+  _ns() {
+    return this.accountId ? 'acct_' + this.accountId + '_' : '';
+  }
+
+  /** Raw access that ignores the namespace — for the registry only. */
+  _rawGet(key, fallback) {
+    try { var d = JSON.parse(localStorage.getItem('orbit_' + key)); return d !== null ? d : fallback; }
+    catch (e) { return fallback; }
+  }
+  _rawSet(key, val) {
+    try { localStorage.setItem('orbit_' + key, JSON.stringify(val)); } catch (e) {}
+  }
+  _rawRemove(key) {
+    try { localStorage.removeItem('orbit_' + key); } catch (e) {}
+  }
+
+  /** All accounts, most recently used first. */
+  listAccounts() {
+    var reg = this._rawGet('accounts', null);
+    return Array.isArray(reg) ? reg : [];
+  }
+
+  activeAccount() {
+    var id = this.accountId;
+    var list = this.listAccounts();
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+    return list[0] || null;
+  }
+
+  _recordFromUser(user, id) {
+    if (!user) return null;
+    return {
+      id: id || user.id || user.userId,
+      name: user.name || 'User',
+      tag: user.tag || '',
+      avatar: user.avatar || null,
+      status: user.status || 'offline',
+      createdAt: user.createdAt || new Date().toISOString(),
+      lastUsedAt: new Date().toISOString()
+    };
+  }
+
+  /**
+   * Decide which account we are, and adopt the legacy single-account keys on
+   * first run under the new scheme.
+   */
+  initAccounts() {
+    var reg = this._rawGet('accounts', null);
+    if (!Array.isArray(reg)) {
+      var legacyUser = this._rawGet('user', null);
+      var id = (legacyUser && (legacyUser.id || legacyUser.userId)) ||
+               ('a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5));
+
+      var moved = this._migrateLegacyInto(id);
+      var rec = this._recordFromUser(legacyUser, id) ||
+                { id: id, name: 'User', tag: '', avatar: null, status: 'online',
+                  createdAt: new Date().toISOString(), lastUsedAt: new Date().toISOString() };
+      reg = [rec];
+      this._rawSet('accounts', reg);
+      this._rawSet('active_account', id);
+      console.log('[Store] Adopted ' + moved + ' legacy key(s) into account ' + id);
+    }
+    if (!reg.length) { this.accountId = null; return reg; }
+
+    var active = this._rawGet('active_account', null);
+    var found = false;
+    for (var i = 0; i < reg.length; i++) if (reg[i].id === active) found = true;
+    this.accountId = found ? active : reg[0].id;
+    return reg;
+  }
+
+  /**
+   * Copy every un-namespaced `orbit_*` key into <id>'s namespace.
+   *
+   * The originals are deliberately LEFT IN PLACE. Copy, verify, and only then
+   * clean up — in a later release. Losing someone's message history to a bad
+   * migration is unrecoverable, and the storage here is small enough that
+   * carrying a duplicate for one release is cheap insurance.
+   */
+  _migrateLegacyInto(id) {
+    var prefix = 'acct_' + id + '_';
+    var bare = [];
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k || k.indexOf('orbit_') !== 0) continue;
+        var b = k.substring(6);
+        if (b === 'accounts' || b === 'active_account') continue;
+        if (b.indexOf('acct_') === 0) continue;   // already namespaced
+        bare.push(b);
+      }
+    } catch (e) { return 0; }
+
+    var moved = 0;
+    bare.forEach(function(b) {
+      var v = localStorage.getItem('orbit_' + b);
+      if (v === null) return;
+      try { localStorage.setItem('orbit_' + prefix + b, v); moved++; } catch (e) {}
+    });
+    return moved;
+  }
+
+  /** Create a fresh, empty account and switch to it. */
+  createAccount() {
+    this.save();  // flush the current account before we change namespace
+    var id = 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+    var reg = this.listAccounts();
+    reg.push({
+      id: id, name: 'New account', tag: '', avatar: null, status: 'online',
+      createdAt: new Date().toISOString(), lastUsedAt: new Date().toISOString()
+    });
+    this._rawSet('accounts', reg);
+    this.accountId = id;
+    this._rawSet('active_account', id);
+    this.load();      // empty namespace → load() generates a default identity
+    this.syncAccountRecord();
+    this.notify(this.getState());
+    return id;
+  }
+
+  /** Switch to another account. Returns false when nothing changed. */
+  switchAccount(id) {
+    if (!id || id === this.accountId) return false;
+    var list = this.listAccounts();
+    var found = null;
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) found = list[i];
+    if (!found) return false;
+
+    this.save();                  // persist what the outgoing account was doing
+    this.accountId = id;
+    this._rawSet('active_account', id);
+    this.load();                  // everything now reads from the new namespace
+    this.touchAccount(id);
+    this.notify(this.getState());
+    return true;
+  }
+
+  /**
+   * Keep the registry's copy of a profile in step with the account's own.
+   * save() runs constantly, so this only writes when a displayed field actually
+   * changed — otherwise every unrelated save would rewrite the registry.
+   */
+  syncAccountRecord() {
+    if (!this.accountId || !this.user) return;
+    var reg = this.listAccounts();
+    var u = this.user;
+    var name = u.name || 'User', tag = u.tag || '', avatar = u.avatar || null;
+    var changed = false;
+    for (var i = 0; i < reg.length; i++) {
+      if (reg[i].id !== this.accountId) continue;
+      if (reg[i].name !== name || reg[i].tag !== tag || reg[i].avatar !== avatar) {
+        reg[i].name = name;
+        reg[i].tag = tag;
+        reg[i].avatar = avatar;
+        changed = true;
+      }
+    }
+    if (changed) this._rawSet('accounts', reg);
+  }
+
+  touchAccount(id) {
+    var reg = this.listAccounts();
+    for (var i = 0; i < reg.length; i++) {
+      if (reg[i].id === id) { reg[i].lastUsedAt = new Date().toISOString(); break; }
+    }
+    this._rawSet('accounts', reg);
+  }
+
+  /**
+   * Remove an account and purge its namespaced keys.
+   * Refuses to remove the last one — there would be nothing to switch to.
+   */
+  deleteAccount(id) {
+    var reg = this.listAccounts().filter(function(a) { return a.id !== id; });
+    if (!reg.length) return false;
+
+    var prefix = 'orbit_acct_' + id + '_';
+    var doomed = [];
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && k.indexOf(prefix) === 0) doomed.push(k);
+      }
+    } catch (e) {}
+    doomed.forEach(function(k) { try { localStorage.removeItem(k); } catch (e) {} });
+
+    this._rawSet('accounts', reg);
+    if (this.accountId === id) {
+      this.accountId = reg[0].id;
+      this._rawSet('active_account', this.accountId);
+      this.load();
+      this.notify(this.getState());
+    }
+    return true;
+  }
+
+  // ════════════════════════════════════════════
   // MStore-compatible API (backward compat)
   // ════════════════════════════════════════════
 
   get(key, fallback) {
     if (key.indexOf('msg_') === 0) {
-      try { var d = JSON.parse(localStorage.getItem('orbit_' + key)); return d !== null ? d : fallback; }
+      try { var d = JSON.parse(localStorage.getItem('orbit_' + this._ns() + key)); return d !== null ? d : fallback; }
       catch(e) { return fallback; }
     }
-    try { var d = JSON.parse(localStorage.getItem('orbit_' + key)); return d !== null ? d : fallback; }
+    try { var d = JSON.parse(localStorage.getItem('orbit_' + this._ns() + key)); return d !== null ? d : fallback; }
     catch(e) { return fallback; }
   }
 
@@ -130,7 +350,7 @@ class Store {
     if (key.indexOf('msg_') === 0) {
       var chatId = key.substring(4);
       try {
-        localStorage.setItem('orbit_' + key, JSON.stringify(val));
+        localStorage.setItem('orbit_' + this._ns() + key, JSON.stringify(val));
       } catch(e) {
         if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
           console.error('Storage quota exceeded for messages of', chatId);
@@ -141,20 +361,20 @@ class Store {
           for (var li = 0; li < limits.length; li++) {
             var trimmed = val.slice(-limits[li]);
             try {
-              localStorage.setItem('orbit_' + key, JSON.stringify(trimmed));
+              localStorage.setItem('orbit_' + this._ns() + key, JSON.stringify(trimmed));
               if (this.messages) this.messages[chatId] = trimmed;
               return;
             } catch(e2) {}
           }
           console.error('Failed to save messages for', chatId);
-          try { localStorage.removeItem('orbit_' + key); } catch(_) {}
+          try { localStorage.removeItem('orbit_' + this._ns() + key); } catch(_) {}
           if (this.messages) delete this.messages[chatId];
         }
       }
       return;
     }
     try {
-      localStorage.setItem('orbit_' + key, JSON.stringify(val));
+      localStorage.setItem('orbit_' + this._ns() + key, JSON.stringify(val));
     } catch(e) {
       if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
         console.error('Storage quota exceeded for', key);
@@ -240,6 +460,9 @@ class Store {
 
   // Load all data from localStorage
   load() {
+    // Must run first — it decides which namespace get() reads from.
+    this.initAccounts();
+
     this.friends = this.get('friends', []).map(function(f) { f.lastSeen = 0; f.status = 'offline'; return f; });
     this.chats = this.get('chats', []);
     this.groups = this.get('groups', []);
@@ -400,6 +623,9 @@ class Store {
         try { this._lastSyncedSettings = JSON.parse(JSON.stringify(this.settings)); } catch (e) {}
       }
     }
+
+    // Keep the account registry's name/tag/avatar in step with the profile.
+    this.syncAccountRecord();
   }
 
   addActivityLogEntry(type, message) {
@@ -940,3 +1166,42 @@ class Store {
 
 // Global singleton — named MStore for backward compat with existing mobile code
 window.MStore = new Store();
+
+/**
+ * Account-aware localStorage, for the sites that do NOT go through Store.
+ *
+ * The store's get()/set() is a funnel only for the store's own data. Roughly
+ * fifteen places elsewhere write `orbit_*` directly — drafts, the last-open
+ * chat, the E2EE keypair, the vault backup, the outbox. Those would all leak
+ * across accounts, and the E2EE one would actively destroy the first account's
+ * identity key. They call this instead.
+ *
+ * Falls back to the un-prefixed key when the store is not up yet.
+ */
+window.OrbitKeys = {
+  ns: function() {
+    return (window.MStore && typeof window.MStore._ns === 'function') ? window.MStore._ns() : '';
+  },
+  full: function(key) { return 'orbit_' + window.OrbitKeys.ns() + key; },
+  get: function(key) {
+    try { return localStorage.getItem(window.OrbitKeys.full(key)); } catch (e) { return null; }
+  },
+  set: function(key, rawValue) {
+    try { localStorage.setItem(window.OrbitKeys.full(key), rawValue); } catch (e) {}
+  },
+  remove: function(key) {
+    try { localStorage.removeItem(window.OrbitKeys.full(key)); } catch (e) {}
+  },
+  /** Every key under a logical prefix, for the enumeration loops. */
+  list: function(prefix) {
+    var out = [];
+    var full = window.OrbitKeys.full(prefix);
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && k.indexOf(full) === 0) out.push(k.substring(full.length));
+      }
+    } catch (e) {}
+    return out;
+  }
+};

@@ -767,7 +767,10 @@
 /* With a conversation open the tab bar would sit under the composer. Hidden via
    a class on #app-layout rather than by watching #panel-chat, so it does not
    depend on how that panel happens to be displayed. */
-#app-layout.orbit-chat-open .orbit-tabbar {
+/* Class set by app.js openChat/closeChat, with a :has() fallback in case a
+   cached bundle opens the panel without going through that path. */
+#app-layout.orbit-chat-open .orbit-tabbar,
+#app-layout:has(#panel-chat.open) .orbit-tabbar {
   display: none !important;
 }
 
@@ -904,6 +907,638 @@
 #home-tabs:not(.has-folders) {
   display: none !important;
 }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   13. CONVERSATION
+   The one place in the app that gets a solid accent surface: your own messages.
+   That is what makes a thread scannable at a glance, and it is why nothing else
+   is allowed to be a big block of accent.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+#message-feed {
+  padding: 16px 16px 10px !important;
+  gap: 0 !important;
+}
+
+/* Encryption note at the head of the thread. It scrolls with the messages —
+   it is the first thing in the conversation, not a fixed banner. */
+.e2ee-note {
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  margin-bottom: 16px;
+}
+.e2ee-note i,
+.e2ee-note svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2;
+}
+
+.message-row {
+  margin-bottom: 7px !important;
+}
+.message-row.grouped {
+  margin-bottom: 2px !important;
+}
+
+.message-bubble {
+  max-width: 78% !important;
+  padding: 9px 13px !important;
+  border-radius: var(--radius-lg) !important;
+  font-size: 14.5px !important;
+  line-height: 1.42 !important;
+  letter-spacing: -.005em;
+  box-shadow: none !important;
+}
+
+/* Mine — the only solid accent surface in the app. */
+.message-row.mine .message-bubble {
+  background: var(--accent-primary) !important;
+  color: #FFFFFF !important;
+  border-bottom-right-radius: 5px !important;
+}
+
+/* Theirs. */
+.message-row.other .message-bubble {
+  background: var(--bg-raised) !important;
+  color: var(--text-primary) !important;
+  border-bottom-left-radius: 5px !important;
+}
+
+/* The old bubbles had a detached triangle tail pinned outside the corner. The
+   design expresses the tail with the 5px corner radius instead. */
+.message-row.mine .message-bubble::after,
+.message-row.other .message-bubble::after {
+  display: none !important;
+}
+
+.message-time {
+  font-size: 10.5px !important;
+  margin-top: 4px !important;
+  font-variant-numeric: tabular-nums;
+}
+.message-row.mine .message-time {
+  color: var(--text-muted) !important;
+}
+
+/* Links and inline code inside a bubble must stay legible on accent. */
+.message-row.mine .message-bubble a,
+.message-row.mine .message-bubble .msg-link-mob {
+  color: #FFFFFF !important;
+  text-decoration: underline;
+}
+.message-row.mine .message-bubble code {
+  background: rgba(0, 0, 0, .22) !important;
+  color: #FFFFFF !important;
+}
+.message-row.other .message-bubble code {
+  background: var(--bg-raised-2) !important;
+}
+
+/* Reactions */
+.reactions-row {
+  margin-top: 4px;
+}
+.message-row.mine .reactions-row .reaction-chip,
+.message-row.mine .message-bubble .reaction-chip {
+  background: rgba(0, 0, 0, .22);
+}
+
+/* ── Composer ── */
+#chat-input-area {
+  border-top: 1px solid var(--border-subtle) !important;
+  box-shadow: none !important;
+  background: var(--bg-surface) !important;
+  padding: 8px 12px calc(8px + var(--safe-area-bottom)) !important;
+}
+
+.chat-input-wrapper {
+  background: var(--bg-raised) !important;
+  border-radius: var(--radius-xl) !important;
+  border: 1px solid var(--border-subtle) !important;
+  padding: 4px 4px 4px 12px !important;
+}
+.chat-input-wrapper:focus-within {
+  background: var(--bg-raised) !important;
+  border-color: var(--accent-ring) !important;
+  box-shadow: none !important;
+}
+
+#chat-input {
+  font-size: 14.5px !important;
+}
+#chat-input::placeholder {
+  color: var(--text-muted) !important;
+}
+
+/* Send is the one round accent control in the composer. */
+#btn-send {
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 50% !important;
+  background: var(--accent-primary) !important;
+  color: #FFFFFF !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0;
+  transition: background var(--dur) var(--ease), opacity var(--dur) var(--ease);
+}
+#btn-send i,
+#btn-send svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2;
+}
+/* The send button shows its state through the icon, not a disabled attribute —
+   the composer is rebuilt on render and a stale `disabled` stranded people on a
+   form that looked fine. Keep that behaviour; just soften the idle look. */
+#btn-send:not(.ready) {
+  background: var(--bg-raised-2) !important;
+  color: var(--text-muted) !important;
+}
+
+/* Chat header — matches the app bar height used everywhere else. */
+#panel-chat .panel-header,
+.chat-head {
+  height: 60px !important;
+  border-bottom: 1px solid var(--border-subtle) !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   14. ACCOUNT SWITCHER
+   A sheet, not the desktop's floating panel — 280px of panel does not survive a
+   390px screen. Behaviour mirrors the desktop's switcher; the form does not.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.acct-host {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.acct-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(6, 7, 8, .66);
+  opacity: 0;
+  transition: opacity 200ms var(--ease);
+}
+.acct-host.open .acct-backdrop { opacity: 1; }
+
+.acct-sheet {
+  position: relative;
+  background: var(--bg-raised);
+  border-top: 1px solid var(--border-strong);
+  border-radius: 26px 26px 0 0;
+  box-shadow: 0 -18px 48px rgba(0, 0, 0, .55);
+  padding: 10px 0 calc(28px + env(safe-area-inset-bottom, 0px));
+  transform: translateY(100%);
+  transition: transform 280ms var(--ease);
+  max-height: 88vh;
+  overflow-y: auto;
+}
+.acct-host.open .acct-sheet { transform: translateY(0); }
+
+.acct-grabber {
+  width: 38px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-strong);
+  margin: 0 auto 18px;
+}
+
+.acct-head {
+  padding: 0 22px 16px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.acct-head h3 {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -.02em;
+  color: var(--text-primary);
+}
+.acct-head span { font-size: 12px; color: var(--text-muted); }
+
+/* Current account */
+.acct-current {
+  margin: 0 16px 16px;
+  padding: 15px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised-2);
+  border: 1px solid var(--accent-ring);
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+.acct-current::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--accent-primary);
+}
+.acct-current:active { background: var(--bg-hover); }
+
+.acct-pic { position: relative; flex-shrink: 0; display: flex; }
+.acct-pic .presence {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--accent-success);
+  border: 2.5px solid var(--bg-raised-2);
+}
+.acct-pic .presence.offline,
+.acct-pic .presence.invisible { background: var(--text-muted); }
+.acct-pic .presence.away { background: var(--accent-warning); }
+.acct-pic .presence.dnd { background: var(--accent-danger); }
+
+.acct-initial {
+  border-radius: 50%;
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -.02em;
+}
+
+.acct-info { flex: 1; min-width: 0; }
+.acct-name {
+  font-size: 15.5px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.acct-tag {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acct-this {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--accent-primary);
+  background: var(--accent-soft);
+  padding: 4px 9px;
+  border-radius: var(--radius-pill);
+  flex-shrink: 0;
+}
+
+.acct-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 4px 22px 8px;
+}
+
+.acct-row {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 12px 22px;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease);
+}
+.acct-row:active { background: var(--bg-raised-2); }
+
+.acct-dev {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.acct-dev i, .acct-dev svg { width: 12px; height: 12px; }
+
+.acct-sep {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 12px 22px;
+}
+
+.acct-action {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 13px 22px;
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 14.5px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease);
+}
+.acct-action:active { background: var(--bg-raised-2); }
+.acct-action > i,
+.acct-action > svg {
+  width: 19px;
+  height: 19px;
+  stroke-width: 1.9;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+.acct-action-txt { flex: 1; min-width: 0; }
+.acct-sub {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.acct-action.danger,
+.acct-action.danger > i,
+.acct-action.danger > svg { color: var(--accent-danger); }
+.acct-action.danger.armed {
+  background: rgba(255, 90, 78, .12);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   15. SETTINGS
+   The renderer already emits settings-category-card / settings-item-card, so
+   this is a restyle rather than a rewrite — same as the chat list.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+#settings-content,
+#settings-overlay-content {
+  padding: 0 16px 120px !important;
+}
+
+.settings-category-header {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: .1em !important;
+  text-transform: uppercase;
+  color: var(--text-muted) !important;
+  padding: 20px 4px 9px !important;
+  margin: 0 !important;
+}
+
+.settings-category-card {
+  border-radius: var(--radius-lg) !important;
+  background: var(--bg-raised) !important;
+  border: 1px solid var(--border-subtle) !important;
+  overflow: hidden;
+  margin: 0 0 4px !important;
+  box-shadow: none !important;
+}
+
+.settings-item-card {
+  display: flex !important;
+  align-items: center !important;
+  gap: 13px !important;
+  padding: 13px 15px !important;
+  border-bottom: 1px solid var(--border-subtle) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+  min-height: 0 !important;
+  transition: background var(--dur) var(--ease);
+}
+.settings-item-card:last-child {
+  border-bottom: none !important;
+}
+.settings-item-card:active {
+  background: var(--bg-hover) !important;
+}
+
+.settings-item-icon {
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: var(--radius-sm) !important;
+  background: var(--bg-raised-2) !important;
+  color: var(--text-secondary) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0;
+}
+.settings-item-icon i,
+.settings-item-icon svg {
+  width: 17px !important;
+  height: 17px !important;
+  stroke-width: 1.9;
+}
+
+.settings-item-info {
+  flex: 1 !important;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-item-title {
+  font-size: 14.5px !important;
+  font-weight: 500 !important;
+  letter-spacing: -.005em;
+  color: var(--text-primary) !important;
+}
+
+.settings-item-desc {
+  font-size: 12.5px !important;
+  color: var(--text-muted) !important;
+  line-height: 1.45;
+}
+
+.settings-item-action {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  color: var(--text-muted);
+}
+
+/* Navigable rows. These carry settings-section-* rather than settings-item-*,
+   and they were rendering their titles in accent blue — every label on the
+   screen competing with the actual accent. */
+.settings-section-card {
+  display: flex !important;
+  align-items: center !important;
+  gap: 13px !important;
+  padding: 13px 15px !important;
+  border-bottom: 1px solid var(--border-subtle) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease);
+}
+.settings-section-card:last-child { border-bottom: none !important; }
+.settings-section-card:active { background: var(--bg-hover) !important; }
+
+.settings-section-title {
+  font-size: 14.5px !important;
+  font-weight: 500 !important;
+  letter-spacing: -.005em;
+  color: var(--text-primary) !important;
+  margin-bottom: 2px;
+}
+.settings-section-desc {
+  font-size: 12.5px !important;
+  color: var(--text-muted) !important;
+  line-height: 1.45;
+}
+.settings-card-info { flex: 1 !important; min-width: 0; }
+
+.settings-card-icon {
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: var(--radius-sm) !important;
+  background: var(--bg-raised-2) !important;
+  color: var(--text-secondary) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0;
+}
+.settings-card-icon i,
+.settings-card-icon svg {
+  width: 17px !important;
+  height: 17px !important;
+  stroke-width: 1.9;
+}
+
+.settings-section-arrow {
+  color: var(--text-muted) !important;
+  width: 16px !important;
+  height: 16px !important;
+  flex-shrink: 0;
+}
+
+/* Link rows (the ones that navigate rather than toggle). */
+.settings-link-card {
+  border-radius: var(--radius-lg) !important;
+  background: var(--bg-raised) !important;
+  border: 1px solid var(--border-subtle) !important;
+  box-shadow: none !important;
+  margin: 0 0 4px !important;
+  padding: 13px 15px !important;
+}
+.settings-link-icon {
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: var(--radius-sm) !important;
+  background: var(--bg-raised-2) !important;
+}
+.settings-link-arrow {
+  color: var(--text-muted) !important;
+  opacity: 1 !important;
+}
+
+/* Toggles and selects inside a row. */
+.settings-toggle {
+  width: 44px !important;
+  height: 26px !important;
+  border-radius: var(--radius-pill) !important;
+  background: var(--bg-raised-2) !important;
+  border: 1px solid var(--border-subtle) !important;
+  position: relative;
+  transition: background var(--dur) var(--ease);
+}
+.settings-toggle.on {
+  background: var(--accent-primary) !important;
+  border-color: var(--accent-primary) !important;
+}
+.settings-select,
+.settings-input {
+  background: var(--bg-raised-2) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--text-secondary) !important;
+  font-size: 13px !important;
+  padding: 6px 10px !important;
+}
+
+/* The account row the design puts at the top of Settings. */
+.settings-account-row {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin: 4px 0 8px;
+  padding: 15px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: background var(--dur) var(--ease);
+}
+.settings-account-row:active { background: var(--bg-hover); }
+.settings-account-row .acct-info { flex: 1; min-width: 0; }
+.settings-account-row .chev {
+  color: var(--text-muted);
+  display: flex;
+  flex-shrink: 0;
+}
+.settings-account-row .chev i,
+.settings-account-row .chev svg { width: 17px; height: 17px; stroke-width: 2; }
+
+/* Busy state after an action that reloads the webview. */
+.acct-busy {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-raised);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 13.5px;
+  color: var(--text-secondary);
+}
+.acct-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--accent-primary);
+  animation: acct-spin .7s linear infinite;
+}
+@keyframes acct-spin { to { transform: rotate(360deg); } }
 
 
 /* ═══════════════════════════════════════════════════════════════════════════

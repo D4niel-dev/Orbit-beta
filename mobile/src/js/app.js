@@ -366,7 +366,7 @@ document.addEventListener('DOMContentLoaded', function() {
   MStore.load();
 
   // Only load messages for the active/last chat at startup (lazy load others on demand)
-  var lastChatId = localStorage.getItem('orbit_last_chat') || null;
+  var lastChatId = OrbitKeys.get('last_chat') || null;
   if (lastChatId) {
     MStore.getMessages(lastChatId);
   }
@@ -804,14 +804,14 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!chatId) return;
     try {
       var v = (value == null ? '' : String(value)).trim();
-      if (v) localStorage.setItem('orbit_draft_' + chatId, v);
-      else localStorage.removeItem('orbit_draft_' + chatId);
+      if (v) OrbitKeys.set('draft_' + chatId, v);
+      else OrbitKeys.remove('draft_' + chatId);
     } catch (e) { /* storage blocked — drafts are a convenience, never fatal */ }
   }
 
   function readDraft(chatId) {
     if (!chatId) return '';
-    try { return localStorage.getItem('orbit_draft_' + chatId) || ''; } catch (e) { return ''; }
+    try { return OrbitKeys.get('draft_' + chatId) || ''; } catch (e) { return ''; }
   }
 
   // Cancel a pending debounced save. Called when the message is sent, so the timer
@@ -835,7 +835,7 @@ document.addEventListener('DOMContentLoaded', function() {
     activeChatId = chatId;
     if (window.OrbitChat) window.OrbitChat._currentChatId = chatId;
     // Save last opened chat for next startup (so we can pre-load just this chat's messages)
-    try { localStorage.setItem('orbit_last_chat', chatId); } catch(e) {}
+    try { OrbitKeys.set('last_chat', chatId); } catch(e) {}
     editingMsg = null;
     replyingTo = null;
     updateReplyEditBar();
@@ -947,9 +947,11 @@ document.addEventListener('DOMContentLoaded', function() {
       setTimeout(function() { panel.classList.remove('anim-enter-up'); }, 300);
     }
 
-    // Hide profile pill when entering chat
-    var _pill = document.getElementById('profile-pill');
-    if (_pill) { _pill.style.opacity = '0'; _pill.style.pointerEvents = 'none'; }
+    // The tab bar is injected into the tab-level panels, which stay active while
+    // a conversation slides over them — so it has to be suppressed explicitly,
+    // or it floats over the composer. (This used to hide the profile pill.)
+    var _layout = document.getElementById('app-layout');
+    if (_layout) _layout.classList.add('orbit-chat-open');
 
     // Highlight active chat in list
     document.querySelectorAll('.chat-row').forEach(function(r) { r.classList.remove('active-chat'); });
@@ -1287,8 +1289,9 @@ document.addEventListener('DOMContentLoaded', function() {
         chatPanel.classList.remove('open', 'active', 'anim-exit-down', 'anim-enter-up');
         var _elmobilenav2 = document.getElementById('mobile-nav');
         if (_elmobilenav2) _elmobilenav2.style.display = 'flex';
-        var _pill2 = document.getElementById('profile-pill');
-        if (_pill2) { _pill2.style.opacity = ''; _pill2.style.pointerEvents = ''; }
+        // Bring the tab bar back now the conversation has closed.
+        var _layout2 = document.getElementById('app-layout');
+        if (_layout2) _layout2.classList.remove('orbit-chat-open');
       }, 180);
     }
     activeChatId = null;
@@ -2300,7 +2303,14 @@ document.addEventListener('DOMContentLoaded', function() {
     if (window.OrbitAudioPlayer && typeof OrbitAudioPlayer.isAnyPlaying === 'function' && OrbitAudioPlayer.isAnyPlaying() && typeof OrbitAudioPlayer.savePlaying === 'function') _savedAudio = OrbitAudioPlayer.savePlaying();
     if (window.OrbitVideoPlayer && typeof OrbitVideoPlayer.isAnyPlaying === 'function' && OrbitVideoPlayer.isAnyPlaying() && typeof OrbitVideoPlayer.savePlaying === 'function') _savedVideo = OrbitVideoPlayer.savePlaying();
     feed.setAttribute('data-refreshing', 'true');
-    feed.innerHTML = html;
+    // The design opens a thread with a quiet statement that the conversation is
+    // end-to-end encrypted. Orbit is E2EE and the UI never said so anywhere,
+    // which is the single most important thing about the product.
+    feed.innerHTML = '<div class="e2ee-note"><i data-lucide="lock"></i>' +
+                     'Messages are end-to-end encrypted</div>' + html;
+    if (window.lucide && lucide.createIcons) {
+      try { lucide.createIcons({ root: feed }); } catch (e) {}
+    }
     // Wire the message long-press context menu (idempotent — safe on every render).
     // The live chat path is window.openChat → this renderMessages; the old
     // OrbitChat.renderMessages path that used to own this is no longer the entry point.
@@ -3830,7 +3840,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (activeChatId && MStore.messages[activeChatId]) {
           if (confirm('Clear all messages in this chat? This cannot be undone.')) {
             MStore.messages[activeChatId] = [];
-            localStorage.removeItem('orbit_msg_' + activeChatId);
+            OrbitKeys.remove('msg_' + activeChatId);
             MStore.save();
             renderMessages(activeChatId);
             renderChatList();
@@ -4018,7 +4028,7 @@ document.addEventListener('DOMContentLoaded', function() {
           MStore.groups = MStore.groups.filter(function(g) { return (g.id || g.groupId) !== gid; });
           MStore.chats = MStore.chats.filter(function(c) { return c.id !== gid; });
           delete MStore.messages[gid];
-          try { localStorage.removeItem('orbit_msg_' + gid); } catch(e) {}
+          try { OrbitKeys.remove('msg_' + gid); } catch(e) {}
           MStore.save();
           if (typeof renderChatList === 'function') try { renderChatList(); } catch(e) {}
           showToast('Left group', 'info');
@@ -5986,6 +5996,29 @@ document.addEventListener('DOMContentLoaded', function() {
     ];
 
     var html = '<div class="settings-section-list">';
+
+    // The design puts your account at the very top of Settings, which also gives
+    // the switcher a second entry point besides the header avatar.
+    var _acct = MStore.activeAccount && MStore.activeAccount();
+    if (_acct) {
+      var _acctPic = _acct.avatar
+        ? '<img src="' + escapeHtml(_acct.avatar) + '" alt="" ' +
+          'style="width:48px;height:48px;border-radius:50%;object-fit:cover;">'
+        : '<div class="acct-initial" style="width:48px;height:48px;font-size:17px;">' +
+          escapeHtml(String(_acct.name || 'U').charAt(0).toUpperCase()) + '</div>';
+      var _acctTag = String(_acct.name || '').toLowerCase() + (_acct.tag ? '#' + _acct.tag : '');
+      html +=
+        '<div class="settings-account-row" id="settings-account-row" role="button" tabindex="0">' +
+          '<div class="acct-pic">' + _acctPic +
+            '<span class="presence ' + escapeHtml(_acct.status || 'offline') + '"></span></div>' +
+          '<div class="acct-info">' +
+            '<div class="acct-name">' + escapeHtml(_acct.name || 'User') + '</div>' +
+            '<div class="acct-tag">' + escapeHtml(_acctTag) + '</div>' +
+          '</div>' +
+          '<span class="chev"><i data-lucide="chevron-right"></i></span>' +
+        '</div>';
+    }
+
     categories.forEach(function(cat) {
       html += '<div class="settings-category-header">' + cat.label + '</div>';
       html += '<div class="settings-category-card">';
@@ -6017,6 +6050,13 @@ document.addEventListener('DOMContentLoaded', function() {
         showSettingsSection(this.getAttribute('data-section'));
       });
     });
+
+    var acctRow = container.querySelector('#settings-account-row');
+    if (acctRow) {
+      acctRow.addEventListener('click', function() {
+        if (window.OrbitAccounts) window.OrbitAccounts.open();
+      });
+    }
 
     renderLucide({ root: container });
   }
@@ -8209,7 +8249,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var chats = MStore.chats.length;
         var msgs = 0;
         var allKeys = [];
-        for (var _i = 0; _i < localStorage.length; _i++) { var _k = localStorage.key(_i); if (_k.indexOf('orbit_msg_') === 0) { allKeys.push(_k.substring(9)); } }
+        OrbitKeys.list('msg_').forEach(function(id) { allKeys.push(id); });
         allKeys.forEach(function(k) { msgs += (MStore.messages[k] || MStore.getMessages(k)).length; });
         _devOverlayEl.innerHTML = 'Friends: ' + friends + '<br>Chats: ' + chats + '<br>Messages: ' + msgs + '<br>P2P Conns: ' + conns;
         if (MStore.settings.experimentalDevOverlay && !window._stopDevOverlay) requestAnimationFrame(update);
@@ -8414,7 +8454,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var chatCount = MStore.chats.length;
       var msgCount = 0;
       var allKeys = [];
-      for (var _i = 0; _i < localStorage.length; _i++) { var _k = localStorage.key(_i); if (_k.indexOf('orbit_msg_') === 0) { allKeys.push(_k.substring(9)); } }
+      OrbitKeys.list('msg_').forEach(function(id) { allKeys.push(id); });
       allKeys.forEach(function(k) { msgCount += (MStore.messages[k] || MStore.getMessages(k)).length; });
       lines.push('friends=' + MStore.friends.length + ' online=' + online + ' chats=' + chatCount + ' msgs=' + msgCount);
       if (window.Orbit && window.Orbit.P2P) {
@@ -8933,8 +8973,8 @@ document.addEventListener('DOMContentLoaded', function() {
         MStore.chats = MStore.chats.filter(function(c) { return c.id !== dmId && c.id !== 'dm_' + dmId; });
         delete MStore.messages[dmId];
         delete MStore.messages['dm_' + dmId];
-        localStorage.removeItem('orbit_msg_' + dmId);
-        localStorage.removeItem('orbit_msg_dm_' + dmId);
+        OrbitKeys.remove('msg_' + dmId);
+        OrbitKeys.remove('msg_dm_' + dmId);
         MStore.friends = MStore.friends.filter(function(f) { return f.id !== dmId; });
         MStore.save();
         if ((activeChatId === dmId || activeChatId === 'dm_' + dmId) && typeof closeChat === 'function') closeChat();
@@ -10208,7 +10248,7 @@ document.addEventListener('DOMContentLoaded', function() {
     MStore.groups = MStore.groups.filter(function(g) { return g.id !== groupId; });
     MStore.chats = MStore.chats.filter(function(c) { return c.id !== groupId; });
     delete MStore.messages[groupId];
-    localStorage.removeItem('orbit_msg_' + groupId);
+    OrbitKeys.remove('msg_' + groupId);
     MStore.save();
     if (activeChatId === groupId && typeof closeChat === 'function') closeChat();
     if (typeof hideGroupInfo === 'function') hideGroupInfo();
@@ -10233,7 +10273,7 @@ document.addEventListener('DOMContentLoaded', function() {
     MStore.groups = MStore.groups.filter(function(g) { return g.id !== groupId; });
     MStore.chats = MStore.chats.filter(function(c) { return c.id !== groupId; });
     delete MStore.messages[groupId];
-    localStorage.removeItem('orbit_msg_' + groupId);
+    OrbitKeys.remove('msg_' + groupId);
     MStore.save();
     if (activeChatId === groupId && typeof closeChat === 'function') closeChat();
     if (typeof hideGroupInfo === 'function') hideGroupInfo();
@@ -12845,7 +12885,7 @@ document.addEventListener('DOMContentLoaded', function() {
     addMenuItem('Close DM', 'x', function() {
       MStore.chats = MStore.chats.filter(function(c) { return c.id !== friend.id; });
       delete MStore.messages[friend.id];
-      localStorage.removeItem('orbit_msg_' + friend.id);
+      OrbitKeys.remove('msg_' + friend.id);
       MStore.friends = MStore.friends.filter(function(f) { return f.id !== friend.id; });
       MStore.save();
       if (activeChatId === friend.id) closeChat();
@@ -13121,7 +13161,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (activeChatId === chat.id) closeChat();
       MStore.chats = MStore.chats.filter(function(c) { return c.id !== chat.id; });
       delete MStore.messages[chat.id];
-      localStorage.removeItem('orbit_msg_' + chat.id);
+      OrbitKeys.remove('msg_' + chat.id);
       MStore.save();
       renderChatList();
       showToast('Chat deleted', 'info');
@@ -13741,7 +13781,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 MStore.messages[peerId] = existingMsgs.concat(mergedMsgs);
                 MStore._saveMsgs(peerId);
                 delete MStore.messages[oldChatId];
-                localStorage.removeItem('orbit_msg_' + oldChatId);
+                OrbitKeys.remove('msg_' + oldChatId);
               }
               MStore.chats = MStore.chats.filter(function(c) { return c.id !== oldChatId; });
             }
@@ -13806,7 +13846,7 @@ document.addEventListener('DOMContentLoaded', function() {
           if (ipChat) {
             MStore.chats = MStore.chats.filter(function(c) { return c.id !== ipChat.id; });
             delete MStore.messages[ipChat.id];
-            localStorage.removeItem('orbit_msg_' + ipChat.id);
+            OrbitKeys.remove('msg_' + ipChat.id);
           }
         }
         if (syncFriendAvatar(peerId)) { MStore.save(); }
@@ -15004,7 +15044,7 @@ document.addEventListener('DOMContentLoaded', function() {
               MStore.messages[peerId] = existingMsgs.concat(mergedMsgs);
               MStore._saveMsgs(peerId);
               delete MStore.messages[oldChatId];
-              localStorage.removeItem('orbit_msg_' + oldChatId);
+              OrbitKeys.remove('msg_' + oldChatId);
             }
             // Remove old chat
             MStore.chats = MStore.chats.filter(function(c) { return c.id !== oldChatId; });
@@ -15080,7 +15120,7 @@ document.addEventListener('DOMContentLoaded', function() {
           debugLog('P2P', 'Removing orphan chat: ' + ipChat.id);
           MStore.chats = MStore.chats.filter(function(c) { return c.id !== ipChat.id; });
           delete MStore.messages[ipChat.id];
-          localStorage.removeItem('orbit_msg_' + ipChat.id);
+          OrbitKeys.remove('msg_' + ipChat.id);
           MStore.save();
           renderChatList();
         }
@@ -15459,7 +15499,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (interval > 0) {
       var cutoff = Date.now() - interval * 60 * 1000;
       var chatIds = [];
-      for (var _i2 = 0; _i2 < localStorage.length; _i2++) { var _k2 = localStorage.key(_i2); if (_k2.indexOf('orbit_msg_') === 0) { chatIds.push(_k2.substring(9)); } }
+      OrbitKeys.list('msg_').forEach(function(id) { chatIds.push(id); });
       chatIds.forEach(function(chatId) {
         var msgs = MStore.getMessages(chatId);
         if (!msgs) return;
