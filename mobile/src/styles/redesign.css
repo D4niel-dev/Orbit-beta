@@ -577,13 +577,25 @@
    count and chips gone.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* MUST be block, not flex.
+   mobile.css sets `#online-friends-section { display: flex; align-items: center }`
+   and the label below is a ::before on this element. As a flex item the
+   pseudo-element sits INLINE, to the left of the avatar row — so "Active now"
+   rendered beside the + button instead of above it as a section header.
+   Block layout makes the pseudo-element its own line.
+   (Do not "fix" this back to flex: `.online-friends-row` carries `flex: 1`,
+   which in a column flex container means flex-basis 0 and the row collapses.) */
 #online-friends-section {
+  display: block !important;
   padding: 0 !important;
   margin: 0 !important;
   border: none !important;
   background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
 }
 
+/* Section header, above the row. */
 #online-friends-section::before {
   content: 'Active now';
   display: block;
