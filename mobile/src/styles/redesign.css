@@ -1486,9 +1486,12 @@
 .settings-section-card:last-child { border-bottom: none !important; }
 .settings-section-card:active { background: var(--bg-hover) !important; }
 
-/* mobile.css renders these at 13px/800, ALL CAPS, in the accent colour — so
-   every row shouted and the whole screen was caps. `text-transform: none` is the
-   actual fix; without it the sentence-case titles in app.js never showed. */
+/* mobile.css renders these at 13px/800, ALL CAPS, in the accent colour, with
+   `padding-left: 4px` — so every row shouted, the screen was solid caps, and the
+   title was indented 4px away from its own icon.
+   Three separate leftovers had to be cleared: text-transform, padding-left and
+   margin-bottom. Overriding the font and colour alone left the other two in
+   place, which is exactly the " Appearance" indent Dan kept seeing. */
 .settings-section-title {
   font-family: var(--font-display) !important;
   font-size: 15px !important;
@@ -1496,7 +1499,8 @@
   letter-spacing: -.01em !important;
   text-transform: none !important;
   color: var(--text-primary) !important;
-  margin-bottom: 2px;
+  padding-left: 0 !important;
+  margin-bottom: 2px !important;
 }
 .settings-section-desc {
   font-size: 12.5px !important;
