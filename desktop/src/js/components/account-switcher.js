@@ -100,6 +100,13 @@ window.AccountSwitcher = {
       '</div>';
     }
 
+    // Link a phone — sends this account to a phone over the LAN.
+    html += '<div id="as-link-phone" style="border-top:1px solid var(--border-subtle);padding:8px 16px 4px;">' +
+      '<button style="width:100%;padding:10px;border-radius:10px;border:none;background:transparent;color:var(--text-primary);font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:background 0.15s;">' +
+        '<i data-lucide="smartphone" style="width:16px;height:16px;"></i> Link a phone' +
+      '</button>' +
+    '</div>';
+
     // Logout
     html += '<div style="border-top:1px solid var(--border-subtle);padding:8px 16px;">' +
       '<button id="as-logout" style="width:100%;padding:10px;border-radius:10px;border:none;background:transparent;color:var(--accent-danger);font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:background 0.15s;">' +
@@ -121,6 +128,15 @@ window.AccountSwitcher = {
       addBtn.querySelector('button').addEventListener('click', function() {
         self.close();
         self._addAccount();
+      });
+    }
+
+    // Link a phone
+    var linkBtn = this.container.querySelector('#as-link-phone');
+    if (linkBtn) {
+      linkBtn.querySelector('button').addEventListener('click', function() {
+        self.close();
+        if (window.OrbitLinkPhone) window.OrbitLinkPhone.open();
       });
     }
 

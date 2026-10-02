@@ -848,6 +848,18 @@ class Store {
       return;
     }
 
+    // ── Account transfer ──
+    // A phone asking to copy this account. LinkPhone owns the whole flow: it
+    // checks the token, confirms with the user, and sends. The store only routes.
+    if (packet.type === window.Protocol.Types.TRANSFER_REQUEST) {
+      if (window.OrbitLinkPhone) window.OrbitLinkPhone.handleRequest(packet);
+      return;
+    }
+    if (packet.type === window.Protocol.Types.TRANSFER_RESULT) {
+      if (window.OrbitLinkPhone) window.OrbitLinkPhone.handleResult(packet);
+      return;
+    }
+
     if (packet.type === window.Protocol.Types.TYPING) {
       return;
     }

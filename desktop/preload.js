@@ -122,6 +122,9 @@ contextBridge.exposeInMainWorld('orbitAPI', {
   backupCreate: (format) => ipcRenderer.invoke('backup-create', format),
   backupRestore: () => ipcRenderer.invoke('backup-restore'),
   backupValidate: (filePath) => ipcRenderer.invoke('backup-validate', filePath),
+  // The backup package WITHOUT writing it to disk — used by the account
+  // transfer, which sends it over the socket instead of to a file.
+  accountBundle: () => ipcRenderer.invoke('account-bundle'),
 
   // Groups
   dbGetGroups: () => ipcRenderer.sendSync('db-get-groups'),

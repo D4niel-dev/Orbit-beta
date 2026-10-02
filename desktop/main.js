@@ -1277,6 +1277,17 @@ app.whenReady().then(() => {
     event.returnValue = globalDb.checkAttachmentIntegrity();
   });
 
+  // The account bundle, in memory. Used by "Link a phone", which encrypts it and
+  // sends it over the socket rather than writing it to a file.
+  ipcMain.handle('account-bundle', async () => {
+    try {
+      if (!globalDb) return { ok: false, error: 'Database not ready' };
+      return { ok: true, backup: globalDb.buildBackupPackage() };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  });
+
   // Backup dialog
   ipcMain.handle('backup-create', async (event, format) => {
     try {
