@@ -201,8 +201,21 @@ var OrbitHome = {
     MStore.save();
   },
 
-  /** Render the profile pill with user info */
+  /**
+   * Refresh the account control in the header.
+   *
+   * This used to paint the floating profile pill, which was removed in the
+   * v0.8.1 redesign — the header avatar does the same job now. The name is kept
+   * because renderChatList() and several other callers still call it.
+   *
+   * ── Everything below targets the pill's elements, which no longer exist, so
+   *    it returns on the next line. Left in place on purpose: deleting it in the
+   *    same change that moves the UI makes a behaviour regression hard to spot.
+   *    Remove it once the redesign has shipped a release. ──
+   */
   renderProfilePill: function() {
+    if (window.OrbitNav && window.OrbitNav.syncAvatar) window.OrbitNav.syncAvatar();
+
     var avatarEl = document.getElementById('profile-pill-avatar');
     var nameEl = document.getElementById('profile-pill-name');
     var statusEl = document.getElementById('profile-pill-status');
@@ -1228,13 +1241,18 @@ document.addEventListener('DOMContentLoaded', function() {
     searchBtn.addEventListener('click', function() {
       var searchInline = document.getElementById('home-search-inline');
       var searchInput = document.getElementById('home-search-input');
+      var chatsPanel = document.getElementById('panel-chats');
       if (searchInline && searchInput) {
         var isOpen = searchInline.classList.contains('open');
         if (isOpen) {
           searchInline.classList.remove('open');
           searchInput.blur();
+          if (chatsPanel) chatsPanel.classList.remove('search-open');
         } else {
           searchInline.classList.add('open');
+          // Collapses the account avatar and the title so the field gets the
+          // whole row — the header is only 56px tall.
+          if (chatsPanel) chatsPanel.classList.add('search-open');
           setTimeout(function() { searchInput.focus(); }, 100);
         }
       }
@@ -1277,6 +1295,8 @@ document.addEventListener('DOMContentLoaded', function() {
         searchInput.value = '';
         searchInput.blur();
       }
+      var closePanel = document.getElementById('panel-chats');
+      if (closePanel) closePanel.classList.remove('search-open');
       window._chatSearchQuery = '';
       if (window.renderChatList) window.renderChatList();
     });

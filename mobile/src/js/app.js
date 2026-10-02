@@ -5455,6 +5455,11 @@ document.addEventListener('DOMContentLoaded', function() {
     if (headerEl) {
       headerEl.innerHTML = u && u.avatar ? '<img src="' + escapeHtml(u.avatar) + '">' : initial;
     }
+
+    // The header account avatar is the live one (the elements above are legacy
+    // from the desktop layout and are not in the mobile DOM). Keeping the sync
+    // here means every existing updateNavAvatar() call site refreshes it.
+    if (window.OrbitNav && window.OrbitNav.syncAvatar) window.OrbitNav.syncAvatar();
   }
 
   /* ─── Settings Panel (simplified main view) ─── */
@@ -9070,40 +9075,8 @@ document.addEventListener('DOMContentLoaded', function() {
         actionBtn.style.background = 'rgba(0,0,0,0.2)';
         actionBtn.onclick = closeProfileSheet;
       }
-      // Update the floating profile pill
-      var pillAvatar = document.getElementById('profile-pill-avatar');
-      if (pillAvatar) {
-        var newAvatar = MStore.user.avatar;
-        var newName = MStore.user.name || 'User';
-        if (newAvatar) {
-          pillAvatar.innerHTML = '<img src="' + escapeHtml(newAvatar) + '" alt="">';
-        } else {
-          pillAvatar.innerHTML = newName.charAt(0).toUpperCase();
-        }
-      }
-      // Update profile frame in the pill
-      var frameNum = getProfileFrame(MStore.settings);
-      var pillFrame = pillAvatar ? pillAvatar.querySelector('.pfp-frame') : null;
-      if (frameNum > 0) {
-        if (!pillFrame) {
-          pillFrame = document.createElement('img');
-          pillFrame.className = 'pfp-frame';
-          pillFrame.draggable = false;
-          pillFrame.alt = '';
-          if (pillAvatar) {
-            pillAvatar.appendChild(pillFrame);
-          }
-        }
-        if (pillFrame) {
-          pillFrame.src = 'icons/frames/pfp_frame_' + frameNum + '.png';
-        }
-      } else if (pillFrame) {
-        pillFrame.remove();
-      }
-      var pillName = document.getElementById('profile-pill-name');
-      if (pillName) {
-        pillName.textContent = MStore.user.name || 'User';
-      }
+      // The header avatar is refreshed by updateNavAvatar() above — this block
+      // used to repaint the floating pill's avatar, name and frame.
       showToast('Profile saved', 'success');
       // Update hero section banner and avatar display
       var heroEl = sheet.querySelector('.profile-hero');
@@ -9357,13 +9330,9 @@ document.addEventListener('DOMContentLoaded', function() {
           statusDot.style.background = getStatusColor(newStatus);
           statusDot.className = 'status-dot status-' + newStatus;
         }
-        // Update the pill status dot too
-        var pillStatus = document.getElementById('profile-pill-status');
-        if (pillStatus) {
-          var statusLabels = { online: 'Online', away: 'Away', dnd: 'Do Not Disturb', invisible: 'Invisible', offline: 'Offline' };
-          pillStatus.textContent = statusLabels[newStatus] || newStatus.charAt(0).toUpperCase() + newStatus.slice(1);
-          pillStatus.style.color = getStatusColor(newStatus);
-        }
+        // Refresh the header account dot. (This used to update the floating
+        // pill's status label, which no longer exists.)
+        if (window.OrbitNav) window.OrbitNav.syncAvatar();
         // Broadcast status change to peers
         if (window.Orbit && window.Orbit.P2P && Orbit.P2P.isAvailable()) {
           var beaconData = buildBeacon().payload;
@@ -9479,22 +9448,10 @@ document.addEventListener('DOMContentLoaded', function() {
               if (heroFrame) heroFrame.remove();
             }
             
-            var framePill = getProfileFrame(MStore.settings);
-            var pillAvatar = document.getElementById('profile-pill-avatar');
-            var pillFrame = pillAvatar ? pillAvatar.querySelector('.pfp-frame') : null;
-            if (framePill > 0) {
-              if (!pillFrame) {
-                pillFrame = document.createElement('img');
-                pillFrame.className = 'pfp-frame';
-                pillFrame.draggable = false;
-                pillFrame.alt = '';
-                if (pillAvatar) pillAvatar.appendChild(pillFrame);
-              }
-              pillFrame.src = 'icons/frames/pfp_frame_' + framePill + '.png';
-            } else if (pillFrame) {
-              pillFrame.remove();
-            }
-            
+            // Refresh the header avatar's frame. (This used to repaint the
+            // floating pill's avatar.)
+            if (window.OrbitNav) window.OrbitNav.syncAvatar();
+
             fOverlay.remove();
             _framePickerOpen = false;
           });
@@ -9695,6 +9652,14 @@ document.addEventListener('DOMContentLoaded', function() {
   window.showProfileOverlay = showProfileOverlay;
   window.startQRScanner = startQRScanner;
   window.stopQRScanner = stopQRScanner;
+
+  // Exposed for the tab bar (components/navigation.js). These were all
+  // closure-scoped, so the tab bar had no way to reach them — it needs the same
+  // switchPanel the activity bell uses, or tab switches would lose the panel
+  // transition and could leave two panels active.
+  window.switchPanel = switchPanel;
+  window.showSettingsOverlay = showSettingsOverlay;
+  window.renderActivity = renderActivity;
 
   window.openLightbox = function(index, mediaList) {
     var existing = document.getElementById('gallery-lightbox');

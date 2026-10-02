@@ -25,6 +25,10 @@
   <link rel="stylesheet" href="styles/components.css?v=20260918">
   <link rel="stylesheet" href="styles/animations.css?v=20260801">
   <link rel="stylesheet" href="styles/mobile.css?v=20260930c">
+  <!-- v0.8.1-beta redesign layer. MUST load last: mobile.css redefines several
+       selectors more than once, and this sheet restates what the redesign
+       changes rather than editing that file in place. -->
+  <link rel="stylesheet" href="styles/redesign.css?v=20261002a">
 
   <!-- Syntax Highlighting (Prism) -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
@@ -45,17 +49,26 @@
       <span id="conn-status-text">Connecting...</span>
     </div>
 
-    <!-- Bottom Nav -->
-    
+    <!-- Primary navigation is the pill tab bar, injected into each tab-level
+         panel by js/components/navigation.js. -->
 
     <!-- Chats Panel -->
     <aside id="panel-chats" class="mobile-panel active">
-      <!-- Top Header with actions only -->
+      <!-- Top Header: account control · title · actions.
+           The account control lives here now — it used to be the floating pill
+           at the bottom of the screen. -->
       <div class="panel-header home-header">
-        <button id="btn-search-home" class="header-icon-btn" title="Search" style="display:none"><i data-lucide="search"></i></button>
+        <div class="orbit-avatar-btn" id="orbit-home-avatar" role="button" tabindex="0" aria-label="Account">
+          <div class="av" id="orbit-home-avatar-initial">?</div>
+          <img id="orbit-home-avatar-img" alt="" style="display:none;">
+          <span class="presence offline" id="orbit-home-avatar-presence"></span>
+          <span class="caret"><i data-lucide="chevron-down"></i></span>
+        </div>
+        <div class="orbit-home-title" id="orbit-home-title">Chats</div>
         <div class="home-header-bar">
+          <button id="btn-search-home" class="header-icon-btn" title="Search"><i data-lucide="search"></i></button>
           <div class="home-search-inline" id="home-search-inline">
-            <i data-lucide="search" style="width:16px;height:16px;color:var(--text-muted);flex-shrink:0;margin-left:0;"></i>
+            <i data-lucide="search" style="width:16px;height:16px;color:var(--text-muted);flex-shrink:0;"></i>
             <input type="text" id="home-search-input" placeholder="Search chats..." autocomplete="off">
             <button id="btn-home-search-close"><i data-lucide="x"></i></button>
           </div>
@@ -70,16 +83,6 @@
         </div>
       </div>
 
-      <!-- Filter tags under online friends section -->
-      <div class="online-friend-filters">
-        <span class="online-filter-count" id="online-filter-count">0 online</span>
-        <div class="online-filter-tags">
-          <button class="online-filter-tag active" data-filter="all">All</button>
-          <button class="online-filter-tag" data-filter="online">Online</button>
-          <button class="online-filter-tag" data-filter="offline">Offline</button>
-        </div>
-      </div>
-
       <!-- Top Tabs: Friends | Groups -->
       <div id="home-tabs" class="home-tabs">
         <button class="home-tab active" data-tab="friends">Friends</button>
@@ -88,20 +91,10 @@
 
       <!-- Chat List -->
       <div id="chat-list" class="chat-list"></div>
-      <!-- Floating Profile Pill (bottom) -->
-  <div class="profile-pill floating" id="profile-pill">
-    <div class="profile-pill-avatar" id="profile-pill-avatar"></div>
-    <div class="profile-pill-info">
-      <span class="profile-pill-name" id="profile-pill-name">User</span>
-      <span class="profile-pill-status" id="profile-pill-status">Online</span>
-    </div>
-    <button id="btn-pill-copy-id" class="profile-pill-btn" title="Copy my user ID">
-      <i data-lucide="copy"></i>
-    </button>
-    <button id="btn-pill-settings" class="profile-pill-btn" title="Settings">
-      <i data-lucide="settings"></i>
-    </button>
-  </div>
+      <!-- The floating profile pill used to sit here. It overlapped the last
+           chat row, duplicated Settings, and had no equivalent on any other
+           platform. The account control is now the header avatar; the tab bar
+           (injected by navigation.js) carries Settings. -->
 </aside>
 
     <!-- Friends Panel -->
@@ -394,11 +387,11 @@
   setTimeout(function() { window._loadImageCropper(); }, 1500);
   </script>
 
-  <script src="js/app.js?v=20261001b"></script>
+  <script src="js/app.js?v=20261002a"></script>
 
   <!-- v0.2.8 Components -->
-  <script src="js/components/navigation.js?v=20260912"></script>
+  <script src="js/components/navigation.js?v=20261002a"></script>
   <script src="js/components/chat-screen.js?v=20260927c"></script>
-  <script src="js/components/home-screen.js?v=20260930c"></script>
+  <script src="js/components/home-screen.js?v=20261002a"></script>
 </body>
 </html>

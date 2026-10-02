@@ -1,0 +1,866 @@
+/* src/styles/redesign.css
+   ────────────────────────────────────────────────────────────────────────────
+   v0.8.1-beta — "Refined minimal" mobile redesign.
+
+   This file is a LAYER, not a replacement. mobile.css is ~7,900 lines and
+   redefines several selectors more than once (#mobile-nav three times,
+   .home-tab.active twice), so editing it in place means guessing which copy
+   wins. Instead this sheet loads LAST in index.html and restates the parts of
+   the UI the redesign changes.
+
+   Prototype this implements: plans/design/mobile-ui-redesign-v0.8.1.html
+   Token names match variables.css / themes/*.css so the values can later be
+   folded back into the theme files.
+
+   Sections
+     1. Tokens
+     2. Base chrome
+     3. Header
+     4. Tab bar
+     5. Chat list
+     6. Active-now strip
+     7. Home tabs (segmented)
+     8. Empty state
+     9. Removed chrome
+   ──────────────────────────────────────────────────────────────────────────── */
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   1. TOKENS
+   Four surfaces, three text levels, one accent. `:root[data-theme=...]`
+   is needed because the theme files already target that specificity.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root,
+:root[data-theme="dark"] {
+  /* Surfaces — each step perceptibly above the last */
+  --bg-base:      #0A0B0D;
+  --bg-surface:   #101114;
+  --bg-raised:    #17191E;
+  --bg-raised-2:  #1E2127;
+  --bg-hover:     #22252C;
+  --bg-active:    #2A2E36;
+
+  /* Text */
+  --text-primary:   #F4F5F7;
+  --text-secondary: #9BA1AA;
+  --text-muted:     #5D636C;
+
+  /* One accent */
+  --accent-primary: #4D7CFE;
+  --accent-hover:   #6A93FF;
+  --accent-soft:    rgba(77, 124, 254, .14);
+  --accent-ring:    rgba(77, 124, 254, .32);
+
+  /* Hairlines */
+  --border-subtle:  rgba(255, 255, 255, .07);
+  --border-strong:  rgba(255, 255, 255, .13);
+
+  /* Radii ladder */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+
+  --ease: cubic-bezier(.22, .61, .36, 1);
+  --dur: 200ms;
+}
+
+/* Light theme keeps the same structure with an inverted value ladder. */
+:root[data-theme="light"] {
+  --bg-base:      #F7F8FA;
+  --bg-surface:   #FFFFFF;
+  --bg-raised:    #F1F3F7;
+  --bg-raised-2:  #E8EBF1;
+  --bg-hover:     #E8EBF1;
+  --bg-active:    #DDE2EC;
+
+  --text-primary:   #16181D;
+  --text-secondary: #5A616E;
+  --text-muted:     #8B929E;
+
+  --accent-primary: #3F6EF0;
+  --accent-hover:   #3462E0;
+  --accent-soft:    rgba(63, 110, 240, .10);
+  --accent-ring:    rgba(63, 110, 240, .28);
+
+  --border-subtle:  rgba(22, 24, 29, .08);
+  --border-strong:  rgba(22, 24, 29, .16);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+}
+
+/* Every other theme (nord, midnight, sunset, seasonal) is dark. They inherit
+   the :root values above; only the accent stays theirs. */
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2. BASE CHROME
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* The old app painted an accent radial glow behind the whole layout. It is the
+   single most "generated-looking" thing in the build — remove it. */
+#app-layout::before {
+  display: none !important;
+}
+
+/* Quieter scrollbars — the old ones turn accent-blue on hover. */
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+}
+:hover::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+}
+
+/* Panel headers: one consistent treatment everywhere. */
+.panel-header {
+  height: 56px !important;
+  padding: 0 12px !important;
+  border-bottom: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  gap: 4px !important;
+  flex-shrink: 0;
+}
+
+.panel-header h2,
+.panel-header h3 {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -.02em;
+  color: var(--text-primary);
+}
+
+.panel-header button i,
+.panel-header button svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 1.8;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   3. HEADER
+   Old: a full-width search pill with the bell inside it, no title, no account.
+   New: avatar · title · actions — and the account control is the avatar.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+#panel-chats .home-header {
+  padding: 0 8px 0 10px !important;
+  height: 56px !important;
+  gap: 10px !important;
+  align-items: center !important;
+}
+
+/* The account affordance. */
+.orbit-avatar-btn {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.orbit-avatar-btn > .av,
+.orbit-avatar-btn > img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-raised-2);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -.02em;
+}
+
+/* Profile frame overlays the avatar; keep it inside the 36px box. */
+.orbit-avatar-btn .pfp-frame {
+  position: absolute;
+  top: -14%;
+  left: -14%;
+  width: 128%;
+  height: 128%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.orbit-avatar-btn .presence {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--accent-success);
+  border: 2.5px solid var(--bg-surface);
+}
+
+.orbit-avatar-btn .presence.offline,
+.orbit-avatar-btn .presence.invisible {
+  background: var(--text-muted);
+}
+.orbit-avatar-btn .presence.away { background: var(--accent-warning); }
+.orbit-avatar-btn .presence.dnd  { background: var(--accent-danger); }
+
+.orbit-avatar-btn .caret {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--bg-raised-2);
+  border: 2px solid var(--bg-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.orbit-avatar-btn .caret svg {
+  width: 9px;
+  height: 9px;
+  stroke-width: 3;
+  color: var(--text-secondary);
+}
+
+/* Title takes the free space so the actions sit hard right. */
+.orbit-home-title {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -.02em;
+  color: var(--text-primary);
+}
+
+/* Header action buttons — flat, 38px, no pill chrome. */
+#panel-chats .home-header .header-icon-btn,
+.orbit-header-btn {
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: var(--radius-md) !important;
+  background: transparent !important;
+  color: var(--text-secondary) !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+#panel-chats .home-header .header-icon-btn:active,
+.orbit-header-btn:active {
+  background: var(--bg-hover) !important;
+  color: var(--text-primary) !important;
+}
+#panel-chats .home-header .header-icon-btn i {
+  width: 20px;
+  height: 20px;
+}
+
+/* The search pill collapses to nothing until it is opened. */
+#panel-chats .home-header-bar {
+  background: transparent !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  gap: 4px !important;
+  flex: 0 0 auto !important;
+  display: flex;
+  align-items: center;
+}
+
+/* The field is collapsed until the search button opens it. (It used to be
+   permanently visible with the toggle hidden, so the `.open` class the handler
+   toggles did nothing.) */
+#panel-chats .home-search-inline {
+  flex: 1;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+}
+#panel-chats .home-search-inline.open {
+  display: flex;
+}
+
+/* When search is open the field takes the row, so the account control and the
+   title step aside rather than being squeezed to nothing. */
+#panel-chats.search-open .orbit-home-title,
+#panel-chats.search-open .orbit-avatar-btn {
+  display: none;
+}
+#panel-chats.search-open .home-header-bar {
+  flex: 1 !important;
+}
+
+/* Belt and braces: if the JS class is missing (older cached bundle), :has()
+   still collapses the header. Ignored harmlessly where :has() is unsupported. */
+#panel-chats .home-header:has(.home-search-inline.open) .orbit-home-title,
+#panel-chats .home-header:has(.home-search-inline.open) .orbit-avatar-btn {
+  display: none;
+}
+#panel-chats .home-search-inline input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 14.5px;
+  color: var(--text-primary);
+  outline: none;
+}
+#panel-chats .home-search-inline input::placeholder {
+  color: var(--text-muted);
+}
+#panel-chats .home-search-inline button {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+#panel-chats .home-search-inline button i {
+  width: 15px;
+  height: 15px;
+}
+
+/* Other panels keep the search field, restyled to match. */
+.header-search-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+}
+.header-search-wrapper i {
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.header-search {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 14.5px;
+  color: var(--text-primary);
+  outline: none;
+}
+.header-search::placeholder { color: var(--text-muted); }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   4. TAB BAR
+   Injected into each tab-level panel by navigation.js, so it appears and
+   disappears with the panel instead of needing a visibility observer.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.orbit-tabbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 60;
+  padding: 12px 21px calc(21px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  background: linear-gradient(180deg,
+              rgba(10, 11, 13, 0) 0%,
+              rgba(10, 11, 13, .92) 46%,
+              var(--bg-base) 100%);
+}
+:root[data-theme="light"] .orbit-tabbar {
+  background: linear-gradient(180deg,
+              rgba(247, 248, 250, 0) 0%,
+              rgba(247, 248, 250, .92) 46%,
+              var(--bg-base) 100%);
+}
+
+.orbit-tabbar .pill {
+  width: 100%;
+  height: 62px;
+  border-radius: 36px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .45);
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  gap: 2px;
+  pointer-events: auto;
+}
+:root[data-theme="light"] .orbit-tabbar .pill {
+  box-shadow: 0 6px 20px rgba(30, 40, 80, .12);
+}
+
+.orbit-tabbar .tab {
+  flex: 1;
+  height: 100%;
+  border-radius: 26px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--text-muted);
+  position: relative;
+  -webkit-tap-highlight-color: transparent;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.orbit-tabbar .tab i,
+.orbit-tabbar .tab svg {
+  width: 19px;
+  height: 19px;
+  stroke-width: 1.9;
+}
+.orbit-tabbar .tab span {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+/* Active = tinted capsule + accent icon. Deliberately NOT a solid accent fill:
+   a solid fill is the loudest object on the screen and fights the direction.
+   Still unambiguous — colour, background and weight all change together. */
+.orbit-tabbar .tab.active {
+  background: var(--accent-soft);
+  color: var(--accent-primary);
+}
+.orbit-tabbar .tab.active i,
+.orbit-tabbar .tab.active svg {
+  stroke-width: 2.2;
+}
+
+.orbit-tabbar .tab .tab-dot {
+  position: absolute;
+  top: 11px;
+  left: calc(50% + 8px);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-danger);
+  border: 1.5px solid var(--bg-raised);
+}
+
+/* Content must clear the floating bar. */
+#panel-chats .chat-list,
+#panel-friends #friends-list,
+#panel-activity #activity-content,
+#panel-settings #settings-content {
+  padding-bottom: 118px !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   5. CHAT LIST
+   Same markup (.chat-row and friends) — restyled. No JS change needed.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.chat-list {
+  padding: 0 8px !important;
+  /* The dotted grid background read as noise behind the list. */
+  background-image: none !important;
+}
+
+.chat-row {
+  gap: 13px !important;
+  padding: 11px 8px !important;
+  min-height: 0 !important;
+  border-radius: var(--radius-md);
+  border-bottom: none !important;
+  transition: background var(--dur) var(--ease);
+}
+.chat-row:active,
+.chat-row.active-chat {
+  background: var(--bg-raised) !important;
+}
+
+.chat-row-avatar {
+  width: 46px !important;
+  height: 46px !important;
+  background: var(--bg-raised-2) !important;
+  font-size: 17px !important;
+  font-weight: 600 !important;
+  letter-spacing: -.02em;
+}
+
+.chat-row-name {
+  font-size: 15px !important;
+  font-weight: 500 !important;
+  letter-spacing: -.01em;
+}
+.chat-row.unread .chat-row-name {
+  font-weight: 600 !important;
+}
+
+.chat-row-preview {
+  font-size: 13.5px !important;
+  color: var(--text-secondary) !important;
+  margin-top: 2px !important;
+}
+.chat-row.unread .chat-row-preview {
+  font-weight: 400 !important;
+  color: var(--text-secondary) !important;
+}
+
+.chat-row-typing {
+  font-size: 13.5px !important;
+  font-style: normal !important;
+  color: var(--accent-primary) !important;
+  animation: none !important;
+}
+
+.chat-row-time {
+  font-size: 11.5px !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-row-badge {
+  min-width: 20px !important;
+  height: 20px !important;
+  border-radius: var(--radius-pill) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  padding: 0 6px !important;
+}
+
+.chat-row-status-dot {
+  width: 11px !important;
+  height: 11px !important;
+  border: 2.5px solid var(--bg-base) !important;
+  right: -1px !important;
+  bottom: -1px !important;
+}
+
+.chat-row-pin-icon {
+  width: 12px !important;
+  height: 12px !important;
+  opacity: .55 !important;
+  transform: none !important;
+}
+
+/* Section headers inside the list */
+.chat-section-header {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: .1em !important;
+  text-transform: uppercase;
+  color: var(--text-muted) !important;
+  padding: 18px 8px 8px !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   6. ACTIVE-NOW STRIP
+   Was: avatar + name + a "N online" count + three filter chips.
+   Now: avatars only, names kept (they are the only label that earns its space),
+   count and chips gone.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+#online-friends-section {
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  background: transparent !important;
+}
+
+#online-friends-section::before {
+  content: 'Active now';
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 4px 16px 10px;
+}
+
+.online-friends-row {
+  padding: 0 16px 14px !important;
+  gap: 14px !important;
+}
+
+.online-friend-item {
+  gap: 7px !important;
+}
+
+.online-friend-avatar {
+  width: 52px !important;
+  height: 52px !important;
+  font-size: 17px !important;
+  font-weight: 600 !important;
+  background: var(--bg-raised-2) !important;
+  /* The old ring was a 2px accent border on every avatar — a lot of colour for
+     a passive element. Presence is carried by the dot instead. */
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.online-friend-name {
+  font-size: 11.5px !important;
+  color: var(--text-secondary) !important;
+  max-width: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.online-indicator {
+  width: 11px !important;
+  height: 11px !important;
+  border: 2.5px solid var(--bg-base) !important;
+  right: -1px !important;
+  bottom: -1px !important;
+}
+
+.online-empty-state {
+  padding: 8px 0 12px !important;
+  font-size: 12.5px !important;
+  color: var(--text-muted) !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   7. HOME TABS (Friends / Groups)
+   Kept — groups are only reachable through them, so removing them would be a
+   functional regression. Restyled from underline-tabs into a quiet segmented
+   control instead.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+#home-tabs {
+  display: flex !important;
+  align-items: center;
+  gap: 4px !important;
+  margin: 0 16px 8px !important;
+  padding: 3px !important;
+  height: 38px;
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+  overflow: visible !important;
+}
+
+#home-tabs .home-tab {
+  flex: 1;
+  height: 100%;
+  border-radius: var(--radius-sm);
+  background: transparent !important;
+  border: none !important;
+  font-size: 13.5px !important;
+  font-weight: 500 !important;
+  color: var(--text-secondary) !important;
+  letter-spacing: -.005em;
+  padding: 0 !important;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+
+/* Kill the old underline indicator. */
+#home-tabs .home-tab::after {
+  display: none !important;
+}
+
+#home-tabs .home-tab.active {
+  background: var(--bg-raised-2) !important;
+  color: var(--text-primary) !important;
+  font-weight: 600 !important;
+}
+
+/* Folder rail: folders are experimental and off by default, but when they are
+   on they should look like part of the same control. */
+#home-tabs .folder-rail {
+  display: flex;
+  gap: 4px;
+  margin-left: 4px;
+  overflow-x: auto;
+}
+#home-tabs .folder-rail::-webkit-scrollbar { display: none; }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   8. EMPTY STATE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.empty-state {
+  padding: 64px 32px !important;
+  text-align: center;
+}
+.empty-state i {
+  width: 34px !important;
+  height: 34px !important;
+  stroke-width: 1.4 !important;
+  color: var(--text-muted) !important;
+  opacity: .5;
+  margin-bottom: 14px;
+}
+.empty-state-text {
+  font-size: 14.5px !important;
+  font-weight: 500 !important;
+  color: var(--text-secondary) !important;
+}
+.empty-state-sub {
+  font-size: 12.5px !important;
+  color: var(--text-muted) !important;
+  margin-top: 6px !important;
+  line-height: 1.55;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   9. REMOVED CHROME
+   Kept in the DOM where JS still reads them, hidden here.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* The floating profile pill — replaced by the header avatar. */
+#profile-pill {
+  display: none !important;
+}
+
+/* The "N online" count and the All/Online/Offline chips. Presence now reads
+   from the avatar dot and the strip, so this is a third control for one fact. */
+.online-friend-filters {
+  display: none !important;
+}
+
+/* Any stale bottom-nav container from older builds. */
+#mobile-nav {
+  display: none !important;
+}
+
+/* With a conversation open the tab bar would sit under the composer. Hidden via
+   a class on #app-layout rather than by watching #panel-chat, so it does not
+   depend on how that panel happens to be displayed. */
+#app-layout.orbit-chat-open .orbit-tabbar {
+  display: none !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   10. CONTACTS PANEL
+   #panel-friends existed in the markup but nothing ever activated it —
+   renderFriendsList() was written and never called. It is the Contacts tab now,
+   so it needs the same row treatment as the chat list.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+#panel-friends #friends-list {
+  padding: 0 8px !important;
+}
+
+.friend-row {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 11px 8px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background var(--dur) var(--ease);
+}
+.friend-row:active {
+  background: var(--bg-raised);
+}
+
+/* The row reuses .chat-row-avatar / .chat-row-info / .chat-row-name, so those
+   restyles above apply here for free. */
+
+.friend-status-dot {
+  width: 11px !important;
+  height: 11px !important;
+  margin-top: 3px !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   11. POLISH — issues found by rendering the build and looking at it
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* The strip centred itself whenever there were fewer than two friends
+   (`data-centered="true"` from renderOnlineFriends). A centred row of one
+   avatar reads as an empty state, not as a list. Always left-aligned now.
+   An id in the selector so it beats the existing `[data-centered="true"]` rule
+   regardless of which sheet a browser decides to apply last. */
+#online-friends-section .online-friends-row[data-centered] {
+  justify-content: flex-start !important;
+}
+
+/* With the search field open the standalone search button is a second magnifier
+   sitting immediately left of the field's own one. Hide it while open. */
+#panel-chats.search-open #btn-search-home {
+  display: none !important;
+}
+
+/* The Activity panel kept a back arrow from when it was reached from the header
+   bell. It is a tab now, so the arrow duplicates the tab bar — and it points at
+   a destination one tap away. */
+#panel-activity #btn-activity-back {
+  display: none !important;
+}
+#panel-activity .panel-header h3 {
+  position: static !important;
+  transform: none !important;
+  left: auto !important;
+  flex: 1;
+  text-align: left;
+}
+
+/* Activity's filter tabs were underline tabs; match the segmented control used
+   for Friends/Groups so the app has one tab idiom, not two. */
+.activity-tabs {
+  display: flex !important;
+  align-items: center;
+  gap: 4px !important;
+  margin: 0 16px 8px !important;
+  padding: 3px !important;
+  height: 38px;
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle) !important;
+  overflow: visible !important;
+}
+
+.activity-tab {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  background: transparent !important;
+  border: none !important;
+  font-size: 13.5px !important;
+  font-weight: 500 !important;
+  color: var(--text-secondary) !important;
+  padding: 0 !important;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+
+/* Kill the underline indicator if the old sheet drew one. */
+.activity-tab::after {
+  display: none !important;
+}
+
+.activity-tab.active {
+  background: var(--bg-raised-2) !important;
+  color: var(--text-primary) !important;
+  font-weight: 600 !important;
+}
