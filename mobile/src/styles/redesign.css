@@ -1606,6 +1606,25 @@
   margin-top: 4px !important;
 }
 
+/* MUST NOT SHRINK.
+   #settings-overlay-content is `display: flex; flex-direction: column`, and a
+   flex item shrinks by default. `.settings-category-card` sets `overflow: hidden`
+   — and a hidden-overflow flex item has an automatic minimum size of ZERO, so the
+   card was squashed down to the container's content box (796px viewport minus the
+   120px bottom padding) and clipped its last row. The container then reported
+   scrollHeight === clientHeight, so there was no scrollbar and the row was
+   unreachable: it just looked like the section was missing a setting.
+
+   The overview escaped this only by luck — `.settings-section-list` is
+   `overflow: visible`, so its automatic minimum size held it open and the
+   container scrolled as expected.
+
+   flex-shrink: 0 keeps children at their content height so the container scrolls
+   instead of squashing them. */
+#settings-overlay-content > * {
+  flex-shrink: 0;
+}
+
 /* Controls that sit on the right of a row. */
 .settings-item-action input[type="range"] {
   width: 108px;
