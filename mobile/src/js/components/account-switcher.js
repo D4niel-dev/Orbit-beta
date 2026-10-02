@@ -57,13 +57,23 @@ var OrbitAccounts = {
   },
 
   _avatarHtml: function(rec, size) {
+    var pic;
     if (rec && rec.avatar) {
-      return '<img src="' + this._escape(rec.avatar) + '" alt="" ' +
-             'style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;object-fit:cover;">';
+      pic = '<img src="' + this._escape(rec.avatar) + '" alt="" ' +
+            'style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;object-fit:cover;">';
+    } else {
+      var initial = (rec && rec.name ? String(rec.name).charAt(0) : '?').toUpperCase();
+      pic = '<div class="acct-initial" style="width:' + size + 'px;height:' + size + 'px;">' +
+            this._escape(initial) + '</div>';
     }
-    var initial = (rec && rec.name ? String(rec.name).charAt(0) : '?').toUpperCase();
-    return '<div class="acct-initial" style="width:' + size + 'px;height:' + size + 'px;">' +
-           this._escape(initial) + '</div>';
+    // Profile frame. Each account's frame number is mirrored into the registry
+    // by Store.syncAccountRecord, so an inactive account can still show its own.
+    var frame = rec && rec.profileFrame ? parseInt(rec.profileFrame, 10) || 0 : 0;
+    if (frame > 0) {
+      pic += '<img class="pfp-frame" src="icons/frames/pfp_frame_' + frame +
+             '.png" alt="" draggable="false">';
+    }
+    return pic;
   },
 
   _html: function() {

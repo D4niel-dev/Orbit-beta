@@ -275,13 +275,20 @@ class Store {
     var reg = this.listAccounts();
     var u = this.user;
     var name = u.name || 'User', tag = u.tag || '', avatar = u.avatar || null;
+    // The frame lives in settings, not on the user record, so it has to be
+    // copied across or the switcher cannot show it for an account that is not
+    // the active one.
+    var frame = (this.settings && this.settings.profileFrames)
+      ? (parseInt(this.settings.profileFrame, 10) || 0) : 0;
     var changed = false;
     for (var i = 0; i < reg.length; i++) {
       if (reg[i].id !== this.accountId) continue;
-      if (reg[i].name !== name || reg[i].tag !== tag || reg[i].avatar !== avatar) {
+      if (reg[i].name !== name || reg[i].tag !== tag ||
+          reg[i].avatar !== avatar || reg[i].profileFrame !== frame) {
         reg[i].name = name;
         reg[i].tag = tag;
         reg[i].avatar = avatar;
+        reg[i].profileFrame = frame;
         changed = true;
       }
     }

@@ -5946,7 +5946,11 @@ document.addEventListener('DOMContentLoaded', function() {
     var container = document.getElementById('settings-overlay-content');
     var s = MStore.settings;
     var html = renderSectionHtml(key, s);
-    container.innerHTML = html;
+    // renderSectionHtml emits bare .settings-item-card siblings with no wrapper,
+    // so a section rendered edge-to-edge with hairline dividers instead of as a
+    // card like the overview. Wrap them in the same card the overview uses.
+    container.innerHTML =
+      '<div class="settings-category-card settings-detail-card">' + html + '</div>';
     container.classList.remove('settings-slide-left');
     container.classList.add('settings-slide-right');
     bindSectionEvents(key, s);
@@ -6007,9 +6011,20 @@ document.addEventListener('DOMContentLoaded', function() {
         : '<div class="acct-initial" style="width:48px;height:48px;font-size:17px;">' +
           escapeHtml(String(_acct.name || 'U').charAt(0).toUpperCase()) + '</div>';
       var _acctTag = String(_acct.name || '').toLowerCase() + (_acct.tag ? '#' + _acct.tag : '');
+      // Profile frame, gated on the stable setting — the same rule the header
+      // avatar and the chat rows use. It is drawn over the avatar, so it has to
+      // sit inside .acct-pic and after the picture.
+      var _acctFrame = 0;
+      if (MStore.settings && MStore.settings.profileFrames) {
+        _acctFrame = parseInt(MStore.settings.profileFrame, 10) || 0;
+      }
+      var _acctFrameHtml = _acctFrame > 0
+        ? '<img class="pfp-frame" src="icons/frames/pfp_frame_' + _acctFrame +
+          '.png" alt="" draggable="false">'
+        : '';
       html +=
         '<div class="settings-account-row" id="settings-account-row" role="button" tabindex="0">' +
-          '<div class="acct-pic">' + _acctPic +
+          '<div class="acct-pic">' + _acctPic + _acctFrameHtml +
             '<span class="presence ' + escapeHtml(_acct.status || 'offline') + '"></span></div>' +
           '<div class="acct-info">' +
             '<div class="acct-name">' + escapeHtml(_acct.name || 'User') + '</div>' +

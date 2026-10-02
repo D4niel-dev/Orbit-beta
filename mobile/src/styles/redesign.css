@@ -181,16 +181,10 @@
   letter-spacing: -.02em;
 }
 
-/* Profile frame overlays the avatar; keep it inside the 36px box. */
-.orbit-avatar-btn .pfp-frame {
-  position: absolute;
-  top: -14%;
-  left: -14%;
-  width: 128%;
-  height: 128%;
-  object-fit: contain;
-  pointer-events: none;
-}
+/* NOTE: profile frames are positioned by `img.pfp-frame` in components.css —
+   it is documented there as the single source of truth and carries !important,
+   so a local override here would be dead code that still reads as live. Do not
+   add one; the parent just needs `position: relative`. */
 
 .orbit-avatar-btn .presence {
   position: absolute;
@@ -1379,14 +1373,17 @@
 
 /* Group label above each card. Deliberately still small-caps — it is the only
    uppercase left on the screen, which is what makes it read as a label rather
-   than a title. */
+   than a title.
+   The bottom padding was 9px, and with the card's 13px row padding the label
+   ended up 27px from the card ABOVE it but 34px from the title BELOW it —
+   floating closer to the wrong neighbour. 2px below puts it with its own card. */
 .settings-category-header {
   font-size: 11px !important;
   font-weight: 600 !important;
   letter-spacing: .09em !important;
   text-transform: uppercase;
   color: var(--text-muted) !important;
-  padding: 22px 4px 9px !important;
+  padding: 22px 4px 2px !important;
   margin: 0 !important;
 }
 
@@ -1577,7 +1574,9 @@
   display: flex;
   align-items: center;
   gap: 13px;
-  margin: 4px 0 8px;
+  /* Same 4px as the cards, so the first group label sits the same distance below
+     the account row as it does below every other card. */
+  margin: 4px 0 4px;
   padding: 15px;
   border-radius: var(--radius-lg);
   background: var(--bg-raised);
@@ -1594,6 +1593,30 @@
 }
 .settings-account-row .chev i,
 .settings-account-row .chev svg { width: 17px; height: 17px; stroke-width: 2; }
+
+/* Profile frames on the Settings account row and the switcher avatars are
+   positioned by `img.pfp-frame` in components.css — see the note in section 3.
+   `.acct-pic` only has to be a positioning context, which it is. */
+
+/* ── Settings detail sections ──
+   showSettingsSection() renders bare .settings-item-card siblings with no
+   wrapper, so a section came out edge-to-edge with hairline dividers rather than
+   as a card. It now wraps them; these just finish the job. */
+.settings-detail-card {
+  margin-top: 4px !important;
+}
+
+/* Controls that sit on the right of a row. */
+.settings-item-action input[type="range"] {
+  width: 108px;
+  accent-color: var(--accent-primary);
+}
+.settings-item-action .settings-toggle {
+  margin: 0;
+}
+.settings-item-action select.settings-select {
+  max-width: 132px;
+}
 
 /* Busy state after an action that reloads the webview. */
 .acct-busy {
