@@ -85,7 +85,10 @@ Orbit.E2EE = (function() {
   return {
     async init() {
       try {
-        var stored = localStorage.getItem('orbit_e2ee_keys');
+        // Per-account. This key IS the identity: left un-namespaced, switching
+        // to a second account would overwrite the first account's keypair.
+        var stored = window.OrbitKeys ? OrbitKeys.get('e2ee_keys')
+                                      : localStorage.getItem('orbit_e2ee_keys');
         if (stored) {
           var parsed = JSON.parse(stored);
           keyId = parsed.keyId;
@@ -119,11 +122,13 @@ Orbit.E2EE = (function() {
         var rawPrivate = await crypto.subtle.exportKey('pkcs8', keyPair.privateKey);
         keyId = 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
-        localStorage.setItem('orbit_e2ee_keys', JSON.stringify({
+        var _keysBlob = JSON.stringify({
           keyId: keyId,
           publicKey: arrayBufferToBase64(rawPublic),
           privateKey: arrayBufferToBase64(rawPrivate)
-        }));
+        });
+        if (window.OrbitKeys) OrbitKeys.set('e2ee_keys', _keysBlob);
+        else localStorage.setItem('orbit_e2ee_keys', _keysBlob);
 
         return true;
       } catch(e) {
