@@ -299,9 +299,13 @@ var OrbitHome = {
       chats = chats.filter(function(c) { return folderChatIds.indexOf(c.id) !== -1; });
     } else if (filter === 'groups') {
       chats = chats.filter(function(c) { return groupIds[c.id]; });
-    } else {
+    } else if (filter === 'friends') {
       chats = chats.filter(function(c) { return !groupIds[c.id]; });
     }
+    // Anything else ('all', or no argument) keeps DMs and groups in ONE list,
+    // which is what the redesign does — the Friends/Groups control is hidden
+    // because it was a third way to slice a list that already had two others.
+    // 'friends' and 'groups' are still honoured for the folder rail.
     
     var searchQ = window._chatSearchQuery || '';
     
@@ -335,10 +339,27 @@ var OrbitHome = {
       return bTime - aTime;
     });
     
+    // Section headers. The list is already sorted pinned-first, so these are a
+    // label over each run rather than a second grouping pass. With nothing
+    // pinned there is nothing to distinguish, so neither label is emitted.
+    var hasPinned = chats.some(function(c) { return pinned[c.id || c.chatId]; });
+    var pinnedLabelDone = false;
+    var recentLabelDone = false;
+
     var html = '';
     chats.forEach(function(chat) {
       var chatId = chat.id || chat.chatId;
       var isPinned = pinned[chatId];
+      if (hasPinned) {
+        if (isPinned && !pinnedLabelDone) {
+          html += '<div class="list-label">Pinned</div>';
+          pinnedLabelDone = true;
+        }
+        if (!isPinned && !recentLabelDone) {
+          html += '<div class="list-label">Recent</div>';
+          recentLabelDone = true;
+        }
+      }
       var unread = MStore.unreadCounts && MStore.unreadCounts[chatId] || 0;
       // Group detection: chat objects in MStore.chats don't reliably carry type === 'group',
       // so also check the MStore.groups index (same source the tab filter above uses).
@@ -368,8 +389,9 @@ var OrbitHome = {
             break;
           }
         }
-        // 52 to match .chat-row-avatar, which mobile.css pins to 52px.
-        groupGridHtml = window.OrbitGroupAvatarMobile.forGroup(grpRec, 52, 'var(--bg-base)');
+        // 46 to match .chat-row-avatar, which redesign.css pins to 46px. This
+        // was 52 for the old 52px avatar; leaving it would overflow the box.
+        groupGridHtml = window.OrbitGroupAvatarMobile.forGroup(grpRec, 46, 'var(--bg-base)');
       }
       var avatarHtml = safeAvatarSrc
         ? '<img src="' + safeAvatarSrc + '" alt="' + OrbitHome._escapeAttr(initial) + '" loading="lazy" onerror="var f=this;f.onerror=null;var i=f.getAttribute(\'data-init\')||\'' + OrbitHome._escapeJs(initial) + '\';f.style.display=\'none\';var d=document.createElement(\'div\');d.textContent=i;d.style.cssText=\'width:40px;height:40px;border-radius:50%;background:var(--accent-soft);color:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;\';f.parentNode.insertBefore(d,f);" data-init="' + OrbitHome._escapeAttr(initial) + '">'
@@ -399,7 +421,8 @@ var OrbitHome = {
       var mentionCount = MStore.mentionCounts && MStore.mentionCounts[chatId] || 0;
       
       html += '<div class="chat-row' + (unread > 0 ? ' unread' : '') + (mentionCount > 0 ? ' has-mention' : '') + '" data-chatid="' + OrbitHome._escapeAttr(chatId) + '"' + (!isGroup ? ' data-user-id="' + OrbitHome._escape(chat.peerId || chat.id) + '"' : '') + ' onclick="OrbitHome._onChatClick(\'' + OrbitHome._escapeJs(chatId) + '\')">';
-      html += '  <div class="chat-row-avatar' + (groupGridHtml ? ' has-group-avatar' : '') + '">' + avatarHtml;
+      // Groups get a squared avatar so they read as groups at a glance.
+      html += '  <div class="chat-row-avatar' + (isGroup ? ' sq' : '') + (groupGridHtml ? ' has-group-avatar' : '') + '">' + avatarHtml;
       // Presence dot is for DMs/users only — groups don't have online status
       if (!isGroup) {
         if (isOnline) {
@@ -410,7 +433,11 @@ var OrbitHome = {
       }
       html += '  </div>';
       html += '  <div class="chat-row-info">';
-      html += '    <div class="chat-row-name">' + OrbitHome._escape(displayName) + '</div>';
+      // Pin sits with the name, not stacked under the timestamp where it landed
+      // before — the meta column is a right-aligned stack and a third item there
+      // read as clutter.
+      html += '    <div class="chat-row-name">' + OrbitHome._escape(displayName) +
+              (isPinned ? '<i data-lucide="pin" class="chat-row-pin-icon"></i>' : '') + '</div>';
       if (typing) {
         html += '    <div class="chat-row-typing">Typing\u2026</div>';
       } else {
@@ -423,9 +450,6 @@ var OrbitHome = {
         html += '    <span class="mention-badge">@</span>';
       } else if (unread > 0) {
         html += '    <span class="chat-row-badge">' + (unread > 99 ? '99+' : unread) + '</span>';
-      }
-      if (isPinned) {
-        html += '    <i data-lucide="pin" class="chat-row-pin-icon"></i>';
       }
       html += '  </div>';
       html += '</div>';
@@ -601,36 +625,87 @@ var OrbitHome = {
       return;
     }
     
-    // Sort online first
-    friends.sort(function(a, b) {
-      var aOnline = (a.status === 'online' || a.lastSeen > Date.now() - 45000) ? 1 : 0;
-      var bOnline = (b.status === 'online' || b.lastSeen > Date.now() - 45000) ? 1 : 0;
-      if (aOnline !== bOnline) return bOnline - aOnline;
-      return (a.name || '').localeCompare(b.name || '');
-    });
-    
-    var html = '';
-    friends.forEach(function(friend) {
+    // Split by presence, then sort each group by name. The old code sorted
+    // `friends` in place — `Array.sort` mutates, so this silently reordered
+    // MStore.friends every render.
+    function isFriendOnline(f) {
+      return f.status === 'online' || (f.lastSeen || 0) > Date.now() - 45000;
+    }
+    function byName(a, b) { return (a.name || '').localeCompare(b.name || ''); }
+
+    var all = friends.slice();
+    var onlineFriends = all.filter(isFriendOnline).sort(byName);
+    var offlineFriends = all.filter(function(f) { return !isFriendOnline(f); }).sort(byName);
+
+    function renderFriendRow(friend) {
       var displayName = friend.name || friend.peerId || 'Unknown';
       var initial = displayName.charAt(0).toUpperCase();
       var safeAvatarSrc = OrbitHome._safeAvatarSrc(friend.avatar);
       var avatarHtml = safeAvatarSrc
         ? '<img src="' + safeAvatarSrc + '" alt="' + OrbitHome._escapeAttr(initial) + '" loading="lazy" onerror="var f=this;f.onerror=null;var i=f.getAttribute(\'data-init\')||\'' + OrbitHome._escapeJs(initial) + '\';f.style.display=\'none\';var d=document.createElement(\'div\');d.textContent=i;d.style.cssText=\'width:40px;height:40px;border-radius:50%;background:var(--accent-soft);color:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;\';f.parentNode.insertBefore(d,f);" data-init="' + OrbitHome._escapeAttr(initial) + '">'
         : OrbitHome._escape(initial);
-      var isOnline = friend.status === 'online' || friend.lastSeen > Date.now() - 45000;
-      var statusColor = isOnline ? 'var(--accent-success)' : 'var(--text-muted)';
-      
-      html += '<div class="friend-row" data-peerid="' + OrbitHome._escapeAttr(friend.peerId || '') + '" data-user-id="' + OrbitHome._escapeAttr(friend.id || friend.peerId || '') + '" onclick="OrbitHome._onFriendClick(\'' + OrbitHome._escapeJs(friend.peerId || '') + '\')">';
-      html += '  <div class="chat-row-avatar">' + avatarHtml + '</div>';
-      html += '  <div class="chat-row-info">';
-      html += '    <div class="chat-row-name">' + OrbitHome._escape(displayName) + '</div>';
-      html += '    <span class="friend-status-dot" style="background:' + statusColor + ';display:inline-block;width:8px;height:8px;border-radius:50%;margin-top:4px;"></span>';
-      html += '  </div>';
-      html += '</div>';
-    });
-    
+      var isOn = isFriendOnline(friend);
+      var peerId = friend.peerId || '';
+      var openIt = 'OrbitHome._onFriendClick(\'' + OrbitHome._escapeJs(peerId) + '\')';
+
+      // The presence dot sits ON the avatar, as it does in the chat list and in
+      // the design. It used to be an inline <span> under the name, which read as
+      // a stray green circle floating in the info column, unattached to anything.
+      var row = '<div class="friend-row" data-peerid="' + OrbitHome._escapeAttr(peerId) + '" data-user-id="' + OrbitHome._escapeAttr(friend.id || peerId) + '" onclick="' + openIt + '">';
+      row += '  <div class="chat-row-avatar">' + avatarHtml +
+             '<span class="chat-row-status-dot ' + (isOn ? 'online' : 'offline') + '"></span></div>';
+      row += '  <div class="chat-row-info">';
+      row += '    <div class="chat-row-name">' + OrbitHome._escape(displayName) + '</div>';
+
+      // Secondary line: their bio if they have one, otherwise their tag.
+      var sub = friend.bio ||
+                ((friend.tag || friend.usertag) ? displayName + '#' + (friend.tag || friend.usertag) : '');
+      if (sub) row += '    <div class="friend-sub">' + OrbitHome._escape(sub) + '</div>';
+
+      row += '  </div>';
+      row += '  <button class="friend-action" title="Message" aria-label="Message ' +
+             OrbitHome._escapeAttr(displayName) + '" onclick="event.stopPropagation();' + openIt + '">' +
+             '<i data-lucide="message-circle"></i></button>';
+      row += '</div>';
+      return row;
+    }
+
+    var html = '';
+    if (onlineFriends.length) {
+      html += '<div class="list-label">Online — ' + onlineFriends.length + '</div>';
+      onlineFriends.forEach(function(f) { html += renderFriendRow(f); });
+    }
+    if (offlineFriends.length) {
+      html += '<div class="list-label">Offline — ' + offlineFriends.length + '</div>';
+      offlineFriends.forEach(function(f) { html += renderFriendRow(f); });
+    }
+
+    // Groups are listed here too. The Friends/Groups control that used to gate
+    // them is hidden in the new design, so this is now the one place they appear.
+    var groups = MStore.groups || [];
+    if (groups.length) {
+      html += '<div class="list-label">Groups</div>';
+      groups.forEach(function(g) {
+        var gid = g.id || g.groupId || '';
+        var gName = g.name || 'Group';
+        var gAvatar = OrbitHome._safeAvatarSrc(g.avatar);
+        var gPic = gAvatar
+          ? '<img src="' + gAvatar + '" alt="" loading="lazy">'
+          : OrbitHome._escape(gName.charAt(0).toUpperCase());
+        var n = (g.members && g.members.length) || 0;
+        html += '<div class="friend-row" data-user-id="' + OrbitHome._escapeAttr(gid) + '" onclick="OrbitHome._onChatClick(\'' + OrbitHome._escapeJs(gid) + '\')">';
+        html += '  <div class="chat-row-avatar sq">' + gPic + '</div>';
+        html += '  <div class="chat-row-info">';
+        html += '    <div class="chat-row-name">' + OrbitHome._escape(gName) + '</div>';
+        html += '    <div class="friend-sub">' + n + ' member' + (n === 1 ? '' : 's') + '</div>';
+        html += '  </div>';
+        html += '</div>';
+      });
+    }
+
     container.innerHTML = html;
     this._addAvatarFrames();
+    if (window.lucide) lucide.createIcons();
   },
 
   /** Add profile frame overlays to friend avatars that have one selected */
@@ -1259,6 +1334,18 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
   
+  // Compose button in the header — the quick sheet (new group / add contact /
+  // scan QR). This replaced the notifications bell, which opened Activity; that
+  // is a tab now, so the bell was a second door to a one-tap destination.
+  var composeBtn = document.getElementById('btn-compose-home');
+  if (composeBtn) {
+    composeBtn.addEventListener('click', function() {
+      if (typeof OrbitHome !== 'undefined' && OrbitHome.showQuickSheet) {
+        OrbitHome.showQuickSheet();
+      }
+    });
+  }
+
   // Wire home search input — shows recent searches on focus, results on type
   var homeSearchInput = document.getElementById('home-search-input');
   if (homeSearchInput) {

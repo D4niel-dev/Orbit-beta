@@ -38,6 +38,10 @@ var OrbitNav = {
     (function wait() {
       if (typeof window.switchPanel === 'function' || tries++ > 40) {
         self._inited = true;
+        // The strip is labelled "Active now", and the All/Online/Offline chips
+        // that used to drive it are gone. Without this it defaults to 'all' and
+        // the header would be a lie — every contact listed as active.
+        window._onlineFriendFilter = 'online';
         self._injectBars();
         self._wireAvatar();
         self._wireBackButtons();

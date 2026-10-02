@@ -28,7 +28,7 @@
   <!-- v0.8.1-beta redesign layer. MUST load last: mobile.css redefines several
        selectors more than once, and this sheet restates what the redesign
        changes rather than editing that file in place. -->
-  <link rel="stylesheet" href="styles/redesign.css?v=20261002b">
+  <link rel="stylesheet" href="styles/redesign.css?v=20261002d">
 
   <!-- Syntax Highlighting (Prism) -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
@@ -72,7 +72,10 @@
             <input type="text" id="home-search-input" placeholder="Search chats..." autocomplete="off">
             <button id="btn-home-search-close"><i data-lucide="x"></i></button>
           </div>
-          <button id="btn-notifications-header" class="header-icon-btn" title="Notifications"><i data-lucide="bell"></i></button>
+          <!-- Was the notifications bell, which opened Activity. Activity is a
+               tab now, so the bell was a second door to a destination one tap
+               away. This is the compose action the design calls for. -->
+          <button id="btn-compose-home" class="header-icon-btn" title="New chat"><i data-lucide="square-pen"></i></button>
         </div>
       </div>
 
@@ -387,11 +390,11 @@
   setTimeout(function() { window._loadImageCropper(); }, 1500);
   </script>
 
-  <script src="js/app.js?v=20261002a"></script>
+  <script src="js/app.js?v=20261002c"></script>
 
   <!-- v0.2.8 Components -->
-  <script src="js/components/navigation.js?v=20261002a"></script>
+  <script src="js/components/navigation.js?v=20261002c"></script>
   <script src="js/components/chat-screen.js?v=20260927c"></script>
-  <script src="js/components/home-screen.js?v=20261002a"></script>
+  <script src="js/components/home-screen.js?v=20261002d"></script>
 </body>
 </html>

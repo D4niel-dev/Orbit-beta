@@ -552,10 +552,16 @@
   bottom: -1px !important;
 }
 
+/* The pin now rides inline with the name (the renderer emits it inside
+   .chat-row-name). The old rule rotated it 45° because it sat alone in the
+   meta column; inline that just makes it look broken. */
 .chat-row-pin-icon {
+  display: inline-block;
+  vertical-align: -1px;
+  margin-left: 5px;
   width: 12px !important;
   height: 12px !important;
-  opacity: .55 !important;
+  opacity: .5 !important;
   transform: none !important;
 }
 
@@ -790,13 +796,113 @@
   background: var(--bg-raised);
 }
 
+/* mobile.css draws a 1px divider between adjacent contact rows. The design has
+   no dividers — rows separate by spacing, with a fill on press. */
+.friend-row + .friend-row {
+  border-top: none !important;
+}
+
 /* The row reuses .chat-row-avatar / .chat-row-info / .chat-row-name, so those
    restyles above apply here for free. */
 
-.friend-status-dot {
-  width: 11px !important;
-  height: 11px !important;
-  margin-top: 3px !important;
+/* Presence now rides on the avatar as .chat-row-status-dot, same as the chat
+   list. The old inline .friend-status-dot sat under the name in the info
+   column, where it read as a stray green circle attached to nothing. */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   12. LIST LABELS, CONTACT ROWS, ACTIVE-NOW RING
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Section header, used by both lists: PINNED / RECENT in Chats,
+   ONLINE — n / OFFLINE — n / GROUPS in Contacts. */
+.list-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 18px 8px 8px;
+}
+
+/* Secondary line on a contact row — their bio, or their tag in mono. */
+.friend-sub {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Message button on a contact row. */
+.friend-action {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.friend-action:active {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.friend-action i,
+.friend-action svg {
+  width: 19px;
+  height: 19px;
+  stroke-width: 1.8;
+}
+
+/* Group avatars are squared off in the list, so they read as groups at a
+   glance rather than relying on the name. */
+.chat-row-avatar.sq,
+.chat-row-avatar.sq img {
+  border-radius: var(--radius-md) !important;
+}
+
+/* The active-now ring. The prototype wraps each avatar in an accent gradient
+   ring; drawn here as a masked pseudo-element so it can sit over the avatar
+   without needing a wrapper element in the renderer.
+   The + and "more" items are excluded — they carry their own dashed treatment. */
+.online-friend-item:not(.online-friend-add-item):not(.online-friend-more) {
+  position: relative;
+}
+.online-friend-item:not(.online-friend-add-item):not(.online-friend-more)::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  padding: 2.5px;
+  background: linear-gradient(180deg, var(--accent-primary), rgba(77, 124, 254, .18));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+:root[data-theme="light"] .online-friend-item:not(.online-friend-add-item):not(.online-friend-more)::after {
+  background: linear-gradient(180deg, var(--accent-primary), rgba(63, 110, 240, .18));
+}
+
+/* The Friends/Groups control is not in the design — groups render inline in the
+   Chats list and under GROUPS in Contacts. The element stays in the DOM because
+   the experimental folder rail lives inside it, so it is only hidden when there
+   are no folders to show. */
+#home-tabs:not(.has-folders) {
+  display: none !important;
 }
 
 

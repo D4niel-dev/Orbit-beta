@@ -543,7 +543,10 @@ document.addEventListener('DOMContentLoaded', function() {
   function renderChatList() {
     // Delegate to OrbitHome's tab-aware renderer if available
     if (typeof OrbitHome !== 'undefined' && OrbitHome.renderChatList) {
-      OrbitHome.renderChatList(window._activeHomeTab || 'friends');
+      // Default is 'all' — DMs and groups in one list. The redesign hides the
+      // Friends/Groups control; 'friends' and 'groups' are still honoured when
+      // the folder rail is in play.
+      OrbitHome.renderChatList(window._activeHomeTab || 'all');
       return;
     }
     // Fallback: original rendering
