@@ -2359,8 +2359,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // The design opens a thread with a quiet statement that the conversation is
     // end-to-end encrypted. Orbit is E2EE and the UI never said so anywhere,
     // which is the single most important thing about the product.
-    feed.innerHTML = '<div class="e2ee-note"><i data-lucide="lock"></i>' +
-                     'Messages are end-to-end encrypted</div>' + html;
+    // Only when encryption is actually on. Claiming it unconditionally would be
+    // the app asserting a property it is not currently providing.
+    var _e2eeOn = !!(MStore.settings && MStore.settings.e2eeEnabled);
+    var _e2eeNote = _e2eeOn
+      ? '<div class="e2ee-note"><i data-lucide="lock"></i>Messages are end-to-end encrypted</div>'
+      : '';
+    feed.innerHTML = _e2eeNote + html;
     if (window.lucide && lucide.createIcons) {
       try { lucide.createIcons({ root: feed }); } catch (e) {}
     }

@@ -79,6 +79,15 @@ class Store {
       ...initialState.settings
     };
 
+    // Pristine settings, captured before anything can merge over them.
+    //
+    // load() has to reset to THESE rather than reusing whatever is already on the
+    // instance. It used to do `Object.assign({}, this.settings, saved)` — so on a
+    // switch or a create, an account with no saved settings of its own inherited
+    // the previous account's wholesale (theme, bubbles, E2EE, the lot). Deep-copied
+    // because `mutedChats` is a nested object and this.mutedChats aliases it.
+    this._settingsDefaults = JSON.parse(JSON.stringify(this.settings));
+
     // ── Chat Folders ──
     this.chatFolders = {};      // { "folderId": { id, name, icon, chatIds: [] } }
     this.chatFolderOrder = [];  // ["folderId1", "folderId2"] — ordered display
@@ -482,9 +491,20 @@ class Store {
     this.lastReadIds = this.get('lastReadIds', {});
     this.peerPublicKeys = this.get('peerPublicKeys', {});
 
-    // Merge saved settings over defaults
+    // Merge saved settings over a FRESH copy of the defaults — not over whatever
+    // the previous account left on the instance. See _settingsDefaults.
     var savedSettings = this.get('settings', {});
-    this.settings = Object.assign({}, this.settings, savedSettings);
+    this.settings = Object.assign(
+      JSON.parse(JSON.stringify(this._settingsDefaults || {})), savedSettings);
+
+    // These are only ever set in the constructor, so a load() that does not come
+    // with a page reload (an account switch, a create) would keep the outgoing
+    // account's values. Reset them so load() really does mean "read it all again".
+    this.closedDMs = {};
+    this.pinnedDMs = {};
+    this.activeChatId = null;
+    this.transferProgress = {};
+    this.transferErrors = {};
 
     // ONE-TIME MIGRATION: "Message Effects" graduated from Experimental to a
     // stable Chat setting. Legacy persisted key `experimentalMessageFx` → `messageFx`.
@@ -584,7 +604,12 @@ class Store {
     var payload = window.OrbitSettingsSync.build(this.settings);
     if (!payload) return false;
 
-    var me = this.currentUser ? (this.currentUser.id || this.currentUser.userId) : null;
+    // this.user, NOT this.currentUser. The store never assigns `currentUser` — it
+    // exists only as a getState()/setState() alias for the desktop's naming. This
+    // read undefined, so `me` was always null and the function returned before
+    // sending anything: SETTINGS_SYNC never actually fired from the mobile, for
+    // any setting, since it was wired up in v0.8.0.
+    var me = this.user ? (this.user.id || this.user.userId) : null;
     if (!me) return false;
 
     var sent = 0;
