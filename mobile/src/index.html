@@ -149,6 +149,13 @@
           <span class="qr-scan-pulse"></span><span id="qr-scan-status-text">Looking for a code…</span>
         </div>
 
+        <!-- Transfer progress. Hidden until an account actually starts arriving. -->
+        <div id="qr-scan-progress" style="display:none;width:100%;max-width:290px;margin-top:14px;">
+          <div style="height:4px;border-radius:2px;background:var(--bg-raised);overflow:hidden;">
+            <div id="qr-scan-bar" style="display:none;height:100%;width:0%;background:var(--accent-primary);transition:width .18s ease;"></div>
+          </div>
+        </div>
+
         <div class="qr-scan-spacer"></div>
 
         <button class="qr-scan-alt" id="btn-qr-show-mine">
@@ -424,12 +431,13 @@
   setTimeout(function() { window._loadImageCropper(); }, 1500);
   </script>
 
-  <script src="js/app.js?v=20261002r"></script>
+  <script src="js/app.js?v=20261002t"></script>
 
   <!-- v0.2.8 Components -->
   <script src="js/components/navigation.js?v=20261002f"></script>
   <script src="js/components/chat-screen.js?v=20261002p"></script>
   <script src="js/components/home-screen.js?v=20261002f"></script>
   <script src="js/components/account-switcher.js?v=20261002r"></script>
+  <script src="js/components/account-receive.js?v=20261002t"></script>
 </body>
 </html>

@@ -10944,7 +10944,11 @@ document.addEventListener('DOMContentLoaded', function() {
         showToast(Orbit.QRPairing.describeReason(res.reason), 'info');
         return;
       }
-      stopQRScanner();
+      // A code that offers an account keeps the screen up: it turns into the
+      // progress view instead of closing the instant the code is read.
+      var isTransfer = !!(window.OrbitAccountReceive &&
+                          OrbitAccountReceive.isTransferPayload(res.data));
+      stopQRScanner(isTransfer);
       pairFromQRData(res.data);
     }).catch(function() {
       showToast('Could not read network addresses', 'info');
@@ -10985,6 +10989,13 @@ document.addEventListener('DOMContentLoaded', function() {
       renderFriends();
       renderChatList();
       showToast('Added ' + peerName, 'info');
+    }
+
+    // An account transfer takes over from here. The peer above is already saved
+    // and connected, which is what the pull rides on.
+    if (window.OrbitAccountReceive && OrbitAccountReceive.isTransferPayload(data)) {
+      OrbitAccountReceive.start(data);
+      return;
     }
 
     if (!data.ips.length) {
@@ -11030,14 +11041,25 @@ document.addEventListener('DOMContentLoaded', function() {
     attempt();
   }
 
-  function stopQRScanner() {
+  // keepVisible: stop the camera but leave the screen up. An account transfer
+  // needs it — the pair screen becomes the progress view rather than closing the
+  // moment a code is read.
+  function stopQRScanner(keepVisible) {
     _qrScanning = false;
     if (_qrStream) {
       _qrStream.getTracks().forEach(function(t) { t.stop(); });
       _qrStream = null;
     }
     var overlay = document.getElementById('qr-scanner-overlay');
-    if (overlay) overlay.style.display = 'none';
+    if (!overlay) return;
+    if (!keepVisible) {
+      overlay.style.display = 'none';
+      return;
+    }
+    var frame = overlay.querySelector('.qr-scan-frame');
+    if (frame) frame.style.display = 'none';
+    var prog = document.getElementById('qr-scan-progress');
+    if (prog) prog.style.display = '';
   }
 
   /* -- Toast -- */
@@ -12270,7 +12292,10 @@ document.addEventListener('DOMContentLoaded', function() {
   var scanBtn = document.getElementById('btn-scan-qr');
   if (scanBtn) scanBtn.addEventListener('click', function() { setScanCopy(null); startQRScanner(); });
   var closeScannerBtn = document.getElementById('btn-close-scanner');
-  if (closeScannerBtn) closeScannerBtn.addEventListener('click', stopQRScanner);
+  // Wrapped, not passed directly: stopQRScanner now takes a flag, and passing it
+  // straight in would hand it the click EVENT, which is truthy and would leave
+  // the screen up forever.
+  if (closeScannerBtn) closeScannerBtn.addEventListener('click', function() { stopQRScanner(); });
 
   // "Show my code instead" — the other half of pairing. Close the camera and open
   // the Add Friend modal on its QR tab, which already renders the payload.
@@ -14714,6 +14739,22 @@ document.addEventListener('DOMContentLoaded', function() {
             if (activeChatId === chatId) renderMessages(chatId);
           }
         }
+        return;
+      }
+
+      // ── Account transfer (Pair a desktop) ──
+      // The receiver owns the whole flow: validate, decrypt, import. The packet
+      // handler only routes, so the screen and the crypto stay in one place.
+      if (packet.type === Orbit.Protocol.Types.TRANSFER_OFFER) {
+        if (window.OrbitAccountReceive) OrbitAccountReceive.handleOffer(packet);
+        return;
+      }
+      if (packet.type === Orbit.Protocol.Types.TRANSFER_CHUNK) {
+        if (window.OrbitAccountReceive) OrbitAccountReceive.handleChunk(packet);
+        return;
+      }
+      if (packet.type === Orbit.Protocol.Types.TRANSFER_DONE) {
+        if (window.OrbitAccountReceive) OrbitAccountReceive.handleDone(packet);
         return;
       }
 
