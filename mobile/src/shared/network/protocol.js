@@ -76,7 +76,23 @@ Orbit.Protocol = {
     CALL_DECLINE: 'CALL_DECLINE',
 
     // E2EE
-    E2EE_KEY_EXCHANGE: 'E2EE_KEY_EXCHANGE'
+    E2EE_KEY_EXCHANGE: 'E2EE_KEY_EXCHANGE',
+
+    // ── Account transfer ──
+    // Carries a whole account from a desktop to a phone over the direct
+    // connection QR pairing already opens. The phone learns the link token by
+    // SCANNING it off the desktop's screen, which is what authorises the pull —
+    // any other device on the LAN does not have it.
+    //   REQUEST  phone   → desktop  { token, deviceName }
+    //   OFFER    desktop → phone    { transferId, salt, iterations, manifest }
+    //   CHUNK    desktop → phone    { transferId, seq, total, data }
+    //   DONE     desktop → phone    { transferId }
+    //   RESULT   phone   → desktop  { transferId, ok, error }
+    TRANSFER_REQUEST: 'TRANSFER_REQUEST',
+    TRANSFER_OFFER: 'TRANSFER_OFFER',
+    TRANSFER_CHUNK: 'TRANSFER_CHUNK',
+    TRANSFER_DONE: 'TRANSFER_DONE',
+    TRANSFER_RESULT: 'TRANSFER_RESULT'
   },
 
   createPacket(type, fromId, toId, payload) {

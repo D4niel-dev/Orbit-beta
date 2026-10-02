@@ -234,6 +234,13 @@ Orbit.QRPairing = (function() {
       payload.pkf = key.format;
     }
 
+    // Account transfer. An opaque extra field: an older client parses this
+    // payload fine and simply ignores it, so adding it needs no version bump.
+    // The token is what authorises the pull — see shared/network/transfer.js.
+    if (typeof opts.linkToken === 'string' && /^[A-Za-z0-9_-]{20,24}$/.test(opts.linkToken)) {
+      payload.lt = opts.linkToken;
+    }
+
     return JSON.stringify(payload);
   }
 
@@ -277,7 +284,9 @@ Orbit.QRPairing = (function() {
       ips: [],
       port: DEFAULT_PORT,
       key: null,
-      keyUsable: false
+      keyUsable: false,
+      // Set when the code offers an account transfer (see below).
+      linkToken: null
     };
 
     // v1 carries no reachability or key — caller falls back to discovery.
@@ -309,6 +318,13 @@ Orbit.QRPairing = (function() {
     if (key) {
       data.key = key;
       data.keyUsable = (key.format === localKeyFormat());
+    }
+
+    // Account transfer token, when the code offers one. Bounded and
+    // character-checked here; whether it is the RIGHT token is settled by the
+    // desktop when the phone presents it.
+    if (typeof parsed.lt === 'string' && /^[A-Za-z0-9_-]{20,24}$/.test(parsed.lt)) {
+      data.linkToken = parsed.lt;
     }
 
     return { ok: true, version: 2, data: data };
