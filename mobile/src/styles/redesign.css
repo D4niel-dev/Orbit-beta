@@ -1074,6 +1074,75 @@
   border-bottom: 1px solid var(--border-subtle) !important;
 }
 
+/* ── Reactions ──
+   Previously the row sat INSIDE the bubble, above the timestamp, with a
+   full-width divider rule across it — so a reaction looked like a footer
+   section rather than something attached to the message.
+
+   Now it straddles the bubble's bottom edge: bottom-LEFT on your own messages,
+   bottom-RIGHT on theirs, poking out by roughly half its height. */
+.reactions-row {
+  position: absolute !important;
+  bottom: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  background: none !important;
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  gap: 3px !important;
+  transform: translateY(52%) !important;
+  z-index: 2;
+}
+
+.message-row.mine .reactions-row {
+  left: 6px !important;
+  right: auto !important;
+}
+.message-row.other .reactions-row {
+  right: 6px !important;
+  left: auto !important;
+}
+
+/* The row is absolutely positioned, so the bubble reserves no room for it and
+   the next message would sit on top. `:has()` gives the height back only to the
+   messages that actually carry reactions. */
+.message-row:has(.reactions-row) {
+  margin-bottom: 32px !important;
+}
+
+/* The pills sit about 10px proud of the bubble's bottom edge and the timestamp
+   is right-aligned on that same edge, so on a SHORT message ("ok", "sure") the
+   pills land on top of the time. Reserve a band for them inside the bubble —
+   the timestamp then clears the pills at any message length. */
+.message-row:has(.reactions-row) .message-bubble {
+  padding-bottom: 22px !important;
+}
+
+.reaction-pill {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 3px !important;
+  padding: 2px 7px !important;
+  border-radius: var(--radius-pill) !important;
+  background: var(--bg-raised-2) !important;
+  border: 1px solid var(--border-strong) !important;
+  font-size: 11.5px !important;
+  line-height: 1.35 !important;
+  color: var(--text-secondary) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .45);
+}
+.reaction-pill.mine {
+  background: var(--accent-soft) !important;
+  border-color: var(--accent-ring) !important;
+  color: var(--accent-primary) !important;
+}
+.reaction-pill-count {
+  font-size: 10.5px !important;
+  font-weight: 600 !important;
+  opacity: .9;
+}
+
 
 /* ═══════════════════════════════════════════════════════════════════════════
    14. ACCOUNT SWITCHER
@@ -1308,13 +1377,16 @@
   padding: 0 16px 120px !important;
 }
 
+/* Group label above each card. Deliberately still small-caps — it is the only
+   uppercase left on the screen, which is what makes it read as a label rather
+   than a title. */
 .settings-category-header {
   font-size: 11px !important;
   font-weight: 600 !important;
-  letter-spacing: .1em !important;
+  letter-spacing: .09em !important;
   text-transform: uppercase;
   color: var(--text-muted) !important;
-  padding: 20px 4px 9px !important;
+  padding: 22px 4px 9px !important;
   margin: 0 !important;
 }
 
@@ -1412,10 +1484,15 @@
 .settings-section-card:last-child { border-bottom: none !important; }
 .settings-section-card:active { background: var(--bg-hover) !important; }
 
+/* mobile.css renders these at 13px/800, ALL CAPS, in the accent colour — so
+   every row shouted and the whole screen was caps. `text-transform: none` is the
+   actual fix; without it the sentence-case titles in app.js never showed. */
 .settings-section-title {
-  font-size: 14.5px !important;
-  font-weight: 500 !important;
-  letter-spacing: -.005em;
+  font-family: var(--font-display) !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  letter-spacing: -.01em !important;
+  text-transform: none !important;
   color: var(--text-primary) !important;
   margin-bottom: 2px;
 }

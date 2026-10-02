@@ -155,11 +155,27 @@
 
     return start.then(function () {
       // 1. settings + messages (localStorage) — small, one unit
+      //
+      // ONLY the active account. Since v0.8.1 every account's data lives under
+      // its own `orbit_acct_<id>_` prefix, so sweeping every `orbit_*` key would
+      // put every account on the device in the vault and — worse — a restore
+      // would write one account's history over another's.
       var data = {};
       try {
+        var activeId = (window.MStore && window.MStore.accountId) || null;
+        var acctPrefix = activeId ? 'orbit_acct_' + activeId + '_' : null;
         for (var i = 0; i < localStorage.length; i++) {
           var k = localStorage.key(i);
-          if (k && k.indexOf('orbit_') === 0) data[k] = localStorage.getItem(k);
+          if (!k || k.indexOf('orbit_') !== 0) continue;
+          // The registry is metadata about which accounts exist, not another
+          // account's data. It is a few hundred bytes and without it a restore
+          // onto a fresh device produces data nothing can reach.
+          if (k === 'orbit_accounts' || k === 'orbit_active_account') {
+            data[k] = localStorage.getItem(k);
+            continue;
+          }
+          if (acctPrefix && k.indexOf(acctPrefix) !== 0) continue;  // another account
+          data[k] = localStorage.getItem(k);
         }
       } catch (e) { /* storage unavailable */ }
       // never back up vault bookkeeping itself
@@ -296,6 +312,10 @@
 
     var manifest, cryptoKey = null;
     var stats = { keys: 0, blobs: 0, partials: 0, bytes: 0 };
+    // Snapshot the account registry BEFORE the restore overwrites it, so the
+    // accounts already on this device survive restoring someone else's vault.
+    var registryBefore = null;
+    try { registryBefore = JSON.parse(localStorage.getItem('orbit_accounts') || 'null'); } catch (e) {}
 
     return readManifest(root).then(function (m) {
       manifest = m;
@@ -318,6 +338,22 @@
           try { localStorage.setItem(k, obj[k]); stats.keys++; } catch (e) {}
         });
       });
+    }).then(function () {
+      // The restore just wrote the backup's registry over this device's. Union
+      // them — the backup is a snapshot from some earlier point and may predate
+      // accounts that exist here now.
+      if (!Array.isArray(registryBefore)) return null;
+      var after = null;
+      try { after = JSON.parse(localStorage.getItem('orbit_accounts') || 'null'); } catch (e) {}
+      if (!Array.isArray(after)) return null;
+      var seen = {};
+      after.forEach(function (a) { if (a && a.id) seen[a.id] = true; });
+      var merged = after.slice();
+      registryBefore.forEach(function (a) { if (a && a.id && !seen[a.id]) merged.push(a); });
+      if (merged.length !== after.length) {
+        try { localStorage.setItem('orbit_accounts', JSON.stringify(merged)); } catch (e) {}
+      }
+      return null;
     }).then(function () {
       // attachments, one chunk file at a time
       var seq = Promise.resolve();
