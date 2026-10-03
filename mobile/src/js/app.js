@@ -2126,7 +2126,34 @@ document.addEventListener('DOMContentLoaded', function() {
     var prevSender = null;
     var prevTime = null;
     var prevIsMine = null;
+
+    // Day separators. A conversation with only times in it is hard to orient in —
+    // "12:06" says nothing about whether that was this morning or last week.
+    var _lastDayKey = null;
+    function _dayKeyOf(iso) {
+      if (!iso) return null;
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return null;
+      return d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate();
+    }
+    function _dayLabelOf(iso) {
+      var d = new Date(iso);
+      var today = new Date();
+      var yest = new Date(today);
+      yest.setDate(yest.getDate() - 1);
+      if (d.toDateString() === today.toDateString()) return 'Today';
+      if (d.toDateString() === yest.toDateString()) return 'Yesterday';
+      var opts = { day: 'numeric', month: 'long' };
+      if (d.getFullYear() !== today.getFullYear()) opts.year = 'numeric';
+      try { return d.toLocaleDateString(undefined, opts); } catch (e) { return d.toDateString(); }
+    }
+
     msgs.forEach(function(m) {
+      var _dk = _dayKeyOf(m.time);
+      if (_dk && _dk !== _lastDayKey) {
+        _lastDayKey = _dk;
+        html += '<div class="day-separator"><span>' + escapeHtml(_dayLabelOf(m.time)) + '</span></div>';
+      }
       // A system line: no sender, no bubble, centred. Handled before the own/other split,
       // because neither branch can draw it.
       //
@@ -2372,6 +2399,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Tell the peer what we have seen. Guarded inside, so this only goes out
     // when the newest message actually changed.
     sendReadReceipt(chatId);
+
+    // The composer's trailing button is mic-or-send, and that state is set here
+    // as well as on input — otherwise opening a chat shows BOTH, because nothing
+    // has run the swap yet.
+    updateSendButton();
     // Wire the message long-press context menu (idempotent — safe on every render).
     // The live chat path is window.openChat → this renderMessages; the old
     // OrbitChat.renderMessages path that used to own this is no longer the entry point.
@@ -2872,7 +2904,15 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!input || !sendBtn) return;
     var hasText = input.value.trim().length > 0;
     var hasFiles = typeof stagedFiles !== 'undefined' && stagedFiles.length > 0;
-    sendBtn.disabled = !(hasText || hasFiles);
+    var ready = hasText || hasFiles;
+    sendBtn.disabled = !ready;
+
+    // One trailing control, not two. Mic when there is nothing to send, send
+    // when there is — otherwise both sit there and the composer reads as four
+    // controls crowded into a 48px pill.
+    var voiceBtn = document.getElementById('btn-voice');
+    if (voiceBtn) voiceBtn.style.display = ready ? 'none' : '';
+    sendBtn.style.display = ready ? '' : 'none';
     // Update scheduled messages badge
     var badge = document.getElementById('scheduled-badge');
     if (badge) {

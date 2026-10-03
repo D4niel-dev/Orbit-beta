@@ -35,7 +35,7 @@
   <!-- v0.8.1-beta redesign layer. MUST load last: mobile.css redefines several
        selectors more than once, and this sheet restates what the redesign
        changes rather than editing that file in place. -->
-  <link rel="stylesheet" href="styles/redesign.css?v=20261003d">
+  <link rel="stylesheet" href="styles/redesign.css?v=20261003e">
 
   <!-- Syntax Highlighting (Prism) -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
@@ -235,11 +235,17 @@
       <div id="transfer-progress-strip"></div>
       <div id="chat-input-area">
         <div style="position:relative;">
+          <!-- Three controls, not four. The emoji picker sits INSIDE the field
+               (it belongs to composing the message), and the trailing button
+               swaps between mic and send depending on whether there is anything
+               to send — so the two never sit side by side. -->
           <div class="chat-input-wrapper">
             <button id="btn-plus" title="Attach"><i data-lucide="plus"></i></button>
-            <textarea id="chat-input" class="chat-input-field" placeholder="Message..." rows="1"></textarea>
+            <div class="chat-field-wrap">
+              <textarea id="chat-input" class="chat-input-field" placeholder="Message..." rows="1"></textarea>
+              <button id="btn-emoji" title="Emoji"><i data-lucide="smile"></i></button>
+            </div>
             <button id="btn-voice" title="Voice message"><i data-lucide="mic"></i></button>
-            <button id="btn-emoji" title="Emoji"><i data-lucide="smile"></i></button>
             <button id="btn-send"><i data-lucide="send"></i></button>
           </div>
           <div id="dropup-menu">
@@ -444,7 +450,7 @@
   setTimeout(function() { window._loadImageCropper(); }, 1500);
   </script>
 
-  <script src="js/app.js?v=20261003c"></script>
+  <script src="js/app.js?v=20261003d"></script>
 
   <!-- v0.2.8 Components -->
   <script src="js/components/navigation.js?v=20261003b"></script>

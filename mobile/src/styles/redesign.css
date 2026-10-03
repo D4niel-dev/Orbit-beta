@@ -1063,23 +1063,25 @@
   color: var(--text-muted) !important;
 }
 
-/* Send is the one round accent control in the composer. */
+/* Send is the one round accent control in the composer.
+   NO `display` here. mobile.css already sets `display: flex`, and forcing it with
+   `!important` beat the inline `style.display = 'none'` the mic/send swap relies
+   on — so the send button stayed on screen next to the mic. An `!important` on a
+   property something else needs to toggle is a trap; let the layout come from
+   the base rule. */
 #btn-send {
   width: 38px !important;
   height: 38px !important;
   border-radius: 50% !important;
   background: var(--accent-primary) !important;
   color: #FFFFFF !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
   flex-shrink: 0;
   transition: background var(--dur) var(--ease), opacity var(--dur) var(--ease);
 }
 #btn-send i,
 #btn-send svg {
-  width: 18px;
-  height: 18px;
+  width: 18px !important;
+  height: 18px !important;
   stroke-width: 2;
 }
 /* The send button shows its state through the icon, not a disabled attribute —
@@ -2359,6 +2361,158 @@
 }
 #profile-sheet-edit-content .settings-section:first-child .settings-section-title {
   margin-top: 10px !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   21. THE COMPOSER
+
+   It had four controls in a 48px pill — attach, mic, emoji, send — with the
+   emoji picker sitting between the field and the send button as though it were a
+   separate action. It is not: choosing an emoji is part of composing. It lives
+   inside the field now, and the trailing button swaps between mic and send.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.chat-input-wrapper {
+  background: var(--bg-raised) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: var(--radius-pill) !important;
+  padding: 5px 5px 5px 6px !important;
+  gap: 2px !important;
+  align-items: flex-end !important;
+  min-height: var(--pill-lg);
+}
+.chat-input-wrapper:focus-within {
+  background: var(--bg-raised) !important;
+  border-color: var(--accent-ring) !important;
+  box-shadow: none !important;
+}
+
+/* Field + emoji picker are one control. */
+.chat-field-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.chat-input-field {
+  flex: 1;
+  min-width: 0;
+  background: transparent !important;
+  border: none !important;
+  color: var(--text-primary) !important;
+  font-family: var(--font-body) !important;
+  font-size: 15px !important;
+  line-height: 1.4 !important;
+  /* 9px top and bottom so a single line measures the same as the buttons. */
+  padding: 9px 2px !important;
+  max-height: 124px;
+  resize: none;
+  outline: none;
+}
+.chat-input-field::placeholder {
+  color: var(--text-muted) !important;
+}
+
+#btn-emoji {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: color var(--dur) var(--ease);
+}
+#btn-emoji:active { color: var(--text-primary); }
+#btn-emoji i, #btn-emoji svg { width: 19px; height: 19px; stroke-width: 1.8; }
+
+#btn-plus, #btn-voice {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+#btn-plus:active, #btn-voice:active {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+#btn-plus i, #btn-plus svg,
+#btn-voice i, #btn-voice svg { width: 20px; height: 20px; stroke-width: 1.9; }
+
+/* (#btn-send is styled once, above, next to the rest of the composer. A second
+    copy of the same rule here only created two places to change.) */
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   22. BUBBLES — rebalanced contrast
+
+   Every outgoing bubble was the accent at full strength. Across a long
+   conversation that is a wall of saturated blue, and it made the incoming
+   bubbles look like they were barely there. A shallow gradient gives the
+   outgoing bubble depth and takes the edge off without changing the hue, and the
+   incoming bubble gets a lift plus a hairline so it reads as a surface rather
+   than a hole.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.message-row.mine .message-bubble {
+  background: linear-gradient(180deg, #4E7BF5, #3F68E0) !important;
+}
+
+.message-row.other .message-bubble {
+  background: #1A1D24 !important;
+  /* inset ring, not a border — a border would change the bubble's size. */
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+}
+
+/* Day separator: a centred label with hairlines running out to the edges. */
+.day-separator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 0 14px;
+  padding: 0 20px;
+}
+.day-separator::before,
+.day-separator::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
+}
+.day-separator span {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* The reaction pill was a near-black circle on a near-black feed. */
+.reactions-row .reaction-pill {
+  background: var(--bg-raised-2) !important;
+  border: 1px solid var(--border-strong) !important;
+  color: var(--text-secondary) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .4);
+}
+.reactions-row .reaction-pill.mine {
+  background: var(--accent-soft) !important;
+  border-color: var(--accent-ring) !important;
+  color: var(--accent-primary) !important;
 }
 
 
