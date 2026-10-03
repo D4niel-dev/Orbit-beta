@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v080-beta">v0.8.0-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v081-beta">v0.8.1-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,8 @@
 
 | Channel           | Version     | Status                                                                                                                                                                                                              |
 | ----------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Latest Stable** | v0.8.0-beta | Your theme and custom colours follow you between your own devices, message search runs on SQLite FTS5, and the update progress bar actually moves |
+| **Latest**        | v0.8.1-beta | Your account travels from the desktop to your phone over your own network, the mobile UI redesign is finished, and search actually finds things |
+| **Stable**        | v0.8.0-beta | Your theme and custom colours follow you between your own devices, message search runs on SQLite FTS5, and the update progress bar actually moves |
 | Legacy **Stable** | v0.1.1-beta | Legacy stable release                                                                                                                                                                                               |
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
@@ -88,6 +89,22 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 | **Open & approachable** | MIT-licensed, readable stack (Electron + SQLite), built for transparency.     |
 
 Orbit is a **beta-stage app for desktop and Android** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
+
+## Highlights (v0.8.1-beta)
+
+* **Your Account, From the Desktop to Your Phone** — Open **Link a phone** on the desktop, scan the code with **Settings → Pair a desktop**, and the account comes across your own network. It arrives as a **new account on the phone** — your existing one is untouched, and you choose when to switch — because quietly overwriting the account already in your hand is the one outcome nobody could undo. What authorises the transfer is a **link token**: 128 random bits, shown only as a code on the desktop's own screen and never sent in the clear. The desktop sends nothing until you confirm, and the confirmation says what is about to leave and how much of it.
+* **The Mobile UI, Finished** — The redesign had been arriving in pieces since v0.8.0. This is the rest of it: the selected tab shows the **filled** form of its icon, the conversation screen has day separators and rebalanced bubbles, the composer is **three controls instead of four**, the gallery names the conversation it belongs to, and the profile card opens from the header avatar with the account switcher one tap in behind it.
+* **Search That Actually Searches** — Message search **found nothing outside the open chat**, because it read a message map that only holds the conversation you are looking at. It searches everything now, with **All / Chats / People / Messages** filters on the global search and **All / Media / Links / Voice** inside a conversation.
+* **A Test Suite for the Mobile** — It had none, and every regression that shipped was found by driving the real UI in a browser and then throwing the script away. Those checks live in `mobile/tests/` now — 41 of them, `npm run test:mobile`.
+
+### Fixed in v0.8.1-beta
+
+* **The settings search never hid anything** — it marked nine of ten rows hidden and left every one on screen, and had been broken since the restyle shipped. A search that does nothing looks exactly like a search with no results.
+* **The composer's mic/send swap** and **hiding "Active now" during a search** — same cause as above: an `!important` on a property something else needs to toggle.
+* **The Activity title sat 20px left of centre**, and **the navbar moved when you changed tabs**.
+* **Switching accounts could take the wrong data with it** — two of the three were pre-existing.
+* **The last row of every settings section was clipped**, the **toggle knob was off-centre**, and a group label lined up with nothing.
+* **A video with no poster was a nearly invisible square**, and **audio sat in a single grid cell** as a square with a filename crammed inside it.
 
 ## Highlights (v0.8.0-beta)
 
@@ -781,6 +798,17 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 </details>
 
 <details open>
+<summary>v0.8.1-beta</summary>
+
+* **Your account travels from the desktop to your phone** — encrypted, over your own network, and imported as a second account rather than overwriting the one already there. A **link token** authorises it: 128 random bits, shown only as a code on the desktop's screen, burned the moment a transfer starts.
+* **The mobile UI redesign is finished** — filled tab icons, day separators and rebalanced bubbles in the conversation, a three-control composer, a gallery that names its conversation, a profile card that opens from the header avatar, and full-bleed settings sections.
+* **Search actually searches** — message search used to find nothing outside the open chat; it now spans everything, with filters on both the global and in-chat surfaces.
+* **A test suite for the mobile** — 41 checks in `mobile/tests/`, `npm run test:mobile`
+* **Fixed** — the settings search that never hid anything, the composer's mic/send swap, the Activity title 20px off centre, the navbar moving on tab change, the clipped last row of every settings section, the off-centre toggle knob, and an account switch that could take the wrong data with it
+
+</details>
+
+<details>
 <summary>v0.8.0-beta (Stable)</summary>
 
 * **Your theme follows you between your own devices** — including a custom theme's colours
@@ -803,6 +831,7 @@ Pre-built Windows installers are published on [GitHub Releases](https://github.c
 | Release                                                                          | Platform                    | Notes                                                                                                                                                                            |
 | -------------------------------------------------------------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [All releases](https://github.com/D4niel-dev/Orbit-beta/releases)                | Win / Mac / Linux / Android | Most recent build first                                                                                                                                                          |
+| [v0.8.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.8.1-beta) | Win / Mac / Linux / Android | Your account travels from the desktop to your phone over your own network; the mobile UI redesign is finished; search finds things and has filters |
 | [v0.8.0-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.8.0-beta) | Win / Mac / Linux / Android | SETTINGS_SYNC between your own devices, FTS5 message search with boolean and prefix queries, and the update progress bar fixed |
 | [v0.7.6-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.6-beta) | Win / Mac / Linux / Android | Shared Media gets search, filters, a grid/list toggle, jump-to-message and multi-select download; the gallery gets storage stats, bulk delete and a month scrubber; the composer lights up when it can send |
 | [v0.0.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.2-beta) | Windows                     | SQLite storage, privacy mode, large file transfers                                                                                                                               |
@@ -1057,11 +1086,17 @@ Transparency matters in beta. Current constraints include:
 * **Calling has not been tested on physical hardware.** Voice and video calls were verified against a two-peer WebRTC harness (real `RTCPeerConnection`, synthetic camera and microphone) in a desktop environment. Real device hardware, Android audio routing (earpiece vs speaker) and behaviour when the app is backgrounded mid-call still need a phone.
 * **The speaker button mutes remote audio** rather than switching Android's audio route — that needs a native `AudioManager` call.
 * Large file transfers between Desktop and Android are under active development
-* Mobile UI redesign planned
+* An account transfer is all-or-nothing, and needs both devices on the same network — it rides the LAN like everything else
 * Discovery reliability depends on local network configuration
 * Beta stability: occasional UI quirks and forced reflow warnings in DevTools
 
 ## Roadmap
+
+### Shipped (v0.8.1-beta)
+* **Account transfer** — desktop → phone over your own network, encrypted, imported as a second account
+* **The mobile UI redesign, finished** — filled tab icons, the conversation screen, the composer, the gallery, the profile card, full-bleed settings
+* **Search** — it was finding nothing outside the open chat; now it spans everything, with filters on both surfaces
+* **Mobile test suite** — 41 checks, `npm run test:mobile`
 
 ### Shipped (v0.8.0-beta)
 * **SETTINGS_SYNC** — your theme and custom colours follow you between your own devices
@@ -1078,9 +1113,10 @@ Transparency matters in beta. Current constraints include:
 
 ### In Progress / Planned
 
-* **Mobile Account Switcher** — Multi-account support on Android (desktop done in v0.1.5-beta)
+* **Account transfer over the internet** — It works across your LAN today; NAT traversal is the same gap that keeps messaging and calling on the local network
+* **Partial account transfer** — Bringing across one conversation rather than the whole account
 * **Group calls on mobile** — Desktop has mesh group calls; Android currently handles 1:1 only
-* **Global message search** — Search is currently per-chat; nothing spans all conversations, which matters at a large history
+* **Search inside attachments** — Search covers message text and chat names; the contents of a file or the text in an image are not indexed
 * **Native audio routing during calls** — Switching between earpiece and loudspeaker needs a native `AudioManager` bridge; today the speaker button mutes the remote audio instead
 * **Group E2EE** — Extend end-to-end encryption to group chats (currently DM-only); membership changes will need re-keying
 * **Signed builds** — Code signing for Windows and macOS, which is also the prerequisite for true silent auto-update

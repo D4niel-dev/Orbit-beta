@@ -45,3 +45,6 @@ graphify-out/
 
 # Webside
 docs/
+
+# Screenshots written by mobile/tests (the harness saves them next to the specs)
+mobile/tests/.shots/

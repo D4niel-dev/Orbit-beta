@@ -1,5 +1,55 @@
 # Orbit Changelog
 
+## v0.8.1-beta
+
+> **Note:** The phone release. Your account can now travel from the desktop to a phone over your own network, encrypted, and land as a second account rather than overwriting the one already there. Around it, the mobile UI redesign that had been landing piece by piece is finished — the conversation screen, the composer, the gallery, the profile card and search all now belong to the same app. And the search itself was not working: message search could only ever find messages in the conversation you already had open.
+
+### Features
+
+- **Your Account, From the Desktop to Your Phone** — The desktop has been able to back itself up for a while, and the phone has never been able to receive any of it. Now it can: open **Link a phone** on the desktop, scan the code with **Settings → Pair a desktop**, and the account comes across your own network. It arrives as a **new account on the phone** — your existing one is untouched, and you choose when to switch — because the alternative, quietly overwriting the account already in your hand, is the one outcome nobody could undo.
+
+  What authorises the transfer is the **link token**: 128 random bits, minted when you ask to link a phone, shown only as a code on the desktop's own screen and never sent in the clear. The phone proves it holds the token by deriving the same encryption key from it. The desktop does not build or send anything until you confirm, and the confirmation says what is about to leave and how much of it — account, message count, contacts, size. The token is **burned the moment a transfer starts**, succeed or fail, and a refusal burns it too: a replay of the same request cannot pull a second copy.
+
+  Everything travels under **PBKDF2-SHA256 (100,000 rounds) → AES-GCM-256**, the same scheme as the Local Vault, so a tampered bundle fails to decrypt rather than importing garbage.
+
+- **The Mobile UI, Finished** — The redesign had been arriving in pieces since v0.8.0. This release is the rest of it, and the parts that were still wearing the old language now match:
+  - **The tab bar** shows the **filled** form of the selected tab's icon. Two of the four icons had to change to make that possible — filling an outline only says something if the glyph has internal shape, and `activity` (a polyline) filled into a lump while `history` filled into a **ball** at 24px. Activity is a bell now, which is also what that panel is.
+  - **The conversation screen** — day separators, so a thread with only times in it is not a puzzle; outgoing bubbles are a shallow gradient rather than the accent at full strength, which across a long conversation is a wall of saturated blue; incoming bubbles get a hairline so they read as a surface.
+  - **The composer** had four controls in a 48px pill. The emoji picker now lives *inside* the field, where composing happens, and the trailing button **swaps between mic and send** — mic when there is nothing to send, send when there is.
+  - **The Gallery** gets a header that names the conversation and counts what is in it, filters on the shared pill scale, a 3-up/2-up layout toggle, and empty states that distinguish "none of that kind" from "nothing at all".
+  - **The profile card** opens from the header avatar, and the account switcher moved one tap in behind a button on its top-left. The hero had been carrying a magenta gradient from the previous palette — the last off-accent colour on a live path in the app.
+  - **Settings sections** are full-bleed again. Wrapping a dozen rows in one card made the whole section read as a single enclosed block, and the side margins were eating width the rows had no use for.
+
+- **Search That Actually Searches** — Message search **found nothing outside the open chat**. It read the store's message map directly, but that map is lazy-loaded — only the conversation you are looking at is in memory — so every other chat resolved to an empty array. Searching a word that appears in three conversations returned zero results. It returns three now, and the index is built through the store's own loader, cached for the duration of a search rather than rebuilt on every keystroke.
+
+  With that working, search grew **filters**: All / Chats / People / Messages on the global search, each with a count of what the query *found* — a pill stays visible at 0, so "no messages match" is something you can see rather than a category that silently is not there. People are matched by **tag** as well as name, because #7714 is the half of a handle you would actually search for. Searching inside a conversation gets its own filters — **All / Media / Links / Voice** — which work with an empty query too, so tapping Media browses that chat's media rather than matching nothing.
+
+- **A Test Suite for the Mobile** — The mobile had none, and every regression that actually shipped was found by driving the real UI in a browser. Those checks used to be throwaway scripts that got deleted each time; they live in `mobile/tests/` now, **41 checks** across four probes, run with `npm run test:mobile`. They use the Edge already on the machine, so there is no browser download.
+
+### Bug Fixes
+
+- **The Settings Search Never Hid Anything** — Typing in it marked nine of ten rows as hidden and left **every one of them on screen**, because the restyle layer pinned `display: flex !important` on the row and that beats a `.hidden` rule. The feature had been broken since the restyle shipped, and it hid well: a search that does nothing looks exactly like a search with no results.
+- **Two More Show/Hide Breaks, Same Cause** — The composer's mic/send swap and hiding the "Active now" row during a search both failed for the identical reason. All three were the same mistake in the same file: an `!important` on a property something else needs to toggle.
+- **The Activity Title Sat 20px Left of Centre** — It used `position:absolute; left:50%; translateX(-50%)`, the textbook centring idiom, which does not work here: an absolutely positioned block with no width shrink-wraps to the *available* space, not to its text, so it measured 326px wide and the translate moved it by half of that.
+- **The Navbar Moved When You Changed Tabs** — The tab bar is injected into *every* panel, so animating the panel slid the bar with it. The bar is the one thing that should look like it never moved; the panels are sequential, so animating their contents instead keeps it perfectly still. Verified by sampling the bar's position every 16ms across a switch: 276 samples, one position.
+- **Switching Accounts Could Take the Wrong Data With It** — Two of the three were pre-existing: settings that belong to one account were being read by the next, and a profile frame could follow you across a switch.
+- **`save()` Does Not Persist Messages, and the Importer Assumed It Did** — Messages are written one chat at a time; there is no `set('messages')` in `save()`. The account importer put the whole history in memory where it looked completely correct and would have been gone on the next boot. Caught by asserting after the reload rather than before.
+- **The Last Row of Every Settings Section Was Clipped** — A flex item shrinks by default and the card set `overflow: hidden`, so the final row was cut off with no way to scroll to it.
+- **The Settings Toggle Knob Was Off-Centre** and overhung its track; a group label lined up with nothing; and section titles sat 4px off their own icon — the same 4px, three separate places.
+- **A Video With No Poster Was a Nearly Invisible Square**, and an audio attachment sat in a single grid cell as a square tile with a filename crammed inside it.
+- **The Images Tab Was Showing Video and Audio** — And their thumbnails cannot load, so both appeared as broken images.
+
+### Technical
+
+- **The Transfer's Threat Model Is the Design** — The desktop listens on the LAN, so anything on that network can open a socket to it. The **entropy of the link token** is what the security rests on, not the KDF — do not shrink it because "there are 100,000 iterations". The receive side never trusts the sender: every field is bounded and typed, the iteration count is clamped into a sane range so a peer cannot talk you into a one-round KDF, and the assembled length is checked against what the offer promised so a **truncated transfer cannot look complete**.
+- **`desktop/src/js/network/protocol.js` Is Hand-Maintained, Not Generated** — A packet type added only to `shared/` does not exist on the desktop, and a receive branch for it can never match. This is what made `SETTINGS_SYNC` look unwired for two releases. All five transfer types went into both copies. (`mobile/src/shared/` *is* generated — `npm run shared:sync`.)
+- **An `!important` on a Property Something Else Toggles Is a Trap** — It beats an inline style *and* a more specific rule, which is how three separate show/hide features broke silently. Swept all 24 `display: !important` declarations in the restyle layer; the remaining 21 are deliberate permanent hides, which is what the flag is for.
+- **`tests/` Is Gitignored, So Its Ten Unit Suites Live on One Machine** — The new `mobile/tests/` is tracked. Worth deciding whether the root one should be too.
+- **`npm run mobile:sync` Needs `NODE_OPTIONS` Cleared in this environment** — `cap sync` legitimately deletes the old `assets/public/` before copying, and the host's safe-delete shim kills it with a state-lock timeout. Same cause as the desktop-suite trap. The failure is misleading: `shared:sync` and `version:sync` both succeed first, so it looks like a partial failure.
+- **A Dead Duplicate Chat-List Renderer** — `app.js` carries a ~250-line `renderChatList` that never runs, shadowed by the one in `home-screen.js`. It is what made a violet "premium badge" rule look live when the real badge has always been the app accent. Left in place, but it is a trap for whoever edits the wrong copy.
+- **Two Bugs That Were in the Tests, Not the App** — Twice while writing the new suite I chased a failure that turned out to be a bad assertion: faking an `active` class does not survive the nav's own re-render, and the document holds three tab bars (one per panel), so three active tabs is correct. Both were fixed by driving the real code path and asserting per bar.
+- **Test Suites** — `npm run test:unit` remains **10 suites**; `npm run test:mobile` is new at **41 checks**; the desktop Playwright suite remains 37 tests across two shards.
+
 ## v0.8.0-beta — **Stable Release**
 
 ### Features

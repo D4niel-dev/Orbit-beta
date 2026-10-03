@@ -14,7 +14,23 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.8.0-beta', 'Latest', [
+        versionBlock('0.8.1-beta', 'Latest', [
+          ['New', [
+            'Link a phone. Open it from the account switcher, scan the code on your phone, and your account comes across your own network \u2014 encrypted, and imported as a second account rather than overwriting the one already there.',
+            'The code that authorises it is shown only on this screen and never sent in the clear. Nothing leaves the machine until you confirm, and the confirmation says what is about to go and how much of it.',
+            'Search now spans everything. It used to find nothing outside the conversation you had open \u2014 searching a word that appears in three chats returned zero results.'
+          ]],
+          ['Fixes', [
+            'The settings search marked nine of ten rows as hidden and left every one of them on screen. It had been broken since the restyle, and a search that does nothing looks exactly like a search with no results.',
+            'The Activity title sat 20px left of centre.',
+            'The navbar no longer moves when you change tabs.',
+            'Switching accounts could take the wrong settings with it, and a profile frame could follow you across a switch.'
+          ]],
+          ['Version', [
+            'Version: Bumped to v0.8.1-beta.'
+          ]]
+        ]) +
+        versionBlock('0.8.0-beta', '', [
           ['New', [
             'Your theme follows you to your phone. Change it on the desktop and it reaches your own devices \u2014 including a custom theme\u2019s colours, which is the part that actually is the theme.',
             'Message search now runs on SQLite\u2019s full-text index. "project AND deadline" is answered by the database in milliseconds however much history you have, with prefix matching, relevance ranking, and an option to search just one chat.',
