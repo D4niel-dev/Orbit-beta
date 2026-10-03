@@ -67,11 +67,11 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
 ## Mobile Preview
 
 <p align="center">
-  <img src="desktop/src/icons/screenshots/preview-friends-dark-M.png" alt="Mobile friends chat screen" width="200">
-  <img src="desktop/src/icons/screenshots/preview-groups-dark-M.png" alt="Mobile groups chat screen" width="200">
-  <img src="desktop/src/icons/screenshots/preview-settings-dark-M.png" alt="Mobile settings screen" width="200">
-  <img src="desktop/src/icons/screenshots/preview-group-info-dark-M.png" alt="Mobile group info panel" width="200"><br>
-  <em>Android app — chat, groups, settings, group info</em>
+  <img src="desktop/src/icons/screenshots/preview-list-dark-M.png" alt="Android — the conversation list" width="200">
+  <img src="desktop/src/icons/screenshots/preview-chat-dark-M.png" alt="Android — a conversation, with day separators and the composer" width="200">
+  <img src="desktop/src/icons/screenshots/preview-gallery-dark-M.png" alt="Android — the shared media gallery" width="200">
+  <img src="desktop/src/icons/screenshots/preview-settings-dark-M.png" alt="Android — settings" width="200"><br>
+  <em>Android app — conversations, a chat, the gallery, settings</em>
 </p>
 
 ## Why Orbit?
