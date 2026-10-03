@@ -312,11 +312,17 @@ var OrbitHome = {
     // ---- SEARCH MODE: show categorized results ----
     if (searchQ) {
       this._saveRecentSearch(searchQ);
+      // "Active now" is not a search result. Leaving it up pushes the results
+      // down and implies those people matched.
+      var onlineRow = document.getElementById('online-friends-section');
+      if (onlineRow) onlineRow.style.display = 'none';
       container.innerHTML = this._buildSearchResults(searchQ, chats, filter);
       this._addAvatarFrames();
       if (window.lucide) lucide.createIcons();
       return;
     }
+    var onlineRowBack = document.getElementById('online-friends-section');
+    if (onlineRowBack) onlineRowBack.style.display = '';
     
     if (chats.length === 0) {
       // Plain empty state. The feature-slide carousel is a DESKTOP surface —
@@ -465,6 +471,59 @@ var OrbitHome = {
   },
 
   /** Build categorized search results HTML */
+  /**
+   * A searchable index of every message, built once and cached.
+   *
+   * The store LAZY-LOADS — only the open conversation's messages live in
+   * MStore.messages. Reading that object directly (which is what this used to
+   * do) could therefore only ever find messages in the chat you were already
+   * looking at, so a global search always came back empty for anything else.
+   * getMessages() loads a chat on demand, and the index has to be built through
+   * it.
+   *
+   * Built once per search rather than per keystroke: each getMessages() is a
+   * storage read plus a JSON parse, and doing that for every chat on every
+   * character would be unusable on a long history.
+   */
+  _searchIndex: function() {
+    if (window._orbitSearchIndex) return window._orbitSearchIndex;
+    var out = [];
+    var chats = MStore.chats || [];
+    for (var i = 0; i < chats.length; i++) {
+      var chat = chats[i];
+      var chatId = chat.id || chat.chatId;
+      if (!chatId) continue;
+      var msgs;
+      try { msgs = MStore.getMessages(chatId) || []; } catch (e) { msgs = []; }
+      for (var j = 0; j < msgs.length; j++) {
+        var m = msgs[j];
+        if (!m || !m.text) continue;
+        out.push({
+          chatId: chatId,
+          chatName: chat.name || chat.peerId || chatId,
+          chatAvatar: chat.avatar || null,
+          text: String(m.text),
+          lower: String(m.text).toLowerCase(),
+          time: m.time || '',
+          from: m.from,
+          id: m.id
+        });
+      }
+    }
+    window._orbitSearchIndex = out;
+    return out;
+  },
+
+  _invalidateSearchIndex: function() {
+    window._orbitSearchIndex = null;
+  },
+
+  /** Filter pill handler. Rendered inline, so it lives on window. */
+  _setSearchType: function(type) {
+    window._searchTypeFilter = type || 'all';
+    if (window.renderChatList) window.renderChatList(window._activeHomeTab);
+  },
+
   _buildSearchResults: function(query, chats, filter) {
     var q = query.toLowerCase();
     var results = [];
@@ -487,7 +546,11 @@ var OrbitHome = {
     var matchedFriends = [];
     friends.forEach(function(f) {
       var fName = (f.name || '').toLowerCase();
-      if (fName.indexOf(q) !== -1) {
+      // The tag too — it is the half of someone's handle you would actually
+      // search for, and the app displays it as #1234.
+      var fTag = String(f.tag || f.usertag || '').toLowerCase();
+      var fId = String(f.id || '').toLowerCase();
+      if (fName.indexOf(q) !== -1 || fTag.indexOf(q.replace(/^#/, '')) !== -1 || fId.indexOf(q) !== -1) {
         matchedFriends.push(f);
       }
     });
@@ -495,38 +558,59 @@ var OrbitHome = {
       results.push({ type: 'friends', label: 'Friends', items: matchedFriends });
     }
     
-    // --- Message results (scan recent chats' last 50 messages) ---
+    // --- Message results ---
+    // Through the index, so a match in a conversation that is NOT currently open
+    // is found too. Sorted newest first, because a search is nearly always for
+    // something recent.
     var matchedMessages = [];
-    var sortedChats = (MStore.chats || []).slice().sort(function(a, b) {
-      return (b.lastTime || 0) - (a.lastTime || 0);
-    });
-    var scannedCount = 0;
-    for (var ci = 0; ci < sortedChats.length && scannedCount < 10; ci++) {
-      var chat = sortedChats[ci];
-      var chatId = chat.id || chat.chatId;
-      var msgs = (MStore.messages && MStore.messages[chatId]) || [];
-      var startIdx = Math.max(0, msgs.length - 50);
-      for (var mi = startIdx; mi < msgs.length; mi++) {
-        var msg = msgs[mi];
-        if (msg && msg.text && msg.text.toLowerCase().indexOf(q) !== -1) {
-          matchedMessages.push({ chat: chat, message: msg });
-          if (matchedMessages.length >= 8) break;
-        }
-      }
-      scannedCount++;
-      if (matchedMessages.length >= 8) break;
+    var index = this._searchIndex();
+    for (var mi = 0; mi < index.length; mi++) {
+      if (index[mi].lower.indexOf(q) !== -1) matchedMessages.push(index[mi]);
     }
+    matchedMessages.sort(function(a, b) {
+      return String(b.time).localeCompare(String(a.time));
+    });
     if (matchedMessages.length) {
       results.push({ type: 'messages', label: 'Messages', items: matchedMessages });
     }
     
     // --- Build HTML ---
+    var counts = { chats: 0, friends: 0, messages: 0 };
+    results.forEach(function(r) { counts[r.type] = r.items.length; });
+    var totalAll = counts.chats + counts.friends + counts.messages;
+
+    // ── Filters ──
+    // Counts are of what the query FOUND, and a pill stays visible at 0 — so
+    // "no messages match" is something you can see, rather than a category that
+    // silently is not there and leaves you wondering.
+    var typeFilter = window._searchTypeFilter || 'all';
+    var pills = [
+      { id: 'all',      label: 'All',      n: totalAll },
+      { id: 'chats',    label: 'Chats',    n: counts.chats },
+      { id: 'people',   label: 'People',   n: counts.friends },
+      { id: 'messages', label: 'Messages', n: counts.messages }
+    ];
+    var html = '<div class="search-filter-bar">';
+    pills.forEach(function(p) {
+      html += '<button class="search-filter-btn' + (typeFilter === p.id ? ' active' : '') +
+              '" onclick="window._searchSetType(\'' + p.id + '\')">' +
+              p.label + '<span class="search-filter-count">' + p.n + '</span></button>';
+    });
+    html += '</div>';
+
+    var visible = results.filter(function(r) {
+      if (typeFilter === 'all') return true;
+      if (typeFilter === 'people') return r.type === 'friends';
+      return r.type === typeFilter;
+    });
     var totalCount = 0;
-    results.forEach(function(r) { totalCount += r.items.length; });
-    
-    var html = '<div class="search-results-info">' + this._highlightText('Search results for "' + query + '"', query) + ' \u2014 ' + totalCount + ' result' + (totalCount !== 1 ? 's' : '') + '</div>';
-    
-    results.forEach(function(section) {
+    visible.forEach(function(r) { totalCount += r.items.length; });
+
+    html += '<div class="search-results-info">' +
+            this._highlightText('Results for "' + query + '"', query) +
+            ' \u2014 ' + totalCount + ' match' + (totalCount !== 1 ? 'es' : '') + '</div>';
+
+    visible.forEach(function(section) {
       html += '<div class="search-results-section">';
       html += '<div class="search-results-section-header">' + section.label + ' (' + section.items.length + ')</div>';
       
@@ -579,17 +663,33 @@ var OrbitHome = {
       }
       
       if (section.type === 'messages') {
-        section.items.forEach(function(m) {
-          var chatName = m.chat.name || m.chat.peerId || 'Chat';
-          var msgText = m.message.text || '';
-          msgText = msgText.length > 80 ? msgText.substring(0, 80) + '\u2026' : msgText;
-          
-          html += '<div class="search-result-item" onclick="OrbitHome._onChatClick(\'' + OrbitHome._escapeJs(m.chat.id || m.chat.chatId) + '\')">';
+        section.items.forEach(function(hit) {
+          var chatName = hit.chatName || 'Chat';
+          var msgText = hit.text || '';
+          msgText = msgText.length > 90 ? msgText.substring(0, 90) + '\u2026' : msgText;
+
+          var when = '';
+          if (hit.time) {
+            var md = new Date(hit.time);
+            if (!isNaN(md.getTime())) {
+              var now2 = new Date();
+              when = md.toDateString() === now2.toDateString()
+                ? md.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : md.toLocaleDateString([], { month: 'short', day: 'numeric' });
+            }
+          }
+
+          // The chat's avatar, so a result is identifiable without reading the
+          // name — the same as every other row in the app.
+          var mInitial = chatName.charAt(0).toUpperCase();
+
+          html += '<div class="search-result-item" onclick="OrbitHome._onChatClick(\'' + OrbitHome._escapeJs(hit.chatId) + '\')">';
+          html += '  <div class="search-result-avatar">' + (OrbitHome._safeAvatarSrc(hit.chatAvatar) ? '<img src="' + OrbitHome._safeAvatarSrc(hit.chatAvatar) + '">' : OrbitHome._escape(mInitial)) + '</div>';
           html += '  <div class="search-result-body">';
-          html += '    <div class="search-result-name">' + OrbitHome._highlightText(chatName, query) + '</div>';
-          html += '    <div class="search-result-preview">\u201c' + OrbitHome._highlightText(msgText, query) + '\u201d</div>';
+          html += '    <div class="search-result-name">' + OrbitHome._escape(chatName) + '</div>';
+          html += '    <div class="search-result-preview">' + OrbitHome._highlightText(msgText, query) + '</div>';
           html += '  </div>';
-          html += '  <span class="search-result-tag">Message</span>';
+          html += '  <div class="search-result-suffix">' + OrbitHome._escape(when) + '</div>';
           html += '</div>';
         });
       }
@@ -1192,6 +1292,9 @@ var OrbitHome = {
 document.addEventListener('DOMContentLoaded', function() {
   // Override window.renderChatList with v0.2.8 version (app.js exports a different one)
   window.renderChatList = function(filter) { OrbitHome.renderChatList(filter); };
+  // The search filter pills are rendered with inline onclick, so the handler
+  // has to be reachable from a global.
+  window._searchSetType = function(type) { OrbitHome._setSearchType(type); };
 
   // Online friends click delegation
   document.getElementById('online-friends-row').addEventListener('click', function(e) {
@@ -1328,6 +1431,10 @@ document.addEventListener('DOMContentLoaded', function() {
           // Collapses the account avatar and the title so the field gets the
           // whole row — the header is only 56px tall.
           if (chatsPanel) chatsPanel.classList.add('search-open');
+          // A fresh search: rebuild the message index (messages may have arrived
+          // since last time) and go back to showing everything.
+          OrbitHome._invalidateSearchIndex();
+          window._searchTypeFilter = 'all';
           setTimeout(function() { searchInput.focus(); }, 100);
         }
       }
@@ -1356,6 +1463,9 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     homeSearchInput.addEventListener('input', function() {
       var val = this.value.trim().toLowerCase();
+      // A new query starts from All — carrying a "Messages" filter over to a
+      // search that finds no messages just looks broken.
+      if (val !== window._chatSearchQuery) window._searchTypeFilter = 'all';
       window._chatSearchQuery = val;
       if (window.renderChatList) window.renderChatList();
     });

@@ -2099,9 +2099,44 @@ document.addEventListener('DOMContentLoaded', function() {
         threadMap[_tkey].push(_tmi);
       }
     }
-    if (chatSearchFilter) {
-      var cl = chatSearchFilter.toLowerCase();
-      msgs = msgs.filter(function(m) { return (m.text || '').toLowerCase().indexOf(cl) !== -1; });
+    // In-chat search. Scoped to this conversation by construction — it filters
+    // the messages we already have for the open chat, so it can never reach
+    // another one.
+    //
+    // The type filter also works with an EMPTY query, so tapping "Media" with
+    // nothing typed browses the chat's media instead of matching nothing.
+    var _typeFilter = window._chatSearchType || 'all';
+    if (chatSearchFilter || _typeFilter !== 'all') {
+      var cl = (chatSearchFilter || '').toLowerCase();
+      msgs = msgs.filter(function(m) {
+        if (cl && (m.text || '').toLowerCase().indexOf(cl) === -1) return false;
+        if (_typeFilter === 'all') return true;
+        var atts = m.attachments || [];
+        if (_typeFilter === 'media') {
+          return atts.some(function(a) {
+            var t = (a.type || '').toLowerCase();
+            return t === 'image' || t === 'video';
+          });
+        }
+        if (_typeFilter === 'voice') {
+          return atts.some(function(a) {
+            var t = (a.type || '').toLowerCase();
+            return t === 'audio' || t === 'voice';
+          });
+        }
+        if (_typeFilter === 'links') return /https?:\/\/\S+/i.test(m.text || '');
+        return true;
+      });
+    }
+
+    // A scoped search should say how much it found, or an empty result is
+    // indistinguishable from a filter that did nothing.
+    var _countEl = document.getElementById('chat-search-count');
+    if (_countEl) {
+      var _searching = !!(chatSearchFilter || (_typeFilter && _typeFilter !== 'all'));
+      _countEl.textContent = _searching
+        ? (msgs.length === 0 ? 'No matches' : msgs.length + (msgs.length === 1 ? ' match' : ' matches'))
+        : '';
     }
     if (msgs.length === 0) {
       feed.innerHTML =
@@ -12237,26 +12272,58 @@ document.addEventListener('DOMContentLoaded', function() {
   var chatSearchInput = document.getElementById('chat-search-input');
   var chatSearchClose = document.getElementById('btn-chat-search-close');
   if (chatSearchBtn && chatSearchBar && chatSearchInput && chatSearchClose) {
+    // Keeps the pills in step with the state, including the resets below — the
+    // two drifting apart is how a filter ends up looking active while doing
+    // nothing.
+    function _syncChatSearchPills() {
+      var cur = window._chatSearchType || 'all';
+      var bar = document.getElementById('chat-search-filters');
+      if (!bar) return;
+      Array.prototype.forEach.call(bar.querySelectorAll('.chat-search-filter'), function(b) {
+        b.classList.toggle('active', (b.getAttribute('data-ctype') || 'all') === cur);
+      });
+    }
+    function _resetChatSearch() {
+      chatSearchFilter = '';
+      chatSearchInput.value = '';
+      window._chatSearchType = 'all';
+      _syncChatSearchPills();
+    }
+
     chatSearchBtn.addEventListener('click', function() {
-      chatSearchBar.style.display = chatSearchBar.style.display === 'none' ? '' : 'none';
-      if (chatSearchBar.style.display !== 'none') {
+      var opening = chatSearchBar.style.display === 'none';
+      chatSearchBar.style.display = opening ? '' : 'none';
+      if (opening) {
+        _resetChatSearch();
         chatSearchInput.focus();
       } else {
-        chatSearchFilter = '';
-        chatSearchInput.value = '';
+        _resetChatSearch();
         if (activeChatId) renderMessages(activeChatId);
       }
     });
+
     chatSearchInput.addEventListener('input', function() {
       chatSearchFilter = this.value;
       if (activeChatId) renderMessages(activeChatId);
     });
+
     chatSearchClose.addEventListener('click', function() {
       chatSearchBar.style.display = 'none';
-      chatSearchFilter = '';
-      chatSearchInput.value = '';
+      _resetChatSearch();
       if (activeChatId) renderMessages(activeChatId);
     });
+
+    // Type filters. Scoped to the open conversation, same as the text.
+    var filterBar = document.getElementById('chat-search-filters');
+    if (filterBar) {
+      filterBar.addEventListener('click', function(e) {
+        var b = e.target.closest ? e.target.closest('.chat-search-filter') : null;
+        if (!b) return;
+        window._chatSearchType = b.getAttribute('data-ctype') || 'all';
+        _syncChatSearchPills();
+        if (activeChatId) renderMessages(activeChatId);
+      });
+    }
   }
 
   // --- Add Three Dots Menu ---

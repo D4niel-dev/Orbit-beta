@@ -592,7 +592,14 @@
    (Do not "fix" this back to flex: `.online-friends-row` carries `flex: 1`,
    which in a column flex container means flex-basis 0 and the row collapses.) */
 #online-friends-section {
-  display: block !important;
+  /* NO `!important` here — and that matters.
+     mobile.css sets `display: flex` on the same selector, and this file loads
+     later, so plain `display: block` already wins on specificity order. The
+     `!important` only added one thing: it beat the inline `style.display = 'none'`
+     that hides this row while a search is running. That is the SECOND time in one
+     session an `!important` on `display` has silently broken a show/hide.
+     Never pin a property something else needs to toggle. */
+  display: block;
   padding: 0 !important;
   margin: 0 !important;
   border: none !important;
@@ -1444,7 +1451,14 @@
 }
 
 .settings-item-card {
-  display: flex !important;
+  /* NO `!important` on display.
+     mobile.css sets `display: flex` on the same selector and this file loads
+     later, so plain `display: flex` already wins. The `!important` only did one
+     thing: it beat `.settings-item-card.hidden { display: none }`, which is how
+     the settings search hides non-matching rows — so the search marked 9 of 10
+     rows hidden and left every one of them on screen.
+     Third time in one session. Never pin a property something else toggles. */
+  display: flex;
   align-items: center !important;
   gap: 13px !important;
   padding: 13px 15px !important;
@@ -1513,7 +1527,8 @@
    and they were rendering their titles in accent blue — every label on the
    screen competing with the actual accent. */
 .settings-section-card {
-  display: flex !important;
+  /* Same reason as .settings-item-card above — no `!important` on display. */
+  display: flex;
   align-items: center !important;
   gap: 13px !important;
   padding: 13px 15px !important;
@@ -2719,6 +2734,237 @@
   color: var(--text-muted);
   margin-top: 7px;
   max-width: 250px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   23. SEARCH
+
+   Global search results land in #chat-list (home-screen.js _buildSearchResults).
+   The structure was already there — grouped sections, highlighting, avatars —
+   it needed the filter row and a tidier result row.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.search-filter-bar {
+  display: flex;
+  gap: 7px;
+  padding: 12px 16px 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.search-filter-bar::-webkit-scrollbar { display: none; }
+
+.search-filter-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--pill-sm);
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.search-filter-btn.active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: #FFFFFF;
+  font-weight: 600;
+}
+
+.search-filter-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-raised-2);
+  border-radius: var(--radius-pill);
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.search-filter-btn.active .search-filter-count {
+  background: rgba(255, 255, 255, .22);
+  color: #FFFFFF;
+}
+
+/* ── Result rows ── */
+.search-results-info,
+.search-results-section-header {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 16px 20px 6px;
+}
+
+.search-result-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 20px;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease);
+}
+.search-result-item:active { background: var(--bg-hover); }
+
+.search-result-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--bg-raised-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.search-result-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+.search-result-body { flex: 1; min-width: 0; }
+
+.search-result-name {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-result-preview {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The matched run, marked by _highlightText. */
+.search-result-preview strong,
+.search-result-name strong {
+  color: var(--accent-primary);
+  font-weight: 600;
+}
+
+.search-result-suffix {
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.search-result-tag {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  padding: 3px 8px;
+  flex-shrink: 0;
+}
+
+
+/* ── In-chat search ──
+   Scoped to the open conversation. Same shape as the global one so the two feel
+   like one feature, but the filters here are about the KIND of thing (media,
+   links, voice) rather than where it lives. */
+#message-search-bar {
+  padding: 8px 16px 0;
+  flex-shrink: 0;
+}
+
+.chat-search-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  padding: 8px 12px;
+}
+.chat-search-field > i,
+.chat-search-field > svg {
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+#chat-search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-family: var(--font-body);
+  font-size: 14.5px;
+  color: var(--text-primary);
+}
+#chat-search-input::placeholder { color: var(--text-muted); }
+
+.chat-search-count {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+#btn-chat-search-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+#btn-chat-search-close i,
+#btn-chat-search-close svg { width: 15px; height: 15px; }
+
+.chat-search-filters {
+  display: flex;
+  gap: 7px;
+  padding: 10px 0 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.chat-search-filters::-webkit-scrollbar { display: none; }
+
+.chat-search-filter {
+  flex-shrink: 0;
+  height: var(--pill-sm);
+  padding: 0 13px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.chat-search-filter.active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: #FFFFFF;
+  font-weight: 600;
 }
 
 

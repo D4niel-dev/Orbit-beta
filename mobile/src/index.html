@@ -35,7 +35,7 @@
   <!-- v0.8.1-beta redesign layer. MUST load last: mobile.css redefines several
        selectors more than once, and this sheet restates what the redesign
        changes rather than editing that file in place. -->
-  <link rel="stylesheet" href="styles/redesign.css?v=20261003e">
+  <link rel="stylesheet" href="styles/redesign.css?v=20261003f">
 
   <!-- Syntax Highlighting (Prism) -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
@@ -203,11 +203,20 @@
         <button id="btn-chat-search" title="Search" style="outline:none!important;-webkit-tap-highlight-color:transparent;"><i data-lucide="search"></i></button>
         <button id="btn-chat-more" style="outline:none!important;-webkit-tap-highlight-color:transparent;"><i data-lucide="more-vertical"></i></button>
       </div>
-      <div id="message-search-bar" style="display:none;padding:8px 16px 0;">
-        <div style="display:flex;align-items:center;gap:8px;background:var(--bg-surface);border-radius:24px;border:1px solid var(--border-subtle);box-shadow:0 4px 20px rgba(0,0,0,0.25);padding:6px 14px;">
-          <i data-lucide="search" style="width:16px;height:16px;color:var(--text-muted);flex-shrink:0;"></i>
-          <input type="text" id="chat-search-input" placeholder="Search messages..." style="flex:1;border:none;background:transparent;outline:none;font-size:14px;color:var(--text-primary);">
-          <button id="btn-chat-search-close" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:2px;"><i data-lucide="x" style="width:14px;height:14px;"></i></button>
+      <div id="message-search-bar" style="display:none;">
+        <div class="chat-search-field">
+          <i data-lucide="search"></i>
+          <input type="text" id="chat-search-input" placeholder="Search this chat..." autocomplete="off">
+          <span id="chat-search-count" class="chat-search-count"></span>
+          <button id="btn-chat-search-close" title="Close"><i data-lucide="x"></i></button>
+        </div>
+        <!-- Scoped to this conversation. The type filters work with an empty
+             query too, so "Media" on its own is a media browser for the chat. -->
+        <div class="chat-search-filters" id="chat-search-filters">
+          <button class="chat-search-filter active" data-ctype="all">All</button>
+          <button class="chat-search-filter" data-ctype="media">Media</button>
+          <button class="chat-search-filter" data-ctype="links">Links</button>
+          <button class="chat-search-filter" data-ctype="voice">Voice</button>
         </div>
       </div>
       <div id="message-feed"></div>
@@ -450,12 +459,12 @@
   setTimeout(function() { window._loadImageCropper(); }, 1500);
   </script>
 
-  <script src="js/app.js?v=20261003d"></script>
+  <script src="js/app.js?v=20261003e"></script>
 
   <!-- v0.2.8 Components -->
   <script src="js/components/navigation.js?v=20261003b"></script>
   <script src="js/components/chat-screen.js?v=20261002p"></script>
-  <script src="js/components/home-screen.js?v=20261002f"></script>
+  <script src="js/components/home-screen.js?v=20261003e"></script>
   <script src="js/components/account-switcher.js?v=20261003b"></script>
   <script src="js/components/account-receive.js?v=20261002t"></script>
 </body>
