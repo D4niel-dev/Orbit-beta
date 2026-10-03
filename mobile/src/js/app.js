@@ -6012,6 +6012,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // card like the overview. Wrap them in the same card the overview uses.
     container.innerHTML =
       '<div class="settings-category-card settings-detail-card">' + html + '</div>';
+    // Detail sections are full-bleed (see the CSS), which needs the container's
+    // own side padding dropped. The overview still wants it.
+    container.classList.add('settings-detail');
     container.classList.remove('settings-slide-left');
     container.classList.add('settings-slide-right');
     bindSectionEvents(key, s);
@@ -6024,6 +6027,8 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('settings-overlay-title').textContent = 'Settings';
     document.getElementById('search-settings').value = '';
     var container = document.getElementById('settings-overlay-content');
+    // Back to the overview, which is carded and needs the side padding back.
+    container.classList.remove('settings-detail');
     renderSettingsOverviewInner(container, true);
   }
 

@@ -1682,8 +1682,47 @@
    showSettingsSection() renders bare .settings-item-card siblings with no
    wrapper, so a section came out edge-to-edge with hairline dividers rather than
    as a card. It now wraps them; these just finish the job. */
+/* Full-bleed, not a card.
+   A section is up to a dozen rows; wrapped in one card it read as a single
+   enclosed block and felt cramped, and the side margins ate width the rows did
+   not need to give up. The rows run edge to edge with hairline dividers instead,
+   which is how they looked before the redesign. The wrapper stays in the DOM
+   only so :first-child/:last-child can close the divider run cleanly. */
+#settings-overlay-content.settings-detail {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
 .settings-detail-card {
-  margin-top: 4px !important;
+  margin-top: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+/* Roomier than the carded rows were: with the card gone the rows are the whole
+   screen width, so they can afford more padding without losing content room. */
+.settings-detail-card .settings-item-card {
+  padding: 15px 20px !important;
+}
+.settings-detail-card .settings-item-card:first-child {
+  border-top: 1px solid var(--border-subtle) !important;
+}
+.settings-detail-card .settings-item-card:last-child {
+  border-bottom: none !important;
+}
+
+/* The sub-heading ("TRANSLATION") sits in the same run, so it lines up with the
+   rows rather than the 4px indent mobile.css gives it. */
+.settings-detail-card .settings-section-label {
+  padding: 20px 20px 6px !important;
+  margin: 0 !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: .09em !important;
+  color: var(--text-muted) !important;
 }
 
 /* MUST NOT SHRINK.
