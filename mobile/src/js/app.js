@@ -7464,7 +7464,70 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button id="changelog-close-mobile" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;font-size:20px;">✕</button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:16px;">' +
-        vBlock('0.7.5-beta', 'Latest', [
+        // NOTE: this list is hand-maintained and had drifted three releases
+        // behind — it stopped at 0.7.5 while the app was on 0.8.1, so What's New
+        // showed nothing newer than 0.7.5 to anyone who updated. The desktop's
+        // changelog.js is the other hand-maintained copy; they are separate files
+        // and both have to be updated. A release is not done until this block is
+        // added, which is why `npm run test:mobile` now asserts it.
+        vBlock('0.8.1-beta', 'Latest', [
+          ['New', [
+            'Link a phone. Open it from the account switcher on the desktop, scan the code here, and your account comes across your own network \u2014 encrypted, and imported as a second account rather than overwriting the one already on this phone.',
+            'The code that authorises it is shown only on the desktop screen and never sent in the clear. Nothing leaves that machine until you confirm.',
+            'The mobile redesign is finished: the selected tab shows the filled form of its icon, the conversation has day separators and rebalanced bubbles, the composer is three controls instead of four, and the gallery names the conversation it belongs to.',
+            'Search actually searches. It used to find nothing outside the conversation you had open \u2014 a word appearing in three chats returned zero results. It spans everything now, with filters on both the global and the in-chat search.',
+            'The profile card opens from the header avatar, with the account switcher one tap in behind it.'
+          ]],
+          ['Fixes', [
+            'Profile frames had a solid square behind them. Two !important rules of equal weight, and this one lost on load order.',
+            'The settings search marked nine of ten rows hidden and left every one on screen. Broken since the restyle.',
+            'The Activity title sat 20px left of centre, and the navbar moved when you changed tabs.',
+            'Switching accounts could take the wrong settings with it.',
+            'The last row of every settings section was clipped, and the toggle knob was off-centre.'
+          ]],
+          ['Version', [
+            'Version: Bumped to v0.8.1-beta.'
+          ]]
+        ]) +
+        vBlock('0.8.0-beta', '', [
+          ['New', [
+            'Your theme follows you to your phone. Change it on the desktop and it reaches your own devices \u2014 including a custom theme\u2019s colours, which is the half that matters.',
+            'Message search now uses a full-text index, so it answers in milliseconds however much history you have.',
+            'A search icon inside the Shared Media search bar.'
+          ]],
+          ['Fixes', [
+            'The update progress bar actually moves. It had no total to divide by.',
+            'A custom theme\u2019s colours now reach your phone \u2014 the colour editor saves differently from everything else, and the broadcast never fired for it.',
+            'The Images tab shows images. Video and audio were landing there, where their thumbnails cannot load.',
+            'Changing the display no longer refreshes the whole window.',
+            'Opening the gallery closes the Shared Media panel, instead of showing two at once.',
+            'Select mode has a visible way out, and long filenames truncate instead of spilling over the next card.',
+            'The send button can no longer leave you stuck, and a toast arriving as you went to send no longer swallows the click.'
+          ]],
+          ['Version', [
+            'Version: Bumped to v0.8.0-beta.'
+          ]]
+        ]) +
+        vBlock('0.7.6-beta', '', [
+          ['New', [
+            'Shared Media has grown up: search, filters by sender, kind and age, a grid/list toggle, jump-to-message on every item, and multi-select with download-all. It renders 60 items at a time with a count, rather than building the whole list on every keystroke.',
+            'Storage stats in the gallery header \u2014 how much your media takes and which chats it came from, biggest first. Orbit keeps your files on your own disk, so this is a fair question to ask.',
+            'Select and delete media from the gallery. The confirm says plainly that the message goes for both people.',
+            'A month scrubber down the side of the gallery, so "that photo from March" is a click rather than a scroll.',
+            'The composer says what it can do: the plus rotates into an \u00d7 while its menu is open, and the send button lights up when there is something to send.'
+          ]],
+          ['Fixes', [
+            'The Images tab was showing video and audio \u2014 and their thumbnails cannot load, so they appeared as broken images. Images means images now.',
+            'Changing the display no longer refreshes the whole window.',
+            'Opening the gallery closes the Shared Media panel, instead of showing two galleries at once.',
+            'Select mode has a visible way out, even before you pick anything.',
+            'Long filenames truncate in their cards instead of spilling over the next one.'
+          ]],
+          ['Version', [
+            'Version: Bumped to v0.7.6-beta.'
+          ]]
+        ]) +
+        vBlock('0.7.5-beta', '', [
           ['New', [
             'The desktop build now has 55 profile frames. This build ships its own set, so frames beyond it will not appear here until that art is added.',
             'Scrolled up and lost? A chip now floats above the message box \u2014 tap it to get back to the bottom. If what you are reading is genuinely old, it says so.',
