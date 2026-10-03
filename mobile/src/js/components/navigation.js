@@ -16,18 +16,32 @@ var OrbitNav = {
   /** Top-level destinations, in order. */
   // Icons are chosen so the ACTIVE state can be FILLED.
   //
-  // Lucide is outline-only, so "filled" means setting `fill: currentColor` on the
-  // active icon (see redesign.css). That works for closed, solid shapes and
-  // produces a shapeless blob for line glyphs — `activity` (a polyline) and
-  // `settings` (a gear whose teeth merge) both fill into a blob. `history` and
-  // `sliders-horizontal` mean the same thing and fill cleanly, so those two tabs
-  // use them. Chats and Contacts keep theirs; they fill perfectly.
+  // Lucide is outline-only, so "filled" means `fill: currentColor` on the active
+  // icon (see redesign.css). The catch is that filling an outline only says
+  // anything if the glyph has INTERNAL SHAPE — otherwise it becomes a blob:
+  //
+  //   activity   a polyline           -> shapeless lump
+  //   settings   a gear, teeth merge  -> a flower
+  //   history    a circle + a notch   -> a BALL at 24px, the notch is 2px
+  //
+  // So the two tabs whose own icons cannot be filled use ones that can:
+  //   activity -> bell   a solid bell, real shape at 24px, and it is what the
+  //                      panel is: All / Mentions / Files / System, with an
+  //                      unread dot on the tab
+  // Chats and Contacts keep theirs; message-circle and users fill perfectly.
+  //
+  // Settings keeps its gear. switchTo() deliberately does NOT mark it active —
+  // it is an overlay on top of whatever tab you are on — so its filled form never
+  // renders and there is nothing to gain by changing the glyph.
+  //
+  // Chosen by rendering candidates at the real 24px and at 3x — the small size is
+  // exactly where a ball and a glyph differ.
   TABS: [
-    { id: 'chats',    label: 'Chats',    icon: 'message-circle',    panel: 'panel-chats'    },
-    { id: 'contacts', label: 'Contacts', icon: 'users',             panel: 'panel-friends'  },
-    { id: 'activity', label: 'Activity', icon: 'history',           panel: 'panel-activity' },
+    { id: 'chats',    label: 'Chats',    icon: 'message-circle', panel: 'panel-chats'    },
+    { id: 'contacts', label: 'Contacts', icon: 'users',          panel: 'panel-friends'  },
+    { id: 'activity', label: 'Activity', icon: 'bell',           panel: 'panel-activity' },
     // Settings is an overlay, not a panel — see switchTo().
-    { id: 'settings', label: 'Settings', icon: 'sliders-horizontal', panel: null            }
+    { id: 'settings', label: 'Settings', icon: 'settings',       panel: null             }
   ],
 
   active: 'chats',

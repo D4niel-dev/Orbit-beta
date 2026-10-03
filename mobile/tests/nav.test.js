@@ -21,7 +21,10 @@ const path = require('path');
   // produced (a colour where `none` was expected) sent me chasing a bug that was
   // in the test.
   const ACCENT = 'rgb(77, 124, 254)';
-  const ids = ['chats', 'contacts', 'activity', 'settings'];
+  // Only the three PANEL tabs. Settings is an overlay and switchTo() deliberately
+  // leaves the active tab alone for it — asserting a fill there measured the
+  // Chats tab and passed for the wrong reason.
+  const ids = ['chats', 'contacts', 'activity'];
   for (const id of ids) {
     await page.evaluate((t) => window.OrbitNav.switchTo(t), id);
     await page.waitForTimeout(700);
@@ -53,15 +56,34 @@ const path = require('path');
       state.inactiveFills.every(f => f === 'none'), state.inactiveFills);
   }
 
-  // The icons chosen so the fill reads as a shape rather than a blob.
+  // Settings is an overlay: opening it must NOT steal the active tab, and its
+  // icon therefore never fills. That is the behaviour, so assert it.
+  await page.evaluate(() => window.OrbitNav.switchTo('settings'));
+  await page.waitForTimeout(800);
+  const settingsState = await page.evaluate(() => {
+    const t = document.querySelector('.mobile-panel.active .orbit-tabbar .tab[data-tab="settings"]');
+    const activeTab = document.querySelector('.mobile-panel.active .orbit-tabbar .tab.active');
+    return {
+      settingsActive: t ? t.classList.contains('active') : null,
+      stillOn: activeTab ? activeTab.getAttribute('data-tab') : null,
+      overlayOpen: !!document.querySelector('#panel-settings-overlay.open, .settings-overlay.open')
+    };
+  });
+  H.check('opening Settings does not mark its tab active', settingsState.settingsActive === false, settingsState);
+  H.check('the tab you came from stays active', settingsState.stillOn === 'activity', settingsState.stillOn);
+
+  // The icons chosen so the filled form reads as a SHAPE rather than a blob.
+  // `activity` (a polyline), `settings` (a gear) and `history` (a circle with a
+  // 2px notch — a BALL at 24px) all fail; these three do not.
   const icons = await page.evaluate(() =>
     Array.from(document.querySelectorAll('.mobile-panel.active .orbit-tabbar .tab'))
       .map(t => t.getAttribute('data-tab') + '=' +
         ((t.querySelector('svg') || {}).getAttribute ? t.querySelector('svg').getAttribute('class').replace('lucide ', '').trim() : '?')));
   console.log('\n  icons: ' + icons.join('  '));
   H.check('chats uses message-circle', icons[0].indexOf('message-circle') !== -1, icons[0]);
-  H.check('activity uses a fillable icon (history)', icons[2].indexOf('history') !== -1, icons[2]);
-  H.check('settings uses a fillable icon (sliders-horizontal)', icons[3].indexOf('sliders-horizontal') !== -1, icons[3]);
+  H.check('contacts uses users', icons[1].indexOf('users') !== -1, icons[1]);
+  H.check('activity uses bell, NOT history (which fills into a ball)',
+    icons[2].indexOf('bell') !== -1 && icons[2].indexOf('history') === -1, icons[2]);
 
   await page.evaluate(() => {
     const tabs = document.querySelectorAll('.mobile-panel.active .orbit-tabbar .tab');
