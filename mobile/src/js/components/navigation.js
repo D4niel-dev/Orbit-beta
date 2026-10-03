@@ -14,12 +14,20 @@
 var OrbitNav = {
 
   /** Top-level destinations, in order. */
+  // Icons are chosen so the ACTIVE state can be FILLED.
+  //
+  // Lucide is outline-only, so "filled" means setting `fill: currentColor` on the
+  // active icon (see redesign.css). That works for closed, solid shapes and
+  // produces a shapeless blob for line glyphs — `activity` (a polyline) and
+  // `settings` (a gear whose teeth merge) both fill into a blob. `history` and
+  // `sliders-horizontal` mean the same thing and fill cleanly, so those two tabs
+  // use them. Chats and Contacts keep theirs; they fill perfectly.
   TABS: [
-    { id: 'chats',    label: 'Chats',    icon: 'message-circle', panel: 'panel-chats'    },
-    { id: 'contacts', label: 'Contacts', icon: 'users',          panel: 'panel-friends'  },
-    { id: 'activity', label: 'Activity', icon: 'activity',       panel: 'panel-activity' },
+    { id: 'chats',    label: 'Chats',    icon: 'message-circle',    panel: 'panel-chats'    },
+    { id: 'contacts', label: 'Contacts', icon: 'users',             panel: 'panel-friends'  },
+    { id: 'activity', label: 'Activity', icon: 'history',           panel: 'panel-activity' },
     // Settings is an overlay, not a panel — see switchTo().
-    { id: 'settings', label: 'Settings', icon: 'settings',       panel: null             }
+    { id: 'settings', label: 'Settings', icon: 'sliders-horizontal', panel: null            }
   ],
 
   active: 'chats',

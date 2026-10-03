@@ -2237,6 +2237,21 @@
 .orbit-tabbar .tab.active svg {
   animation: tabPop .3s var(--ease);
 }
+/* The selected tab shows the FILLED form of its icon.
+   Lucide renders `<svg fill="none" stroke="currentColor">`, and a presentation
+   attribute loses to any CSS rule — so this overrides it without needing to
+   reach into the markup lucide generates. The icons are picked to suit it; see
+   the comment on TABS in navigation.js for why two of them differ from the
+   outline set. */
+.orbit-tabbar .tab.active i,
+.orbit-tabbar .tab.active svg {
+  fill: currentColor;
+}
+/* The inactive ones must not inherit a fill from anywhere. */
+.orbit-tabbar .tab i,
+.orbit-tabbar .tab svg {
+  fill: none;
+}
 .orbit-tabbar .tab.active span {
   animation: tabLabelIn .3s var(--ease);
 }
