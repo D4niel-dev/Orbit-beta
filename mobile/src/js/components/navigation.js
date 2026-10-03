@@ -212,12 +212,13 @@ var OrbitNav = {
     btn.addEventListener('click', function(e) {
       e.stopPropagation();
       if (longFired) { longFired = false; return; }
-      // The avatar is the account control now, so it opens the switcher. The
-      // profile editor is one tap further in — tapping the current-account card.
-      if (window.OrbitAccounts) {
-        window.OrbitAccounts.open();
-      } else if (typeof window.showProfileSheet === 'function') {
+      // Tap opens the PROFILE. The account switcher is one tap further in, from
+      // the button in the profile's top-left — it is a rarer action than looking
+      // at your own profile, and it used to sit on the first tap.
+      if (typeof window.showProfileSheet === 'function') {
         window.showProfileSheet();
+      } else if (window.OrbitAccounts) {
+        window.OrbitAccounts.open();
       }
     });
   },

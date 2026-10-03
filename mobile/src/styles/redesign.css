@@ -2242,6 +2242,109 @@
 
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   19. PROFILE CARD
+
+   The sheet shell and the form inside it were already close to the new UI —
+   .profile-field / .profile-field-label / .profile-input are the modern classes.
+   The HERO was the part left behind: a magenta (#EC4899) gradient from the
+   previous palette, which was the last off-accent colour in the app.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.profile-sheet-scroll {
+  background: var(--bg-base) !important;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0 !important;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.profile-hero {
+  background: transparent !important;
+  border-radius: 0 !important;
+  border-bottom: none !important;
+  box-shadow: none !important;
+  margin-bottom: 6px !important;
+}
+
+/* One accent, blurred behind the avatar — not a two-tone gradient. */
+.profile-hero-bg {
+  background: linear-gradient(135deg, var(--accent-primary), transparent 72%) !important;
+  filter: blur(48px) !important;
+  opacity: .22 !important;
+  height: 190px !important;
+}
+
+.profile-avatar-wrapper {
+  width: 88px !important;
+  height: 88px !important;
+}
+.profile-avatar-wrapper img,
+.profile-avatar-wrapper .avatar-placeholder {
+  border: none !important;
+  background: var(--bg-raised-2) !important;
+  box-shadow: 0 0 0 1px var(--border-subtle);
+  font-family: var(--font-display) !important;
+  font-size: 30px !important;
+  font-weight: 600 !important;
+  color: var(--text-secondary) !important;
+}
+
+.profile-hero .profile-name {
+  font-family: var(--font-display) !important;
+  font-size: 23px !important;
+  font-weight: 600 !important;
+  letter-spacing: -.02em !important;
+  margin-bottom: 7px !important;
+}
+
+.profile-id {
+  font-family: var(--font-mono) !important;
+  font-size: 11.5px !important;
+  color: var(--text-muted) !important;
+  background: var(--bg-raised) !important;
+  border: 1px solid var(--border-subtle);
+  padding: 5px 12px !important;
+  border-radius: var(--radius-pill) !important;
+}
+
+/* ── The two top buttons ──
+   Mirrored: accounts on the left, close/save on the right. The close button
+   keeps its ✕/✓ text because its label is toggled when there are unsaved
+   changes, so both are sized to read the same. */
+.profile-sheet-btn {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-raised);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 3;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.profile-sheet-btn:active {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.profile-sheet-btn i,
+.profile-sheet-btn svg {
+  width: 17px;
+  height: 17px;
+  stroke-width: 1.9;
+}
+.profile-sheet-btn-end {
+  left: auto;
+  right: 12px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
    11. POLISH — issues found by rendering the build and looking at it
    ═══════════════════════════════════════════════════════════════════════════ */
 

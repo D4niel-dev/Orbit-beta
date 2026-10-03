@@ -20,7 +20,16 @@ var OrbitAccounts = {
 
   // ──────────────────────────────────────────────────────────────────────────
 
-  open: function() {
+  open: function(opts) {
+    // Only one account surface at a time. The profile sheet registers a closer
+    // on window because it cannot be reached from here.
+    if (typeof window._closeProfileSheet === 'function') {
+      try { window._closeProfileSheet(); } catch (e) {}
+    }
+    // Set when the user arrived here FROM the profile, so closing comes back to
+    // it. Opening from anywhere else closes to whatever was underneath.
+    this._returnTo = (opts && opts.returnTo) || null;
+
     if (!window.MStore) return;
     if (this._el) this.close();
     this._confirmingSignOut = false;
@@ -44,8 +53,18 @@ var OrbitAccounts = {
     var host = this._el;
     if (!host) return;
     this._el = null;
+    var back = this._returnTo;
+    this._returnTo = null;
     host.classList.remove('open');
-    setTimeout(function() { if (host.parentNode) host.parentNode.removeChild(host); }, 220);
+    setTimeout(function() {
+      if (host.parentNode) host.parentNode.removeChild(host);
+      // Closing the switcher goes back to the profile when that is where the
+      // user came from. showProfileSheet() clears _returnTo before it closes
+      // us, so this cannot bounce back and forth.
+      if (back === 'profile' && typeof window.showProfileSheet === 'function') {
+        window.showProfileSheet();
+      }
+    }, 220);
   },
 
   // ──────────────────────────────────────────────────────────────────────────

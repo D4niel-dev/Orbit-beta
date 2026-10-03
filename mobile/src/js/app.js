@@ -9092,6 +9092,15 @@ document.addEventListener('DOMContentLoaded', function() {
     var u = MStore.user;
     if (!u) { showToast('No user data', 'info'); return; }
 
+    // The profile and the account switcher are two views of the same thing and
+    // must never be stacked. Whoever opens second closes the other.
+    // _returnTo is cleared first: otherwise closing the switcher would bounce
+    // straight back to the profile we are about to show, forever.
+    if (window.OrbitAccounts) {
+      window.OrbitAccounts._returnTo = null;
+      window.OrbitAccounts.close();
+    }
+
     // Store initial values for change detection
     var _origName = u.name || '';
     var _origBio = u.bio || '';
@@ -9118,7 +9127,14 @@ document.addEventListener('DOMContentLoaded', function() {
         backdrop.remove();
         showPillLocal();
       }
+      // The switcher checks this before opening, so clear it — a stale closer
+      // would try to remove an element that is already gone.
+      if (window._closeProfileSheet === closeProfileSheet) window._closeProfileSheet = null;
     }
+
+    // Let the account switcher close us when it opens. It cannot reach into this
+    // closure, so it gets a handle instead.
+    window._closeProfileSheet = closeProfileSheet;
 
     backdrop.addEventListener('click', function(e) { if (e.target === backdrop) closeProfileSheet(); });
 
@@ -9141,8 +9157,11 @@ document.addEventListener('DOMContentLoaded', function() {
         '<div class="profile-hero-bg"></div>' +
         // Drag handle overlay (centered at top)
         '<div class="bottom-sheet-handle" style="position:absolute;top:12px;left:50%;transform:translateX(-50%);width:40px;height:5px;background:rgba(255,255,255,0.4);border-radius:4px;z-index:3;"></div>' +
-        // Action button (✕ by default, ✓ when changes detected)
-        '<button id="btn-profile-sheet-action" style="position:absolute;top:8px;right:12px;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,0.2);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;z-index:3;transition:all 0.2s;">✕</button>' +
+        // Top row: the account switcher on the left, close/save on the right.
+        // Tapping the header avatar used to open the switcher directly; that is
+        // this button now, and the avatar opens the profile.
+        '<button id="btn-profile-sheet-accounts" class="profile-sheet-btn" title="Accounts"><i data-lucide="users"></i></button>' +
+        '<button id="btn-profile-sheet-action" class="profile-sheet-btn profile-sheet-btn-end" title="Close">✕</button>' +
         '<div class="profile-hero-content">' +
           '<div class="profile-avatar-wrapper" style="position:relative;">' +
             (safeAvatarSrc(u.avatar) ? '<img src="' + safeAvatarSrc(u.avatar) + '">' : '<div class="avatar-placeholder">' + escapeHtml(initial) + '</div>') +
@@ -9160,6 +9179,26 @@ document.addEventListener('DOMContentLoaded', function() {
     sheet.appendChild(editContainer);
     backdrop.appendChild(sheet);
     document.body.appendChild(backdrop);
+
+    // The accounts button carries a lucide glyph, which has to be swapped in
+    // after the markup is in the document.
+    if (window.lucide && lucide.createIcons) {
+      try { lucide.createIcons({ root: sheet }); } catch (e) {}
+    }
+
+    var accountsBtn = document.getElementById('btn-profile-sheet-accounts');
+    if (accountsBtn) {
+      accountsBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        // Switching accounts leaves this sheet behind, and its unsaved-changes
+        // prompt would fire over a screen that no longer owns it.
+        _hasUnsavedChanges = false;
+        closeProfileSheet();
+        // returnTo so closing the switcher comes back here rather than dropping
+        // the user on the chat list.
+        if (window.OrbitAccounts) window.OrbitAccounts.open({ returnTo: 'profile' });
+      });
+    }
 
     // Drag-down-to-close (grab the hero handle)
     OrbitSheet.enableDragClose({ sheet: sheet, onClose: function () { closeProfileSheet(); } });
