@@ -2343,6 +2343,230 @@
   right: 12px;
 }
 
+/* The section headings inside the card ("Edit Profile", "Status", "Profile
+   Frame") were left-aligned and sat flush against the field below them. Centred,
+   with room above and below, they read as dividers between the parts of the card
+   rather than as a label for the first field. */
+#profile-sheet-edit-content .settings-section-title {
+  text-align: center !important;
+  margin: 22px 0 16px !important;
+  font-family: var(--font-display) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  letter-spacing: .06em !important;
+  text-transform: uppercase !important;
+  color: var(--text-muted) !important;
+}
+#profile-sheet-edit-content .settings-section:first-child .settings-section-title {
+  margin-top: 10px !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   20. GALLERY
+
+   The behaviour was already there — filters with counts, date grouping, a
+   lightbox. It was wearing the old .overlay-panel-header and 3px-radius tiles.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.gallery-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  flex-shrink: 0;
+}
+
+.gallery-head-text {
+  flex: 1;
+  min-width: 0;
+  padding-left: 4px;
+}
+
+.gallery-head-text .panel-title {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -.02em;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.15;
+}
+
+.gallery-subtitle {
+  display: block;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Filters ──
+   Pills, on the same scale as everything else, in a row that scrolls sideways
+   rather than wrapping. */
+.gallery-filter-bar {
+  display: flex !important;
+  gap: 7px !important;
+  padding: 4px 16px 12px !important;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-shrink: 0;
+}
+.gallery-filter-bar::-webkit-scrollbar { display: none; }
+
+.gallery-filter-btn {
+  flex-shrink: 0;
+  padding: 0 13px !important;
+  min-height: var(--pill-sm) !important;
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-pill) !important;
+  border: 1px solid var(--border-strong) !important;
+  background: transparent !important;
+  color: var(--text-secondary) !important;
+  font-family: var(--font-body) !important;
+  font-size: 12.5px !important;
+  font-weight: 500 !important;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.gallery-filter-btn.active {
+  background: var(--accent-primary) !important;
+  border-color: var(--accent-primary) !important;
+  color: #FFFFFF !important;
+  font-weight: 600 !important;
+}
+
+/* ── Date headings ── */
+.gallery-section-date {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: .09em !important;
+  text-transform: uppercase !important;
+  color: var(--text-muted) !important;
+  padding: 16px 16px 8px !important;
+  position: static !important;
+  background: transparent !important;
+}
+
+/* ── Grid ── */
+.gallery-grid {
+  display: grid !important;
+  gap: 4px !important;
+  padding: 0 12px !important;
+}
+.gallery-grid.cols-3 { grid-template-columns: repeat(3, 1fr) !important; }
+.gallery-grid.cols-2 { grid-template-columns: repeat(2, 1fr) !important; }
+.gallery-grid.single-col { grid-template-columns: 1fr !important; }
+
+.gallery-item {
+  border-radius: var(--radius-md) !important;
+  overflow: hidden !important;
+  background: var(--bg-raised-2) !important;
+  aspect-ratio: 1 / 1;
+}
+.gallery-item img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+
+.gallery-item-type-badge {
+  border-radius: var(--radius-pill) !important;
+  background: rgba(0, 0, 0, .55) !important;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  font-size: 10.5px !important;
+  padding: 3px 8px !important;
+}
+
+/* No-poster video: a play button on a raised tile, so it does not read as an
+   empty square. */
+.gallery-video-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-raised-2);
+}
+.gallery-video-fallback i,
+.gallery-video-fallback svg {
+  width: 26px !important;
+  height: 26px !important;
+  color: var(--text-secondary);
+  opacity: .75;
+}
+
+/* Audio has no thumbnail, so it spans the full row instead of sitting in one
+   grid cell — a square with a filename in it was hard to read. */
+.gallery-grid .gallery-item-audio {
+  grid-column: 1 / -1;
+  aspect-ratio: auto !important;
+  display: flex !important;
+  /* mobile.css stacks these vertically for the square tile. At full width a
+     centred stack leaves a lot of dead space either side of it. */
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 12px;
+  padding: 14px 16px !important;
+  border-radius: var(--radius-md) !important;
+  background: var(--bg-raised) !important;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary) !important;
+  font-size: 13.5px !important;
+}
+.gallery-item-audio i,
+.gallery-item-audio svg {
+  width: 18px !important;
+  height: 18px !important;
+  color: var(--accent-primary) !important;
+  flex-shrink: 0;
+}
+.gallery-item-audio span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Empty state ── */
+.gallery-empty {
+  display: flex !important;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 64px 40px !important;
+  gap: 0;
+  color: var(--text-muted) !important;
+}
+.gallery-empty i,
+.gallery-empty svg {
+  width: 40px !important;
+  height: 40px !important;
+  stroke-width: 1.4 !important;
+  color: var(--text-muted) !important;
+  opacity: .55;
+  margin-bottom: 18px;
+}
+.gallery-empty-title {
+  font-family: var(--font-display);
+  font-size: 15.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.gallery-empty-sub {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  margin-top: 7px;
+  max-width: 250px;
+}
+
 
 /* ═══════════════════════════════════════════════════════════════════════════
    11. POLISH — issues found by rendering the build and looking at it

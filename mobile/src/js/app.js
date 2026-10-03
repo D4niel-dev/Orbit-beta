@@ -9651,11 +9651,37 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   /* -- Gallery Overlay -- */
+  // Grid density, remembered per account. 3-up by default.
+  function galleryColumns() {
+    var n = parseInt(MStore.get('galleryColumns', 3), 10);
+    return (n === 2 || n === 3) ? n : 3;
+  }
+
+  // Whose gallery this is and how much is in it. The header used to say only
+  // "Gallery", which gave no clue which conversation you were looking at.
+  function setGallerySubtitle(count, filter) {
+    var el = document.getElementById('gallery-subtitle');
+    if (!el) return;
+    var chat = (MStore.chats || []).find(function(c) { return c.id === activeChatId; });
+    var name = chat ? (chat.name || 'Chat') : 'Chat';
+    var what = (filter && filter !== 'all') ? filter + 's' : 'items';
+    var n = (typeof count === 'number') ? count : 0;
+    el.textContent = name + ' · ' + n + ' ' + (n === 1 ? what.replace(/s$/, '') : what);
+  }
+
   function renderGallery(filter) {
     var container = document.getElementById('gallery-content');
+    // Remembered so the density toggle can re-render without losing the filter.
+    window._galleryFilterValue = filter || 'all';
     if (!activeChatId) {
+      setGallerySubtitle(null);
+      var sub0 = document.getElementById('gallery-subtitle');
+      if (sub0) sub0.textContent = 'No conversation open';
       container.innerHTML =
-        '<div class="gallery-empty"><i data-lucide="image"></i><div>Select a chat to view gallery</div></div>';
+        '<div class="gallery-empty"><i data-lucide="image"></i>' +
+        '<div class="gallery-empty-title">Select a chat to view its media</div>' +
+        '<div class="gallery-empty-sub">Photos, videos and voice notes from a conversation all land here.</div>' +
+        '</div>';
       renderLucide({ root: container });
       return;
     }
@@ -9701,8 +9727,19 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     if (filteredMedia.length === 0) {
+      setGallerySubtitle(0, filter);
+      var isFiltered = !!(filter && filter !== 'all');
       container.innerHTML =
-        '<div class="gallery-empty"><i data-lucide="image"></i><div>No ' + (filter && filter !== 'all' ? filter : '') + ' media shared yet</div></div>';
+        '<div class="gallery-empty"><i data-lucide="' + (isFiltered ? 'filter' : 'image') + '"></i>' +
+        '<div class="gallery-empty-title">' +
+          (isFiltered ? 'No ' + escapeHtml(filter) + ' in this chat' : 'Nothing shared yet') +
+        '</div>' +
+        '<div class="gallery-empty-sub">' +
+          (isFiltered
+            ? 'This conversation has media, just none of that kind.'
+            : 'Photos, videos and voice notes sent in this chat will show up here.') +
+        '</div>' +
+        '</div>';
       renderLucide({ root: container });
       return;
     }
@@ -9763,13 +9800,16 @@ document.addEventListener('DOMContentLoaded', function() {
       return a.localeCompare(b);
     });
 
-    html += '<div class="gallery-count">' + filteredMedia.length + ' item' + (filteredMedia.length !== 1 ? 's' : '') + '</div>';
+    // The count lives in the header now, so the separate .gallery-count line
+    // that used to sit above the grid would say the same thing twice.
+    setGallerySubtitle(filteredMedia.length, filter);
 
+    var cols = galleryColumns();
     var flatIndex = 0;
     var visualOrder = [];
     dateKeys.forEach(function(dateKey) {
       html += '<div class="gallery-section-date">' + escapeHtml(dateKey) + '</div>';
-      html += '<div class="gallery-grid' + (filter === 'audio' ? ' single-col' : '') + '">';
+      html += '<div class="gallery-grid cols-' + cols + (filter === 'audio' ? ' single-col' : '') + '">';
       groups[dateKey].forEach(function(item) {
         var safeUrl = escapeHtml(item.url).replace(/'/g, "\\'");
         var safePoster = item.poster ? window.Sanitize.escapeHtml(item.poster) : '';
@@ -9781,8 +9821,10 @@ document.addEventListener('DOMContentLoaded', function() {
               '<div class="gallery-item-type-badge"><i data-lucide="video"></i> Video</div>' +
               '</div>';
           } else {
-            html += '<div class="gallery-item" onclick="window._galleryOpen(' + flatIndex + ')" data-gallery-index="' + flatIndex + '">' +
-              '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-base);"><i data-lucide="video" style="width:32px;height:32px;opacity:0.4;"></i></div>' +
+              // No poster: a plain dark square with a dim glyph read as an empty
+              // tile. A play button says what it is before you tap it.
+              html += '<div class="gallery-item" onclick="window._galleryOpen(' + flatIndex + ')" data-gallery-index="' + flatIndex + '">' +
+              '<div class="gallery-video-fallback"><i data-lucide="play"></i></div>' +
               '<div class="gallery-item-type-badge"><i data-lucide="video"></i> Video</div>' +
               '</div>';
           }
@@ -9808,6 +9850,26 @@ document.addEventListener('DOMContentLoaded', function() {
     container.innerHTML = html;
     renderLucide({ root: container });
   }
+
+  // Grid density toggle. Kept in storage rather than in settings so it does not
+  // travel between devices — how wide your thumb likes the grid is a per-screen
+  // preference, not part of the account.
+  (function wireGalleryDensity() {
+    var btn = document.getElementById('btn-gallery-density');
+    if (!btn || btn._wired) return;
+    btn._wired = true;
+    btn.addEventListener('click', function() {
+      MStore.set('galleryColumns', galleryColumns() === 3 ? 2 : 3);
+      var icon = btn.querySelector('i, svg');
+      if (window.lucide) {
+        btn.innerHTML = '<i data-lucide="' + (galleryColumns() === 3 ? 'layout-grid' : 'grid-2x2') + '"></i>';
+        try { lucide.createIcons({ root: btn }); } catch (e) {}
+      } else if (icon) {
+        icon.remove();
+      }
+      renderGallery(window._galleryFilterValue || 'all');
+    });
+  })();
 
   window.showProfileSheet = showProfileSheet;
   window.showCreateGroup = showCreateGroup;
