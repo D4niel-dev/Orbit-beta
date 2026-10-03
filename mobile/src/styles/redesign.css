@@ -1892,6 +1892,47 @@
 }
 
 
+/* ── Activity header ──
+   The title was `position:absolute; left:50%; transform:translateX(-50%)`, which
+   SHOULD centre it — but an absolutely positioned block with no width shrink-wraps
+   to the available space, not to its text, so it measured 326px wide and landed
+   20px left of centre. Flex on the header centres it against the two 38px buttons
+   instead, which is exact and stays exact whatever the title says. */
+#panel-activity .panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+/* `left: 0; right: 0` rather than `left: 50%; translateX(-50%)`. The 50% form
+   shrink-wraps an absolutely positioned block to the available space (it measured
+   326px instead of its text width), which is what pushed it off centre.
+   And it must NOT be a flex child: the back button is hidden on a top-level tab
+   (width 0), so `flex: 1` on the title gave it the space to the RIGHT of a zero
+   -width sibling — centring it in 330px starting at 12px, not in the panel. */
+/* With the title out of flow and the back button hidden on a top-level tab, the
+   action button is the ONLY flex child — so `space-between` parked it at the
+   left. auto margin pins it to the right edge where it belongs. */
+#panel-activity .panel-header > button:last-child {
+  margin-left: auto;
+}
+
+#panel-activity .panel-header h3,
+#panel-activity .panel-header .panel-title {
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  top: 50%;
+  transform: translateY(-50%) !important;
+  text-align: center;
+  white-space: nowrap;
+  pointer-events: none;
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -.02em;
+  color: var(--text-primary);
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    17. PAIR A DESKTOP (the QR scanner screen)
 
@@ -2080,6 +2121,85 @@
 }
 .qr-scan-alt:active { background: var(--bg-raised); }
 .qr-scan-alt i, .qr-scan-alt svg { width: 18px; height: 18px; stroke-width: 1.9; }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   18. TRANSITIONS — no fade, and the navbar does not move
+
+   Two separate problems:
+
+   1. Every panel keyframe animated `opacity` alongside the movement, so a switch
+      read as a cross-fade. Removed. The movement alone carries it.
+
+   2. The tab bar lives INSIDE every panel (navigation.js injects one per panel),
+      so animating the panel slid the bar along with it — and the bar is the one
+      thing that should look like it never moved. The panel no longer animates at
+      all; its CHILDREN do, with the bar exempted. The panels are sequential (the
+      outgoing one is hidden before the incoming one appears), so the bar is
+      continuous across the swap and only the content changes under it.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.mobile-panel.anim-enter,
+.mobile-panel.anim-exit,
+.mobile-panel.anim-enter-up,
+.mobile-panel.anim-exit-down,
+.mobile-panel.anim-enter-reverse,
+.mobile-panel.anim-exit-reverse {
+  animation: none !important;
+}
+/* Note: `anim-exit` also carries `display: flex !important`, which must survive —
+   only the animation is switched off, not the whole declaration. */
+
+.mobile-panel.anim-enter > *:not(.orbit-tabbar),
+.mobile-panel.anim-enter-reverse > *:not(.orbit-tabbar) {
+  animation: panelContentIn .24s var(--ease) both;
+}
+.mobile-panel.anim-exit > *:not(.orbit-tabbar),
+.mobile-panel.anim-exit-reverse > *:not(.orbit-tabbar) {
+  animation: panelContentOut .16s var(--ease) both;
+}
+.mobile-panel.anim-enter-up > *:not(.orbit-tabbar) {
+  animation: panelContentUp .24s var(--ease) both;
+}
+.mobile-panel.anim-exit-down > *:not(.orbit-tabbar) {
+  animation: panelContentDown .16s var(--ease) both;
+}
+
+/* Position only — no opacity anywhere, which is the fade he asked to lose. */
+@keyframes panelContentIn   { from { transform: translateX(16px); } to { transform: translateX(0); } }
+@keyframes panelContentOut  { from { transform: translateX(0); }    to { transform: translateX(-12px); } }
+@keyframes panelContentUp   { from { transform: translateY(12px); } to { transform: translateY(0); } }
+@keyframes panelContentDown { from { transform: translateY(0); }    to { transform: translateY(12px); } }
+
+/* ── The navbar ──
+   It stays where it is; the feedback lives in the tab itself. `.tab.active` is
+   re-applied on every switch, so these replay each time you move between tabs. */
+.orbit-tabbar .tab {
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.orbit-tabbar .tab.active i,
+.orbit-tabbar .tab.active svg {
+  animation: tabPop .3s var(--ease);
+}
+.orbit-tabbar .tab.active span {
+  animation: tabLabelIn .3s var(--ease);
+}
+/* Press feedback, so a tab answers before the switch happens. */
+.orbit-tabbar .tab:active i,
+.orbit-tabbar .tab:active svg {
+  transform: scale(.88);
+  transition: transform .12s var(--ease);
+}
+
+@keyframes tabPop {
+  0%   { transform: scale(.82); }
+  55%  { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+@keyframes tabLabelIn {
+  from { transform: translateY(3px); }
+  to   { transform: translateY(0); }
+}
 
 
 /* ═══════════════════════════════════════════════════════════════════════════

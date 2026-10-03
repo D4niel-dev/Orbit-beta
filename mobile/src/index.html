@@ -35,7 +35,7 @@
   <!-- v0.8.1-beta redesign layer. MUST load last: mobile.css redefines several
        selectors more than once, and this sheet restates what the redesign
        changes rather than editing that file in place. -->
-  <link rel="stylesheet" href="styles/redesign.css?v=20261002r">
+  <link rel="stylesheet" href="styles/redesign.css?v=20261003a">
 
   <!-- Syntax Highlighting (Prism) -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
@@ -168,8 +168,14 @@
     <aside id="panel-activity" class="mobile-panel">
       <div class="panel-header" style="position:relative;">
         <button id="btn-activity-back" class="header-icon-btn" title="Back"><i data-lucide="arrow-left"></i></button>
-        <h3 style="margin:0;font-size:17px;font-weight:700;color:var(--text-primary);position:absolute;left:50%;transform:translateX(-50%);white-space:nowrap;text-align:center;">Activity</h3>
-        <button id="btn-activity-action" title="Clear"><i data-lucide="trash-2"></i></button>
+        <!-- No inline positioning: the header is a flex row and the title takes
+             the space between two equal-width buttons, which centres it exactly.
+             The old `position:absolute; left:50%` shrink-wrapped to 326px rather
+             than to its text and landed 20px left of centre. -->
+        <h3 class="panel-title">Activity</h3>
+        <!-- Was missing .header-icon-btn, so it collapsed to nothing and the
+             title's flex:1 ate the space — which is what pushed the title off. -->
+        <button id="btn-activity-action" class="header-icon-btn" title="Clear"><i data-lucide="trash-2"></i></button>
       </div>
        <div id="activity-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
     </aside>
