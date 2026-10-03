@@ -30,7 +30,7 @@ window.Changelog = {
             'Version: Bumped to v0.8.1-beta.'
           ]]
         ]) +
-        versionBlock('0.8.0-beta', '', [
+        versionBlock('0.8.0-beta', 'Stable', [
           ['New', [
             'Your theme follows you to your phone. Change it on the desktop and it reaches your own devices \u2014 including a custom theme\u2019s colours, which is the part that actually is the theme.',
             'Message search now runs on SQLite\u2019s full-text index. "project AND deadline" is answered by the database in milliseconds however much history you have, with prefix matching, relevance ranking, and an option to search just one chat.',
@@ -248,7 +248,7 @@ window.Changelog = {
             'Unit tests 267/267. The desktop E2E suite is unaffected by this release.'
           ]]
         ]) +
-        versionBlock('0.6.0-beta', '', [
+        versionBlock('0.6.0-beta', 'Stable', [
           ['Fixed', [
             'Profile Frames Sit Correctly Now — Frames were drawn at 100% of the avatar, so the wreath art hugged the edge instead of wrapping around it. They are now drawn at 125%, centred, so the artwork surrounds the avatar the way it was designed to. This was wrong on mobile too, and both platforms are now the same.'
           ]],
@@ -335,7 +335,7 @@ window.Changelog = {
             'Version bumped to v0.5.0-beta across all manifests; Android bundle resynced.'
           ]]
         ]) +
-        versionBlock('0.4.2-beta', 'Stable', [
+        versionBlock('0.4.2-beta', '', [
           ['Features', [
             'Chat Folders (Desktop, Experimental) — New Folders rail in the sidebar, gated behind Settings → Advanced → Enable Experimental + the new "Chat Folders" toggle. Create/rename/delete folders, add friends and groups via the chat context menu, browse a folder\'s chats in a dedicated view, and bulk-assign chats with the "Add Chats" picker. Folders persist per-device (local only; no sync yet).',
             'Folder Tabs Polish (Mobile) — Home-screen folder tabs redesigned: uniform tab width, centered Friends/Groups/folder trio when you have a single folder, and a dedicated scrollable sub-rail when you have several. Folders no longer draw opaque backgrounds over the panel; the active-tab underline is centered and new folders auto-scroll into view.'
@@ -469,6 +469,22 @@ window.Changelog = {
           ]],
           ['Technical', [
             'Version bumped to v0.2.7-beta.'
+          ]]
+        ]) +
+        versionBlock('0.2.7-beta', 'Stable', [
+          ['New', [
+            'Code blocks got a proper frame \u2014 a header bar, a language badge and a Copy button, with inline code in the accent colour.',
+            'Chat list previews are cleaned up: markdown is stripped, so a code block reads as "code" and a link as "link" rather than a wall of punctuation.'
+          ]],
+          ['Fixes', [
+            'Video duration, finally. Four fallbacks now cover the containers that report nothing useful, including a backward scan for the metadata atom in a fragmented MP4.',
+            'Media survived a restart on mobile again \u2014 a received file is stored with its data as well as its blob URL, so a URL that dies with the session can be rebuilt.',
+            'A friend\u2019s status dot updates when they reply, not only when a beacon arrives.',
+            'Reactions route to the right message in a direct message.',
+            'The play overlay on a video responds to the first touch instead of the second.'
+          ]],
+          ['Version', [
+            'Version: Bumped to v0.2.7-beta.'
           ]]
         ]) +
         versionBlock('0.2.6-beta', '', [

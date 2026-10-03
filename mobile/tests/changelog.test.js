@@ -67,6 +67,34 @@ console.log('\n== the two platforms agree ==');
 check('both platforms show the same newest version', appBlock === deskBlock,
   { mobile: appBlock, desktop: deskBlock });
 
+// The CHANGELOG is where a version is DECLARED stable ("## v0.5.0-beta — **Stable
+// Release**"). Both What's New lists have to say so too, and they had drifted:
+// 0.8.0 and 0.6.0 carried no tag at all, and 0.2.7 was missing from both lists
+// entirely despite being a stable release.
+console.log('\n== every stable release is tagged Stable in the lists ==');
+const md = fs.readFileSync(path.join(REPO, 'CHANGELOG.md'), 'utf8');
+const stableVersions = [...md.matchAll(/^##\s+v([0-9][^\s]*)\s+—\s+\*\*Stable/gm)].map(m => m[1]);
+console.log('  CHANGELOG marks stable: ' + stableVersions.join(', '));
+check('the CHANGELOG declares at least one stable release', stableVersions.length > 0, stableVersions.length);
+
+for (const [label, file, fn] of [
+  ['mobile', 'mobile/src/js/app.js', 'vBlock'],
+  ['desktop', 'desktop/src/js/components/changelog.js', 'versionBlock']
+]) {
+  const src = fs.readFileSync(path.join(REPO, file), 'utf8');
+  const tags = {};
+  for (const m of src.matchAll(new RegExp(fn + "\\(\\s*'([0-9][^']*)'\\s*,\\s*'([^']*)'", 'g'))) {
+    tags[m[1]] = m[2];
+  }
+  const missing = stableVersions.filter(v => !/stable/i.test(tags[v] || ''));
+  check(label + ': every stable release carries a Stable tag', missing.length === 0,
+    missing.map(v => v + ' -> ' + JSON.stringify(tags[v] === undefined ? '(not in the list)' : tags[v])));
+  // A version that is not stable must NOT wear the tag.
+  const wrong = Object.keys(tags).filter(v => /stable/i.test(tags[v]) && stableVersions.indexOf(v) === -1);
+  check(label + ': no non-stable release wears a Stable tag', wrong.length === 0,
+    wrong.map(v => v + ' -> ' + JSON.stringify(tags[v])));
+}
+
 // A version that appears twice would mean an entry was renamed rather than added,
 // which is how a released version once vanished from the README history.
 console.log('\n== no version appears twice ==');

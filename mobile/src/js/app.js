@@ -7489,7 +7489,7 @@ document.addEventListener('DOMContentLoaded', function() {
             'Version: Bumped to v0.8.1-beta.'
           ]]
         ]) +
-        vBlock('0.8.0-beta', '', [
+        vBlock('0.8.0-beta', 'Stable', [
           ['New', [
             'Your theme follows you to your phone. Change it on the desktop and it reaches your own devices \u2014 including a custom theme\u2019s colours, which is the half that matters.',
             'Message search now uses a full-text index, so it answers in milliseconds however much history you have.',
@@ -7701,7 +7701,7 @@ document.addEventListener('DOMContentLoaded', function() {
             'Unit tests 267/267.'
           ]]
         ]) +
-        vBlock('0.6.0-beta', '', [
+        vBlock('0.6.0-beta', 'Stable', [
           ['Notifications', [
             'Real system notifications — Orbit now tells you about messages, @mentions, incoming calls, available updates and background work even when it is closed. Each type has its own icon and its own notification channel, so you can set different behaviour for calls and for quiet background work in Android settings.',
             'Messages group by chat, so a burst from one person collapses into a single notification instead of stacking up.'
@@ -7807,7 +7807,7 @@ document.addEventListener('DOMContentLoaded', function() {
             'Version bumped to v0.5.0-beta across all manifests; Android bundle resynced.'
           ]]
         ]) +
-        vBlock('0.4.2-beta', 'Stable', [
+        vBlock('0.4.2-beta', '', [
           ['Features', [
             'Chat Folders (Desktop, experimental) — New Folders rail in the sidebar: create/rename/delete folders, add chats via the context menu, and bulk-assign with the "Add Chats" picker. Folders persist per-device (no sync yet).',
             'Folder Tabs Polish (Mobile) — Uniform tab width, centered Friends/Groups/folder trio with one folder, scrollable sub-rail with several; no opaque backgrounds, centered underline, auto-scroll on new folders.'
@@ -7937,6 +7937,22 @@ document.addEventListener('DOMContentLoaded', function() {
           ]],
           ['Technical', [
             'Version bumped to v0.2.7-beta.'
+          ]]
+        ]) +
+        vBlock('0.2.7-beta', 'Stable', [
+          ['New', [
+            'Code blocks got a proper frame \u2014 a header bar, a language badge and a Copy button, with inline code in the accent colour.',
+            'Chat list previews are cleaned up: markdown is stripped, so a code block reads as "code" and a link as "link" rather than a wall of punctuation.'
+          ]],
+          ['Fixes', [
+            'Video duration, finally. Four fallbacks now cover the containers that report nothing useful, including a backward scan for the metadata atom in a fragmented MP4.',
+            'Media survived a restart on mobile again \u2014 a received file is stored with its data as well as its blob URL, so a URL that dies with the session can be rebuilt.',
+            'A friend\u2019s status dot updates when they reply, not only when a beacon arrives.',
+            'Reactions route to the right message in a direct message.',
+            'The play overlay on a video responds to the first touch instead of the second.'
+          ]],
+          ['Version', [
+            'Version: Bumped to v0.2.7-beta.'
           ]]
         ]) +
         vBlock('0.2.6-beta', '', [
@@ -8327,7 +8343,7 @@ document.addEventListener('DOMContentLoaded', function() {
             '42 decorative profile frame overlays, experimental feature badges'
           ]]
         ]) +
-        vBlock('0.0.5-beta', '', [
+        vBlock('0.0.5-beta', 'Stable', [
           ['New Features', [
             'Backup & Restore, Database Health Check, Database Repair',
             'Unread badges, @mention highlighting, mention badges, jump to first unread',
