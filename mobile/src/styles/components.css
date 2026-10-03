@@ -539,8 +539,16 @@ button:active,
 
    !important is required because the render sites still carry inline styles. This
    block is deliberately the single source of truth so the values cannot drift apart
-   again — change them here, not at the call sites. */
-img.pfp-frame {
+   again — change them here, not at the call sites.
+
+   The selector repeats `.pfp-frame` ON PURPOSE. `img.pfp-frame` is (0,1,1), which
+   is the SAME weight as any later `.some-wrapper img` rule — and `!important`
+   does not break that tie, load order does. redesign.css loads last and sets
+   `background` on `.profile-avatar-wrapper img`, which also matches the frame, so
+   every profile frame got a solid dark square behind it. Doubling the class makes
+   this (0,2,1) so it wins on weight instead of on luck. Do not "tidy" it back to
+   one. */
+img.pfp-frame.pfp-frame {
   position: absolute !important;
   top: -12.5% !important;
   left: -12.5% !important;

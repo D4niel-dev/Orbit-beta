@@ -2308,7 +2308,11 @@
   width: 88px !important;
   height: 88px !important;
 }
-.profile-avatar-wrapper img,
+/* `:not(.pfp-frame)` is load-bearing. A bare `img` here also matched the frame
+   overlay, and because this file loads after components.css the `!important`
+   background won on order — every profile frame got a dark square behind it.
+   The frame is not an avatar and must never be styled as one. */
+.profile-avatar-wrapper img:not(.pfp-frame),
 .profile-avatar-wrapper .avatar-placeholder {
   border: none !important;
   background: var(--bg-raised-2) !important;
@@ -3058,4 +3062,121 @@
   background: var(--bg-raised-2) !important;
   color: var(--text-primary) !important;
   font-weight: 600 !important;
+}
+
+
+/* ── Toasts ──
+   Styled over mobile.css rather than edited in place, same as everything else in
+   this file (see the note at the top). The old shape belonged to the previous
+   language: a 3px accent bar down the left edge, a 12px radius, a raw drop shadow
+   and a 20px icon with nothing around it.
+
+   The replacement uses the same pieces the rest of the app now does — the raised
+   surface, the hairline, the radius ladder, and an icon TILE, which is the shape
+   the settings cards and the empty states already use. One bar down one edge was
+   the only thing saying "success" or "error"; a tinted tile says it with the icon
+   that is already there. */
+#toast-container {
+  top: calc(14px + var(--safe-area-top));
+  left: 14px;
+  right: 14px;
+  /* Wide enough that each card's shadow lands on the background rather than on
+     the card below it, which made a stack look like one smudged block. */
+  gap: 14px;
+}
+
+.toast-mobile {
+  position: relative;
+  padding: 12px 14px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-raised);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .34), 0 1px 0 rgba(255, 255, 255, .04) inset;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  gap: 12px;
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--text-primary);
+  overflow: hidden;
+  animation: toastIn var(--dur, .34s) var(--ease, cubic-bezier(.16,1,.3,1));
+}
+
+/* The old left accent bar. Kept off rather than deleted so nothing that still
+   expects a ::before on this element gets a surprise. */
+.toast-mobile::before { display: none; }
+
+/* The icon tile. Padding on the icon rather than a wrapper element, because the
+   markup is an <i> that lucide swaps for an <svg> — a wrapper would have to
+   survive that swap, and this does not. */
+.toast-mobile > i,
+.toast-mobile > svg {
+  width: 30px;
+  height: 30px;
+  padding: 7px;
+  box-sizing: border-box;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  background: var(--accent-soft);
+  color: var(--accent-primary);
+  stroke-width: 2.1;
+}
+
+.toast-mobile.toast-success > i,
+.toast-mobile.toast-success > svg {
+  background: rgba(34, 197, 94, .15);
+  color: #34D399;
+}
+.toast-mobile.toast-error > i,
+.toast-mobile.toast-error > svg {
+  background: rgba(239, 68, 68, .15);
+  color: #F87171;
+}
+.toast-mobile.toast-warning > i,
+.toast-mobile.toast-warning > svg {
+  background: rgba(245, 158, 11, .15);
+  color: #FBBF24;
+}
+
+.toast-mobile .toast-text {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The progress bar, as a hairline that runs out with the toast. Inset so it does
+   not fight the corner radius. */
+.toast-mobile .toast-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  width: 100%;
+  transform-origin: left center;
+  /* `color`, not `background` — the bar takes its colour from the type below, and
+     an info toast has no type class, so it needs the accent stated rather than
+     inherited (inheriting gave it --text-primary, a white line). */
+  background: currentColor;
+  color: var(--accent-primary);
+  opacity: .55;
+  border-radius: 0 2px 2px 0;
+  animation: toastBar 2.5s linear forwards;
+}
+.toast-mobile.toast-success .toast-bar { color: #34D399; }
+.toast-mobile.toast-error   .toast-bar { color: #F87171; }
+.toast-mobile.toast-warning .toast-bar { color: #FBBF24; }
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(-14px) scale(.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes toastBar {
+  from { transform: scaleX(1); }
+  to   { transform: scaleX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-mobile { animation: none; }
+  .toast-mobile .toast-bar { animation: none; opacity: .5; transform: scaleX(1); }
 }
