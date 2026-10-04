@@ -26,42 +26,35 @@
 
 ## Release Status
 
-| Channel           | Version     | Status                                                                                                                                                                                                              |
-| ----------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Channel           | Version     | Status                                                                                                                                                                                                                        |
+| ----------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Latest**        | v0.8.2-beta | Maintenance release — the mobile restyle's own regressions closed out: a contacts list that flipped between two renderers, tabs hidden unless you already had a folder, and custom profile banners that had stopped rendering |
-|                   | v0.8.1-beta | Your account travels from the desktop to your phone over your own network, the mobile UI redesign is finished, and search actually finds things |
-| **Stable**        | v0.8.0-beta | Your theme and custom colours follow you between your own devices, message search runs on SQLite FTS5, and the update progress bar actually moves |
-| Legacy **Stable** | v0.1.1-beta | Legacy stable release                                                                                                                                                                                               |
+|                   | v0.8.1-beta | Your account travels from the desktop to your phone over your own network, the mobile UI redesign is finished, and search actually finds things                                                                               |
+| **Stable**        | v0.8.0-beta | Your theme and custom colours follow you between your own devices, message search runs on SQLite FTS5, and the update progress bar actually moves                                                                             |
+| Legacy **Stable** | v0.1.1-beta | Legacy stable release                                                                                                                                                                                                         |
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
 
 ## Windows Preview
 
 <p align="center">
-  <img src="desktop/src/icons/screenshots/preview-darkmode.png" alt="Orbit dark mode" width="720"><br>
-  <em>Dark mode</em>
-</p>
-
-<p align="center">
+  <img src="desktop/src/icons/screenshots/preview-darkmode.png" alt="Orbit dark mode" width="720">
   <img src="desktop/src/icons/screenshots/preview-lightmode.png" alt="Orbit light mode" width="720"><br>
-  <em>Light mode</em>
+  <em>Dark mode & Light Mode</em>
 </p>
 
 <p align="center">
-  <img src="desktop/src/icons/screenshots/preview-settings-dark.png" alt="Orbit settings (dark)" width="360">
-  <img src="desktop/src/icons/screenshots/preview-settings-light.png" alt="Orbit settings (light)" width="360"><br>
+  <img src="desktop/src/icons/screenshots/preview-settings-dark.png" alt="Orbit settings (dark)" width="720"><br>
   <em>Settings</em>
 </p>
 
 <p align="center">
-  <img src="desktop/src/icons/screenshots/preview-gallery-dark.png" alt="Orbit gallery (dark)" width="360">
-  <img src="desktop/src/icons/screenshots/preview-gallery-light.png" alt="Orbit gallery (light)" width="360"><br>
+  <img src="desktop/src/icons/screenshots/preview-gallery-dark.png" alt="Orbit gallery (dark)" width="720"><br>
   <em>Gallery & File sharing</em>
 </p>
 
 <p align="center">
-  <img src="desktop/src/icons/screenshots/preview-group-dark.png" alt="Orbit group chat (dark)" width="360">
-  <img src="desktop/src/icons/screenshots/preview-group-light.png" alt="Orbit group chat (light)" width="360"><br>
+  <img src="desktop/src/icons/screenshots/preview-group-dark.png" alt="Orbit group chat (dark)" width="720"><br>
   <em>Group Chat</em>
 </p>
 
@@ -784,11 +777,17 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 <summary>v0.7.5-beta</summary>
 
 * **`/help` opens the command list again on mobile** — the tap that opened it also closed it
+
 * **Jump to latest**, with a word when you are reading old messages
+
 * **Commands** in the `+` menu, and **copyable user IDs** on both platforms
+
 * **Swipe the pinned bar** between pins
+
 * **Members folded** into the `⋮` menu, and a **search ✕** that clears before it closes
+
 * **No more "Created Unknown"**, and a setting for the group created date
+
 * **A sheet that opens off-screen says so**, instead of eating what you typed
 
 * **55 profile frames**, up from 43, with a picker that lists what exists
@@ -809,13 +808,15 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 
 </details>
 
-<details open>
-<summary>v0.8.2-beta</summary>
+<details>
+<summary>v0.8.0-beta (Stable)</summary>
 
-* **A maintenance release** — the mobile restyle's own regressions, closed out
-* **Diagnostics, rebuilt** — a verdict with a pass count, the checks in one grouped card, and the report shown rather than only described
-* **Fixed** — the contacts list flipping to a flat list on almost any update, the Friends/Groups tabs hidden unless you already had a folder, and custom profile banners that had stopped rendering
-* **Mobile test suite** — 66 → 134 checks
+* **Your theme follows you between your own devices** — including a custom theme's colours
+* **Message search runs on SQLite's FTS5** — boolean queries, prefix matching, relevance ranking, per-chat scoping
+* **The update progress bar moves** — it had no denominator to divide by
+* **The Images tab is images** — video and audio went to Files, where their icons work
+* **Changing the display no longer refreshes the whole window**
+* **Fixed** — two galleries at once, no way out of select mode, and file cards spilling over their neighbours
 
 </details>
 
@@ -830,15 +831,13 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 
 </details>
 
-<details>
-<summary>v0.8.0-beta (Stable)</summary>
+<details open>
+<summary>v0.8.2-beta</summary>
 
-* **Your theme follows you between your own devices** — including a custom theme's colours
-* **Message search runs on SQLite's FTS5** — boolean queries, prefix matching, relevance ranking, per-chat scoping
-* **The update progress bar moves** — it had no denominator to divide by
-* **The Images tab is images** — video and audio went to Files, where their icons work
-* **Changing the display no longer refreshes the whole window**
-* **Fixed** — two galleries at once, no way out of select mode, and file cards spilling over their neighbours
+* **A maintenance release** — the mobile restyle's own regressions, closed out
+* **Diagnostics, rebuilt** — a verdict with a pass count, the checks in one grouped card, and the report shown rather than only described
+* **Fixed** — the contacts list flipping to a flat list on almost any update, the Friends/Groups tabs hidden unless you already had a folder, and custom profile banners that had stopped rendering
+* **Mobile test suite** — 66 → 134 checks
 
 </details>
 
@@ -850,15 +849,13 @@ See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
 Pre-built Windows installers are published on [GitHub Releases](https://github.com/D4niel-dev/Orbit-beta/releases).
 
-| Release                                                                          | Platform                    | Notes                                                                                                                                                                            |
-| -------------------------------------------------------------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [All releases](https://github.com/D4niel-dev/Orbit-beta/releases)                | Win / Mac / Linux / Android | Most recent build first                                                                                                                                                          |
-| [v0.8.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.8.2-beta) | Win / Mac / Linux / Android | Maintenance — the mobile restyle's regressions closed out, and Diagnostics rebuilt |
+| Release                                                                          | Platform                    | Notes                                                                                                                                              |
+| -------------------------------------------------------------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [All releases](https://github.com/D4niel-dev/Orbit-beta/releases)                | Win / Mac / Linux / Android | Most recent build first                                                                                                                            |
+| [v0.8.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.8.2-beta) | Win / Mac / Linux / Android | Maintenance — the mobile restyle's regressions closed out, and Diagnostics rebuilt                                                                 |
 | [v0.8.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.8.1-beta) | Win / Mac / Linux / Android | Your account travels from the desktop to your phone over your own network; the mobile UI redesign is finished; search finds things and has filters |
-| [v0.8.0-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.8.0-beta) | Win / Mac / Linux / Android | SETTINGS_SYNC between your own devices, FTS5 message search with boolean and prefix queries, and the update progress bar fixed |
-| [v0.7.6-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.6-beta) | Win / Mac / Linux / Android | Shared Media gets search, filters, a grid/list toggle, jump-to-message and multi-select download; the gallery gets storage stats, bulk delete and a month scrubber; the composer lights up when it can send |
-| [v0.0.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.2-beta) | Windows                     | SQLite storage, privacy mode, large file transfers                                                                                                                               |
-| [v0.0.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.1-beta) | Windows                     | Original release                                                                                                                                                                 |
+| [v0.0.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.2-beta) | Windows                     | SQLite storage, privacy mode, large file transfers                                                                                                 |
+| [v0.0.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.1-beta) | Windows                     | Original release                                                                                                                                   |
 
 > The **Releases** page is the source of truth — every current release is a prerelease (`-beta`), and GitHub's `releases/latest` shortcut deliberately skips prereleases, so it will not resolve to an Orbit build.
 
@@ -1116,28 +1113,17 @@ Transparency matters in beta. Current constraints include:
 ## Roadmap
 
 ### Shipped (v0.8.2-beta)
+
 * **Diagnostics, rebuilt** — a verdict with a pass count, the checks in one grouped card, and the report shown rather than only described
 * **Fixed** — the contacts list flipping between two renderers, the Friends/Groups tabs hidden unless you already had a folder, and custom profile banners that had stopped rendering
 * **Mobile test suite grew** — 66 → 134 checks, with new probes for the contacts list, the home tabs and Diagnostics
 
 ### Shipped (v0.8.1-beta)
+
 * **Account transfer** — desktop → phone over your own network, encrypted, imported as a second account
 * **The mobile UI redesign, finished** — filled tab icons, the conversation screen, the composer, the gallery, the profile card, full-bleed settings
 * **Search** — it was finding nothing outside the open chat; now it spans everything, with filters on both surfaces
 * **Mobile test suite** — 66 checks, `npm run test:mobile`
-
-### Shipped (v0.8.0-beta)
-* **SETTINGS_SYNC** — your theme and custom colours follow you between your own devices
-* **FTS5 Message Search** — boolean queries, prefix matching, relevance ranking, per-chat scoping
-* **Fixed** — the update progress bar, custom colours not syncing, the Images tab showing video and audio, the display toggle refreshing the window, two galleries at once, no way out of select mode, and overflowing file cards
-
-### Shipped (v0.7.6-beta)
-* **Shared Media Rebuilt** — search, filters, grid/list, jump-to-message, multi-select download, and lazy rendering
-* **Storage Stats** — how much your media takes, and which chats it came from, biggest first
-* **Select and Delete Media** — with a confirm that says it goes for both people
-* **A Month Scrubber** — jump to any month that has media
-* **The Composer** — a plus that becomes an ×, a send button that lights up and fills, and an easter egg on a disabled one
-* **Fixed** — the Images tab showing video and audio, the display toggle re-rendering the window, two galleries at once, no way out of select mode, NaN day groups, and overflowing file cards
 
 ### In Progress / Planned
 
@@ -1228,3 +1214,5 @@ Bug *reports* and *feature ideas* are welcome via [GitHub Issues](https://github
   <strong>Orbit Team</strong> · Lead developer <a href="https://github.com/D4niel-dev">D4niel-dev</a><br>
   Local-first communication for private networks
 </p>
+
+
