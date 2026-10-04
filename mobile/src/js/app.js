@@ -436,34 +436,34 @@ document.addEventListener('DOMContentLoaded', function() {
 
   var activeChatId = null;
 
-  /* -- Navigation -- */
-  var TAB_ORDER = ['chats', 'friends', 'activity', 'settings'];
-  var _currentTabIndex = 0;
-  var navBtns = document.querySelectorAll('.nav-btn');
-  navBtns.forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      var view = this.getAttribute('data-view');
-      var newIndex = TAB_ORDER.indexOf(view);
-      if (newIndex === _currentTabIndex) return;
+  /* -- Navigation --
+     The left-to-right order of the tab panels, which is what decides the
+     direction a transition slides. Moving to a panel further along this list
+     goes FORWARD — the outgoing panel leaves to the left and the incoming one
+     arrives from the right. Moving to an earlier one goes BACK, and the two
+     swap over.
 
-      navBtns.forEach(function(b) { b.classList.remove('active'); });
-      this.classList.add('active');
-      var panels = document.querySelectorAll('.mobile-panel');
-      panels.forEach(function(p) {
-        p.classList.remove('active', 'panel-slide-right', 'panel-slide-left');
-      });
-      var target = document.getElementById('panel-' + view);
-      if (target) {
-        target.classList.add(newIndex > _currentTabIndex ? 'panel-slide-right' : 'panel-slide-left');
-        target.classList.add('active');
-      }
-      _currentTabIndex = newIndex;
-    });
-  });
+     This replaced a handler bound to `.nav-btn`, an element the tab bar has not
+     used since it was rebuilt — it also carried its own `panel-slide-*` classes
+     and animations, so the app had two transition mechanisms and only one of
+     them was reachable. */
+  var PANEL_ORDER = ['panel-chats', 'panel-friends', 'panel-activity'];
 
   /* -- Panel Transition Helper -- */
+  /**
+   * Switch panels with a directional slide.
+   *
+   * The direction is DERIVED from PANEL_ORDER rather than passed in. It used to
+   * come from the caller, and the only caller passed `tabId === 'chats' ?
+   * 'reverse' : 'enter'` — so the direction was really "is the destination
+   * Chats?" and every move that did not involve Chats slid the same way. Going
+   * Chats → Contacts → Activity → Contacts, the last step slid left when it
+   * should have slid right.
+   *
+   * `animation` is still honoured for the one genuinely vertical case: a chat
+   * opening over the list rises from the bottom and settles back down.
+   */
   function switchPanel(panelId, animation) {
-    animation = animation || 'enter';
     var panels = document.querySelectorAll('.mobile-panel');
     var currentActive = null;
     panels.forEach(function(p) {
@@ -476,15 +476,17 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if (currentActive) {
       var exitClass, enterClass;
-      if (animation === 'reverse') {
-        exitClass = 'anim-exit-reverse';
-        enterClass = 'anim-enter-reverse';
-      } else if (animation === 'enter-up') {
+      if (animation === 'enter-up') {
         exitClass = 'anim-exit-down';
         enterClass = 'anim-enter-up';
       } else {
-        exitClass = 'anim-exit';
-        enterClass = 'anim-enter';
+        // -1 for a panel not in the list, so an unknown destination is treated
+        // as being to the right rather than silently going backwards.
+        var from = PANEL_ORDER.indexOf(currentActive.id);
+        var to = PANEL_ORDER.indexOf(panelId);
+        var back = from !== -1 && to !== -1 && to < from;
+        exitClass = back ? 'anim-exit-reverse' : 'anim-exit';
+        enterClass = back ? 'anim-enter-reverse' : 'anim-enter';
       }
       currentActive.classList.add(exitClass);
       setTimeout(function() {
@@ -13148,7 +13150,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var _elbtn_notifications = document.getElementById('btn-notifications-header');
   if (_elbtn_notifications) {
     _elbtn_notifications.addEventListener('click', function() {
-      switchPanel('panel-activity', 'enter');
+      switchPanel('panel-activity');
       setTimeout(function() {
         if (typeof renderActivity === 'function') renderActivity();
       }, 200);
@@ -13163,7 +13165,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var _elbtn_activity_back = document.getElementById('btn-activity-back');
   if (_elbtn_activity_back) {
     _elbtn_activity_back.addEventListener('click', function() {
-      switchPanel('panel-chats', 'reverse');
+      switchPanel('panel-chats');
       var pill = document.getElementById('profile-pill');
       if (pill) { pill.style.opacity = ''; pill.style.pointerEvents = ''; }
     });

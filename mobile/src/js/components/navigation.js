@@ -165,7 +165,11 @@ var OrbitNav = {
     }
 
     if (typeof window.switchPanel === 'function' && tab.panel) {
-      window.switchPanel(tab.panel, tabId === 'chats' ? 'reverse' : 'enter');
+      // No direction hint. It used to pass `tabId === 'chats' ? 'reverse' : 'enter'`,
+      // which made the direction depend on the DESTINATION rather than on where
+      // you were coming from — so every move not involving Chats slid the same
+      // way. switchPanel derives it from the panel order now.
+      window.switchPanel(tab.panel);
     }
 
     // Panels are lazy: nothing rendered the friends list before, because
