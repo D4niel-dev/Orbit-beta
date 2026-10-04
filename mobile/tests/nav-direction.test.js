@@ -1,21 +1,21 @@
-// Tab transitions must slide the way you are moving.
+// Tab transitions must slide the way you are moving, must not fade, and must not
+// move the tab bar.
 //
-// Dan: "why is the mobile transitions only slide to the left? where is the slide
-// to the right? like when user's go from 'Chat' to 'Contacts' left is ok, but
-// when it's from the other way round, it's should be slide to the right!"
+// Dan: "why is the mobile transitions only slide to the left? ... when it's from
+// the other way round, it's should be slide to the right!"
+// then: "and why did you add back the fade in effect to the slide effects?!"
 //
-// Two separate faults, and the second one hid the first:
+// Three things are load-bearing here, and they are easy to break one at a time:
 //
-//   1. The direction came from the CALLER, and the only caller passed
-//      `tabId === 'chats' ? 'reverse' : 'enter'` — so the direction was really
-//      "is the destination Chats?" and every move that did not involve Chats
-//      went the same way. Chats -> Contacts -> Activity -> Contacts slid left on
-//      the last step, which is backwards.
-//   2. redesign.css switched ALL SIX panel animations off with
-//      `animation: none !important`. So nothing animated anywhere, and the
-//      complaint about direction could not be reproduced as stated.
-//
-// This asserts the animation name that actually lands, in both directions.
+//   1. The direction comes from PANEL_ORDER in switchPanel. It used to come from
+//      the caller as `tabId === 'chats' ? 'reverse' : 'enter'`, which is really
+//      "is the destination Chats?" — so every move not involving Chats went the
+//      same way.
+//   2. The PANEL must not animate; its CHILDREN do. The tab bar lives inside
+//      every panel, so animating the panel slides the bar — the exact bug that
+//      was fixed once already by measuring the bar across a switch.
+//   3. No `opacity` in the keyframes. The panel keyframes carry a fade; the
+//      content keyframes must not, or the slide reads as a cross-dissolve.
 const H = require('./harness.js');
 const path = require('path');
 
@@ -26,23 +26,30 @@ const path = require('path');
     orbit_settings: { theme: 'dark' }
   });
 
-  // Record every animation name that lands on a panel, with the panel it is on.
+  // Record what animates, on which element, with which keyframes.
   await page.evaluate(() => {
     window.__nav = [];
     const obs = new MutationObserver((muts) => {
       for (const m of muts) {
         const el = m.target;
         if (!el.classList || !el.classList.contains('mobile-panel')) continue;
-        const anim = getComputedStyle(el).animationName;
-        if (!anim || anim === 'none') continue;
-        window.__nav.push({ id: el.id, anim: anim });
+        const panelAnim = getComputedStyle(el).animationName;
+        // The children are what should be moving.
+        const childAnim = {};
+        Array.from(el.children).forEach((c) => {
+          const a = getComputedStyle(c).animationName;
+          if (a && a !== 'none') {
+            const key = c.className && c.className.indexOf('orbit-tabbar') !== -1 ? 'tabbar' : 'content';
+            childAnim[key] = a;
+          }
+        });
+        window.__nav.push({ id: el.id, panelAnim: panelAnim, children: childAnim });
       }
     });
     document.querySelectorAll('.mobile-panel').forEach((el) =>
       obs.observe(el, { attributes: true, attributeFilter: ['class'] }));
   });
 
-  // Tap a tab and return the pair of animations it produced.
   const move = async (tabId) => {
     await page.evaluate(() => { window.__nav = []; });
     await page.evaluate((t) => {
@@ -53,35 +60,87 @@ const path = require('path');
     return page.evaluate(() => window.__nav);
   };
 
-  const names = (seq) => seq.map((s) => s.anim).join(' + ');
-  const entering = (seq) => (seq.find((s) => /Enter/.test(s.anim)) || {}).anim || '(none)';
+  // The INCOMING panel's content animation. The exit fires first, so a naive
+  // "first content animation seen" returns panelContentOut* and the assertion
+  // reads backwards.
+  const entering = (seq) => {
+    for (const s of seq) {
+      const a = s.children && s.children.content;
+      if (a && a.indexOf('panelContentIn') === 0) return a;
+    }
+    return '(none)';
+  };
 
   console.log('\n== going FORWARD: Chats -> Contacts -> Activity ==');
   let seq = await move('contacts');
-  console.log('  Chats -> Contacts   ', names(seq));
-  H.check('forward: the incoming panel enters from the right',
-    entering(seq) === 'panelEnter', names(seq));
+  console.log('  Chats -> Contacts   ', entering(seq));
+  H.check('forward: the content enters from the RIGHT',
+    entering(seq) === 'panelContentIn', entering(seq));
 
   seq = await move('activity');
-  console.log('  Contacts -> Activity', names(seq));
-  H.check('forward again: still enters from the right',
-    entering(seq) === 'panelEnter', names(seq));
+  console.log('  Contacts -> Activity', entering(seq));
+  H.check('forward again: still from the right',
+    entering(seq) === 'panelContentIn', entering(seq));
 
   console.log('\n== going BACK: Activity -> Contacts -> Chats ==');
   seq = await move('contacts');
-  console.log('  Activity -> Contacts', names(seq));
-  H.check('BACK: the incoming panel enters from the LEFT — this is the reported bug',
-    entering(seq) === 'panelEnterReverse', names(seq));
+  console.log('  Activity -> Contacts', entering(seq));
+  H.check('BACK: the content enters from the LEFT — the reported bug',
+    entering(seq) === 'panelContentInReverse', entering(seq));
 
   seq = await move('chats');
-  console.log('  Contacts -> Chats   ', names(seq));
-  H.check('back again: still enters from the left',
-    entering(seq) === 'panelEnterReverse', names(seq));
+  console.log('  Contacts -> Chats   ', entering(seq));
+  H.check('back again: still from the left',
+    entering(seq) === 'panelContentInReverse', entering(seq));
 
-  console.log('\n== every transition animates at all ==');
-  const any = await move('contacts');
-  H.check('a tab switch produces an animation, not a jump',
-    any.length > 0, any);
+  console.log('\n== the panel itself must NOT animate ==');
+  const anySeq = await move('contacts');
+  const panelAnims = anySeq.map((s) => s.panelAnim).filter((a) => a && a !== 'none');
+  console.log('  panel animations seen:', JSON.stringify(panelAnims));
+  H.check('the panel never animates — that is what drags the tab bar',
+    panelAnims.length === 0, panelAnims);
+
+  console.log('\n== the tab bar must not move ==');
+  await page.evaluate(() => { const el = document.querySelector('[data-tab="chats"]'); if (el) el.click(); });
+  await page.waitForTimeout(600);
+  // The ACTIVE panel's bar. There is one bar per panel, so a bare
+  // `.orbit-tabbar` picks up the outgoing one and reads 0,0 once it is hidden.
+  const barPos = () => page.evaluate(() => {
+    const panel = document.querySelector('.mobile-panel.active');
+    const t = panel && panel.querySelector('.orbit-tabbar');
+    if (!t) return null;
+    const r = t.getBoundingClientRect();
+    return Math.round(r.x) + ',' + Math.round(r.y);
+  });
+
+  await page.evaluate(() => { const el = document.querySelector('[data-tab="chats"]'); if (el) el.click(); });
+  await page.waitForTimeout(600);
+  console.log('  bar before:', await barPos());
+  await page.evaluate(() => { const el = document.querySelector('[data-tab="contacts"]'); if (el) el.click(); });
+  const seen = [];
+  for (let i = 0; i < 12; i++) {
+    await page.waitForTimeout(16);
+    seen.push(await barPos());
+  }
+  const uniq = [...new Set(seen.filter(Boolean))];
+  console.log('  bar positions across the switch:', JSON.stringify(uniq));
+  H.check('the bar holds one position while the content moves', uniq.length <= 1, uniq);
+
+  console.log('\n== no fade in the content keyframes ==');
+  const hasOpacity = await page.evaluate(() => {
+    const out = [];
+    for (const sheet of document.styleSheets) {
+      let rules; try { rules = sheet.cssRules; } catch (e) { continue; }
+      for (const r of rules) {
+        if (!r.name || r.name.indexOf('panelContent') !== 0) continue;
+        const text = Array.from(r.cssRules || []).map((k) => k.cssText).join(' ');
+        if (/opacity/.test(text)) out.push(r.name);
+      }
+    }
+    return out;
+  });
+  console.log('  content keyframes containing opacity:', JSON.stringify(hasOpacity));
+  H.check('the content slide has no opacity — no fade', hasOpacity.length === 0, hasOpacity);
 
   H.check('no page errors', errors.length === 0, errors);
   await browser.close(); server.close(); H.report();

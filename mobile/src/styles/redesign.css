@@ -2196,21 +2196,38 @@
       continuous across the swap and only the content changes under it.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Panel transitions are LEFT ALONE here.
-   This block used to switch all six off with `animation: none !important`, which
-   meant no tab ever animated at all — and because it read as a deliberate
-   "calmer transitions" choice, nobody looked. Dan reported it as "the slide only
-   goes left"; the truth was that nothing slid anywhere.
-   Note: `anim-exit` also carries `display: flex !important` in mobile.css, and
-   that must survive — do not switch off the whole declaration. */
+/* The PANEL animation stays off — the content animation below is the one that
+   runs. These two are not alternatives: if the panel animates, the tab bar
+   animates with it (the bar lives inside every panel) and `panelEnter`/`panelExit`
+   carry `opacity`, which is the fade.
 
-.mobile-panel.anim-enter > *:not(.orbit-tabbar),
-.mobile-panel.anim-enter-reverse > *:not(.orbit-tabbar) {
+   I removed this block once, thinking `animation: none !important` on a state
+   class looked like a mistake. It is not — it is what keeps the panel still while
+   the content moves. Removing it brought back BOTH the fade and a sliding tab
+   bar, and the bar had been measured still at 276 samples across a switch.
+
+   Note: `anim-exit` also carries `display: flex !important` in mobile.css, and
+   that must survive — only the animation is switched off, not the declaration. */
+.mobile-panel.anim-enter,
+.mobile-panel.anim-exit,
+.mobile-panel.anim-enter-up,
+.mobile-panel.anim-exit-down,
+.mobile-panel.anim-enter-reverse,
+.mobile-panel.anim-exit-reverse {
+  animation: none !important;
+}
+
+.mobile-panel.anim-enter > *:not(.orbit-tabbar) {
   animation: panelContentIn .24s var(--ease) both;
 }
-.mobile-panel.anim-exit > *:not(.orbit-tabbar),
-.mobile-panel.anim-exit-reverse > *:not(.orbit-tabbar) {
+.mobile-panel.anim-enter-reverse > *:not(.orbit-tabbar) {
+  animation: panelContentInReverse .24s var(--ease) both;
+}
+.mobile-panel.anim-exit > *:not(.orbit-tabbar) {
   animation: panelContentOut .16s var(--ease) both;
+}
+.mobile-panel.anim-exit-reverse > *:not(.orbit-tabbar) {
+  animation: panelContentOutReverse .16s var(--ease) both;
 }
 .mobile-panel.anim-enter-up > *:not(.orbit-tabbar) {
   animation: panelContentUp .24s var(--ease) both;
@@ -2219,11 +2236,16 @@
   animation: panelContentDown .16s var(--ease) both;
 }
 
-/* Position only — no opacity anywhere, which is the fade he asked to lose. */
-@keyframes panelContentIn   { from { transform: translateX(16px); } to { transform: translateX(0); } }
-@keyframes panelContentOut  { from { transform: translateX(0); }    to { transform: translateX(-12px); } }
-@keyframes panelContentUp   { from { transform: translateY(12px); } to { transform: translateY(0); } }
-@keyframes panelContentDown { from { transform: translateY(0); }    to { transform: translateY(12px); } }
+/* Position only — no opacity anywhere, which is the fade he asked to lose.
+   The `Reverse` pair is what makes the direction real: without them the content
+   animation was the same whichever way you moved, so "back" looked identical to
+   "forward" even once the direction was being derived correctly. */
+@keyframes panelContentIn        { from { transform: translateX(16px); }  to { transform: translateX(0); } }
+@keyframes panelContentOut       { from { transform: translateX(0); }     to { transform: translateX(-12px); } }
+@keyframes panelContentInReverse { from { transform: translateX(-16px); } to { transform: translateX(0); } }
+@keyframes panelContentOutReverse{ from { transform: translateX(0); }     to { transform: translateX(12px); } }
+@keyframes panelContentUp        { from { transform: translateY(12px); }  to { transform: translateY(0); } }
+@keyframes panelContentDown      { from { transform: translateY(0); }     to { transform: translateY(12px); } }
 
 /* ── The navbar ──
    It stays where it is; the feedback lives in the tab itself. `.tab.active` is
