@@ -168,6 +168,89 @@ const path = require('path');
     if (!tag || !heading) return null;
     return Math.round(heading.getBoundingClientRect().top - tag.getBoundingClientRect().bottom);
   });
+  // Cropping a banner must reach the hero, through the <img> layer.
+  //
+  // The live preview used to write `heroEl.style.backgroundImage`, which
+  // `background: transparent !important` on .profile-hero resets — so the crop
+  // modal closed, the URL field filled in, and the hero did not move. Asserting
+  // on the save path does NOT catch this: the sheet re-renders from the store, so
+  // a saved banner appears anyway. It has to be the live preview.
+  console.log('\n== cropping a banner reaches the hero ==');
+  // Close first: showProfileSheet() is a no-op on an already-open sheet, and the
+  // picker button would not be there to click.
+  await page.evaluate(() => {
+    // Remove EVERY overlay, not just the first. `showProfileSheet` is a no-op on
+    // an open sheet, and a stale one leaves two `#btn-pick-banner` elements —
+    // the click then waits on the hidden one and times out.
+    document.querySelectorAll('#profile-sheet-overlay').forEach((el) => el.remove());
+    window.showProfileSheet && window.showProfileSheet();
+  });
+  await page.waitForTimeout(1200);
+  const sheetCount = await page.evaluate(() => document.querySelectorAll('#profile-sheet-overlay').length);
+  const pickerCount = await page.evaluate(() => document.querySelectorAll('#btn-pick-banner').length);
+  console.log('  sheets in the DOM:', sheetCount, ' banner pickers:', pickerCount);
+  const pickerThere = pickerCount > 0;
+  H.check('the sheet offers a banner picker to drive', pickerThere, pickerThere);
+  await page.evaluate(() => {
+    // Start from no banner, so anything that appears came from the crop.
+    if (window.MStore.user) window.MStore.user.banner = '';
+    const band = document.querySelector('.profile-hero-banner');
+    if (band) band.remove();
+    const hero = document.querySelector('.profile-hero');
+    if (hero) hero.classList.remove('has-banner');
+  });
+
+  const beforeCrop = await page.evaluate(() => ({
+    hasBand: !!document.querySelector('.profile-hero-banner')
+  }));
+
+  // A real image, handed to the picker's own file chooser.
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAGQAAAAyCAYAAACqNX6+AAAAV0lEQVR4nO3BAQ0AAADCoPdPbQ8HFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAvBsYAAABK5D4hAAAAABJRU5ErkJggg==',
+    'base64');
+
+  let cropOk = false, cropperOpened = false;
+  try {
+    // Click the picker to set its internal mode, then hand the file straight to
+    // the input it uses. Waiting on a `filechooser` event does not work here —
+    // the input is created by the sheet and clicked programmatically, so the
+    // event never reaches the driver.
+    await page.click('#btn-pick-banner');
+    await page.waitForTimeout(300);
+    await page.setInputFiles('#profile-file-input', { name: 'banner.png', mimeType: 'image/png', buffer: png });
+    await page.waitForTimeout(2000);
+    cropperOpened = await page.evaluate(() => document.querySelectorAll('.ic-action-btn').length >= 2);
+    if (cropperOpened) {
+      // Apply Crop is the second action button; Cancel is first.
+      const btns = await page.$$('.ic-action-btn');
+      await btns[1].click();
+      await page.waitForTimeout(1600);
+      cropOk = true;
+    }
+  } catch (e) {
+    console.log('  (crop flow could not be driven: ' + e.message.slice(0, 60) + ')');
+  }
+
+  const afterCrop = await page.evaluate(() => {
+    const hero = document.querySelector('.profile-hero');
+    const band = hero && hero.querySelector('.profile-hero-banner');
+    return {
+      hasBand: !!band,
+      hasClass: hero ? hero.classList.contains('has-banner') : null,
+      bandSrcLen: band ? String(band.getAttribute('src')).length : 0,
+      inlineBg: hero ? hero.style.backgroundImage.slice(0, 16) : null
+    };
+  });
+  console.log('  before:', JSON.stringify(beforeCrop));
+  console.log('  after :', JSON.stringify(afterCrop));
+  // NOT `!cropOk || …`. If the flow cannot be driven, the assertion has to fail —
+  // a green that passes because nothing ran is worse than a red.
+  H.check('the crop flow was actually driven', cropOk, { cropOk: cropOk, cropperOpened: cropperOpened });
+  H.check('the cropper opened on a chosen banner', cropperOpened, cropperOpened);
+  H.check('applying a crop puts a band in the hero — not a background image',
+    afterCrop.hasBand, afterCrop);
+  H.check('the band carries the cropped image', afterCrop.bandSrcLen > 100, afterCrop);
+
   console.log('  gap from the tag to Edit Profile:', gap + 'px');
   // 36 rather than the 18 this state measures, because the exact figure depends
   // on which avatar and frame are seeded. The bug being guarded against was ~79px.

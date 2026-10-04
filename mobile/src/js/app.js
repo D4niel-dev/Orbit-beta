@@ -8757,6 +8757,40 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   /* -- Profile Panel (editable) -- */
+  /**
+   * Paint the hero's banner — through the <img> layer, never a background.
+   *
+   * There were three places doing `heroEl.style.backgroundImage = 'url(...)'`,
+   * and `.profile-hero { background: transparent !important }` resets
+   * background-image. A stylesheet `!important` beats a non-important inline
+   * style, so all three did nothing: you crop a banner, the modal closes, the URL
+   * field fills in, and the hero does not move.
+   *
+   * The save path also gated the banner on `avatar` — so with no avatar set it
+   * actively CLEARED the banner.
+   *
+   * @param {Element} heroEl  the .profile-hero to paint
+   * @param {string}  url     the image, or a falsy value to remove the banner
+   */
+  function setHeroBanner(heroEl, url) {
+    if (!heroEl) return;
+    var band = heroEl.querySelector('.profile-hero-banner');
+    if (!url) {
+      if (band) band.remove();
+      heroEl.classList.remove('has-banner');
+      return;
+    }
+    if (!band) {
+      band = document.createElement('img');
+      band.className = 'profile-hero-banner';
+      band.alt = '';
+      band.draggable = false;
+      heroEl.insertBefore(band, heroEl.firstChild);
+    }
+    band.src = url;
+    heroEl.classList.add('has-banner');
+  }
+
   function renderProfile() {
     var container = document.getElementById('profile-content');
     var u = MStore.user;
@@ -9429,15 +9463,11 @@ document.addEventListener('DOMContentLoaded', function() {
       // The header avatar is refreshed by updateNavAvatar() above — this block
       // used to repaint the floating pill's avatar, name and frame.
       showToast('Profile saved', 'success');
-      // Update hero section banner and avatar display
+      // Update the hero's banner and avatar. The banner goes through the <img>
+      // layer, and is NOT gated on `avatar` — it used to be, so saving with no
+      // avatar set cleared the banner you had just chosen.
       var heroEl = sheet.querySelector('.profile-hero');
-      if (heroEl) {
-        if (avatar) {
-          heroEl.style.backgroundImage = 'url(' + banner + ')';
-        } else {
-          heroEl.style.backgroundImage = '';
-        }
-      }
+      setHeroBanner(heroEl, banner);
       var avatarWrapper = sheet.querySelector('.profile-avatar-wrapper');
       if (avatarWrapper) {
         var img = avatarWrapper.querySelector('img');
@@ -9575,10 +9605,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                   }
                 } else {
-                  // Update banner in hero
-                  if (heroEl) {
-                    heroEl.style.backgroundImage = 'url(' + result + ')';
-                  }
+                  // Live-preview the banner in the hero. Through the <img> layer —
+                  // a background image here is reset by `background: transparent
+                  // !important` on .profile-hero and does nothing at all.
+                  setHeroBanner(heroEl, result);
                 }
               }
             }
