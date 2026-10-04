@@ -143,7 +143,10 @@ window.SettingsModal = {
                 // The numbers that have an asset, listed rather than ranged, so a missing
                 // asset cannot put a broken tile in the picker. All of 1..55 exist as of the
                 // latest batch. Regenerate if the frame assets change.
-                var FRAME_NUMBERS = [
+                // The shared list — the mobile reads the same one. This was a
+                // literal 1..55 here and a loop stopping at 42 on the phone, so
+                // the two drifted and nobody could tell.
+                var FRAME_NUMBERS = (window.ProfileFrames && window.ProfileFrames.numbers) || [
                   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
                   13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
                   25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36,

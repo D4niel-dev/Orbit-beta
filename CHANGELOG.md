@@ -6,6 +6,8 @@
 
 ### Features
 
+- **The Phone Offers All 55 Profile Frames** — The desktop enumerated **1–55** and the phone's picker stopped at **42**, so twelve frames were simply not there. Nothing errored and nothing looked wrong: a picker missing its last entries is indistinguishable from a picker that ends there. Both platforms now read one list, `shared/ui/profile-frames.js`, and a test fails if the list and the shipped PNGs ever disagree — in either direction, so a frame file nobody can choose is caught too. Dan: *"we need to increase the profile frames cap before the release (it has less than desktop...)"*.
+
 - **Diagnostics, Rebuilt** — It was a section title repeating the screen header, one card, six bare rows floating on the background with nothing under them, and the top third of a screen filled. It opens with a **verdict now** — "Everything checks out" or "Something needs a look", with a count of how many checks passed — the checks sit in one grouped card instead of loose on the background, and the **report is shown** in a monospace block rather than only described. "Copy these values to paste into a bug report" was a promise about content you could not see; the same promise kept is the actual text. The Copy button and the preview come from **one builder**, because they were two separate loops over the same rows and would have drifted the first time either changed.
 
 ### Bug Fixes
@@ -23,7 +25,7 @@
 ### Technical
 
 - **The Restyle Layer Has Three Shapes That Keep Catching Things** — Every bug it has caused is one of them: a **bare `img` or `*` child selector** (it caught the profile-frame overlay), a **`:not(...)` on a state class** (it hid the tab strip unless you already had a folder), and a **`background` shorthand with `!important`** (it reset an inline `background-image`, so custom banners were invisible). All three read as deliberate once they land, which is why none of them were noticed. When writing in that file, prefer the narrowest selector that does the job and never set `position` when all you need is `z-index` — a blanket child selector that sets `position` takes it away from the children that are deliberately `absolute`, which is how the profile sheet's two buttons ended up stacked down the left edge.
-- **Test Suites** — `npm run test:unit` remains **10 suites**; `npm run test:mobile` is now **132 checks** across eleven probes; the desktop Playwright suite remains 37 tests across two shards. The new probes cover the Contacts list, the home tabs and Diagnostics.
+- **Test Suites** — `npm run test:unit` is now **11 suites**; `npm run test:mobile` is now **134 checks** across eleven probes; the desktop Playwright suite remains 37 tests across two shards. The new probes cover the Contacts list, the home tabs and Diagnostics.
 
 ## v0.8.1-beta
 
@@ -76,7 +78,7 @@
 - **`npm run mobile:sync` Needs `NODE_OPTIONS` Cleared in this environment** — `cap sync` legitimately deletes the old `assets/public/` before copying, and the host's safe-delete shim kills it with a state-lock timeout. Same cause as the desktop-suite trap. The failure is misleading: `shared:sync` and `version:sync` both succeed first, so it looks like a partial failure.
 - **A Dead Duplicate Chat-List Renderer** — `app.js` carries a ~250-line `renderChatList` that never runs, shadowed by the one in `home-screen.js`. It is what made a violet "premium badge" rule look live when the real badge has always been the app accent. Left in place, but it is a trap for whoever edits the wrong copy.
 - **Two Bugs That Were in the Tests, Not the App** — Twice while writing the new suite I chased a failure that turned out to be a bad assertion: faking an `active` class does not survive the nav's own re-render, and the document holds three tab bars (one per panel), so three active tabs is correct. Both were fixed by driving the real code path and asserting per bar.
-- **Test Suites** — `npm run test:unit` remains **10 suites**; `npm run test:mobile` is new at **66 checks**; the desktop Playwright suite remains 37 tests across two shards.
+- **Test Suites** — `npm run test:unit` is now **11 suites**; `npm run test:mobile` is new at **66 checks**; the desktop Playwright suite remains 37 tests across two shards.
 
 ## v0.8.0-beta — **Stable Release**
 

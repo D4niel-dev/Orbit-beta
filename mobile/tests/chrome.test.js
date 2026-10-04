@@ -251,6 +251,31 @@ const path = require('path');
     afterCrop.hasBand, afterCrop);
   H.check('the band carries the cropped image', afterCrop.bandSrcLen > 100, afterCrop);
 
+  // The frame picker must offer every frame that exists. It stopped at 42 while
+  // 55 exist, so the phone was twelve short of the desktop — and a picker missing
+  // its last entries looks exactly like a picker that ends there.
+  console.log('\n== the frame picker offers every frame ==');
+  const frames = await page.evaluate(async () => {
+    const btn = document.getElementById('frame-picker-btn');
+    if (!btn) return { skipped: true };
+    btn.click();
+    await new Promise((r) => setTimeout(r, 800));
+    const opts = Array.from(document.querySelectorAll('.frame-option'));
+    const nums = opts.map((el) => parseInt(el.getAttribute('data-frame'), 10)).filter((n) => !isNaN(n));
+    const real = nums.filter((n) => n > 0);
+    return {
+      options: opts.length,
+      realFrames: real.length,
+      highest: real.length ? Math.max.apply(null, real) : 0,
+      declared: (window.ProfileFrames && window.ProfileFrames.COUNT) || null
+    };
+  });
+  console.log('  ' + JSON.stringify(frames));
+  H.check('the picker lists every declared frame',
+    frames.skipped || (frames.declared !== null && frames.realFrames === frames.declared), frames);
+  H.check('the highest frame offered is the last one that exists',
+    frames.skipped || frames.highest === frames.declared, frames);
+
   console.log('  gap from the tag to Edit Profile:', gap + 'px');
   // 36 rather than the 18 this state measures, because the exact figure depends
   // on which avatar and frame are seeded. The bug being guarded against was ~79px.

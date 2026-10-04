@@ -9758,7 +9758,13 @@ document.addEventListener('DOMContentLoaded', function() {
             '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;">' +
               (function() {
                 var html = '';
-                for (var fi = 0; fi <= 42; fi++) {
+                // 0 is the "None" option; 1..COUNT are the frames. This stopped at
+                // 42 while 55 exist, so the phone never offered 43-55 — and a
+                // picker missing its last twelve entries looks exactly like a
+                // picker that ends there. COUNT now comes from the shared list the
+                // desktop reads too.
+                var _frameMax = (window.ProfileFrames && window.ProfileFrames.COUNT) || 42;
+                for (var fi = 0; fi <= _frameMax; fi++) {
                   var isSel = selectedFrame == fi;
                   if (fi === 0) {
                     html += '<div class="frame-option" data-frame="0" style="width:100%;aspect-ratio:1;border-radius:50%;background:var(--bg-hover);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-muted);cursor:pointer;transition:all 0.15s;box-sizing:border-box;overflow:hidden;' + (isSel ? 'border:2px solid var(--accent-primary);' : 'border:2px solid transparent;') + '">None</div>';
