@@ -14,7 +14,20 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.8.1-beta', 'Latest', [
+        versionBlock('0.8.2-beta', 'Latest', [
+          ['New', [
+            'Diagnostics, rebuilt. It used to be a row of bare checks floating on the background with the top third of the screen empty. It opens with a verdict now \u2014 "Everything checks out", or what needs a look \u2014 and the report you would paste into a bug report is shown on screen instead of only promised.'
+          ]],
+          ['Fixes', [
+            'The contacts list kept changing its mind. It rendered grouped \u2014 Online, Offline, Groups \u2014 and then flipped to a plain flat list on almost any update, including typing in the search box. Two renderers were writing to the same list and the older one was winning.',
+            'The Friends / Groups tabs were invisible unless you had already created a folder. If you never made one, the control that switches between them was simply not there.',
+            'Custom profile banners had stopped showing. Your banner image was still saved and still set \u2014 it just was not being drawn, and the card looked deliberate without it.'
+          ]],
+          ['Version', [
+            'Version: Bumped to v0.8.2-beta.'
+          ]]
+        ]) +
+        versionBlock('0.8.1-beta', '', [
           ['New', [
             'Link a phone. Open it from the account switcher, scan the code on your phone, and your account comes across your own network \u2014 encrypted, and imported as a second account rather than overwriting the one already there.',
             'The code that authorises it is shown only on this screen and never sent in the clear. Nothing leaves the machine until you confirm, and the confirmation says what is about to go and how much of it.',

@@ -7470,7 +7470,20 @@ document.addEventListener('DOMContentLoaded', function() {
         // changelog.js is the other hand-maintained copy; they are separate files
         // and both have to be updated. A release is not done until this block is
         // added, which is why `npm run test:mobile` now asserts it.
-        vBlock('0.8.1-beta', 'Latest', [
+        vBlock('0.8.2-beta', 'Latest', [
+          ['New', [
+            'Diagnostics, rebuilt. It used to be a row of bare checks floating on the background with the top third of the screen empty. It opens with a verdict now \u2014 "Everything checks out", or what needs a look \u2014 and the report you would paste into a bug report is shown on screen instead of only promised.'
+          ]],
+          ['Fixes', [
+            'The contacts list kept changing its mind. It rendered grouped \u2014 Online, Offline, Groups \u2014 and then flipped to a plain flat list on almost any update, including typing in the search box. Two renderers were writing to the same list and the older one was winning.',
+            'The Friends / Groups tabs were invisible unless you had already created a folder. If you never made one, the control that switches between them was simply not there.',
+            'Custom profile banners had stopped showing. Your banner image was still saved and still set \u2014 it just was not being drawn, and the card looked deliberate without it.'
+          ]],
+          ['Version', [
+            'Version: Bumped to v0.8.2-beta.'
+          ]]
+        ]) +
+        vBlock('0.8.1-beta', '', [
           ['New', [
             'Link a phone. Open it from the account switcher on the desktop, scan the code here, and your account comes across your own network \u2014 encrypted, and imported as a second account rather than overwriting the one already on this phone.',
             'The code that authorises it is shown only on the desktop screen and never sent in the clear. Nothing leaves that machine until you confirm.',

@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v081-beta">v0.8.1-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v082-beta">v0.8.2-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,8 @@
 
 | Channel           | Version     | Status                                                                                                                                                                                                              |
 | ----------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Latest**        | v0.8.1-beta | Your account travels from the desktop to your phone over your own network, the mobile UI redesign is finished, and search actually finds things |
+| **Latest**        | v0.8.2-beta | Maintenance release — the mobile restyle's own regressions closed out: a contacts list that flipped between two renderers, tabs hidden unless you already had a folder, and custom profile banners that had stopped rendering |
+|                   | v0.8.1-beta | Your account travels from the desktop to your phone over your own network, the mobile UI redesign is finished, and search actually finds things |
 | **Stable**        | v0.8.0-beta | Your theme and custom colours follow you between your own devices, message search runs on SQLite FTS5, and the update progress bar actually moves |
 | Legacy **Stable** | v0.1.1-beta | Legacy stable release                                                                                                                                                                                               |
 
@@ -90,12 +91,23 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage app for desktop and Android** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
+## Highlights (v0.8.2-beta)
+
+* **A maintenance release.** Nothing new to look at on purpose — this closes out a run of the mobile restyle's own regressions, the things it broke quietly while it was shipping.
+* **Diagnostics, rebuilt** — it was a row of bare checks floating on the background with the top third of the screen empty. It opens with a verdict now, and the report you would paste into a bug report is shown on screen rather than only promised.
+
+### Fixed in v0.8.2-beta
+
+* **The contacts list kept changing its mind** — it rendered grouped (Online / Offline / Groups) and then flipped to a plain flat list on almost any update, including typing in the search box. Two renderers were writing to the same list and the older one was winning.
+* **The Friends / Groups tabs were invisible unless you had already created a folder** — so the folder feature was gated behind itself, and anyone without one had no way to scope the list to a single kind.
+* **Custom profile banners had stopped showing** — your banner was still saved and still set; it just was not being drawn, and the card looked deliberate without it.
+
 ## Highlights (v0.8.1-beta)
 
 * **Your Account, From the Desktop to Your Phone** — Open **Link a phone** on the desktop, scan the code with **Settings → Pair a desktop**, and the account comes across your own network. It arrives as a **new account on the phone** — your existing one is untouched, and you choose when to switch — because quietly overwriting the account already in your hand is the one outcome nobody could undo. What authorises the transfer is a **link token**: 128 random bits, shown only as a code on the desktop's own screen and never sent in the clear. The desktop sends nothing until you confirm, and the confirmation says what is about to leave and how much of it.
 * **The Mobile UI, Finished** — The redesign had been arriving in pieces since v0.8.0. This is the rest of it: the selected tab shows the **filled** form of its icon, the conversation screen has day separators and rebalanced bubbles, the composer is **three controls instead of four**, the gallery names the conversation it belongs to, and the profile card opens from the header avatar with the account switcher one tap in behind it.
 * **Search That Actually Searches** — Message search **found nothing outside the open chat**, because it read a message map that only holds the conversation you are looking at. It searches everything now, with **All / Chats / People / Messages** filters on the global search and **All / Media / Links / Voice** inside a conversation.
-* **A Test Suite for the Mobile** — It had none, and every regression that shipped was found by driving the real UI in a browser and then throwing the script away. Those checks live in `mobile/tests/` now — 71 of them, `npm run test:mobile`.
+* **A Test Suite for the Mobile** — It had none, and every regression that shipped was found by driving the real UI in a browser and then throwing the script away. Those checks live in `mobile/tests/` now — 66 at the time, **116** as of v0.8.2 — `npm run test:mobile`.
 
 ### Fixed in v0.8.1-beta
 
@@ -798,6 +810,16 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 </details>
 
 <details open>
+<summary>v0.8.2-beta</summary>
+
+* **A maintenance release** — the mobile restyle's own regressions, closed out
+* **Diagnostics, rebuilt** — a verdict with a pass count, the checks in one grouped card, and the report shown rather than only described
+* **Fixed** — the contacts list flipping to a flat list on almost any update, the Friends/Groups tabs hidden unless you already had a folder, and custom profile banners that had stopped rendering
+* **Mobile test suite** — 66 → 116 checks
+
+</details>
+
+<details>
 <summary>v0.8.1-beta</summary>
 
 * **Your account travels from the desktop to your phone** — encrypted, over your own network, and imported as a second account rather than overwriting the one already there. A **link token** authorises it: 128 random bits, shown only as a code on the desktop's screen, burned the moment a transfer starts.
@@ -831,6 +853,7 @@ Pre-built Windows installers are published on [GitHub Releases](https://github.c
 | Release                                                                          | Platform                    | Notes                                                                                                                                                                            |
 | -------------------------------------------------------------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [All releases](https://github.com/D4niel-dev/Orbit-beta/releases)                | Win / Mac / Linux / Android | Most recent build first                                                                                                                                                          |
+| [v0.8.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.8.2-beta) | Win / Mac / Linux / Android | Maintenance — the mobile restyle's regressions closed out, and Diagnostics rebuilt |
 | [v0.8.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.8.1-beta) | Win / Mac / Linux / Android | Your account travels from the desktop to your phone over your own network; the mobile UI redesign is finished; search finds things and has filters |
 | [v0.8.0-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.8.0-beta) | Win / Mac / Linux / Android | SETTINGS_SYNC between your own devices, FTS5 message search with boolean and prefix queries, and the update progress bar fixed |
 | [v0.7.6-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.7.6-beta) | Win / Mac / Linux / Android | Shared Media gets search, filters, a grid/list toggle, jump-to-message and multi-select download; the gallery gets storage stats, bulk delete and a month scrubber; the composer lights up when it can send |
@@ -1091,6 +1114,11 @@ Transparency matters in beta. Current constraints include:
 * Beta stability: occasional UI quirks and forced reflow warnings in DevTools
 
 ## Roadmap
+
+### Shipped (v0.8.2-beta)
+* **Diagnostics, rebuilt** — a verdict with a pass count, the checks in one grouped card, and the report shown rather than only described
+* **Fixed** — the contacts list flipping between two renderers, the Friends/Groups tabs hidden unless you already had a folder, and custom profile banners that had stopped rendering
+* **Mobile test suite grew** — 66 → 116 checks, with new probes for the contacts list, the home tabs and Diagnostics
 
 ### Shipped (v0.8.1-beta)
 * **Account transfer** — desktop → phone over your own network, encrypted, imported as a second account
