@@ -24,7 +24,7 @@
 
   With that working, search grew **filters**: All / Chats / People / Messages on the global search, each with a count of what the query *found* — a pill stays visible at 0, so "no messages match" is something you can see rather than a category that silently is not there. People are matched by **tag** as well as name, because #7714 is the half of a handle you would actually search for. Searching inside a conversation gets its own filters — **All / Media / Links / Voice** — which work with an empty query too, so tapping Media browses that chat's media rather than matching nothing.
 
-- **A Test Suite for the Mobile** — The mobile had none, and every regression that actually shipped was found by driving the real UI in a browser. Those checks used to be throwaway scripts that got deleted each time; they live in `mobile/tests/` now, **111 checks** across ten probes, run with `npm run test:mobile`. They use the Edge already on the machine, so there is no browser download.
+- **A Test Suite for the Mobile** — The mobile had none, and every regression that actually shipped was found by driving the real UI in a browser. Those checks used to be throwaway scripts that got deleted each time; they live in `mobile/tests/` now, **116 checks** across ten probes, run with `npm run test:mobile`. They use the Edge already on the machine, so there is no browser download.
 
 ### Bug Fixes
 
@@ -51,7 +51,7 @@
 - **`npm run mobile:sync` Needs `NODE_OPTIONS` Cleared in this environment** — `cap sync` legitimately deletes the old `assets/public/` before copying, and the host's safe-delete shim kills it with a state-lock timeout. Same cause as the desktop-suite trap. The failure is misleading: `shared:sync` and `version:sync` both succeed first, so it looks like a partial failure.
 - **A Dead Duplicate Chat-List Renderer** — `app.js` carries a ~250-line `renderChatList` that never runs, shadowed by the one in `home-screen.js`. It is what made a violet "premium badge" rule look live when the real badge has always been the app accent. Left in place, but it is a trap for whoever edits the wrong copy.
 - **Two Bugs That Were in the Tests, Not the App** — Twice while writing the new suite I chased a failure that turned out to be a bad assertion: faking an `active` class does not survive the nav's own re-render, and the document holds three tab bars (one per panel), so three active tabs is correct. Both were fixed by driving the real code path and asserting per bar.
-- **Test Suites** — `npm run test:unit` remains **10 suites**; `npm run test:mobile` is new at **111 checks**; the desktop Playwright suite remains 37 tests across two shards.
+- **Test Suites** — `npm run test:unit` remains **10 suites**; `npm run test:mobile` is new at **116 checks**; the desktop Playwright suite remains 37 tests across two shards.
 
 ## v0.8.0-beta — **Stable Release**
 

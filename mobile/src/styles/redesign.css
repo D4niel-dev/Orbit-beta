@@ -3320,11 +3320,20 @@
    Three separate profile heroes render this (own profile tab, own sheet, a
    friend's sheet) and all three had the same bug. An <img> cannot be reached by
    a background rule, so the fix holds for any of them. */
+/* A BAND, not a full-height backdrop. `inset: 0` made the photo cover the whole
+   hero, which put the name and the tag over the image and made the banner read
+   as the entire card. 150px puts the avatar's lower half across the band's
+   bottom edge — the hero's padding-top is 44px and the avatar is 88px, so the
+   avatar ends at 132px — and leaves the name and tag on the sheet's own
+   surface below it. */
 .profile-hero-banner {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: auto;
   width: 100%;
-  height: 100%;
+  height: 150px;
   object-fit: cover;
   object-position: center;
   z-index: 0;
@@ -3337,23 +3346,33 @@
   display: none !important;
 }
 
-/* A scrim, so the name and the drag handle stay readable over any photo. It
-   fades into the sheet's own surface so the hero has no hard bottom edge. */
+/* A scrim over the BAND only, so the buttons and the drag handle stay readable
+   over any photo. Fading to the sheet's surface at the bottom gives the band no
+   hard edge. It must not cover the name area below, which is already on a solid
+   surface. */
 .profile-hero.has-banner::after {
   content: '';
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: auto;
+  height: 150px;
   z-index: 1;
   pointer-events: none;
   background: linear-gradient(180deg,
-    rgba(0, 0, 0, .34) 0%,
-    rgba(0, 0, 0, .52) 45%,
+    rgba(0, 0, 0, .38) 0%,
+    rgba(0, 0, 0, .18) 55%,
     var(--bg-surface) 100%);
 }
 
-/* Everything sits above the banner and its scrim. The drag handle carries an
-   inline z-index of 3 and still wins, which is what we want. */
-.profile-hero > *:not(.profile-hero-banner):not(.profile-hero-bg) {
-  position: relative;
+/* The content sits above the banner's scrim. ONLY z-index — never `position`.
+   `.profile-hero-content` is already `position: relative`, and the sheet's two
+   buttons are `position: absolute` at top:10px with left/right pins. A blanket
+   `position: relative` here outranked them on specificity, took them out of
+   absolute positioning, and dropped both into normal flow — stacked down the
+   left edge on top of the banner. The drag handle carries an inline z-index of 3
+   and still wins, which is what we want. */
+.profile-hero > .profile-hero-content {
   z-index: 2;
 }

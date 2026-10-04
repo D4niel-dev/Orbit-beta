@@ -96,7 +96,22 @@ const path = require('path');
       // The bug in one line: the banner must not be carried as a CSS background,
       // because that is what the !important rule kills.
       heroBgImage: hero ? getComputedStyle(hero).backgroundImage : null,
-      accentHidden: accent ? getComputedStyle(accent).display === 'none' : null
+      accentHidden: accent ? getComputedStyle(accent).display === 'none' : null,
+      // A BAND, not a backdrop. `inset: 0` made the photo cover the whole hero.
+      bannerH: img ? Math.round(img.getBoundingClientRect().height) : 0,
+      heroH: hero ? Math.round(hero.getBoundingClientRect().height) : 0,
+      // The buttons must stay pinned to the corners. A blanket `position: relative`
+      // on the hero's children outranked their own `position: absolute` and dropped
+      // both into normal flow, stacked down the left edge.
+      buttons: ['btn-profile-sheet-accounts', 'btn-profile-sheet-action'].map((id) => {
+        const el = document.getElementById(id);
+        if (!el) return null;
+        const cs = getComputedStyle(el);
+        const r = el.getBoundingClientRect();
+        const hr = hero.getBoundingClientRect();
+        return { id: id, pos: cs.position, top: Math.round(r.top - hr.top),
+          left: Math.round(r.left - hr.left), right: Math.round(hr.right - r.right) };
+      })
     };
   });
   console.log(JSON.stringify(banner));
@@ -107,6 +122,20 @@ const path = require('path');
   H.check('the blurred accent steps aside when a banner is present', banner.accentHidden, banner.accentHidden);
   H.check('the banner is NOT a CSS background on the hero — that is the bug',
     banner.heroBgImage === 'none', banner.heroBgImage);
+  H.check('the banner is a band, not a full-height backdrop',
+    banner.bannerH > 0 && banner.bannerH < banner.heroH, { banner: banner.bannerH, hero: banner.heroH });
+
+  // Both sheet buttons are pinned to opposite top corners. They were stacked down
+  // the left edge when a blanket `position: relative` took them out of absolute.
+  const acct = banner.buttons[0], act = banner.buttons[1];
+  H.check('both sheet buttons exist', !!acct && !!act, banner.buttons);
+  H.check('both are absolutely positioned', acct && act && acct.pos === 'absolute' && act.pos === 'absolute',
+    banner.buttons.map((b) => b && b.pos));
+  H.check('the account button is pinned top-LEFT', acct && acct.top === 10 && acct.left === 12,
+    acct && { top: acct.top, left: acct.left });
+  H.check('the close button is pinned top-RIGHT, not under the first one',
+    act && act.top === 10 && act.right === 12 && act.left > 200,
+    act && { top: act.top, right: act.right, left: act.left });
 
   const hero2 = await page.$('.profile-hero');
   if (hero2) await hero2.screenshot({ path: path.join(H.SHOTS, 'chrome-banner.png') });
