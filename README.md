@@ -107,7 +107,7 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Your Account, From the Desktop to Your Phone** — Open **Link a phone** on the desktop, scan the code with **Settings → Pair a desktop**, and the account comes across your own network. It arrives as a **new account on the phone** — your existing one is untouched, and you choose when to switch — because quietly overwriting the account already in your hand is the one outcome nobody could undo. What authorises the transfer is a **link token**: 128 random bits, shown only as a code on the desktop's own screen and never sent in the clear. The desktop sends nothing until you confirm, and the confirmation says what is about to leave and how much of it.
 * **The Mobile UI, Finished** — The redesign had been arriving in pieces since v0.8.0. This is the rest of it: the selected tab shows the **filled** form of its icon, the conversation screen has day separators and rebalanced bubbles, the composer is **three controls instead of four**, the gallery names the conversation it belongs to, and the profile card opens from the header avatar with the account switcher one tap in behind it.
 * **Search That Actually Searches** — Message search **found nothing outside the open chat**, because it read a message map that only holds the conversation you are looking at. It searches everything now, with **All / Chats / People / Messages** filters on the global search and **All / Media / Links / Voice** inside a conversation.
-* **A Test Suite for the Mobile** — It had none, and every regression that shipped was found by driving the real UI in a browser and then throwing the script away. Those checks live in `mobile/tests/` now — 66 at the time, **126** as of v0.8.2 — `npm run test:mobile`.
+* **A Test Suite for the Mobile** — It had none, and every regression that shipped was found by driving the real UI in a browser and then throwing the script away. Those checks live in `mobile/tests/` now — 66 at the time, **127** as of v0.8.2 — `npm run test:mobile`.
 
 ### Fixed in v0.8.1-beta
 
@@ -815,7 +815,7 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **A maintenance release** — the mobile restyle's own regressions, closed out
 * **Diagnostics, rebuilt** — a verdict with a pass count, the checks in one grouped card, and the report shown rather than only described
 * **Fixed** — the contacts list flipping to a flat list on almost any update, the Friends/Groups tabs hidden unless you already had a folder, and custom profile banners that had stopped rendering
-* **Mobile test suite** — 66 → 126 checks
+* **Mobile test suite** — 66 → 127 checks
 
 </details>
 
@@ -1118,7 +1118,7 @@ Transparency matters in beta. Current constraints include:
 ### Shipped (v0.8.2-beta)
 * **Diagnostics, rebuilt** — a verdict with a pass count, the checks in one grouped card, and the report shown rather than only described
 * **Fixed** — the contacts list flipping between two renderers, the Friends/Groups tabs hidden unless you already had a folder, and custom profile banners that had stopped rendering
-* **Mobile test suite grew** — 66 → 126 checks, with new probes for the contacts list, the home tabs and Diagnostics
+* **Mobile test suite grew** — 66 → 127 checks, with new probes for the contacts list, the home tabs and Diagnostics
 
 ### Shipped (v0.8.1-beta)
 * **Account transfer** — desktop → phone over your own network, encrypted, imported as a second account

@@ -157,6 +157,22 @@ const path = require('path');
   H.check('the avatar keeps its ring so it separates from the photo',
     straddle && parseFloat(straddle.ring) >= 3, straddle && straddle.ring);
 
+  // The space between the tag and the edit form. It was ~79px of nothing —
+  // 30 hero padding-bottom + 6 hero margin + 16 on the form's wrapper + 10 on the
+  // section — and Dan reported it as "the gap below the name is too big".
+  const gap = await page.evaluate(() => {
+    const band = document.querySelector('.profile-hero-banner');
+    const hero = band && band.closest('.profile-hero');
+    const tag = hero && hero.querySelector('.profile-id');
+    const heading = document.querySelector('.profile-edit-body .settings-section-title');
+    if (!tag || !heading) return null;
+    return Math.round(heading.getBoundingClientRect().top - tag.getBoundingClientRect().bottom);
+  });
+  console.log('  gap from the tag to Edit Profile:', gap + 'px');
+  // 36 rather than the 18 this state measures, because the exact figure depends
+  // on which avatar and frame are seeded. The bug being guarded against was ~79px.
+  H.check('the gap under the name is tight, not a hole', gap !== null && gap <= 36, gap + 'px');
+
   // Both sheet buttons are pinned to opposite top corners. They were stacked down
   // the left edge when a blanket `position: relative` took them out of absolute.
   const acct = banner.buttons[0], act = banner.buttons[1];

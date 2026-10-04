@@ -8783,7 +8783,7 @@ document.addEventListener('DOMContentLoaded', function() {
           '<div class="profile-id">#' + escapeHtml(u ? u.tag : '0000') + '</div>' +
         '</div>' +
       '</div>' +
-      '<div style="padding: 16px;">' +
+      '<div class="profile-edit-body" style="padding: 16px;">' +
       '<div class="settings-section">' +
         '<div class="settings-section-title">Edit Profile</div>' +
         '<div class="settings-item">' +
@@ -9464,7 +9464,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Now render the editable profile form into the sheet
     editContainer.innerHTML =
-      '<div style="padding: 16px;">' +
+      '<div class="profile-edit-body" style="padding: 16px;">' +
       '<div class="settings-section">' +
         '<div class="settings-section-title">Edit Profile</div>' +
         '<div class="profile-field">' +
