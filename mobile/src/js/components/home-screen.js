@@ -321,8 +321,11 @@ var OrbitHome = {
       if (window.lucide) lucide.createIcons();
       return;
     }
+    // "Active now" is a strip of online FRIENDS, so it has nothing to say on the
+    // Groups tab. Hidden only there — a folder can hold direct messages, so it
+    // stays for those.
     var onlineRowBack = document.getElementById('online-friends-section');
-    if (onlineRowBack) onlineRowBack.style.display = '';
+    if (onlineRowBack) onlineRowBack.style.display = (filter === 'groups' ? 'none' : '');
     
     if (chats.length === 0) {
       // Plain empty state. The feature-slide carousel is a DESKTOP surface —
@@ -716,11 +719,35 @@ var OrbitHome = {
     if (!container) return;
     
     var friends = MStore.friends || [];
-    if (friends.length === 0) {
+    // The search box on this panel is wired in app.js and used to be handled by
+    // the flat `renderFriends()` there. That renderer and this one both wrote to
+    // #friends-list, and whichever ran last won — so the list flipped from this
+    // grouped version to the flat one on any friend change. app.js now delegates
+    // here instead, and the filter comes across on the window (the same shape as
+    // `_onlineFriendFilter` below) because the two live in different files.
+    var query = String(window._friendsSearchFilter || '').trim().toLowerCase();
+    if (query) {
+      friends = friends.filter(function(f) {
+        return String(f.name || '').toLowerCase().indexOf(query) !== -1 ||
+               String(f.bio || '').toLowerCase().indexOf(query) !== -1 ||
+               String(f.tag || f.usertag || '').toLowerCase().indexOf(query) !== -1;
+      });
+    }
+
+    // Groups are filtered by the same query, so "nothing matched" has to consider
+    // both — otherwise a query that only matches a group would show the empty
+    // state and then render the group anyway.
+    var groups = (MStore.groups || []).filter(function(g) {
+      if (!query) return true;
+      return String(g.name || '').toLowerCase().indexOf(query) !== -1;
+    });
+
+    if (friends.length === 0 && groups.length === 0) {
       container.innerHTML = window.OrbitEmpty.html({
-        icon: 'users-round',
-        title: 'No friends yet',
-        hint: 'Add a friend by scanning their QR code or entering their IP address.'
+        icon: query ? 'search-x' : 'users-round',
+        title: query ? 'No matches' : 'No friends yet',
+        hint: query ? 'Try a different search.' : 'Add a friend by scanning their QR code or entering their IP address.',
+        muted: !!query
       });
       return;
     }
@@ -782,7 +809,6 @@ var OrbitHome = {
 
     // Groups are listed here too. The Friends/Groups control that used to gate
     // them is hidden in the new design, so this is now the one place they appear.
-    var groups = MStore.groups || [];
     if (groups.length) {
       html += '<div class="list-label">Groups</div>';
       groups.forEach(function(g) {

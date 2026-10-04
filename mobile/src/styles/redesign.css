@@ -907,13 +907,14 @@
   background: linear-gradient(180deg, var(--accent-primary), rgba(63, 110, 240, .18));
 }
 
-/* The Friends/Groups control is not in the design — groups render inline in the
-   Chats list and under GROUPS in Contacts. The element stays in the DOM because
-   the experimental folder rail lives inside it, so it is only hidden when there
-   are no folders to show. */
-#home-tabs:not(.has-folders) {
-  display: none !important;
-}
+/* The Friends / Groups / folders segmented control is shown always.
+   I hid it during the restyle on the reasoning that groups already render inline
+   in the Chats list and under GROUPS in Contacts. That was wrong: it took away
+   the only way to scope the list to one kind, and it hid the folder rail behind
+   an "if you already have folders" condition — so the feature was invisible to
+   anyone who had not already found it. Dan asked for it back, and he is right.
+   The tabs carry the same `home-tab` class the folder rail appends to, so the
+   folder tabs join this row unchanged. */
 
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -3179,4 +3180,130 @@
 @media (prefers-reduced-motion: reduce) {
   .toast-mobile { animation: none; }
   .toast-mobile .toast-bar { animation: none; opacity: .5; transform: scaleX(1); }
+}
+
+
+/* ── Diagnostics ──
+   Styled over mobile.css, which had the rows as bare divs with a bottom border
+   floating on the background — no container, no grouping, and a section title
+   repeating the screen header four lines below it. Everything sat in the top
+   third of the screen with nothing under it.
+
+   Now: a hero that states the verdict, the checks as one grouped card, and the
+   report text shown rather than only described. */
+.diag-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0 16px 18px;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+}
+
+/* A tinted edge rather than a red card. The screen is still readable when
+   something is wrong; it just does not look healthy. */
+.diag-hero-bad {
+  border-color: rgba(255, 69, 58, .38);
+  background: linear-gradient(180deg, rgba(255, 69, 58, .10), transparent 70%), var(--bg-raised);
+}
+
+.diag-hero-icon {
+  width: 40px;
+  height: 40px;
+  padding: 10px;
+  box-sizing: border-box;
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+  background: rgba(52, 211, 153, .15);
+  color: #34D399;
+}
+.diag-hero-bad .diag-hero-icon {
+  background: rgba(255, 69, 58, .16);
+  color: #FF6961;
+}
+
+.diag-hero-text { flex: 1; min-width: 0; }
+.diag-hero-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -.01em;
+}
+.diag-hero-sub {
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+.diag-hero-count {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.diag-group { margin: 0 16px 20px; }
+.diag-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.diag-group-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.diag-group-sub {
+  margin: 2px 0 8px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+/* The rows sit in a card now, so the hairline is a separator between siblings
+   rather than an underline on every row including the last. */
+.diag-list {
+  margin: 0 !important;
+  padding: 2px 14px !important;
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+}
+.diag-row {
+  padding: 12px 0 !important;
+  border-bottom: 1px solid var(--border-subtle);
+  align-items: center !important;
+}
+.diag-row:last-child { border-bottom: none; }
+.diag-row-bad .diag-label { color: #FF6961; }
+.diag-hint {
+  padding: 0 0 12px !important;
+  margin-top: -6px !important;
+}
+
+/* The report, shown. Monospace because it is text you are about to paste
+   somewhere else, and capped so a long report cannot push the screen on. */
+.diag-report {
+  margin: 0;
+  padding: 12px 14px;
+  max-height: 168px;
+  overflow: auto;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.65;
+  color: var(--text-secondary);
+  white-space: pre;
+  -webkit-overflow-scrolling: touch;
 }

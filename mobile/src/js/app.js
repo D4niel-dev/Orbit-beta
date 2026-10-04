@@ -5522,57 +5522,29 @@ document.addEventListener('DOMContentLoaded', function() {
   var friendsSearchFilter = '';
   var activitySearchFilter = '';
 
+  /**
+   * Render the Contacts list.
+   *
+   * This used to be a second, older implementation that wrote to the SAME
+   * `#friends-list` container as `OrbitHome.renderFriendsList()`. Whichever ran
+   * last won, and this one is called from a dozen places (friend added, presence
+   * change, profile save, search), so the list flipped from the grouped version
+   * — Online / Offline / Groups — to a flat list with a chevron on almost any
+   * friend update. Dan saw it as "correct, then incorrect".
+   *
+   * There is one renderer now. The name is kept because the call sites use it,
+   * and the search filter is published on the window for the renderer to read.
+   */
   function renderFriends() {
-    var container = document.getElementById('friends-list');
-    var friends = MStore.friends;
-    var filtered = friends;
-
-    if (friendsSearchFilter) {
-      var lower = friendsSearchFilter.toLowerCase();
-      filtered = friends.filter(function(f) {
-        return f.name.toLowerCase().indexOf(lower) !== -1;
-      });
-    }
-
-    if (filtered.length === 0) {
-      container.innerHTML =
-        window.OrbitEmpty.html({
-          icon: friendsSearchFilter ? 'search-x' : 'users-round',
-          title: friendsSearchFilter ? 'No matching friends' : 'No friends yet',
-          hint: friendsSearchFilter ? 'Try a different search.' : 'Friends appear here as they are discovered on your network.',
-          muted: !!friendsSearchFilter
-        });
-      renderLucide({ root: container });
+    window._friendsSearchFilter = friendsSearchFilter;
+    if (window.OrbitHome && window.OrbitHome.renderFriendsList) {
+      window.OrbitHome.renderFriendsList();
       return;
     }
-    var statusColors = { online: 'var(--accent-success)', away: 'var(--accent-warning)', busy: 'var(--accent-danger)', offline: 'var(--text-muted)' };
-    var html = '';
-    filtered.forEach(function(f) {
-      var color = statusColors[f.status] || 'var(--text-muted)';
-      var initial = f.name ? f.name.charAt(0).toUpperCase() : '?';
-      var fAvatarSrc = safeAvatarSrc(f.avatar);
-      var fPfNum = getProfileFrame(f);
-      var fPfHtml = fPfNum > 0 ? '<img src="icons/frames/pfp_frame_' + fPfNum + '.png" class="pfp-frame" draggable="false" alt="">' : '';
-      html += '<div class="list-row friend-row" data-friend="' + escapeAttr(f.id) + '" data-user-id="' + escapeAttr(f.id) + '">' +
-        '<div class="chat-row-avatar-wrapper" style="width:44px;height:44px;">' +
-          '<div class="chat-row-avatar" style="width:44px;height:44px;font-size:16px;">' + (fAvatarSrc ? '<img src="' + fAvatarSrc + '">' : escapeHtml(initial)) + '</div>' +
-          fPfHtml +
-          '<div class="friend-status-dot" style="background:' + color + ';position:absolute;bottom:0;right:0;width:12px;height:12px;border-radius:50%;border:2px solid var(--bg-surface);"></div>' +
-        '</div>' +
-        '<div style="flex:1;min-width:0;margin-left:14px;">' +
-          '<div style="font-size:16px;font-weight:700;color:var(--text-primary);margin-bottom:2px;">' + escapeHtml(f.name) + '</div>' +
-          '<div style="font-size:13px;color:var(--text-muted);display:flex;align-items:center;gap:6px;">' +
-            '<span style="width:8px;height:8px;border-radius:50%;background:' + color + ';display:inline-block;box-shadow:0 0 4px ' + color + ';"></span>' +
-            escapeHtml(f.status || 'offline') +
-          '</div>' +
-        '</div>' +
-        '<div style="color:var(--text-muted);opacity:0.5;"><i data-lucide="chevron-right" style="width:16px;height:16px;"></i></div>' +
-      '</div>';
-    });
-    html += endOfListHTML();
-
-    container.innerHTML = html;
-    renderLucide({ root: container });
+    // OrbitHome loads after app.js. Reaching here means a call fired before it
+    // was defined, which is a load-order bug — say so rather than drawing a
+    // second, different list that then gets overwritten.
+    console.warn('[Orbit] renderFriends called before OrbitHome is available');
   }
 
   /* -- Settings -- */
@@ -5693,22 +5665,33 @@ document.addEventListener('DOMContentLoaded', function() {
       if (!rows[i].ok && rows[i].hint) { problem = rows[i]; break; }
     }
 
-    html += '<div class="settings-section-title">Diagnostics</div>';
-    // `.settings-item-info` is the real class — it is `flex-direction: column`, which is
-    // what stacks the title above the description. I had invented `settings-item-body`,
-    // which has no rule at all, so both spans rendered inline and ran together as
-    // "Connection healthEverything Orbit can check looks healthy."
-    html += '<div class="settings-item-card" data-search="Diagnostics connection health network">' +
-      '<div class="settings-item-icon"><i data-lucide="activity"></i></div>' +
-      '<div class="settings-item-info">' +
-        '<span class="settings-item-title">Connection health</span>' +
-        '<span class="settings-item-desc">' +
-          (problem
-            ? escapeHtml('Something looks wrong: ' + problem.label.toLowerCase() + '.')
-            : 'Everything Orbit can check looks healthy.') +
-        '</span>' +
-      '</div></div>';
+    // No section title. The screen header already says "Diagnostics", so a title
+    // repeating it four lines lower was pure duplication.
+    //
+    // A hero that states the verdict, then the checks as ONE group, then the
+    // report. Before this the checks were bare rows floating on the background
+    // with no container, and everything sat in the top third of a screen with
+    // nothing under it.
+    var bad = 0;
+    for (var k = 0; k < rows.length; k++) if (!rows[k].ok) bad++;
 
+    html += '<div class="diag-hero' + (problem ? ' diag-hero-bad' : '') + '">' +
+      '<div class="diag-hero-icon"><i data-lucide="' + (problem ? 'alert-triangle' : 'check-circle-2') + '"></i></div>' +
+      '<div class="diag-hero-text">' +
+        '<div class="diag-hero-title">' +
+          (problem ? 'Something needs a look' : 'Everything checks out') +
+        '</div>' +
+        '<div class="diag-hero-sub">' +
+          (problem
+            ? escapeHtml(problem.label + ' is the first thing to look at.')
+            : 'Orbit can reach what it needs to.') +
+        '</div>' +
+      '</div>' +
+      '<div class="diag-hero-count">' + (rows.length - bad) + '/' + rows.length + '</div>' +
+    '</div>';
+
+    html += '<div class="diag-group">';
+    html += '<div class="diag-group-label">Checked</div>';
     html += '<div class="diag-list">';
     for (var j = 0; j < rows.length; j++) {
       var r = rows[j];
@@ -5722,27 +5705,44 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }
     html += '</div>';
+    html += '</div>';
 
-    html += '<div class="settings-item-card" data-search="Diagnostics report share">' +
-      '<div class="settings-item-info">' +
-        '<span class="settings-item-title">Share a report</span>' +
-        '<span class="settings-item-desc">Copy these values to paste into a bug report.</span>' +
-      '</div>' +
-      '<div class="settings-item-action">' +
+    // The report, shown rather than only described. "Copy these values" is a
+    // promise about content you could not see; a monospace block of the actual
+    // text is the same promise kept, and it is what the empty half of this
+    // screen should have been holding all along.
+    html += '<div class="diag-group">' +
+      '<div class="diag-group-head">' +
+        '<span class="diag-group-label">Report</span>' +
         '<button class="settings-action-btn" id="diag-copy">Copy</button>' +
-      '</div></div>';
+      '</div>' +
+      '<div class="diag-group-sub">Paste this into a bug report. It carries no message content.</div>' +
+      '<pre class="diag-report" id="diag-report-preview">' + escapeHtml(_diagReportText()) + '</pre>' +
+    '</div>';
 
     return html;
   }
 
-  function _diagCopy() {
+  /**
+   * The exact text the Copy button puts on the clipboard.
+   *
+   * One builder, used by both the button and the on-screen preview — they were
+   * two separate loops and would have drifted the first time either changed.
+   * The `label=value` shape is what people have been pasting into reports, so it
+   * is kept as it was.
+   */
+  function _diagReportText() {
     var rows = _diagRows();
     var lines = ['Orbit diagnostics', 'version=' + (window.APP_VERSION || '?'),
                  'platform=' + (window.Capacitor ? 'android' : 'web')];
     rows.forEach(function(r) { lines.push(r.label + '=' + r.value); });
     lines.push('friends=' + ((MStore.friends || []).length));
     lines.push('chats=' + ((MStore.chats || []).length));
-    var text = lines.join('\n');
+    return lines.join('\n');
+  }
+
+  function _diagCopy() {
+    var text = _diagReportText();
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(function() { showToast('Diagnostics copied', 'success'); },
