@@ -125,6 +125,38 @@ const path = require('path');
   H.check('the banner is a band, not a full-height backdrop',
     banner.bannerH > 0 && banner.bannerH < banner.heroH, { banner: banner.bannerH, hero: banner.heroH });
 
+  // The avatar must STRADDLE the band's bottom edge, not sit inside it. With the
+  // hero's own 44px padding an 88px avatar ends at 132px — entirely within the
+  // band — so nothing crossed the edge and the whole hero read as crammed against
+  // the top with dead space under it.
+  const straddle = await page.evaluate(() => {
+    // Scoped to the hero that HAS the banner. There are three `.profile-hero`
+    // elements in the DOM — the profile tab renders one — and a bare
+    // querySelector picks up whichever comes first. I made this exact mistake in
+    // the banner block above and then made it again here.
+    const band = document.querySelector('.profile-hero-banner');
+    const hero = band ? band.closest('.profile-hero') : document.querySelector('.profile-hero');
+    const av = hero && hero.querySelector('.profile-avatar-wrapper');
+    if (!hero || !band || !av) return null;
+    const h = hero.getBoundingClientRect();
+    const bandBottom = band.getBoundingClientRect().bottom - h.top;
+    const avTop = av.getBoundingClientRect().top - h.top;
+    const avBottom = av.getBoundingClientRect().bottom - h.top;
+    const img = av.querySelector('img');
+    return {
+      bandBottom: Math.round(bandBottom),
+      avatarTop: Math.round(avTop),
+      avatarBottom: Math.round(avBottom),
+      crossesBy: Math.round(avBottom - bandBottom),
+      ring: img ? getComputedStyle(img).borderTopWidth : null
+    };
+  });
+  console.log(JSON.stringify(straddle));
+  H.check('the avatar straddles the band rather than sitting inside it',
+    straddle && straddle.crossesBy > 20, straddle);
+  H.check('the avatar keeps its ring so it separates from the photo',
+    straddle && parseFloat(straddle.ring) >= 3, straddle && straddle.ring);
+
   // Both sheet buttons are pinned to opposite top corners. They were stacked down
   // the left edge when a blanket `position: relative` took them out of absolute.
   const acct = banner.buttons[0], act = banner.buttons[1];
