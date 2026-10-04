@@ -3307,3 +3307,53 @@
   white-space: pre;
   -webkit-overflow-scrolling: touch;
 }
+
+
+/* ── The profile banner ──
+   The custom banner is an <img> layer, NOT a CSS background. It used to be an
+   inline `background-image` on .profile-hero, and the rule above sets
+   `background: transparent !important` on that element — the shorthand resets
+   background-image, and a stylesheet `!important` beats a non-important inline
+   style. So every custom banner was invisible from the restyle onward, and it
+   read as deliberate because the blurred accent was still there behind it.
+
+   Three separate profile heroes render this (own profile tab, own sheet, a
+   friend's sheet) and all three had the same bug. An <img> cannot be reached by
+   a background rule, so the fix holds for any of them. */
+.profile-hero-banner {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* The blurred accent is the no-banner state. With a photo behind it there is
+   nothing for it to do. */
+.profile-hero.has-banner .profile-hero-bg {
+  display: none !important;
+}
+
+/* A scrim, so the name and the drag handle stay readable over any photo. It
+   fades into the sheet's own surface so the hero has no hard bottom edge. */
+.profile-hero.has-banner::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(180deg,
+    rgba(0, 0, 0, .34) 0%,
+    rgba(0, 0, 0, .52) 45%,
+    var(--bg-surface) 100%);
+}
+
+/* Everything sits above the banner and its scrim. The drag handle carries an
+   inline z-index of 3 and still wins, which is what we want. */
+.profile-hero > *:not(.profile-hero-banner):not(.profile-hero-bg) {
+  position: relative;
+  z-index: 2;
+}

@@ -803,7 +803,7 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Your account travels from the desktop to your phone** — encrypted, over your own network, and imported as a second account rather than overwriting the one already there. A **link token** authorises it: 128 random bits, shown only as a code on the desktop's screen, burned the moment a transfer starts.
 * **The mobile UI redesign is finished** — filled tab icons, day separators and rebalanced bubbles in the conversation, a three-control composer, a gallery that names its conversation, a profile card that opens from the header avatar, and full-bleed settings sections.
 * **Search actually searches** — message search used to find nothing outside the open chat; it now spans everything, with filters on both the global and in-chat surfaces.
-* **A test suite for the mobile** — 71 checks in `mobile/tests/`, `npm run test:mobile`
+* **A test suite for the mobile** — 111 checks in `mobile/tests/`, `npm run test:mobile`
 * **Fixed** — the settings search that never hid anything, the composer's mic/send swap, the Activity title 20px off centre, the navbar moving on tab change, the clipped last row of every settings section, the off-centre toggle knob, and an account switch that could take the wrong data with it
 
 </details>
@@ -1096,7 +1096,7 @@ Transparency matters in beta. Current constraints include:
 * **Account transfer** — desktop → phone over your own network, encrypted, imported as a second account
 * **The mobile UI redesign, finished** — filled tab icons, the conversation screen, the composer, the gallery, the profile card, full-bleed settings
 * **Search** — it was finding nothing outside the open chat; now it spans everything, with filters on both surfaces
-* **Mobile test suite** — 71 checks, `npm run test:mobile`
+* **Mobile test suite** — 111 checks, `npm run test:mobile`
 
 ### Shipped (v0.8.0-beta)
 * **SETTINGS_SYNC** — your theme and custom colours follow you between your own devices

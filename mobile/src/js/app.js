@@ -8747,15 +8747,20 @@ document.addEventListener('DOMContentLoaded', function() {
     var u = MStore.user;
     var initial = u && u.name ? u.name.charAt(0).toUpperCase() : '?';
 
-    var bannerStyle = u && u.banner
-      ? 'background-image:url(' + escapeHtml(u.banner) + ');background-size:cover;background-position:center;'
+    // An <img>, not a CSS background — see the note in showProfileSheet. The
+    // restyle's `background: transparent !important` on .profile-hero resets
+    // background-image and beats an inline style, so this was invisible too.
+    var hasBanner = !!(u && u.banner);
+    var bannerHtml = hasBanner
+      ? '<img class="profile-hero-banner" src="' + escapeHtml(u.banner) + '" alt="" draggable="false">'
       : '';
 
     var pfNum = getProfileFrame(MStore.settings);
     var selfFrameHtml = pfNum > 0 ? '<img src="icons/frames/pfp_frame_' + pfNum + '.png" class="pfp-frame" draggable="false" alt="">' : '';
 
     container.innerHTML =
-      '<div class="profile-hero" style="' + bannerStyle + '">' +
+      '<div class="profile-hero' + (hasBanner ? ' has-banner' : '') + '">' +
+        bannerHtml +
         '<div class="profile-hero-bg"></div>' +
         '<div class="profile-hero-content">' +
           '<div class="profile-avatar-wrapper" style="position:relative;">' + (u.avatar ? '<img src="' + escapeHtml(u.avatar) + '">' : '<div class="avatar-placeholder">' + initial + '</div>') + selfFrameHtml + '</div>' +
@@ -9007,10 +9012,14 @@ document.addEventListener('DOMContentLoaded', function() {
     sheet.style.cssText = 'background:var(--bg-surface);border-radius:24px 24px 0 0;animation:slideUp 0.3s cubic-bezier(0.16,1,0.3,1);max-height:90dvh;overflow-y:auto;position:relative;';
     sheet.addEventListener('click', function(e) { e.stopPropagation(); });
 
+    // Same <img>-not-background fix as the other two profile heroes. This one also
+    // had a gradient fallback for "no banner", which the restyle replaced with the
+    // blurred accent — so the fallback went too, and that was fine.
     var bannerUrl = friend.banner;
-    var bannerStyle = bannerUrl
-      ? 'background-image:url(' + escapeHtml(bannerUrl) + ');background-size:cover;background-position:center;'
-      : 'background:linear-gradient(135deg,var(--accent-primary),#EC4899);';
+    var hasBanner = !!bannerUrl;
+    var bannerHtml = hasBanner
+      ? '<img class="profile-hero-banner" src="' + escapeHtml(bannerUrl) + '" alt="" draggable="false">'
+      : '';
 
     var frameHtml = frameNum > 0 ? '<img src="icons/frames/pfp_frame_' + frameNum + '.png" class="pfp-frame" draggable="false" alt="">' : '';
     var fAvatarSrc = safeAvatarSrc(friend.avatar);
@@ -9020,7 +9029,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Hero section (matching showProfileSheet style)
     var heroHtml =
-      '<div class="profile-hero" style="' + bannerStyle + 'padding: 44px 20px 30px;">' +
+      '<div class="profile-hero' + (hasBanner ? ' has-banner' : '') + '" style="padding: 44px 20px 30px;">' +
+        bannerHtml +
         '<div class="profile-hero-bg"></div>' +
         // Drag handle
         '<div class="bottom-sheet-handle" style="position:absolute;top:12px;left:50%;transform:translateX(-50%);width:40px;height:5px;background:rgba(255,255,255,0.4);border-radius:4px;z-index:3;"></div>' +
@@ -9298,8 +9308,16 @@ document.addEventListener('DOMContentLoaded', function() {
     sheet.addEventListener('click', function(e) { e.stopPropagation(); });
 
     var initial = u.name ? u.name.charAt(0).toUpperCase() : '?';
-    var bannerStyle = u.banner
-      ? 'background-image:url(' + escapeHtml(u.banner) + ');background-size:cover;background-position:center;'
+    // The banner is an <img>, not a CSS background. It used to be an inline
+    // `background-image` on .profile-hero, and the restyle layer sets
+    // `background: transparent !important` on that element — the shorthand resets
+    // background-image, and a stylesheet `!important` beats a non-important inline
+    // style. So every custom banner became invisible and nobody noticed, because
+    // the element still looked deliberate with the blurred accent behind it.
+    // An <img> cannot be reached by a background rule.
+    var hasBanner = !!u.banner;
+    var bannerHtml = hasBanner
+      ? '<img class="profile-hero-banner" src="' + escapeHtml(u.banner) + '" alt="" draggable="false">'
       : '';
     var pfNum = getProfileFrame(MStore.settings);
     var frameHtml = pfNum > 0 ? '<img src="icons/frames/pfp_frame_' + pfNum + '.png" class="pfp-frame" draggable="false" alt="">' : '';
@@ -9307,7 +9325,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Build profile content HTML (hero + edit form)
     var contentHtml =
       // Hero section with drag handle + action button overlaid inside
-      '<div class="profile-hero" style="' + bannerStyle + 'padding: 44px 20px 30px;">' +
+      '<div class="profile-hero' + (hasBanner ? ' has-banner' : '') + '" style="padding: 44px 20px 30px;">' +
+        bannerHtml +
         '<div class="profile-hero-bg"></div>' +
         // Drag handle overlay (centered at top)
         '<div class="bottom-sheet-handle" style="position:absolute;top:12px;left:50%;transform:translateX(-50%);width:40px;height:5px;background:rgba(255,255,255,0.4);border-radius:4px;z-index:3;"></div>' +

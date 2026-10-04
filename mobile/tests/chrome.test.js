@@ -55,6 +55,64 @@ const path = require('path');
   await page.evaluate(() => window.closeProfileSheet && window.closeProfileSheet());
   await page.waitForTimeout(800);
 
+  // ── The profile banner ──
+  //
+  // The banner used to be an inline `background-image` on .profile-hero, and the
+  // restyle sets `background: transparent !important` on that element. The
+  // shorthand resets background-image, and a stylesheet `!important` beats a
+  // non-important inline style — so every custom banner was invisible. It is an
+  // <img> now, which no background rule can reach.
+  console.log('\n== the profile banner ==');
+  // A self-contained SVG data URL, so this test does not depend on any generated
+  // asset being on the machine.
+  const BANNER = 'data:image/svg+xml;base64,' + Buffer.from(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">' +
+    '<rect width="64" height="64" fill="#2f6f4f"/><circle cx="32" cy="32" r="18" fill="#d9b44a"/></svg>'
+  ).toString('base64');
+
+  await page.evaluate((banner) => {
+    // Both places the own-profile hero reads from.
+    if (window.MStore.user) window.MStore.user.banner = banner;
+    if (window.MStore.currentUser) window.MStore.currentUser.banner = banner;
+    window.MStore.save();
+    if (window.showProfileSheet) window.showProfileSheet();
+  }, BANNER);
+  await page.waitForTimeout(1500);
+
+  const banner = await page.evaluate(() => {
+    // There is more than one `.profile-hero` in the DOM — the profile tab renders
+    // one and the sheet renders another — so a bare querySelector('.profile-hero')
+    // asserts about whichever happens to come first. Pick the hero that actually
+    // carries the banner, falling back to the first.
+    const heroes = Array.from(document.querySelectorAll('.profile-hero'));
+    const img = document.querySelector('.profile-hero-banner');
+    const hero = (img && img.closest('.profile-hero')) || heroes[0] || null;
+    const accent = hero ? hero.querySelector('.profile-hero-bg') : null;
+    return {
+      hasClass: hero ? hero.classList.contains('has-banner') : null,
+      imgFound: !!img,
+      imgW: img ? Math.round(img.getBoundingClientRect().width) : 0,
+      objectFit: img ? getComputedStyle(img).objectFit : null,
+      // The bug in one line: the banner must not be carried as a CSS background,
+      // because that is what the !important rule kills.
+      heroBgImage: hero ? getComputedStyle(hero).backgroundImage : null,
+      accentHidden: accent ? getComputedStyle(accent).display === 'none' : null
+    };
+  });
+  console.log(JSON.stringify(banner));
+  H.check('a custom banner renders an <img> layer', banner.imgFound, banner);
+  H.check('the hero carries the has-banner class', banner.hasClass, banner.hasClass);
+  H.check('the banner image covers the hero', banner.imgW > 200 && banner.objectFit === 'cover',
+    { w: banner.imgW, fit: banner.objectFit });
+  H.check('the blurred accent steps aside when a banner is present', banner.accentHidden, banner.accentHidden);
+  H.check('the banner is NOT a CSS background on the hero — that is the bug',
+    banner.heroBgImage === 'none', banner.heroBgImage);
+
+  const hero2 = await page.$('.profile-hero');
+  if (hero2) await hero2.screenshot({ path: path.join(H.SHOTS, 'chrome-banner.png') });
+  await page.evaluate(() => window.closeProfileSheet && window.closeProfileSheet());
+  await page.waitForTimeout(700);
+
   console.log('\n== the toasts ==');
   await page.evaluate(() => {
     window.showToast('Message copied to clipboard', 'success');
