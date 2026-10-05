@@ -30,7 +30,6 @@
 | ----------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Latest**        | v0.8.3-beta | The conversation screen reworked on both platforms — a message is no longer one box holding everything — plus reactions that straddle the bubble, the duplicate × removed, and the Local Vault brought into line |
 |                   | v0.8.2-beta | Maintenance release — the mobile restyle's own regressions closed out: a contacts list that flipped between two renderers, tabs hidden unless you already had a folder, and custom profile banners that had stopped rendering |
-|                   | v0.8.1-beta | Your account travels from the desktop to your phone over your own network, the mobile UI redesign is finished, and search actually finds things                                                                               |
 | **Stable**        | v0.8.0-beta | Your theme and custom colours follow you between your own devices, message search runs on SQLite FTS5, and the update progress bar actually moves                                                                             |
 | Legacy **Stable** | v0.1.1-beta | Legacy stable release                                                                                                                                                                                                         |
 
@@ -102,68 +101,6 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 
 * **Message text could vanish into its own bubble** — the bubble fills were hardcoded to a fixed dark and a fixed blue, so in a light theme the incoming bubble stayed dark while the text went dark with the rest of the app. They follow the theme now: **17.3:1** contrast in dark, **17.8:1** in light.
 * **A stored backup time that would not parse** rendered the literal words *"Invalid Date"* into the vault status.
-
-## Highlights (v0.8.2-beta)
-
-* **A maintenance release.** Nothing new to look at on purpose — this closes out a run of the mobile restyle's own regressions, the things it broke quietly while it was shipping.
-* **Diagnostics, rebuilt** — it was a row of bare checks floating on the background with the top third of the screen empty. It opens with a verdict now, and the report you would paste into a bug report is shown on screen rather than only promised.
-
-### Fixed in v0.8.2-beta
-
-* **The contacts list kept changing its mind** — it rendered grouped (Online / Offline / Groups) and then flipped to a plain flat list on almost any update, including typing in the search box. Two renderers were writing to the same list and the older one was winning.
-* **The Friends / Groups tabs were invisible unless you had already created a folder** — so the folder feature was gated behind itself, and anyone without one had no way to scope the list to a single kind.
-* **Custom profile banners had stopped showing** — your banner was still saved and still set; it just was not being drawn, and the card looked deliberate without it.
-
-## Highlights (v0.8.1-beta)
-
-* **Your Account, From the Desktop to Your Phone** — Open **Link a phone** on the desktop, scan the code with **Settings → Pair a desktop**, and the account comes across your own network. It arrives as a **new account on the phone** — your existing one is untouched, and you choose when to switch — because quietly overwriting the account already in your hand is the one outcome nobody could undo. What authorises the transfer is a **link token**: 128 random bits, shown only as a code on the desktop's own screen and never sent in the clear. The desktop sends nothing until you confirm, and the confirmation says what is about to leave and how much of it.
-* **The Mobile UI, Finished** — The redesign had been arriving in pieces since v0.8.0. This is the rest of it: the selected tab shows the **filled** form of its icon, the conversation screen has day separators and rebalanced bubbles, the composer is **three controls instead of four**, the gallery names the conversation it belongs to, and the profile card opens from the header avatar with the account switcher one tap in behind it.
-* **Search That Actually Searches** — Message search **found nothing outside the open chat**, because it read a message map that only holds the conversation you are looking at. It searches everything now, with **All / Chats / People / Messages** filters on the global search and **All / Media / Links / Voice** inside a conversation.
-* **A Test Suite for the Mobile** — It had none, and every regression that shipped was found by driving the real UI in a browser and then throwing the script away. Those checks live in `mobile/tests/` now — 66 at the time, **160** as of v0.8.3 — `npm run test:mobile`.
-
-### Fixed in v0.8.1-beta
-
-* **The settings search never hid anything** — it marked nine of ten rows hidden and left every one on screen, and had been broken since the restyle shipped. A search that does nothing looks exactly like a search with no results.
-* **The composer's mic/send swap** and **hiding "Active now" during a search** — same cause as above: an `!important` on a property something else needs to toggle.
-* **The Activity title sat 20px left of centre**, and **the navbar moved when you changed tabs**.
-* **Switching accounts could take the wrong data with it** — two of the three were pre-existing.
-* **The last row of every settings section was clipped**, the **toggle knob was off-centre**, and a group label lined up with nothing.
-* **A video with no poster was a nearly invisible square**, and **audio sat in a single grid cell** as a square with a filename crammed inside it.
-
-## Highlights (v0.8.0-beta)
-
-* **Your Theme Follows You to Your Phone** — The whitelist, the validation and the last-write-wins logic have been in the codebase since v0.7.3; the wire was missing. Change your theme on the desktop and it reaches **your own devices** — a peer with your userId is you on another machine. **A custom theme's colours travel too**, which is the half that matters: the colours *are* the theme.
-* **Search That Uses the Database** — Message search no longer pulls every message into JavaScript to run `includes` over it. It goes through **SQLite's FTS5**, so `project AND deadline` is answered by the engine in milliseconds no matter how much history you have. Prefix matching works, results are ranked by **relevance** rather than recency, and search can be scoped to a single chat.
-* **A Search Icon in the Shared Media Bar** — Inside the field, where it belongs.
-
-### Fixed in v0.8.0-beta
-
-* **The Update Progress Bar Never Moved** — It sat at 0% for the whole download while the label counted megabytes, because the only source of a total was a header the mobile's patched Response usually omits.
-* **A Custom Theme's Colours Never Reached the Phone** — The colour editor writes to the store directly rather than through the settings funnel, so the broadcast never fired for it. The name went and the colours stayed behind.
-* **The Images Tab Was Showing Video and Audio** — And their thumbnails cannot load, so they appeared as broken images.
-* **Changing the Display Refreshed the Whole Window** — The toggle wrote its preference through the store, which every part of the app listens to.
-* **Two Galleries at Once**, **no way out of select mode**, and **long filenames spilling out of their cards**.
-* **The send button can no longer strand you**, and **a toast no longer swallows the send click**.
-
-## Highlights (v0.7.6-beta)
-
-* **The Shared Media Panel Grew Up** — Search, filters by sender, kind and age, a grid/list toggle, jump-to-message on every item, multi-select with download-all, and it renders sixty items at a time with a *"Showing 60 of 412"* count rather than building the whole list on every keystroke. It was a list you could only scroll before.
-* **Storage Stats** — Orbit is local-first, so every attachment is on *your* disk, and there was no way to see how much or where it went. The gallery header reads **"3 items · 4.9 MB"**, and clicking it opens a per-chat breakdown **biggest first**. A total does not answer the question; the ranking does.
-* **Select and Delete Media** — With the stats in place, the next question is *"so let me reclaim some"*. The confirm says plainly that the message goes for **both people**, because "delete" here could reasonably mean three different things.
-* **A Month Scrubber** — A rail down the side of the gallery listing the months that actually have media, so *that photo from March* is a click rather than a scroll.
-* **The Composer Says What It Can Do** — The attach button is a plain plus that rotates into an **×** while its menu is open. The send button is **dimmed and inert** with an empty box and **lit with a filled arrow** when there is something to send — including when the only thing staged is a file. It used to be always pressable with a handler that silently did nothing.
-* **A Reason to Hover a Button You Cannot Press** — Hovering a disabled send shows a random icon from the 1,958 in lucide. Only while it is disabled: when it can be pressed, the filled arrow is what says so.
-* **The Slides Have Some Pop** — The first-run carousel and the tutorial animate their parts on a 60ms stagger instead of swapping all at once.
-
-### Fixed in v0.7.6-beta
-
-* **The Images Tab Was Not Showing Images** — Video and audio counted as "media", and their thumbnails cannot load: a video has no still to show and an audio file has none at all. They appeared as broken images.
-* **Changing the Display Refreshed the Whole Window** — The grid/list toggle wrote its preference through the store, which every part of the app listens to. Flipping it now causes **zero** chat renders.
-* **Two Galleries at Once** — Opening the gallery now closes the Shared Media panel.
-* **No Way Out of Select Mode** — The bulk bar only appeared once something was picked. It is visible whenever the mode is on.
-* **"NaN" Was Not a Date** — The panel's day groups were labelled `NaN`; the timestamps come back from storage as strings with a trailing `.0`. Third appearance of that bug, so it uses one shared parse now.
-* **Long Filenames Spilled Out of Their Cards** — A grid item refuses to shrink below its content without `min-width:0`, so a long name pushed the card over its neighbour.
-* **The Filled Emoji Was a Blue Disc** — Filling lucide's `smile` fills its outer circle, leaving a solid blob with no face in it.
 
 ## Version History
 
@@ -884,8 +821,6 @@ Pre-built Windows installers are published on [GitHub Releases](https://github.c
 | Release                                                                          | Platform                    | Notes                                                                                                                                              |
 | -------------------------------------------------------------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [All releases](https://github.com/D4niel-dev/Orbit-beta/releases)                | Win / Mac / Linux / Android | Most recent build first                                                                                                                            |
-| [v0.8.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.8.2-beta) | Win / Mac / Linux / Android | Maintenance — the mobile restyle's regressions closed out, and Diagnostics rebuilt                                                                 |
-| [v0.8.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.8.1-beta) | Win / Mac / Linux / Android | Your account travels from the desktop to your phone over your own network; the mobile UI redesign is finished; search finds things and has filters |
 | [v0.0.2-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.2-beta) | Windows                     | SQLite storage, privacy mode, large file transfers                                                                                                 |
 | [v0.0.1-beta](https://github.com/D4niel-dev/Orbit-beta/releases/tag/v0.0.1-beta) | Windows                     | Original release                                                                                                                                   |
 
@@ -1143,19 +1078,6 @@ Transparency matters in beta. Current constraints include:
 * Beta stability: occasional UI quirks and forced reflow warnings in DevTools
 
 ## Roadmap
-
-### Shipped (v0.8.2-beta)
-
-* **Diagnostics, rebuilt** — a verdict with a pass count, the checks in one grouped card, and the report shown rather than only described
-* **Fixed** — the contacts list flipping between two renderers, the Friends/Groups tabs hidden unless you already had a folder, and custom profile banners that had stopped rendering
-* **Mobile test suite grew** — 66 → 160 checks, with new probes for the contacts list, the home tabs and Diagnostics
-
-### Shipped (v0.8.1-beta)
-
-* **Account transfer** — desktop → phone over your own network, encrypted, imported as a second account
-* **The mobile UI redesign, finished** — filled tab icons, the conversation screen, the composer, the gallery, the profile card, full-bleed settings
-* **Search** — it was finding nothing outside the open chat; now it spans everything, with filters on both surfaces
-* **Mobile test suite** — 66 checks, `npm run test:mobile`
 
 ### In Progress / Planned
 
