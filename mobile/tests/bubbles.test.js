@@ -21,7 +21,7 @@ const SEED = {
   orbit_friends: [{ id: 'p_mai', name: 'Mai Nguyen', tag: '7714', status: 'online' }],
   orbit_chats: [{ id: 'p_mai', name: 'Mai Nguyen', lastMessage: 'ok', lastTime: H.t(2) }],
   orbit_msg_p_mai: [
-    { id: 'm1', from: 'p_mai', text: 'a plain text message', time: H.t(60) },
+    { id: 'm1', from: 'p_mai', text: 'a plain text message', time: H.t(60), reactions: [{ emoji: '\u{1F44D}', userId: 'u_dan' }] },
     { id: 'm2', from: 'me', text: 'and one of mine', time: H.t(58) },
     { id: 'm3', from: 'p_mai', text: '', time: H.t(50), attachments: [img('sunset.png')] },
     { id: 'm4', from: 'p_mai', text: 'and the archive', time: H.t(40), attachments: [file('orbit-source.zip', 'application/zip')] },
@@ -67,7 +67,7 @@ const SEED = {
 
   console.log('\n== text keeps a bubble ==');
   H.check('a text message has a bubble', rows.m1 && rows.m1.hasBubble, rows.m1);
-  H.check('and its text is in it', rows.m1 && rows.m1.bubbleText === 'a plain text message', rows.m1 && rows.m1.bubbleText);
+  H.check('and its text is in it', rows.m1 && rows.m1.bubbleText.indexOf('a plain text message') !== -1, rows.m1 && rows.m1.bubbleText);
 
   console.log('\n== your own messages match theirs ==');
   H.check('mine has a bubble too', rows.m2 && rows.m2.hasBubble, rows.m2);
@@ -81,7 +81,7 @@ const SEED = {
   H.check('and keeps its natural aspect', rows.m3 && rows.m3.imgAspect === 'auto', rows.m3 && rows.m3.imgAspect);
 
   console.log('\n== attachments live outside the bubble ==');
-  H.check('text + file: the bubble holds the text', rows.m4 && rows.m4.hasBubble && rows.m4.bubbleText === 'and the archive', rows.m4);
+  H.check('text + file: the bubble holds the text', rows.m4 && rows.m4.hasBubble && rows.m4.bubbleText.indexOf('and the archive') !== -1, rows.m4);
   H.check('and the attachment is not inside it', rows.m4 && rows.m4.attsInsideBubble === false, rows.m4);
 
   console.log('\n== text comes first, attachments below it ==');
@@ -113,6 +113,30 @@ const SEED = {
   H.check('.zip gets file-archive', rows.m4 && rows.m4.fileIcon === 'file-archive', rows.m4 && rows.m4.fileIcon);
   H.check('.json gets file-code', rows.m5 && rows.m5.fileIcon === 'file-code', rows.m5 && rows.m5.fileIcon);
   H.check('.pdf gets file-text', rows.m6 && rows.m6.fileIcon === 'file-text', rows.m6 && rows.m6.fileIcon);
+
+  console.log('\n== reactions stay where they were designed to sit ==');
+  const rxPlacement = await page.evaluate(() => {
+    const row = document.querySelector('.message-row[data-msg-id=m1]');
+    if (!row) return null;
+    const bubble = row.querySelector('.message-bubble');
+    const pills = row.querySelectorAll('.reaction-pill');
+    if (!pills.length || !bubble) return { pills: pills.length, hasBubble: !!bubble };
+    const br = bubble.getBoundingClientRect();
+    const pr = pills[0].getBoundingClientRect();
+    return {
+      pills: pills.length,
+      inBubble: !!bubble.querySelector('.reaction-pill'),
+      // Designed to straddle the bubble's bottom edge, poking out by about half.
+      straddles: Math.round(pr.bottom - br.bottom),
+      // And on the OPPOSITE corner to the tail: theirs on the right.
+      fromRightEdge: Math.round(br.right - pr.right)
+    };
+  });
+  console.log('  ' + JSON.stringify(rxPlacement));
+  H.check('a message WITH a bubble keeps its reactions inside it',
+    rxPlacement && rxPlacement.inBubble === true, rxPlacement);
+  H.check('and they straddle its bottom edge rather than sitting clear of it',
+    rxPlacement && rxPlacement.straddles > 0, rxPlacement);
 
   console.log('\n== an image-only message can still show reactions ==');
   H.check('it has no bubble', rows.m7 && rows.m7.hasBubble === false, rows.m7);

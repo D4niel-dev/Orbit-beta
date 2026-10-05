@@ -1037,9 +1037,9 @@
   align-self: flex-end;
 }
 
-/* Reactions and the reply chip — outside the bubble, aligned with it. They
-   belong to the message rather than to its text, so they survive on a message
-   that has no bubble at all. */
+/* The reply chip, and the reactions of a message that has NO bubble — an image
+   on its own. Everything else keeps its reactions inside the bubble, because
+   that is what positions them (see the .reactions-row rules above). */
 .message-row .msg-below {
   display: flex;
   flex-wrap: wrap;
@@ -1052,6 +1052,18 @@
 .message-row.mine .msg-below {
   align-self: flex-end;
   justify-content: flex-end;
+}
+
+/* With no bubble to straddle, the absolute positioning has nothing to resolve
+   against and pins to the ROW instead — which puts them on the wrong side,
+   detached from the image. Let them flow. */
+.msg-below .reactions-row {
+  position: static !important;
+  bottom: auto !important;
+  left: auto !important;
+  right: auto !important;
+  transform: none !important;
+  margin: 0 !important;
 }
 
 /* Images: no bubble, no crop. `aspect-ratio: 1` + `object-fit: cover` in

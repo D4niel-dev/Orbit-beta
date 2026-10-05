@@ -2416,14 +2416,24 @@ document.addEventListener('DOMContentLoaded', function() {
       // An image on its own should not leave an empty bubble above it.
       var _bubbleHasContent = _bubbleInner.replace(/<[^>]*>/g, '').trim().length > 0 ||
         replyHtml || pollHtml || callLogHtml || linkPreviewHtml || senderLabel;
-      // Reactions and the reply chip sit OUTSIDE the bubble, with the
-      // attachments. They belong to the message, not to its text — inside the
-      // bubble an image-only message would have had no bubble and therefore no
-      // way to show that anyone had reacted to it.
-      var _belowBubble = reactionsHtml + threadChipHtml;
+
+      // The reactions belong INSIDE the bubble whenever there is one.
+      //
+      // `.reactions-row` is `position: absolute; bottom: 0; transform:
+      // translateY(52%)` — it is designed to straddle the bubble's bottom edge,
+      // bottom-left on your own messages and bottom-right on theirs, poking out
+      // by half its height. It needs the bubble to position against; moved out to
+      // a wrapper it escapes to the row instead and lands on the wrong side,
+      // detached. The bubble also reserves a band at its bottom for them.
+      //
+      // Only a message with NO bubble — an image on its own — puts them in the
+      // group below, because there is nothing to straddle and the alternative is
+      // losing them entirely.
+      var _rxInside = _bubbleHasContent;
+      var _belowBubble = (_rxInside ? '' : reactionsHtml) + threadChipHtml;
 
       html += '<div class="message-row ' + (isMine ? 'mine' : 'other') + (isGrouped ? ' grouped' : '') + (m.replyTo != null ? ' msg-threaded' : '') + (m.call ? ' msg-call' : '') + '" data-msg-id="' + m.id + '"' + _animAttr + '>' +
-        (_bubbleHasContent ? '<div class="message-bubble">' + _bubbleInner + '</div>' : '') +
+        (_bubbleHasContent ? '<div class="message-bubble">' + _bubbleInner + (_rxInside ? reactionsHtml : '') + '</div>' : '') +
         attachmentsHtml +
         (_belowBubble ? '<div class="msg-below">' + _belowBubble + '</div>' : '') +
         // Timestamp and delivery state sit BELOW the bubble, on the bubble's
