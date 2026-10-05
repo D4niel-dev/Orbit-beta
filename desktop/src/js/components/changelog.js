@@ -14,7 +14,18 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.8.2-beta', 'Latest', [
+        versionBlock('0.8.3-beta', 'Latest', [
+          ['New', [
+            'The conversation screen is being reworked. Messages, images, files, video and audio are getting their own treatment instead of sharing one box.'
+          ]],
+          ['Fixes', [
+            'The small × on every staged attachment is gone. The Cancel button clears them, and two controls for one job just meant the smaller, harder-to-hit one.'
+          ]],
+          ['Version', [
+            'Version: Bumped to v0.8.3-beta.'
+          ]]
+        ]) +
+        versionBlock('0.8.2-beta', '', [
           ['New', [
             'Diagnostics, rebuilt. It used to be a row of bare checks floating on the background with the top third of the screen empty. It opens with a verdict now \u2014 "Everything checks out", or what needs a look \u2014 and the report you would paste into a bug report is shown on screen instead of only promised.'
           ]],
