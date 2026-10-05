@@ -84,6 +84,31 @@ const SEED = {
   H.check('text + file: the bubble holds the text', rows.m4 && rows.m4.hasBubble && rows.m4.bubbleText === 'and the archive', rows.m4);
   H.check('and the attachment is not inside it', rows.m4 && rows.m4.attsInsideBubble === false, rows.m4);
 
+  console.log('\n== text comes first, attachments below it ==');
+  const order = await page.evaluate(() => {
+    // A message that has BOTH. m4 is 'and the archive' + a .zip, from the other side.
+    const row = document.querySelector('.message-row[data-msg-id=m4]');
+    if (!row) return null;
+    const kids = Array.from(row.children).map((c) => ({
+      cls: c.className,
+      top: Math.round(c.getBoundingClientRect().top)
+    }));
+    const bubble = row.querySelector('.message-bubble');
+    const atts = row.querySelector('.msg-attachments');
+    return {
+      domOrder: kids.map((k) => k.cls.split(' ')[0]),
+      bubbleTop: bubble ? Math.round(bubble.getBoundingClientRect().top) : null,
+      attsTop: atts ? Math.round(atts.getBoundingClientRect().top) : null,
+      // DOM order and visual order must agree — the row is a column, so if they
+      // ever disagree something has a flex order or a reverse on it.
+      domBubbleFirst: bubble && atts ? (bubble.compareDocumentPosition(atts) & Node.DOCUMENT_POSITION_FOLLOWING) > 0 : null
+    };
+  });
+  console.log('  ' + JSON.stringify(order));
+  H.check('the text bubble comes before the attachment in the DOM',
+    order && order.domBubbleFirst === true, order);
+  H.check('and above it on screen', order && order.bubbleTop < order.attsTop, order);
+
   console.log('\n== the icon matches the file type ==');
   H.check('.zip gets file-archive', rows.m4 && rows.m4.fileIcon === 'file-archive', rows.m4 && rows.m4.fileIcon);
   H.check('.json gets file-code', rows.m5 && rows.m5.fileIcon === 'file-code', rows.m5 && rows.m5.fileIcon);
