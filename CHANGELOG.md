@@ -36,7 +36,7 @@
 ### Technical
 
 - **The Restyle Layer Has Three Shapes That Keep Catching Things** — Every bug it has caused is one of them: a **bare `img` or `*` child selector** (it caught the profile-frame overlay), a **`:not(...)` on a state class** (it hid the tab strip unless you already had a folder), and a **`background` shorthand with `!important`** (it reset an inline `background-image`, so custom banners were invisible). All three read as deliberate once they land, which is why none of them were noticed. When writing in that file, prefer the narrowest selector that does the job and never set `position` when all you need is `z-index` — a blanket child selector that sets `position` takes it away from the children that are deliberately `absolute`, which is how the profile sheet's two buttons ended up stacked down the left edge.
-- **Test Suites** — `npm run test:unit` is now **11 suites**; `npm run test:mobile` is now **154 checks** across twelve probes; the desktop Playwright suite remains 37 tests across two shards. The new probes cover the Contacts list, the home tabs and Diagnostics.
+- **Test Suites** — `npm run test:unit` is now **11 suites**; `npm run test:mobile` is now **156 checks** across twelve probes; the desktop Playwright suite remains 37 tests across two shards. The new probes cover the Contacts list, the home tabs and Diagnostics.
 
 ## v0.8.1-beta
 

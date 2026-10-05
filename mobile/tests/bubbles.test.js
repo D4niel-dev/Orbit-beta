@@ -26,7 +26,8 @@ const SEED = {
     { id: 'm3', from: 'p_mai', text: '', time: H.t(50), attachments: [img('sunset.png')] },
     { id: 'm4', from: 'p_mai', text: 'and the archive', time: H.t(40), attachments: [file('orbit-source.zip', 'application/zip')] },
     { id: 'm5', from: 'p_mai', text: '', time: H.t(30), attachments: [file('settings.json', 'application/json')] },
-    { id: 'm6', from: 'p_mai', text: '', time: H.t(20), attachments: [file('notes.pdf', 'application/pdf')] }
+    { id: 'm6', from: 'p_mai', text: '', time: H.t(20), attachments: [file('notes.pdf', 'application/pdf')] },
+    { id: 'm7', from: 'p_mai', text: '', time: H.t(10), attachments: [img('reacted.png')], reactions: [{ emoji: '👍', by: 'me' }] }
   ]
 };
 
@@ -87,6 +88,18 @@ const SEED = {
   H.check('.zip gets file-archive', rows.m4 && rows.m4.fileIcon === 'file-archive', rows.m4 && rows.m4.fileIcon);
   H.check('.json gets file-code', rows.m5 && rows.m5.fileIcon === 'file-code', rows.m5 && rows.m5.fileIcon);
   H.check('.pdf gets file-text', rows.m6 && rows.m6.fileIcon === 'file-text', rows.m6 && rows.m6.fileIcon);
+
+  console.log('\n== an image-only message can still show reactions ==');
+  H.check('it has no bubble', rows.m7 && rows.m7.hasBubble === false, rows.m7);
+  const m7reactions = await page.evaluate(() => {
+    const row = document.querySelector('.message-row[data-msg-id=m7]');
+    if (!row) return null;
+    const below = row.querySelector('.msg-below');
+    const chips = row.querySelectorAll('.reaction-pill');
+    return { hasBelow: !!below, chips: chips.length, inBubble: !!(row.querySelector('.message-bubble .reaction-pill')) };
+  });
+  console.log('  ' + JSON.stringify(m7reactions));
+  H.check('the reaction is rendered outside the bubble', m7reactions && m7reactions.chips > 0 && !m7reactions.inBubble, m7reactions);
 
   console.log('\n== the classic toggle brings the accent back ==');
   const classic = await page.evaluate(() => {

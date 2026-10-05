@@ -2411,15 +2411,21 @@ document.addEventListener('DOMContentLoaded', function() {
       // is a frame around a frame — so only the things that need a surface get
       // one. The row is a flex column, so they stack and align together.
       var _bubbleInner = senderLabel + replyHtml + _textWrapHtml + linkPreviewHtml +
-        pollHtml + callLogHtml + reactionsHtml + threadChipHtml +
+        pollHtml + callLogHtml +
         (MStore.settings.showMessageIds ? '<div style="font-size:9px;color:var(--text-muted);opacity:0.5;margin-top:2px;">' + m.id + '</div>' : '');
       // An image on its own should not leave an empty bubble above it.
       var _bubbleHasContent = _bubbleInner.replace(/<[^>]*>/g, '').trim().length > 0 ||
-        replyHtml || pollHtml || callLogHtml || reactionsHtml || threadChipHtml || linkPreviewHtml || senderLabel;
+        replyHtml || pollHtml || callLogHtml || linkPreviewHtml || senderLabel;
+      // Reactions and the reply chip sit OUTSIDE the bubble, with the
+      // attachments. They belong to the message, not to its text — inside the
+      // bubble an image-only message would have had no bubble and therefore no
+      // way to show that anyone had reacted to it.
+      var _belowBubble = reactionsHtml + threadChipHtml;
 
       html += '<div class="message-row ' + (isMine ? 'mine' : 'other') + (isGrouped ? ' grouped' : '') + (m.replyTo != null ? ' msg-threaded' : '') + (m.call ? ' msg-call' : '') + '" data-msg-id="' + m.id + '"' + _animAttr + '>' +
         (_bubbleHasContent ? '<div class="message-bubble">' + _bubbleInner + '</div>' : '') +
         attachmentsHtml +
+        (_belowBubble ? '<div class="msg-below">' + _belowBubble + '</div>' : '') +
         // Timestamp and delivery state sit BELOW the bubble, on the bubble's
         // outer edge — the same place the desktop puts them. Inside the bubble
         // they competed with the message text for the same corner.

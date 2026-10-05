@@ -1037,6 +1037,23 @@
   align-self: flex-end;
 }
 
+/* Reactions and the reply chip — outside the bubble, aligned with it. They
+   belong to the message rather than to its text, so they survive on a message
+   that has no bubble at all. */
+.message-row .msg-below {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  max-width: 78%;
+  align-self: flex-start;
+}
+.message-row.mine .msg-below {
+  align-self: flex-end;
+  justify-content: flex-end;
+}
+
 /* Images: no bubble, no crop. `aspect-ratio: 1` + `object-fit: cover` in
    mobile.css was forcing every photo into a square and cutting the edges off. */
 .message-row .msg-attachments .att-grid-cell {
