@@ -216,7 +216,6 @@ var OrbitSheet = {
 
     // Add cancel pill
     OrbitSheet._addCancelPill();
-    OrbitSheet._addCloseButton();
     
     // Show
     overlay.classList.add('active');
@@ -265,7 +264,6 @@ var OrbitSheet = {
     OrbitSheet._settleViewport();
     content.scrollTop = 0;
     OrbitSheet._addCancelPill();
-    OrbitSheet._addCloseButton();
     overlay.classList.add('active');
     if (window.lucide) lucide.createIcons();
 
@@ -309,6 +307,15 @@ var OrbitSheet = {
    * to scroll has no visible way out at all. This puts a dismiss affordance at
    * the top-right, where it is always on screen. Same inline-SVG approach as the
    * player controls: no lucide pass needed, so it cannot be lost to icon timing.
+   */
+  /**
+   * NOT CALLED. Every sheet this builds already ends in a Cancel pill, so the ×
+   * was a second control for one job — and the smaller, harder-to-hit one, which
+   * is the same reasoning that removed it from the attachment pills.
+   *
+   * Kept rather than deleted because the frame-picker and changelog sheets build
+   * their own × and this is the reference for how it is drawn. If a sheet ever
+   * needs one and has no bottom dismiss, call this instead of writing another.
    */
   _addCloseButton: function() {
     var existing = document.querySelector('.bottom-sheet-close');

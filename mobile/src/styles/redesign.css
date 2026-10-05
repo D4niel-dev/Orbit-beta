@@ -3572,3 +3572,53 @@
 .profile-hero > .profile-hero-content {
   z-index: 2;
 }
+
+/* ── Local Vault ─────────────────────────────────────────────────────────────
+   The status was a centred block with centred sub-text, in a settings list where
+   every other row is left-aligned — which is what made it read as bolted on.
+   It is a card now, like the rows around it.
+
+   The two actions were BOTH primary, which made the eye choose between things
+   that are not equal: exporting is routine, restoring replaces everything you
+   have. Export keeps the accent; restore steps back. */
+.vault-block {
+  padding: 0 !important;
+}
+.vault-status-card {
+  cursor: default !important;
+}
+.vault-status-card:hover {
+  background: transparent !important;
+}
+.vault-status-sub {
+  margin-top: 10px !important;
+  font-size: 12px !important;
+  color: var(--text-muted) !important;
+  text-align: left !important;
+  padding-left: 4px;
+}
+.settings-btn-secondary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 1;
+  padding: 12px 16px;
+  border: 2px dashed var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.settings-btn-secondary:active {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+.settings-btn-secondary i {
+  width: 16px;
+  height: 16px;
+}

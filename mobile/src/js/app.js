@@ -6504,12 +6504,35 @@ document.addEventListener('DOMContentLoaded', function() {
         var _vLastBackup = localStorage.getItem('orbit_vault_lastbackup');
         var _vLastBackupTxt = '';
         if (_vLastBackup) {
-          try { _vLastBackupTxt = new Date(_vLastBackup).toLocaleString(); } catch(e) {}
+          // Accepts BOTH shapes. The app writes `new Date().toISOString()`, so an
+          // ISO string is what is normally here — but an epoch number has been
+          // seen too, and `new Date('1791...')` is Invalid Date, which renders the
+          // literal words "Invalid Date" into the UI.
+          //
+          // I got this wrong once by reading a probe's seed instead of the writer:
+          // the probe's value was JSON-quoted, so `new Date()` failed on the
+          // probe, and "coercing to a number" would have broken the real path.
+          // Check the WRITER before believing a value's shape.
+          try {
+            var _vNum = Number(_vLastBackup);
+            var _vDate = new Date(isNaN(_vNum) ? _vLastBackup : _vNum);
+            if (!isNaN(_vDate.getTime())) _vLastBackupTxt = _vDate.toLocaleString();
+          } catch(e) {}
         }
+        // The status was a centred block with centred sub-text, sitting in a
+        // settings list where everything else is left-aligned — which is what made
+        // it read as bolted on rather than part of the app. It is a card now, like
+        // every other row here: icon, title, description.
         return '<div class="settings-section-label">Local Vault</div>' +
         '<div class="vault-block" data-search="Local Vault encrypted backup restore files">' +
-          '<div class="vault-status" id="vault-status">' + (_vLastBackupTxt ? 'Last backup: ' + _vLastBackupTxt : 'No backup yet') + '</div>' +
-          '<div class="vault-status-sub">Backups are stored as a single JSON file in the app data folder (vault/).</div>' +
+          '<div class="settings-item-card vault-status-card" id="vault-status">' +
+            '<div class="settings-item-icon"><i data-lucide="shield-check"></i></div>' +
+            '<div class="settings-item-info">' +
+              '<span class="settings-item-title">' + (_vLastBackupTxt ? 'Last backup' : 'No backup yet') + '</span>' +
+              '<span class="settings-item-desc">' + (_vLastBackupTxt ? escapeHtml(_vLastBackupTxt) : 'Backups are stored as a single JSON file in the app data folder (vault/)') + '</span>' +
+            '</div>' +
+          '</div>' +
+          (_vLastBackupTxt ? '<div class="vault-status-sub">A single JSON file in the app data folder (vault/).</div>' : '') +
         '</div>' +
         card('lock', 'Encrypt Vault', 'Protect exports with a passphrase (PBKDF2 + AES-GCM)',
           '<button class="settings-toggle ' + (s.vaultEncrypt ? 'on' : '') + '" id="vault-encrypt-toggle"></button>') +
@@ -6525,9 +6548,12 @@ document.addEventListener('DOMContentLoaded', function() {
         ) : '') +
         card('smartphone', 'Auto-Backup on Background', 'Export silently when the app goes to background',
           '<button class="settings-toggle ' + (s.vaultAutoBackup ? 'on' : '') + '" id="vault-auto-toggle"></button>') +
+        // One primary, one secondary. Both were primary, which made the eye
+        // choose between two things that are not equal: exporting is the routine
+        // action, restoring replaces everything you have.
         '<div class="settings-btn-row">' +
           '<button id="btn-vault-export" class="settings-btn-primary"><i data-lucide="download"></i> Export Vault Now</button>' +
-          '<button id="btn-vault-restore" class="settings-btn-primary"><i data-lucide="upload"></i> Restore Vault</button>' +
+          '<button id="btn-vault-restore" class="settings-btn-secondary"><i data-lucide="upload"></i> Restore Vault</button>' +
         '</div>';
       case 'folders':
         if (!s.experimentalFolders) return '';
@@ -10191,6 +10217,10 @@ document.addEventListener('DOMContentLoaded', function() {
   window.renderMessages = renderMessages;
   window.applyClassicBubbles = applyClassicBubbles;
   window.showSettingsOverlay = showSettingsOverlay;
+  // The section renderer too — without it a test can open Settings but not reach
+  // a section, which is the same gap that made an earlier probe silently do
+  // nothing when it called renderMessages.
+  window.showSettingsSection = showSettingsSection;
   window.renderActivity = renderActivity;
 
   window.openLightbox = function(index, mediaList) {
