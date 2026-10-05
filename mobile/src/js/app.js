@@ -1980,6 +1980,21 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  /**
+   * The Lucide glyph for an attachment, from its name and MIME type.
+   *
+   * Every attachment used to draw the same generic `file` icon, so a .zip, a
+   * .json and a .pdf were a column of identical squares. The mapper lives in
+   * `shared/ui/file-icons.js` and the desktop reads the same one. Falls back to
+   * the old glyph rather than to nothing if the module is not loaded.
+   */
+  function _fileIconFor(att) {
+    if (att && window.FileIcons && typeof window.FileIcons.icon === 'function') {
+      return window.FileIcons.icon(att.name, att.mimeType || att.mime || '');
+    }
+    return 'file';
+  }
+
   function renderMessages(chatId) {
     // The pinned bar belongs to the chat, so it repaints whenever the chat does.
     try { _renderPinnedBar(chatId); } catch (e) { /* the bar must never break the messages */ }
@@ -2272,7 +2287,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 largeHtml += '<div class="att-large-cell att-video-cell" style="display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg-panel);color:var(--text-muted);border:1px solid var(--border-subtle);border-radius:8px;height:200px;">' +
                   '<i data-lucide="hard-drive" style="width:28px;height:28px;margin-bottom:8px;opacity:0.5;"></i><div style="font-size:13px;font-weight:500;">Restoring...</div></div>';
               } else {
-                gridHtml += '<div class="att-grid-cell att-file-cell"><i data-lucide="file" style="width:28px;height:28px;margin-bottom:6px;color:var(--text-muted);"></i><div class="att-file-name">' + escapeHtml(String(a.name || 'File')) + '</div></div>';
+                gridHtml += '<div class="att-grid-cell att-file-cell"><i data-lucide="' + _fileIconFor(a) + '" style="width:28px;height:28px;margin-bottom:6px;color:var(--text-muted);"></i><div class="att-file-name">' + escapeHtml(String(a.name || 'File')) + '</div></div>';
               }
             } else if (a.type === 'audio') {
               if (attUrl) {
@@ -2284,7 +2299,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 largeHtml += '<div class="att-large-cell att-audio-cell" style="display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg-panel);color:var(--text-muted);border:1px solid var(--border-subtle);border-radius:8px;height:120px;">' +
                   '<i data-lucide="hard-drive" style="width:28px;height:28px;margin-bottom:8px;opacity:0.5;"></i><div style="font-size:13px;font-weight:500;">Restoring...</div></div>';
               } else {
-                gridHtml += '<div class="att-grid-cell att-file-cell"><i data-lucide="file" style="width:28px;height:28px;margin-bottom:6px;color:var(--text-muted);"></i><div class="att-file-name">' + escapeHtml(String(a.name || 'File')) + '</div></div>';
+                gridHtml += '<div class="att-grid-cell att-file-cell"><i data-lucide="' + _fileIconFor(a) + '" style="width:28px;height:28px;margin-bottom:6px;color:var(--text-muted);"></i><div class="att-file-name">' + escapeHtml(String(a.name || 'File')) + '</div></div>';
               }
             } else if (a.type === 'image') {
               if (attUrl) {
@@ -2298,17 +2313,21 @@ document.addEventListener('DOMContentLoaded', function() {
               } else if (a._blobKey) {
                 gridHtml += '<div class="att-grid-cell" style="display:flex;align-items:center;justify-content:center;background:var(--bg-panel);color:var(--text-muted);"><i data-lucide="hard-drive" style="width:24px;height:24px;opacity:0.5;"></i></div>';
               } else {
-              gridHtml += '<div class="att-grid-cell att-file-cell"><i data-lucide="file" style="width:28px;height:28px;margin-bottom:6px;color:var(--text-muted);"></i><div class="att-file-name">' + escapeHtml(String(a.name || 'File')) + '</div></div>';
+              gridHtml += '<div class="att-grid-cell att-file-cell"><i data-lucide="' + _fileIconFor(a) + '" style="width:28px;height:28px;margin-bottom:6px;color:var(--text-muted);"></i><div class="att-file-name">' + escapeHtml(String(a.name || 'File')) + '</div></div>';
             }
           } else {
             gridHtml += '<div class="att-grid-cell att-file-cell">' +
-              '<i data-lucide="file" style="width:28px;height:28px;margin-bottom:6px;color:var(--text-muted);"></i>' +
+              '<i data-lucide="' + _fileIconFor(a) + '" style="width:28px;height:28px;margin-bottom:6px;color:var(--text-muted);"></i>' +
               '<div class="att-file-name">' + escapeHtml(String(a.name || 'File')) + '</div>' +
             '</div>';
           }
         });
         var gridSection = gridHtml ? '<div class="att-grid" data-count="' + (m.attachments.filter(function(x){return x.type!=='video'&&x.type!=='audio';}).length) + '">' + gridHtml + '</div>' : '';
-        attachmentsHtml = (gridSection ? gridSection + '<div style="height:6px;"></div>' : '') + largeHtml;
+        // One wrapper, so the attachments can be styled as a group that sits
+        // beside the bubble rather than inside it.
+        attachmentsHtml = '<div class="msg-attachments">' +
+          (gridSection ? gridSection + '<div style="height:6px;"></div>' : '') + largeHtml +
+        '</div>';
       }
       // Link Preview detection (mobile — basic card without OG fetch)
       var linkPreviewHtml = '';
@@ -2387,19 +2406,20 @@ document.addEventListener('DOMContentLoaded', function() {
       var _textWrapHtml = (m.call && !_renderedText)
         ? ''
         : '<div class="msg-text-mob">' + _renderedText + editedBadge + '</div>';
+      // Attachments sit BESIDE the bubble, not inside it. A photo, a file, a
+      // video and a line of text want different things — a bubble around a photo
+      // is a frame around a frame — so only the things that need a surface get
+      // one. The row is a flex column, so they stack and align together.
+      var _bubbleInner = senderLabel + replyHtml + _textWrapHtml + linkPreviewHtml +
+        pollHtml + callLogHtml + reactionsHtml + threadChipHtml +
+        (MStore.settings.showMessageIds ? '<div style="font-size:9px;color:var(--text-muted);opacity:0.5;margin-top:2px;">' + m.id + '</div>' : '');
+      // An image on its own should not leave an empty bubble above it.
+      var _bubbleHasContent = _bubbleInner.replace(/<[^>]*>/g, '').trim().length > 0 ||
+        replyHtml || pollHtml || callLogHtml || reactionsHtml || threadChipHtml || linkPreviewHtml || senderLabel;
+
       html += '<div class="message-row ' + (isMine ? 'mine' : 'other') + (isGrouped ? ' grouped' : '') + (m.replyTo != null ? ' msg-threaded' : '') + (m.call ? ' msg-call' : '') + '" data-msg-id="' + m.id + '"' + _animAttr + '>' +
-        '<div class="message-bubble">' +
-          senderLabel +
-          replyHtml +
-          _textWrapHtml +
-          attachmentsHtml +
-          linkPreviewHtml +
-          pollHtml +
-          callLogHtml +
-          reactionsHtml +
-          threadChipHtml +
-          (MStore.settings.showMessageIds ? '<div style="font-size:9px;color:var(--text-muted);opacity:0.5;margin-top:2px;">' + m.id + '</div>' : '') +
-        '</div>' +
+        (_bubbleHasContent ? '<div class="message-bubble">' + _bubbleInner + '</div>' : '') +
+        attachmentsHtml +
         // Timestamp and delivery state sit BELOW the bubble, on the bubble's
         // outer edge — the same place the desktop puts them. Inside the bubble
         // they competed with the message text for the same corner.
@@ -6287,6 +6307,8 @@ document.addEventListener('DOMContentLoaded', function() {
           '<button class="settings-toggle ' + (s.showImagePreviews !== false ? 'on' : '') + '" id="set-image-previews"></button>') +
         card('link', 'Link Previews', 'Show rich previews for shared links',
           '<button class="settings-toggle ' + (s.showLinkPreviews !== false ? 'on' : '') + '" id="set-link-previews"></button>') +
+        card('palette', 'Classic Bubbles', 'Colour your own messages with the accent',
+          '<button class="settings-toggle ' + (s.classicBubbles ? 'on' : '') + '" id="set-classic-bubbles"></button>') +
         '<div class="settings-section-label">Translation</div>' +
         card('languages', 'Message Translation', 'Show translate button on messages',
           '<button class="settings-toggle ' + (s.messageTranslate ? 'on' : '') + '" id="set-message-translate"></button>') +
@@ -6636,6 +6658,7 @@ document.addEventListener('DOMContentLoaded', function() {
         bindSelect('set-pattern', function(v) { s.bgPattern = v; MStore.save(); applyBgPattern(); });
         bindToggle('set-image-previews', function(on) { s.showImagePreviews = on; MStore.save(); if (activeChatId) renderMessages(activeChatId); }, s.showImagePreviews !== false);
         bindToggle('set-link-previews', function(on) { s.showLinkPreviews = on; MStore.save(); if (activeChatId) renderMessages(activeChatId); }, s.showLinkPreviews !== false);
+        bindToggle('set-classic-bubbles', function(on) { s.classicBubbles = on; MStore.save(); applyClassicBubbles(); }, s.classicBubbles);
         bindToggle('set-message-translate', function(on) { s.messageTranslate = on; MStore.save(); if (activeChatId) renderMessages(activeChatId); }, s.messageTranslate);
         bindSelect('set-translate-target', function(v) { s.translateTargetLang = v; MStore.save(); });
         bindToggle('set-auto-detect', function(on) { s.autoDetectSource = on; MStore.save(); }, s.autoDetectSource !== false);
@@ -8564,6 +8587,21 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
+  /**
+   * Whether your own messages keep the accent fill or match everyone else's.
+   *
+   * Separate from `messageBubbles` (Modern/Compact), which is about DENSITY —
+   * folding a colour choice into that selector would make the two impossible to
+   * reason about together.
+   */
+  function applyClassicBubbles() {
+    if (MStore.settings.classicBubbles) {
+      document.documentElement.setAttribute('data-classic-bubbles', 'true');
+    } else {
+      document.documentElement.removeAttribute('data-classic-bubbles');
+    }
+  }
+
   function applyBgPattern() {
     var p = MStore.settings.bgPattern || 'None';
     if (p === 'Dots') {
@@ -10118,6 +10156,11 @@ document.addEventListener('DOMContentLoaded', function() {
   // switchPanel the activity bell uses, or tab switches would lose the panel
   // transition and could leave two panels active.
   window.switchPanel = switchPanel;
+  // Exposed so the appearance settings can be driven from a test — and so the
+  // harness can seed a thread and re-render it. Neither was reachable before,
+  // which is why a probe that called them silently did nothing.
+  window.renderMessages = renderMessages;
+  window.applyClassicBubbles = applyClassicBubbles;
   window.showSettingsOverlay = showSettingsOverlay;
   window.renderActivity = renderActivity;
 
@@ -15768,6 +15811,7 @@ document.addEventListener('DOMContentLoaded', function() {
   applyTheme(MStore.settings.theme || 'dark');
   applyBgPattern();
   applyAnimationSettings();
+  applyClassicBubbles();
   document.documentElement.setAttribute('data-bubbles', MStore.settings.messageBubbles || 'Modern');
 
   // Listen for OS theme changes in system mode

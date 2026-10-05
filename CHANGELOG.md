@@ -6,6 +6,9 @@
 
 ### Features
 
+- **The Conversation Screen, Reworked** — Everything a message carried lived inside **one** bubble — text, images, files, video, audio — so a photo had a bubble around it (a frame around a frame) and a file was whatever was left over. Attachments now sit beside the bubble, and each kind gets what it actually wants: **text** keeps its bubble, **images** get none at all and keep their natural aspect instead of being forced into a square and cropped, **files** get a surface of their own, and **video and audio** float on the feed behind a shadow. Your own messages are no longer a solid block of accent — same surface as everyone else's, with the corner radius saying which side you are on. A **Classic Bubbles** toggle in Chat settings brings the accent back.
+- **Every File Draws Its Own Icon** — A .zip, a .json and a .pdf were a column of identical generic glyphs. The mapper moved to `shared/ui/file-icons.js`, which both platforms read, and it knows archives, code, spreadsheets, slides, audio, video, PDFs and plain text.
+- **The Bubble Colours Were Hardcoded** — `#1A1D24` for incoming and a fixed blue gradient for outgoing, neither of which followed the theme. In a **light** theme the incoming bubble stayed dark while `color: var(--text-primary)` went dark with the rest of the app — so the message text vanished into its own bubble. That was Dan's "fix this" screenshot, and it was invisible in the dark theme, which is why it survived. Tokens now, and the text is **17.3:1** on its bubble in dark and **17.8:1** in light.
 - **The × Is Gone From the Attachment Pills** — Staged files carried a close button on every pill, and the composer already has a Cancel that clears them. Two controls for one job, and the × was the smaller, harder one to hit on a phone. Removed on both platforms. Dan: *"remove that 'x' in the pills cuz we already have the cancel button at the bottom, this is for desktop and mobile"*.
 
 ## v0.8.2-beta
@@ -33,7 +36,7 @@
 ### Technical
 
 - **The Restyle Layer Has Three Shapes That Keep Catching Things** — Every bug it has caused is one of them: a **bare `img` or `*` child selector** (it caught the profile-frame overlay), a **`:not(...)` on a state class** (it hid the tab strip unless you already had a folder), and a **`background` shorthand with `!important`** (it reset an inline `background-image`, so custom banners were invisible). All three read as deliberate once they land, which is why none of them were noticed. When writing in that file, prefer the narrowest selector that does the job and never set `position` when all you need is `z-index` — a blanket child selector that sets `position` takes it away from the children that are deliberately `absolute`, which is how the profile sheet's two buttons ended up stacked down the left edge.
-- **Test Suites** — `npm run test:unit` is now **11 suites**; `npm run test:mobile` is now **134 checks** across eleven probes; the desktop Playwright suite remains 37 tests across two shards. The new probes cover the Contacts list, the home tabs and Diagnostics.
+- **Test Suites** — `npm run test:unit` is now **11 suites**; `npm run test:mobile` is now **154 checks** across twelve probes; the desktop Playwright suite remains 37 tests across two shards. The new probes cover the Contacts list, the home tabs and Diagnostics.
 
 ## v0.8.1-beta
 

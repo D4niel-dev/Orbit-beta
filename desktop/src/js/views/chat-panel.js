@@ -2106,35 +2106,20 @@ window.ChatPanel = {
     });
   },
 
+  // Delegates to the shared mapper so the desktop and the phone agree about
+  // what a .rar looks like. The inline list is kept as a fallback.
   getFileIcon(name, mimeType) {
-    var ext = name.split('.').pop().toLowerCase();
-    if (mimeType && mimeType.startsWith('image/')) return 'image';
-    if (mimeType === 'application/pdf' || ext === 'pdf') return 'pdf';
-    if (mimeType && (mimeType.includes('word') || mimeType.includes('document')) || ['doc','docx'].includes(ext)) return 'word';
-    if (mimeType && (mimeType.includes('sheet') || mimeType.includes('excel')) || ['xls','xlsx','csv'].includes(ext)) return 'sheet';
-    if (mimeType && (mimeType.includes('presentation') || mimeType.includes('powerpoint')) || ['ppt','pptx'].includes(ext)) return 'presentation';
-    if (mimeType && (mimeType.includes('zip') || mimeType.includes('rar') || mimeType.includes('tar') || mimeType.includes('gzip') || mimeType.includes('7z')) || ['zip','rar','tar','gz','7z'].includes(ext)) return 'archive';
-    if (['js','ts','py','java','cpp','c','h','cs','go','rs','rb','php','swift','kt','scala','html','css','json','xml','yaml','yml','toml','sh','bat','sql'].includes(ext)) return 'code';
-    if (mimeType && mimeType.startsWith('audio/') || ['mp3','wav','ogg','flac','aac','wma','m4a'].includes(ext)) return 'audio';
-    if (mimeType && mimeType.startsWith('video/') || ['mp4','avi','mkv','mov','wmv','webm','flv'].includes(ext)) return 'video';
-    if (['txt','log','md'].includes(ext)) return 'text';
+    if (window.FileIcons && typeof window.FileIcons.kind === 'function') {
+      return window.FileIcons.kind(name, mimeType);
+    }
     return 'file';
   },
 
   getFileIconLucide(fileType) {
-    var map = {
-      image: 'file-image',
-      pdf: 'file-text',
-      word: 'file-text',
-      sheet: 'file-spreadsheet',
-      presentation: 'presentation',
-      archive: 'file-archive',
-      code: 'file-code',
-      audio: 'music',
-      video: 'video',
-      text: 'file-text'
-    };
-    return map[fileType] || 'file';
+    if (window.FileIcons && typeof window.FileIcons.lucide === 'function') {
+      return window.FileIcons.lucide(fileType);
+    }
+    return 'file';
   },
 
   /* ── Voice memo recording (parity with mobile _voiceRecorder) ── */

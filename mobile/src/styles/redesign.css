@@ -990,6 +990,88 @@
   border-bottom-left-radius: 5px !important;
 }
 
+/* ── Your own messages are no longer a different colour ────────────────────
+   They were a solid block of accent, which made the thread read as two kinds of
+   thing rather than one conversation. Same surface as theirs now; the corner
+   radius is what says which side you are on, and it was always doing most of
+   that work anyway. `--classic-bubbles` restores the accent for anyone who wants
+   it. */
+.message-row.mine .message-bubble {
+  /* `--bg-surface`, the same token the bubble already uses in mobile.css — not
+     `--bg-raised`, which only exists inside the dark/light theme scopes. Using a
+     different token here made mine resolve to nothing while theirs was opaque. */
+  background: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
+}
+:root[data-classic-bubbles="true"] .message-row.mine .message-bubble {
+  background: var(--accent-primary) !important;
+  color: #FFFFFF !important;
+}
+/* The tail corner follows the SIDE, not the colour — it has to keep pointing
+   outward whichever fill is in use. */
+.message-row.mine .message-bubble {
+  border-bottom-right-radius: 5px !important;
+  border-bottom-left-radius: var(--radius-lg) !important;
+}
+
+/* ── Attachments sit BESIDE the bubble, not inside it ──────────────────────
+   A bubble around a photo is a frame around a frame. Each kind of content gets
+   what it actually wants:
+
+     images      no box — the image is the message. Natural aspect, hairline.
+     files       a surface, because a file has no shape of its own
+     video/audio no box — a shadow, so the player floats on the feed
+     text        a bubble, unchanged
+
+   The markup moved the attachments out of `.message-bubble` into
+   `.msg-attachments`; the bubble is skipped entirely when a message is only an
+   image, so there is no empty box above it. */
+.message-row .msg-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 78%;
+  align-self: flex-start;
+}
+.message-row.mine .msg-attachments {
+  align-self: flex-end;
+}
+
+/* Images: no bubble, no crop. `aspect-ratio: 1` + `object-fit: cover` in
+   mobile.css was forcing every photo into a square and cutting the edges off. */
+.message-row .msg-attachments .att-grid-cell {
+  aspect-ratio: auto !important;
+  background: transparent !important;
+  border-radius: var(--radius-lg) !important;
+  overflow: hidden !important;
+  box-shadow: 0 0 0 1px var(--border-subtle);
+}
+.message-row .msg-attachments .att-grid-cell img {
+  width: 100% !important;
+  height: auto !important;
+  max-height: 340px;
+  object-fit: contain !important;
+  display: block;
+}
+
+/* Files keep a surface. */
+.message-row .msg-attachments .att-file-cell {
+  background: var(--bg-raised) !important;
+  border-radius: var(--radius-lg) !important;
+  border: 1px solid var(--border-subtle) !important;
+  padding: 14px 10px !important;
+}
+
+/* Video and audio: no box, a shadow instead, so the player reads as sitting on
+   the feed rather than inside a container. */
+.message-row .msg-attachments .att-large-cell {
+  background: transparent !important;
+  border: none !important;
+  border-radius: var(--radius-lg) !important;
+  overflow: hidden !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .30);
+}
+
 /* The old bubbles had a detached triangle tail pinned outside the corner. The
    design expresses the tail with the 5px corner radius instead. */
 .message-row.mine .message-bubble::after,
@@ -2560,12 +2642,20 @@
    than a hole.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* ⚠ These two were HARDCODED — a blue gradient for yours, `#1A1D24` for theirs.
+   Hardcoded colours do not follow the theme, so in a LIGHT theme the incoming
+   bubble stayed dark while `color: var(--text-primary)` went dark with the rest
+   of the app, and the message text vanished into its own bubble. That was Dan's
+   "fix this" screenshot, and it was invisible in the dark theme, which is why it
+   survived. Tokens now, so the bubble follows whatever theme is in use. */
 .message-row.mine .message-bubble {
-  background: linear-gradient(180deg, #4E7BF5, #3F68E0) !important;
+  background: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
 }
 
 .message-row.other .message-bubble {
-  background: #1A1D24 !important;
+  background: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
   /* inset ring, not a border — a border would change the bubble's size. */
   box-shadow: inset 0 0 0 1px var(--border-subtle);
 }

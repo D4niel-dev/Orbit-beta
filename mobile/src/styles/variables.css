@@ -3,6 +3,17 @@
   /* Fallback accent (themes override) */
   --accent-primary: #0A84FF;
 
+  /* Fallback surfaces. `--bg-raised` was only ever defined inside
+     `:root[data-theme="dark"]` and `:root[data-theme="light"]` — none of the
+     theme files set it, and neither did this block. So any rule using it
+     resolved to NOTHING on every other theme, and a `background: var(--bg-raised)`
+     came out transparent with no error anywhere. */
+  --bg-base: #0C0C0E;
+  --bg-surface: #1C1C1E;
+  --bg-raised: #17191E;
+  --bg-hover: #22252C;
+  --text-primary: #F4F5F7;
+
   /* Spacing */
   --spacing-xs: 4px;
   --spacing-sm: 8px;
