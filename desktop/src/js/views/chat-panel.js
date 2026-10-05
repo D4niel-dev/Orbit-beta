@@ -1075,6 +1075,16 @@ window.ChatPanel = {
       // against. With no bubble they go in the group below instead — same rule as
       // the mobile, so the two platforms cannot drift.
       const _rxInside = _bubbleHasContent;
+      // With no bubble the pills straddle the ATTACHMENT's bottom edge — the idea
+      // is "straddle whatever the message IS". They have to go INSIDE
+      // `.msg-attachments`: an absolutely-positioned element resolves against its
+      // own ancestor chain, and `.msg-below` is a SIBLING of the attachment group,
+      // so putting them there leaves them pinned to the row instead — detached,
+      // and on the wrong side. Same rule as the mobile.
+      if (!_rxInside && reactionsHtml && attachmentsHtml) {
+        attachmentsHtml = attachmentsHtml.replace(/<\/div>$/, reactionsHtml + '</div>');
+      }
+      const _rxInBelow = !_rxInside && reactionsHtml && !attachmentsHtml ? reactionsHtml : '';
 
       // This loop is a `for`, so the exit is `continue`. I checked, because `return` here
       // would have ended the whole render and shown an empty feed, and `continue` inside a
@@ -1118,7 +1128,7 @@ window.ChatPanel = {
             (_rxInside ? reactionsHtml : '') +
           '</div>' : '') +
           attachmentsHtml +
-          (!_rxInside && reactionsHtml ? '<div class="msg-below">' + reactionsHtml + '</div>' : '') +
+          (_rxInBelow ? '<div class="msg-below">' + _rxInBelow + '</div>' : '') +
           threadChipHtml +
           '<div class="msg-time" style="font-size: 12px; color: var(--text-muted); margin-top: 4px; align-self: flex-start; margin-left: 4px;">' + timeStr + readHtml + '</div>' +
           '</div>' +
@@ -1159,7 +1169,7 @@ window.ChatPanel = {
               (_rxInside ? reactionsHtml : '') +
             '</div>' : '') +
             attachmentsHtml +
-            (!_rxInside && reactionsHtml ? '<div class="msg-below">' + reactionsHtml + '</div>' : '') +
+            (_rxInBelow ? '<div class="msg-below">' + _rxInBelow + '</div>' : '') +
             threadChipHtml +
             '<div class="msg-time" style="font-size: 12px; color: var(--text-muted); margin-top: 4px; align-self: flex-end; margin-right: 4px;">' + timeStr + '</div>' +
           '</div>' +

@@ -1054,16 +1054,36 @@
   justify-content: flex-end;
 }
 
-/* With no bubble to straddle, the absolute positioning has nothing to resolve
-   against and pins to the ROW instead — which puts them on the wrong side,
-   detached from the image. Let them flow. */
-.msg-below .reactions-row {
-  position: static !important;
-  bottom: auto !important;
-  left: auto !important;
-  right: auto !important;
-  transform: none !important;
+/* ── No bubble: straddle the ATTACHMENT's bottom edge instead ────────────────
+   An image on its own has no bubble, so the pills have nothing to sit on. Left
+   to flow they float below it with a gap, belonging to nothing — Dan spotted
+   exactly that: "why is the mobile emoji reaction there???"
+
+   The idea is "straddle the bottom edge of whatever the message IS". With no
+   bubble, that is the attachment, so it becomes the containing block and the
+   pills keep their corner and their half-height overlap.
+
+   The `.msg-below` wrapper stays unpositioned, so the absolutely-positioned pills
+   resolve past it to `.msg-attachments`. */
+.message-row:not(:has(.message-bubble)) .msg-attachments {
+  position: relative;
+}
+.message-row:not(:has(.message-bubble)) .reactions-row {
+  position: absolute !important;
+  bottom: 0 !important;
   margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  background: none !important;
+  transform: translateY(52%) !important;
+  z-index: 2;
+}
+/* …and the attachment reserves the same band the bubble does. */
+.message-row:not(:has(.message-bubble)):has(.reactions-row) .msg-attachments {
+  padding-bottom: 14px !important;
+}
+.message-row:not(:has(.message-bubble)):has(.reactions-row) .msg-time {
+  margin-top: 14px !important;
 }
 
 /* Images: no bubble, no crop. `aspect-ratio: 1` + `object-fit: cover` in

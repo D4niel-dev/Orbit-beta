@@ -2650,3 +2650,21 @@ html[data-theme="light"] #chat-welcome-host::before { opacity: 0.3; }
   right: auto !important;
   transform: none !important;
 }
+
+/* ── No bubble: straddle the ATTACHMENT's bottom edge instead ────────────────
+   An image on its own has no bubble, so the pills have nothing to sit on and
+   float below it, belonging to nothing. The idea is "straddle the bottom edge of
+   whatever the message IS" — with no bubble, that is the attachment.
+
+   The reactions are rendered INSIDE `.msg-attachments` for this case, which is
+   what makes it work: an absolutely-positioned element resolves against its own
+   ancestor chain, and `.msg-below` is a SIBLING of the attachment group. */
+.message-row:not(:has(.message-bubble)) .msg-attachments {
+  position: relative;
+}
+.message-row:not(:has(.message-bubble)):has(.reactions-row) .msg-attachments {
+  padding-bottom: 14px !important;
+}
+.message-row:not(:has(.message-bubble)):has(.reactions-row) .msg-time {
+  margin-top: 14px !important;
+}

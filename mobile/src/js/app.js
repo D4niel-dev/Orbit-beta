@@ -2430,7 +2430,20 @@ document.addEventListener('DOMContentLoaded', function() {
       // group below, because there is nothing to straddle and the alternative is
       // losing them entirely.
       var _rxInside = _bubbleHasContent;
-      var _belowBubble = (_rxInside ? '' : reactionsHtml) + threadChipHtml;
+      var _belowBubble = threadChipHtml;
+
+      // With no bubble the pills straddle the ATTACHMENT's bottom edge — the idea
+      // is "straddle whatever the message IS". They have to go INSIDE
+      // `.msg-attachments` for that: an absolutely-positioned element resolves
+      // against its own ancestor chain, and `.msg-below` is a SIBLING of the
+      // attachment group, so putting them there left them pinned to the row
+      // instead — detached, and on the wrong side.
+      if (!_rxInside && reactionsHtml && attachmentsHtml) {
+        attachmentsHtml = attachmentsHtml.replace(/<\/div>$/, reactionsHtml + '</div>');
+      } else if (!_rxInside && reactionsHtml) {
+        // No attachment either — nothing to straddle, so they flow below.
+        _belowBubble = reactionsHtml + _belowBubble;
+      }
 
       html += '<div class="message-row ' + (isMine ? 'mine' : 'other') + (isGrouped ? ' grouped' : '') + (m.replyTo != null ? ' msg-threaded' : '') + (m.call ? ' msg-call' : '') + '" data-msg-id="' + m.id + '"' + _animAttr + '>' +
         (_bubbleHasContent ? '<div class="message-bubble">' + _bubbleInner + (_rxInside ? reactionsHtml : '') + '</div>' : '') +
