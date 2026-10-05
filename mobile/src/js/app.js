@@ -5448,19 +5448,19 @@ document.addEventListener('DOMContentLoaded', function() {
       if (s.type === 'image' && s.url) {
         html += '<div class="file-preview-item">' +
           '<img src="' + s.url + '" loading="lazy">' +
-          '<button class="file-preview-remove" data-index="' + i + '">&times;</button></div>';
+          "</div>";
       } else if (s.type === 'video') {
         html += '<div class="file-preview-item">' +
           '<div class="file-icon" style="color:#a855f7;"><i data-lucide="video"></i></div>' +
-          '<button class="file-preview-remove" data-index="' + i + '">&times;</button></div>';
+          "</div>";
       } else if (s.type === 'audio') {
         html += '<div class="file-preview-item">' +
           '<div class="file-icon" style="color:#ec4899;"><i data-lucide="music"></i></div>' +
-          '<button class="file-preview-remove" data-index="' + i + '">&times;</button></div>';
+          "</div>";
       } else {
         html += '<div class="file-preview-item">' +
           '<div class="file-icon"><i data-lucide="file"></i></div>' +
-          '<button class="file-preview-remove" data-index="' + i + '">&times;</button></div>';
+          "</div>";
       }
     });
     area.innerHTML = html;

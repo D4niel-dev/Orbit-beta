@@ -1,5 +1,13 @@
 # Orbit Changelog
 
+## v0.8.3-beta
+
+> **Note:** The conversation screen, reworked. A message is no longer one box with everything crammed inside it — text, images, files, video and audio each get the treatment their content actually wants, and your own messages stop being a different colour from everyone else's.
+
+### Features
+
+- **The × Is Gone From the Attachment Pills** — Staged files carried a close button on every pill, and the composer already has a Cancel that clears them. Two controls for one job, and the × was the smaller, harder one to hit on a phone. Removed on both platforms. Dan: *"remove that 'x' in the pills cuz we already have the cancel button at the bottom, this is for desktop and mobile"*.
+
 ## v0.8.2-beta
 
 > **Note:** A maintenance release. Nothing new to look at on purpose — this is the mobile restyle's own regressions, closed out. The redesign shipped in v0.8.1 and then a run of things it had quietly broken surfaced: a contacts list that flipped between two renderers, a tab strip that was hidden unless you had already created a folder, and custom profile banners that had stopped rendering without anything looking wrong. Diagnostics was rebuilt while I was in there. If you were on v0.8.1 and something felt off, it was probably one of these.

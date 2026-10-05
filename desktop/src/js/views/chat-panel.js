@@ -2397,7 +2397,7 @@ window.ChatPanel = {
       if (fileType === 'image') {
         html += '<div style="position:relative; width: 64px; height: 64px; border-radius: 8px; overflow:hidden; flex-shrink:0; border: 1px solid var(--border-subtle);">' +
           '<img src="' + staged.url + '" style="width:100%; height:100%; object-fit:cover;">' +
-          '<button data-index="' + index + '" class="btn-remove-file" style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.6); color:white; border-radius:50%; width:20px; height:20px; display:flex; align-items:center; justify-content:center; cursor:pointer;"><i data-lucide="x" style="width:12px;height:12px;"></i></button>' +
+          
         '</div>';
       } else {
         var icon = this.getFileIconLucide(fileType);
@@ -2406,7 +2406,7 @@ window.ChatPanel = {
         html += '<div style="position:relative; width: 64px; height: 64px; border-radius: 8px; background:var(--bg-surface); display:flex; flex-direction:column; align-items:center; justify-content:center; flex-shrink:0; padding:4px; border: 1px solid var(--border-subtle);">' +
           '<i data-lucide="' + icon + '" style="width:22px;height:22px;color:' + iconColor + '; margin-bottom:4px;"></i>' +
           '<span style="font-size:9px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; text-align:center;">' + window.Sanitize.escapeHtml(staged.name) + '</span>' +
-          '<button data-index="' + index + '" class="btn-remove-file" style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.6); color:white; border-radius:50%; width:20px; height:20px; display:flex; align-items:center; justify-content:center; cursor:pointer;"><i data-lucide="x" style="width:12px;height:12px;"></i></button>' +
+          
         '</div>';
       }
     });
