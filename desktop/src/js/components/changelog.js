@@ -16,10 +16,16 @@ window.Changelog = {
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
         versionBlock('0.8.3-beta', 'Latest', [
           ['New', [
-            'The conversation screen is being reworked. Messages, images, files, video and audio are getting their own treatment instead of sharing one box.'
+            'The conversation screen, reworked. A message was one box with everything crammed inside it — text, images, files, video, audio. Now each kind gets the treatment its content actually wants: text keeps its bubble, images lose theirs and keep their real proportions instead of being squared and cropped, files get a surface of their own, and video and audio float on a shadow.',
+            'Every file draws its own icon. A .zip, a .json and a .pdf used to be a column of identical glyphs.',
+            'Your own messages are no longer a block of colour. Same surface as everyone else’s, with the corner saying which side you are on — and a Classic Bubbles toggle in Chat settings if you want the old look back.',
+            'The desktop got the same treatment, so both platforms lay a conversation out the same way.',
+            'The Local Vault fits the rest of Settings now, with Export and Restore told apart instead of both shouting equally.',
+            'Reactions straddle the bubble’s edge, and the bottom sheets lost their duplicate ×.',
           ]],
           ['Fixes', [
-            'The small × on every staged attachment is gone. The Cancel button clears them, and two controls for one job just meant the smaller, harder-to-hit one.'
+            'The message bubbles were hardcoded to a fixed dark and a fixed blue. In a light theme the incoming bubble stayed dark while the text went dark with the rest of the app, so the message vanished into its own bubble. They follow the theme now — 17.3:1 contrast in dark, 17.8:1 in light.',
+            'The small × on every staged attachment is gone, and so is the one in the top-right of every sheet. The Cancel button clears them, and two controls for one job just meant the smaller, harder-to-hit one.',
           ]],
           ['Version', [
             'Version: Bumped to v0.8.3-beta.'

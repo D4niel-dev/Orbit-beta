@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v082-beta">v0.8.2-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v083-beta">v0.8.3-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,8 @@
 
 | Channel           | Version     | Status                                                                                                                                                                                                                        |
 | ----------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Latest**        | v0.8.2-beta | Maintenance release — the mobile restyle's own regressions closed out: a contacts list that flipped between two renderers, tabs hidden unless you already had a folder, and custom profile banners that had stopped rendering |
+| **Latest**        | v0.8.3-beta | The conversation screen reworked on both platforms — a message is no longer one box holding everything — plus reactions that straddle the bubble, the duplicate × removed, and the Local Vault brought into line |
+|                   | v0.8.2-beta | Maintenance release — the mobile restyle's own regressions closed out: a contacts list that flipped between two renderers, tabs hidden unless you already had a folder, and custom profile banners that had stopped rendering |
 |                   | v0.8.1-beta | Your account travels from the desktop to your phone over your own network, the mobile UI redesign is finished, and search actually finds things                                                                               |
 | **Stable**        | v0.8.0-beta | Your theme and custom colours follow you between your own devices, message search runs on SQLite FTS5, and the update progress bar actually moves                                                                             |
 | Legacy **Stable** | v0.1.1-beta | Legacy stable release                                                                                                                                                                                                         |
@@ -84,6 +85,24 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage app for desktop and Android** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
+## Highlights (v0.8.3-beta)
+
+* **The conversation screen, reworked.** A message used to be one box with everything crammed inside it — text, images, files, video, audio — so a photo had a frame around it and a file was whatever was left over. Now each kind gets the treatment its content actually wants.
+* **Your own messages are no longer a block of colour.** They use the same surface as everyone else's, and the corner says which side you are on. A **Classic Bubbles** toggle in Chat settings brings the accent back if you miss it.
+* **The desktop got the same treatment**, so both platforms lay a conversation out the same way.
+
+### Changed in v0.8.3-beta
+
+* **Text** keeps its bubble. **Images** lose theirs and keep their real proportions — they were being forced into a square and cropped. **Files** get a surface of their own, with an icon that matches the type: a `.zip`, a `.json` and a `.pdf` used to be a column of identical glyphs. **Video and audio** float on the feed behind a shadow.
+* **Reactions straddle the bubble's edge** — bottom-left on your own messages, bottom-right on theirs — and do the same against a photo when a message has no bubble.
+* **The × is gone** from both the staged attachment pills and the top-right of every bottom sheet. Cancel already did the job, and it is the bigger, easier target. Backdrop tap and drag-down still dismiss.
+* **The Local Vault fits the rest of Settings now.** Its status was a centred block in a left-aligned list, and its Export and Restore buttons were both shouting equally — exporting is routine, restoring replaces everything you have.
+
+### Fixed in v0.8.3-beta
+
+* **Message text could vanish into its own bubble** — the bubble fills were hardcoded to a fixed dark and a fixed blue, so in a light theme the incoming bubble stayed dark while the text went dark with the rest of the app. They follow the theme now: **17.3:1** contrast in dark, **17.8:1** in light.
+* **A stored backup time that would not parse** rendered the literal words *"Invalid Date"* into the vault status.
+
 ## Highlights (v0.8.2-beta)
 
 * **A maintenance release.** Nothing new to look at on purpose — this closes out a run of the mobile restyle's own regressions, the things it broke quietly while it was shipping.
@@ -100,7 +119,7 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Your Account, From the Desktop to Your Phone** — Open **Link a phone** on the desktop, scan the code with **Settings → Pair a desktop**, and the account comes across your own network. It arrives as a **new account on the phone** — your existing one is untouched, and you choose when to switch — because quietly overwriting the account already in your hand is the one outcome nobody could undo. What authorises the transfer is a **link token**: 128 random bits, shown only as a code on the desktop's own screen and never sent in the clear. The desktop sends nothing until you confirm, and the confirmation says what is about to leave and how much of it.
 * **The Mobile UI, Finished** — The redesign had been arriving in pieces since v0.8.0. This is the rest of it: the selected tab shows the **filled** form of its icon, the conversation screen has day separators and rebalanced bubbles, the composer is **three controls instead of four**, the gallery names the conversation it belongs to, and the profile card opens from the header avatar with the account switcher one tap in behind it.
 * **Search That Actually Searches** — Message search **found nothing outside the open chat**, because it read a message map that only holds the conversation you are looking at. It searches everything now, with **All / Chats / People / Messages** filters on the global search and **All / Media / Links / Voice** inside a conversation.
-* **A Test Suite for the Mobile** — It had none, and every regression that shipped was found by driving the real UI in a browser and then throwing the script away. Those checks live in `mobile/tests/` now — 66 at the time, **160** as of v0.8.2 — `npm run test:mobile`.
+* **A Test Suite for the Mobile** — It had none, and every regression that shipped was found by driving the real UI in a browser and then throwing the script away. Those checks live in `mobile/tests/` now — 66 at the time, **160** as of v0.8.3 — `npm run test:mobile`.
 
 ### Fixed in v0.8.1-beta
 
@@ -831,13 +850,26 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 
 </details>
 
-<details open>
+
+<details>
 <summary>v0.8.2-beta</summary>
 
 * **A maintenance release** — the mobile restyle's own regressions, closed out
 * **Diagnostics, rebuilt** — a verdict with a pass count, the checks in one grouped card, and the report shown rather than only described
 * **Fixed** — the contacts list flipping to a flat list on almost any update, the Friends/Groups tabs hidden unless you already had a folder, and custom profile banners that had stopped rendering
 * **Mobile test suite** — 66 → 160 checks
+
+</details>
+
+<details open>
+<summary>v0.8.3-beta</summary>
+
+* **The conversation screen, reworked** — text keeps its bubble, images lose theirs and keep their real proportions, files get a surface with a type-correct icon, video and audio float on a shadow
+* **Your own messages match everyone else’s** — same surface, with a Classic Bubbles toggle for the old accent
+* **The desktop got the same treatment**, so both platforms lay a conversation out the same way
+* **Reactions straddle the bubble’s edge**, and do the same against a photo when there is no bubble
+* **Fixed** — hardcoded bubble colours that made message text vanish in a light theme, a duplicate × on the attachment pills and in every sheet, and an unparseable backup time that rendered the words Invalid Date
+* **Mobile test suite** — 160 checks
 
 </details>
 
