@@ -1010,13 +1010,17 @@ window.ChatPanel = {
           } else {
             gridHtml += '<div class="att-thumb" style="position:relative;border-radius: 8px; height: 120px; border: 1px solid var(--border-subtle); display:flex; flex-direction:column; align-items:center; justify-content:center; background: rgba(0,0,0,0.1); padding: 8px; text-align:center;">' +
               deleteBtn +
-              '<i data-lucide="file" style="width:32px;height:32px;margin-bottom:8px;color:var(--text-muted);"></i>' +
+              '<i data-lucide="' + this.getFileIconLucide(this.getFileIcon(att.name, att.mimeType || '')) + '" style="width:32px;height:32px;margin-bottom:8px;color:var(--text-muted);"></i>' +
               '<div style="font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%;">' + window.Sanitize.escapeHtml(String(att.name || 'File')) + '</div>' +
             '</div>';
           }
         });
         var gridSection = gridHtml ? '<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; width: 100%; min-width: 250px; max-width: 280px;">' + gridHtml + '</div>' : '';
-        attachmentsHtml = (gridSection ? gridSection + '<div style="height:8px;"></div>' : '') + largeHtml;
+        // One wrapper, so the attachments can be styled as a group that sits
+        // beside the bubble rather than inside it.
+        attachmentsHtml = '<div class="msg-attachments">' +
+          (gridSection ? gridSection + '<div style="height:8px;"></div>' : '') + largeHtml +
+        '</div>';
       }
 
       // Hover action bar
@@ -1030,9 +1034,6 @@ window.ChatPanel = {
 
       const actionsBar = '<div class="msg-actions-bar' + (isMine ? ' msg-actions-left' : ' msg-actions-right') + '">' + actionBtns + '</div>';
 
-      const bubblePadding = (sanitizedText || attachmentsHtml) ? 'padding: 10px 14px;' : 'padding: 0;';
-      const bubbleBgMine = (sanitizedText || attachmentsHtml) ? 'background-color: var(--bg-surface); color: var(--text-primary); box-shadow: var(--shadow-sm);' : 'background: transparent;';
-      const bubbleBgOther = (sanitizedText || attachmentsHtml) ? 'background-color: var(--bg-surface); box-shadow: var(--shadow-sm);' : 'background: transparent;';
 
       // Link Preview detection
       let linkPreviewHtml = '';
@@ -1057,6 +1058,24 @@ window.ChatPanel = {
       // A system line: no sender, no bubble, centred. It carries its own text, so it is
       // handled BEFORE the own/other split — neither branch can render it.
       //
+      // ── Whether this message gets a bubble at all ──────────────────────────
+      // The bubble is for TEXT. Attachments sit beside it now, so they no longer
+      // decide — that is what put a frame around every photo. Matches the mobile.
+      //
+      // ⚠ This block has to sit AFTER every variable it reads, and it is here for
+      // that reason. Written above `linkPreviewHtml` it threw `Cannot access
+      // 'linkPreviewHtml' before initialization` — a `const` in the temporal dead
+      // zone is a RUNTIME error, so `node --check` passes and every message fails
+      // to render. The voice-recorder spec caught it; nothing else did.
+      const _bubbleHasContent = !!(sanitizedText || replyHtml || callLogHtml || linkPreviewHtml);
+      const bubblePadding = _bubbleHasContent ? 'padding: 10px 14px;' : 'padding: 0;';
+      const bubbleBgMine = _bubbleHasContent ? 'background-color: var(--bg-surface); color: var(--text-primary); box-shadow: var(--shadow-sm);' : 'background: transparent;';
+      const bubbleBgOther = _bubbleHasContent ? 'background-color: var(--bg-surface); box-shadow: var(--shadow-sm);' : 'background: transparent;';
+      // Reactions straddle the bubble's bottom edge, so they need it to position
+      // against. With no bubble they go in the group below instead — same rule as
+      // the mobile, so the two platforms cannot drift.
+      const _rxInside = _bubbleHasContent;
+
       // This loop is a `for`, so the exit is `continue`. I checked, because `return` here
       // would have ended the whole render and shown an empty feed, and `continue` inside a
       // forEach would not have parsed at all.
@@ -1093,13 +1112,15 @@ window.ChatPanel = {
           '</div>' +
           '<div class="' + (msg.replyTo ? 'msg-threaded ' : '') + '" style="max-width: 65%; display:flex; flex-direction:column; align-items:flex-end;">' +
             senderName +
-            '<div class="message-bubble" data-msg-id="' + msg.id + '" data-debug="Bubble: ' + msg.id + '" style="position:relative;' + bubbleBgMine + ' ' + bubblePadding + ' border-radius: 16px 16px 0 16px; line-height: 1.4; font-size: 14px; cursor:context-menu; max-width: 100%;">' +
+            (_bubbleHasContent ? '<div class="message-bubble" data-msg-id="' + msg.id + '" data-debug="Bubble: ' + msg.id + '" style="position:relative;' + bubbleBgMine + ' ' + bubblePadding + ' border-radius: 16px 16px 0 16px; line-height: 1.4; font-size: 14px; cursor:context-menu; max-width: 100%;">' +
               '<div class="message-id" style="display:none;font-size:9px;font-family:monospace;color:rgba(255,255,255,0.4);margin-bottom:2px;">#' + String(msg.id).substring(0, 8) + '</div>' +
-            actionsBar + replyHtml + textWrapHtml + attachmentsHtml + callLogHtml + linkPreviewHtml + editedBadge +
-            (reactionsHtml ? '<div style="border-top:1px solid rgba(255,255,255,0.15);margin-top:8px;padding-top:6px;">' + reactionsHtml + '</div>' : '') +
-          '</div>' +
+            actionsBar + replyHtml + textWrapHtml + callLogHtml + linkPreviewHtml + editedBadge +
+            (_rxInside ? reactionsHtml : '') +
+          '</div>' : '') +
+          attachmentsHtml +
+          (!_rxInside && reactionsHtml ? '<div class="msg-below">' + reactionsHtml + '</div>' : '') +
           threadChipHtml +
-          '<div style="font-size: 12px; color: var(--text-muted); margin-top: 4px; align-self: flex-start; margin-left: 4px;">' + timeStr + readHtml + '</div>' +
+          '<div class="msg-time" style="font-size: 12px; color: var(--text-muted); margin-top: 4px; align-self: flex-start; margin-left: 4px;">' + timeStr + readHtml + '</div>' +
           '</div>' +
         '</div>';
       } else {
@@ -1132,13 +1153,15 @@ window.ChatPanel = {
           '<div class="avatar avatar-sm msg-avatar" data-user-id="' + msg.sender + '" style="margin-right: var(--spacing-sm); margin-top: 4px; flex-shrink: 0; cursor:pointer;' + (showAvatars ? '' : 'display:none;') + '">' + otherAvatarContainer + '</div>' +
           '<div class="' + (msg.replyTo ? 'msg-threaded ' : '') + '" style="max-width: 65%; display:flex; flex-direction:column; align-items:flex-start;">' +
             '<div style="font-size: 11px; color: var(--text-secondary); font-weight: 500; margin-bottom: 2px; margin-left: 4px;">' + senderName + '</div>' +
-            '<div class="message-bubble" data-msg-id="' + msg.id + '" data-debug="Bubble: ' + msg.id + '" style="position:relative;' + bubbleBgOther + ' ' + bubblePadding + ' border-radius: 0 16px 16px 16px; line-height: 1.4; font-size: 14px; cursor:context-menu; max-width: 100%;">' +
+            (_bubbleHasContent ? '<div class="message-bubble" data-msg-id="' + msg.id + '" data-debug="Bubble: ' + msg.id + '" style="position:relative;' + bubbleBgOther + ' ' + bubblePadding + ' border-radius: 0 16px 16px 16px; line-height: 1.4; font-size: 14px; cursor:context-menu; max-width: 100%;">' +
               '<div class="message-id" style="display:none;font-size:9px;font-family:monospace;color:var(--text-muted);margin-bottom:2px;">#' + String(msg.id).substring(0, 8) + '</div>' +
-              actionsBar + replyHtml + textWrapHtml + attachmentsHtml + callLogHtml + linkPreviewHtml + editedBadgeOther +
-              (reactionsHtml ? '<div style="border-top:1px solid var(--border-subtle);margin-top:8px;padding-top:6px;">' + reactionsHtml + '</div>' : '') +
-            '</div>' +
+              actionsBar + replyHtml + textWrapHtml + callLogHtml + linkPreviewHtml + editedBadgeOther +
+              (_rxInside ? reactionsHtml : '') +
+            '</div>' : '') +
+            attachmentsHtml +
+            (!_rxInside && reactionsHtml ? '<div class="msg-below">' + reactionsHtml + '</div>' : '') +
             threadChipHtml +
-            '<div style="font-size: 12px; color: var(--text-muted); margin-top: 4px; align-self: flex-end; margin-right: 4px;">' + timeStr + '</div>' +
+            '<div class="msg-time" style="font-size: 12px; color: var(--text-muted); margin-top: 4px; align-self: flex-end; margin-right: 4px;">' + timeStr + '</div>' +
           '</div>' +
         '</div>';
       }
