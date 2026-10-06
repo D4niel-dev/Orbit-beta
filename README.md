@@ -794,7 +794,7 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Your own messages match everyone else’s** — same surface, with a Classic Bubbles toggle for the old accent
 * **The desktop got the same treatment**, so both platforms lay a conversation out the same way
 * **Reactions straddle the bubble’s edge**, and do the same against a photo when there is no bubble
-* **Fixed** — hardcoded bubble colours that made message text vanish in a light theme, a duplicate × on the attachment pills and in every sheet, and an unparseable backup time that rendered the words Invalid Date
+* **Fixed** — hardcoded bubble colours that made message text vanish in a light theme, a duplicate × on the attachment pills and in every sheet, an unparseable backup time that rendered the words Invalid Date, and desktop grid images that rendered at half height
 * **Mobile test suite** — 160 checks
 
 </details>

@@ -2682,61 +2682,61 @@ html[data-theme="light"] #chat-welcome-host::before { opacity: 0.3; }
 
    Tiles touch and the grid clips, so only the OUTER corners are rounded — which
    is what makes a group read as one object rather than several adjacent cards. */
-.att-grid[data-count="1"] {
+.message-row .msg-attachments .att-grid[data-count="1"] {
   display: block !important;
   aspect-ratio: auto !important;
 }
-.att-grid[data-count="1"] > .att-thumb {
+.message-row .msg-attachments .att-grid[data-count="1"] > .att-thumb {
   border-radius: 12px !important;
 }
 
-.att-grid:not([data-count="1"]) {
+.message-row .msg-attachments .att-grid:not([data-count="1"]) {
   display: grid !important;
   gap: 2px !important;
   grid-template-columns: repeat(2, 1fr) !important;
   border-radius: 12px !important;
   overflow: hidden !important;
 }
-.att-grid:not([data-count="1"]) > .att-thumb {
+.message-row .msg-attachments .att-grid:not([data-count="1"]) > .att-thumb {
   border-radius: 0 !important;
   min-width: 0;
   min-height: 0;
   height: auto !important;
 }
-.att-grid:not([data-count="1"]) > .att-thumb img {
+.message-row .msg-attachments .att-grid:not([data-count="1"]) > .att-thumb img {
   width: 100% !important;
   height: 100% !important;
   object-fit: cover !important;
 }
 
-.att-grid[data-count="2"] {
+.message-row .msg-attachments .att-grid[data-count="2"] {
   aspect-ratio: 2 / 1 !important;
   grid-template-rows: 1fr !important;
 }
 
 /* 3:2, not square — the large tile is two thirds of both dimensions, which is
    what makes it and the two small ones all square. */
-.att-grid[data-count="3"] {
+.message-row .msg-attachments .att-grid[data-count="3"] {
   aspect-ratio: 3 / 2 !important;
   grid-template-columns: 2fr 1fr !important;
   grid-template-rows: repeat(2, 1fr) !important;
 }
-.att-grid[data-count="3"] > :nth-child(1) {
+.message-row .msg-attachments .att-grid[data-count="3"] > :nth-child(1) {
   grid-row: span 2;
 }
 
-.att-grid[data-count="4"] {
+.message-row .msg-attachments .att-grid[data-count="4"] {
   aspect-ratio: 1 !important;
   grid-template-rows: repeat(2, 1fr) !important;
 }
 
-.att-grid-more {
+.message-row .msg-attachments .att-grid-more {
   position: relative !important;
 }
-.att-grid-more img {
+.message-row .msg-attachments .att-grid-more img {
   filter: brightness(0.35);
 }
-.att-grid-more::after {
+.message-row .msg-attachments .att-grid-more::after {
   content: attr(data-more);
   position: absolute;
   inset: 0;

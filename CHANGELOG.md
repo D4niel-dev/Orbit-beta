@@ -10,6 +10,8 @@
 
 - **A Group of Images of Different Sizes No Longer Goes Ragged** — every cell took its own image’s height, so a 1:1 beside a 16:9 beside a 9:16 gave three heights in one row: the tallest set the row and the others floated inside it. The grid now follows Discord: **one** image keeps its own proportions, **two** are a pair of squares, **three** are one large square with two stacked beside it, **four** are a 2×2, and **anything past four** shows four tiles with a **+N** on the last. Tiles touch, and the grid clips so only the outer corners are rounded — which is what makes a group read as one object rather than several adjacent cards. Dan: *"Let’s make the grid display like this (discord-like)"*.
 
+- **Images in a Desktop Grid Were Rendering at Half Height** — the grid’s own rules were written without the `.message-row .msg-attachments` prefix, so they lost a **specificity tie** against an earlier rule that carried it. Both were `!important`, so the more specific one won and its `height: auto` and `object-fit: contain` applied: a wide image rendered at its natural height inside a square cell, so **half the tile was empty**. The grid rules carry the prefix now, and a desktop spec measures the **image** against its cell rather than the cell alone — a grid row stretches its cells to a common size whatever the CSS says, so a cell-only assertion passes either way.
+
 ## v0.8.3-beta
 
 > **Note:** The conversation screen, reworked. A message is no longer one box with everything crammed inside it — text, images, files, video and audio each get the treatment their content actually wants, and your own messages stop being a different colour from everyone else's.
