@@ -12184,6 +12184,31 @@ document.addEventListener('DOMContentLoaded', function() {
   };
 
   /* -- Event Bindings -- */
+
+  /**
+   * Android fires a FULL set of synthetic mouse events after every touchend —
+   * mousedown, mouseup, click — and they are dispatched against whatever element
+   * is under the finger at the time, not the one the touch started on.
+   *
+   * That is what caused the endless voice messages. One tap on Send:
+   *
+   *   1. touchend on #btn-send  -> sendMessage() -> the composer swaps to the mic
+   *   2. synthetic mousedown    -> now lands on #btn-voice -> startVoiceRecording()
+   *   3. mouseup (on document)  -> stopVoiceRecording() -> a voice message is SENT
+   *
+   * One tap, a voice note nobody asked for, and it repeats because each one
+   * resets the composer. The send icon looked wrong for the same reason: the
+   * swap had already run, so the composer was showing the mic.
+   *
+   * Any mouse event within this window of a real touch is a ghost and is ignored.
+   * 700ms is comfortably longer than Android's ~300ms synthetic delay and far
+   * shorter than a deliberate second tap.
+   */
+  var _lastRealTouch = 0;
+  document.addEventListener('touchstart', function() { _lastRealTouch = Date.now(); },
+    { passive: true, capture: true });
+  function _isGhostMouse() { return (Date.now() - _lastRealTouch) < 700; }
+
   // Back button
   document.getElementById('btn-back').addEventListener('click', closeChat);
 
@@ -12303,6 +12328,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Mouse events for desktop/testing fallback
     sendBtn.addEventListener('mousedown', _startLongPress);
     sendBtn.addEventListener('mouseup', function(e) {
+      // The tap already sent on touchend; this is the ghost.
+      if (_isGhostMouse()) return;
       _clearLongPress();
       if (!isLongPress) {
         hideCommandTooltip();
@@ -13266,6 +13293,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Start recording on press
     btnVoice.addEventListener('mousedown', function(e) {
+      // Ghost mouse event after a touch — the mic would start twice.
+      if (_isGhostMouse()) return;
       e.preventDefault();
       if (!voiceSupported) { showToast('Voice recording not supported in this browser', 'warning'); return; }
       startVoiceRecording();
@@ -13277,6 +13306,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Stop recording on release (anywhere on the page)
     document.addEventListener('mouseup', function() {
+      if (_isGhostMouse()) return;
       if (_voiceRecorder.isRecording) stopVoiceRecording(false);
     });
     document.addEventListener('touchend', function() {
