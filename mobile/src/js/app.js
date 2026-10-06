@@ -7550,7 +7550,16 @@ document.addEventListener('DOMContentLoaded', function() {
         // changelog.js is the other hand-maintained copy; they are separate files
         // and both have to be updated. A release is not done until this block is
         // added, which is why `npm run test:mobile` now asserts it.
-        vBlock('0.8.3-beta', 'Latest', [
+        vBlock('0.8.4-beta', 'Latest', [
+          ['Fixes', [
+            'One tap on Send was also starting the mic. Sending swaps the composer from the send button to the mic, and Android fires a synthetic mouse event right after a touch aimed at whatever is under your finger by then \u2014 so it landed on the mic, started a recording, and the release sent it. One tap, a voice message nobody asked for, on repeat.',
+            'That is also why the send button looked wrong and never lit up: the swap had already run, so the composer was showing the mic.',
+          ]],
+          ['Version', [
+            'Version: Bumped to v0.8.4-beta.'
+          ]]
+        ]) +
+        vBlock('0.8.3-beta', '', [
           ['New', [
             'The conversation screen, reworked. A message was one box with everything crammed inside it — text, images, files, video, audio. Now each kind gets the treatment its content actually wants: text keeps its bubble, images lose theirs and keep their real proportions instead of being squared and cropped, files get a surface of their own, and video and audio float on a shadow.',
             'Every file draws its own icon. A .zip, a .json and a .pdf used to be a column of identical glyphs.',

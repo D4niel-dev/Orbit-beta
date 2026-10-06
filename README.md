@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v083-beta">v0.8.3-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v084-beta">v0.8.4-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,8 @@
 
 | Channel           | Version     | Status                                                                                                                                                                                                                        |
 | ----------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Latest**        | v0.8.3-beta | The conversation screen reworked on both platforms — a message is no longer one box holding everything — plus reactions that straddle the bubble, the duplicate × removed, and the Local Vault brought into line |
+| **Latest**        | v0.8.4-beta | One tap on Send was also starting the mic — Android’s synthetic mouse events land on whatever is under your finger by then, which was the mic, so it recorded and sent a voice note on repeat |
+|                   | v0.8.3-beta | The conversation screen reworked on both platforms — a message is no longer one box holding everything — plus reactions that straddle the bubble, the duplicate × removed, and the Local Vault brought into line |
 |                   | v0.8.2-beta | Maintenance release — the mobile restyle's own regressions closed out: a contacts list that flipped between two renderers, tabs hidden unless you already had a folder, and custom profile banners that had stopped rendering |
 | **Stable**        | v0.8.0-beta | Your theme and custom colours follow you between your own devices, message search runs on SQLite FTS5, and the update progress bar actually moves                                                                             |
 | Legacy **Stable** | v0.1.1-beta | Legacy stable release                                                                                                                                                                                                         |
@@ -84,23 +85,10 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage app for desktop and Android** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
-## Highlights (v0.8.3-beta)
+## Highlights (v0.8.4-beta)
 
-* **The conversation screen, reworked.** A message used to be one box with everything crammed inside it — text, images, files, video, audio — so a photo had a frame around it and a file was whatever was left over. Now each kind gets the treatment its content actually wants.
-* **Your own messages are no longer a block of colour.** They use the same surface as everyone else's, and the corner says which side you are on. A **Classic Bubbles** toggle in Chat settings brings the accent back if you miss it.
-* **The desktop got the same treatment**, so both platforms lay a conversation out the same way.
-
-### Changed in v0.8.3-beta
-
-* **Text** keeps its bubble. **Images** lose theirs and keep their real proportions — they were being forced into a square and cropped. **Files** get a surface of their own, with an icon that matches the type: a `.zip`, a `.json` and a `.pdf` used to be a column of identical glyphs. **Video and audio** float on the feed behind a shadow.
-* **Reactions straddle the bubble's edge** — bottom-left on your own messages, bottom-right on theirs — and do the same against a photo when a message has no bubble.
-* **The × is gone** from both the staged attachment pills and the top-right of every bottom sheet. Cancel already did the job, and it is the bigger, easier target. Backdrop tap and drag-down still dismiss.
-* **The Local Vault fits the rest of Settings now.** Its status was a centred block in a left-aligned list, and its Export and Restore buttons were both shouting equally — exporting is routine, restoring replaces everything you have.
-
-### Fixed in v0.8.3-beta
-
-* **Message text could vanish into its own bubble** — the bubble fills were hardcoded to a fixed dark and a fixed blue, so in a light theme the incoming bubble stayed dark while the text went dark with the rest of the app. They follow the theme now: **17.3:1** contrast in dark, **17.8:1** in light.
-* **A stored backup time that would not parse** rendered the literal words *"Invalid Date"* into the vault status.
+* **One tap on Send was sending a voice message.** Sending swaps the composer from the send button to the mic — and Android fires a set of synthetic mouse events after every touch, aimed at whatever is under your finger *by then*. So the mic got the tap, started recording, and the release sent it. It repeated, because each voice note reset the composer and put the mic back under your thumb.
+* **The send button looked wrong for the same reason** — the swap had already run, so the composer was showing the mic. That is the "isn’t lighting up" half of the report.
 
 ## Version History
 
@@ -798,7 +786,8 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 
 </details>
 
-<details open>
+
+<details>
 <summary>v0.8.3-beta</summary>
 
 * **The conversation screen, reworked** — text keeps its bubble, images lose theirs and keep their real proportions, files get a surface with a type-correct icon, video and audio float on a shadow
@@ -807,6 +796,15 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Reactions straddle the bubble’s edge**, and do the same against a photo when there is no bubble
 * **Fixed** — hardcoded bubble colours that made message text vanish in a light theme, a duplicate × on the attachment pills and in every sheet, and an unparseable backup time that rendered the words Invalid Date
 * **Mobile test suite** — 160 checks
+
+</details>
+
+<details open>
+<summary>v0.8.4-beta</summary>
+
+* **One tap on Send no longer fires the mic** — Android’s synthetic mouse events land on whatever is under the finger by then, which after the swap was the mic
+* **Both controls were double-firing on a real tap** — the mic started on touchstart and on the synthetic mousedown, send on touchend and on mouseup
+* **Mobile test suite** — 168 checks
 
 </details>
 

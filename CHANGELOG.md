@@ -1,5 +1,13 @@
 # Orbit Changelog
 
+## v0.8.4-beta
+
+> **Note:** One tap on Send was sending a voice message. Android fires a set of synthetic mouse events after every touch, aimed at whatever is under your finger *by then* — and sending swapped the composer to the mic before they arrived.
+
+### Fixed
+
+- **One Tap on Send No Longer Fires the Mic** — Send fired on `touchend`, which swapped the composer from the send button to the mic. Android then fires a synthetic `mousedown` aimed at whatever is under the finger *at that moment* — which was now the mic — so a recording started, and the `mouseup` stopped and sent it. One tap, a voice note nobody asked for, and it repeated, because each one reset the composer and put the mic back under your thumb. The send icon "not lighting up" was the same stuck state: the swap had already run. Any mouse event within 700ms of a real touch is ignored now, which is longer than Android's ~300ms synthetic delay and shorter than a deliberate second tap. Both controls were also double-firing on a real tap — the mic started on `touchstart` **and** the synthetic `mousedown`, and send ran on `touchend` **and** `mouseup`. Dan: *"the user seems to somehow click the mic button too...which make them in an endless loop of sending voice messages"*.
+
 ## v0.8.3-beta
 
 > **Note:** The conversation screen, reworked. A message is no longer one box with everything crammed inside it — text, images, files, video and audio each get the treatment their content actually wants, and your own messages stop being a different colour from everyone else's.
