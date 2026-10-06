@@ -1100,11 +1100,30 @@
   display: block;
 }
 
-/* ── ONE image keeps its own proportions ─────────────────────────────────────
-   A photo on its own is the message. Nothing to line it up against, so cropping
-   it to a square would only be losing picture. */
+/* ══ The attachment grid, laid out the way Discord does it ══════════════════
+   One image is the message, so it keeps its own shape. Two or more become a
+   GRID whose overall shape is fixed by how many there are — that is what makes
+   the arrangement predictable, and it is why the earlier per-image approach went
+   ragged: a 1:1 beside a 16:9 beside a 9:16 gave three heights in one row.
+
+   Tiles touch. The grid clips, so only the OUTER corners are rounded and the
+   inner ones stay square, which is what makes a group read as one object rather
+   than as several cards that happen to be adjacent.
+
+     1  the image, whole
+     2  two squares side by side          container 2:1
+     3  one large square, two stacked     container 1:1
+     4  2x2                               container 1:1
+     5+ 2x2 with a "+N" on the last tile  container 1:1
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* One image: its own proportions. Nothing to line it up against. */
+.message-row .msg-attachments .att-grid[data-count="1"] {
+  aspect-ratio: auto !important;
+}
 .message-row .msg-attachments .att-grid[data-count="1"] .att-grid-cell {
   aspect-ratio: auto !important;
+  border-radius: var(--radius-lg) !important;
 }
 .message-row .msg-attachments .att-grid[data-count="1"] .att-grid-cell img {
   height: auto !important;
@@ -1112,48 +1131,72 @@
   object-fit: contain !important;
 }
 
-/* ── TWO or more: a grid, square by default ──────────────────────────────────
-   This is the bug. Every cell took its own image's height, so a 1:1 next to a
-   16:9 next to a 9:16 gave three different heights and the row went ragged —
-   the taller image set the row, the others floated inside it, and the grid
-   stopped reading as a grid. Squaring every cell means no image can disturb
-   another's size, whatever the mix is. */
+/* Two or more: a grid. */
 .message-row .msg-attachments .att-grid:not([data-count="1"]) {
+  display: grid !important;
+  gap: 2px !important;
   grid-template-columns: repeat(2, 1fr) !important;
-  gap: 4px !important;
+  border-radius: var(--radius-lg) !important;
+  overflow: hidden !important;
 }
 .message-row .msg-attachments .att-grid:not([data-count="1"]) .att-grid-cell {
-  aspect-ratio: 1 !important;
+  aspect-ratio: auto !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  min-width: 0;
+  min-height: 0;
 }
 .message-row .msg-attachments .att-grid:not([data-count="1"]) .att-grid-cell img {
+  width: 100% !important;
   height: 100% !important;
   object-fit: cover !important;
 }
 
-/* ── THREE: the odd one centres below the pair ───────────────────────────────
-   Two on top, the third centred underneath at the same width — not stranded in
-   the left column with a hole beside it. */
-.message-row .msg-attachments .att-grid[data-count="3"] .att-grid-cell:nth-child(3) {
-  grid-column: 1 / -1;
-  justify-self: center;
-  width: calc(50% - 2px);
+/* Two: a pair of squares, so the container is twice as wide as it is tall. */
+.message-row .msg-attachments .att-grid[data-count="2"] {
+  aspect-ratio: 2 / 1;
+  grid-template-rows: 1fr !important;
 }
 
-/* ── Unless every image in the group shares one ratio ────────────────────────
-   Then there is nothing to disturb, so that ratio is kept and the group is
-   shown whole. Set from the loaded images (see _settleAttachmentGrid) — the
-   ratios are not known when the markup is written, and putting them in the
-   attachment would be a protocol change. */
-.message-row .msg-attachments .att-grid[data-uniform="1"] .att-grid-cell {
-  aspect-ratio: auto !important;
+/* Three: one large square with two stacked beside it.
+   The container is 3:2, NOT square — and the columns are 2fr / 1fr, not 1fr /
+   1fr. That is what makes all three tiles square: the large one is two thirds of
+   the width and two thirds of the height, the small ones a third each. With a
+   square container the large tile came out 1:2, which the test caught. */
+.message-row .msg-attachments .att-grid[data-count="3"] {
+  aspect-ratio: 3 / 2;
+  grid-template-columns: 2fr 1fr !important;
+  grid-template-rows: repeat(2, 1fr) !important;
 }
-.message-row .msg-attachments .att-grid[data-uniform="1"] .att-grid-cell img {
-  height: auto !important;
-  max-height: 340px;
-  object-fit: contain !important;
+.message-row .msg-attachments .att-grid[data-count="3"] .att-grid-cell:nth-child(1) {
+  grid-row: span 2;
 }
-.message-row .msg-attachments .att-grid[data-uniform="1"][data-count="3"] .att-grid-cell:nth-child(3) {
-  width: calc(50% - 2px);
+
+/* Four, and anything past it: 2x2. */
+.message-row .msg-attachments .att-grid[data-count="4"],
+.message-row .msg-attachments .att-grid[data-count="5"] {
+  aspect-ratio: 1;
+  grid-template-rows: repeat(2, 1fr) !important;
+}
+
+/* The "+N" tile. Sits on the fourth cell, so the group still reads as four
+   pictures with more behind them rather than as a grid that was cut off. */
+.message-row .msg-attachments .att-grid-cell.att-grid-more {
+  position: relative;
+}
+.message-row .msg-attachments .att-grid-cell.att-grid-more img {
+  filter: brightness(0.35);
+}
+.message-row .msg-attachments .att-grid-cell.att-grid-more::after {
+  content: attr(data-more);
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 600;
+  color: #fff;
 }
 
 /* Files keep a surface. */

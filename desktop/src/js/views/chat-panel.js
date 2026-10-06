@@ -978,7 +978,13 @@ window.ChatPanel = {
 
         let gridHtml = '';
         let largeHtml = '';
+        // The grid is the images and files; video and audio go below it whole.
+        // Past four there is no tile to put one in — the fourth carries "+N".
+        var _gridTotal = msg.attachments.filter(function (x) { return x.type !== 'video' && x.type !== 'audio'; }).length;
+        var _gridSeen = 0;
         msg.attachments.forEach(att => {
+          var _isGridCell = att.type !== 'video' && att.type !== 'audio';
+          if (_isGridCell) { if (_gridSeen >= 4) return; _gridSeen++; }
           const safeAttId = window.Sanitize.escapeHtml(String(att.id || ''));
           const deleteBtn = '<button class="att-delete-btn" data-att-id="' + safeAttId + '" data-msg-id="' + msg.id + '" style="position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,0.6);border:none;color:white;cursor:pointer;align-items:center;justify-content:center;font-size:14px;line-height:1;z-index:2;" title="Delete">×</button>';
           if (att.type === 'video' || (att.mimeType && att.mimeType.startsWith('video/'))) {
@@ -1015,11 +1021,18 @@ window.ChatPanel = {
             '</div>';
           }
         });
-        // `data-count` so the grid can lay out by how many there are — three
-        // images put the third centred below the first two, rather than
-        // stranding it in the left column with a hole beside it.
-        var gridCount = msg.attachments.filter(function (x) { return x.type !== 'video' && x.type !== 'audio'; }).length;
-        var gridSection = gridHtml ? '<div class="att-grid" data-count="' + gridCount + '" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; width: 100%; min-width: 250px; max-width: 280px;">' + gridHtml + '</div>' : '';
+        if (_gridTotal > 4 && gridHtml) {
+          // A string pass rather than a counter threaded through every branch
+          // that can emit a cell.
+          var _seen = 0;
+          gridHtml = gridHtml.replace(/class="att-thumb/g, function (m2) {
+            _seen++;
+            return _seen === 4 ? 'class="att-thumb att-grid-more" data-more="+' + (_gridTotal - 4) + '"' : m2;
+          });
+        }
+        // Discord's layouts are bucketed: 1, 2, 3, then 4 for everything larger.
+        var _gridLayout = Math.min(_gridTotal, 4);
+        var gridSection = gridHtml ? '<div class="att-grid" data-count="' + _gridLayout + '" data-total="' + _gridTotal + '" style="width: 100%; min-width: 250px; max-width: 280px;">' + gridHtml + '</div>' : '';
         // One wrapper, so the attachments can be styled as a group that sits
         // beside the bubble rather than inside it.
         attachmentsHtml = '<div class="msg-attachments">' +

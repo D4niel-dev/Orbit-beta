@@ -1,30 +1,29 @@
-// The attachment grid, with images of different proportions.
+// The attachment grid, laid out the way Discord does it.
 //
-// The bug: every cell took its own image's height, so a 1:1 beside a 16:9 beside
-// a 9:16 gave three heights in one row. The tallest set the row, the others
-// floated inside it, and the grid stopped reading as a grid.
+// The bug it replaced: every cell took its own image's height, so a 1:1 beside a
+// 16:9 beside a 9:16 gave three heights in one row. The tallest set the row, the
+// others floated inside it, and the grid stopped reading as a grid. Measured on
+// the pre-fix build — a 1:1 image at 138 tall beside a 16:9 at 78.
 //
-// Dan's rule:
-//   - one image        keeps its own proportions — it is the whole message
-//   - two or more      square, so no image can disturb another's size
-//   - unless EVERY image in the group shares one ratio, in which case keep it
-//   - three images     the third centres below the first two
+// The layouts:
+//   1  the image, whole
+//   2  two squares side by side          container 2:1
+//   3  one large square, two stacked     container 1:1
+//   4  2x2                               container 1:1
+//   5+ 2x2 with a "+N" on the last tile
 const H = require('./harness.js');
 const sharp = require('C:/Users/KHAC DUY/Desktop/Orbit Beta/desktop/node_modules/sharp');
 
-// Real images of known proportions, as data URLs so they are complete
-// immediately — naturalWidth is what the settle pass reads.
-const make = async (w, h) => {
-  const buf = await sharp({ create: { width: w, height: h, channels: 3, background: { r: 70, g: 130, b: 200 } } })
+const make = async (w, h, rgb) => {
+  const buf = await sharp({ create: { width: w, height: h, channels: 3, background: rgb } })
     .png().toBuffer();
   return 'data:image/png;base64,' + buf.toString('base64');
 };
 
 (async () => {
-  const square = await make(200, 200);
-  const wide = await make(320, 180);
-  const tall = await make(180, 320);
-
+  const sq = await make(240, 240, { r: 70, g: 130, b: 200 });
+  const wide = await make(360, 200, { r: 210, g: 120, b: 70 });
+  const tall = await make(200, 360, { r: 90, g: 180, b: 130 });
   const img = (n, url) => ({ id: n, type: 'image', name: n + '.png', url: url, mimeType: 'image/png' });
 
   const SEED = {
@@ -32,11 +31,11 @@ const make = async (w, h) => {
     orbit_friends: [{ id: 'p_echo', name: 'Orbit Echo', tag: '0001', status: 'online' }],
     orbit_chats: [{ id: 'p_echo', name: 'Orbit Echo', lastMessage: '', lastTime: H.t(2) }],
     orbit_msg_p_echo: [
-      { id: 'one', from: 'p_echo', text: '', time: H.t(90), attachments: [img('a', square)] },
-      { id: 'two-mixed', from: 'p_echo', text: '', time: H.t(80), attachments: [img('b', square), img('c', wide)] },
-      { id: 'three', from: 'p_echo', text: '', time: H.t(70), attachments: [img('d', square), img('e', wide), img('f', tall)] },
-      { id: 'four-mixed', from: 'p_echo', text: '', time: H.t(60), attachments: [img('g', square), img('h', wide), img('i', tall), img('j', square)] },
-      { id: 'three-wide', from: 'p_echo', text: '', time: H.t(50), attachments: [img('k', wide), img('l', wide), img('m', wide)] }
+      { id: 'one', from: 'p_echo', text: '', time: H.t(90), attachments: [img('a', wide)] },
+      { id: 'two', from: 'p_echo', text: '', time: H.t(80), attachments: [img('b', sq), img('c', wide)] },
+      { id: 'three', from: 'p_echo', text: '', time: H.t(70), attachments: [img('d', sq), img('e', wide), img('f', tall)] },
+      { id: 'four', from: 'p_echo', text: '', time: H.t(60), attachments: [img('g', sq), img('h', wide), img('i', tall), img('j', sq)] },
+      { id: 'seven', from: 'p_echo', text: '', time: H.t(50), attachments: [img('k', sq), img('l', wide), img('m', tall), img('n', sq), img('o', wide), img('p', tall), img('q', sq)] }
     ]
   };
 
@@ -48,64 +47,66 @@ const make = async (w, h) => {
   const read = await page.evaluate(() => {
     const out = {};
     document.querySelectorAll('.message-row').forEach((row) => {
-      const id = row.getAttribute('data-msg-id');
       const grid = row.querySelector('.att-grid');
       if (!grid) return;
-      const cells = Array.from(grid.querySelectorAll('.att-grid-cell'));
-      const px = (el, p) => getComputedStyle(el)[p];
+      const cs = getComputedStyle(grid);
       const gr = grid.getBoundingClientRect();
-      out[id] = {
+      const cells = Array.from(grid.querySelectorAll('.att-grid-cell'));
+      const rect = (el) => { const r = el.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top), left: Math.round(r.left) }; };
+      out[row.getAttribute('data-msg-id')] = {
         count: grid.getAttribute('data-count'),
-        uniform: grid.getAttribute('data-uniform'),
-        cellAspect: cells.map((c) => px(c, 'aspectRatio')),
-        // Heights of the first row's cells — the thing that used to differ.
-        // The images, not the cells: a grid row stretches its cells to a common
-        // height either way, so measuring the cells proves nothing.
-        firstRowImgHeights: cells.slice(0, 2).map((c) => {
-          const i = c.querySelector('img');
-          return i ? Math.round(i.getBoundingClientRect().height) : null;
-        }),
-        firstRowImgWidths: cells.slice(0, 2).map((c) => {
-          const i = c.querySelector('img');
-          return i ? Math.round(i.getBoundingClientRect().width) : null;
-        }),
-        third: cells[2] ? {
-          centreOffsetFromGrid: Math.round((cells[2].getBoundingClientRect().left + cells[2].getBoundingClientRect().width / 2) - (gr.left + gr.width / 2)),
-          belowFirstRow: Math.round(cells[2].getBoundingClientRect().top - cells[0].getBoundingClientRect().bottom)
-        } : null
+        total: grid.getAttribute('data-total'),
+        gridRatio: Number((gr.width / gr.height).toFixed(2)),
+        gap: cs.gap,
+        cells: cells.length,
+        cellRects: cells.map(rect),
+        more: cells[3] ? cells[3].getAttribute('data-more') : null,
+        moreClass: cells[3] ? cells[3].classList.contains('att-grid-more') : null,
+        innerRadius: cells.length > 1 ? getComputedStyle(cells[1]).borderTopLeftRadius : null
       };
     });
     return out;
   });
   console.log(JSON.stringify(read, null, 1));
 
-  console.log('\n== one image keeps its own proportions ==');
-  H.check('a lone image is not forced square', read.one && read.one.cellAspect[0] === 'auto', read.one);
+  console.log('\n== one image keeps its own shape ==');
+  const one = read.one;
+  H.check('it is not squared', one && one.cellRects[0].w !== one.cellRects[0].h, one && one.cellRects[0]);
 
-  console.log('\n== two or more go square ==');
-  for (const id of ['two-mixed', 'three', 'four-mixed']) {
-    const r = read[id];
-    H.check(id + ': every cell is 1:1',
-      r && r.cellAspect.every((a) => a === '1 / 1'), r && r.cellAspect);
-    H.check(id + ': the two images in the first row are the same size',
-      r && r.firstRowImgHeights[0] === r.firstRowImgHeights[1] && r.firstRowImgWidths[0] === r.firstRowImgWidths[1],
-      r && { h: r.firstRowImgHeights, w: r.firstRowImgWidths });
-  }
+  console.log('\n== two: a pair of squares ==');
+  const two = read.two;
+  H.check('the container is twice as wide as tall', two && Math.abs(two.gridRatio - 2) < 0.06, two && two.gridRatio);
+  H.check('both cells are square', two && two.cellRects.every((c) => Math.abs(c.w - c.h) <= 1), two && two.cellRects);
 
-  console.log('\n== the third image centres below the first two ==');
+  console.log('\n== three: one large square, two stacked ==');
   const three = read.three;
-  H.check('it is centred, not left-aligned',
-    three && Math.abs(three.third.centreOffsetFromGrid) <= 2, three && three.third);
-  H.check('and it sits below the first row, not beside it',
-    three && three.third.belowFirstRow >= 0, three && three.third);
+  // 3:2, not square — the large tile is two thirds of both dimensions, which is
+  // what makes it and the two small ones all square.
+  H.check('the container is 3:2', three && Math.abs(three.gridRatio - 1.5) < 0.06, three && three.gridRatio);
+  H.check('the first cell is about twice the height of the others',
+    three && Math.abs(three.cellRects[0].h - three.cellRects[1].h * 2) <= 3, three && three.cellRects.map((c) => c.h));
+  H.check('the first cell is square', three && Math.abs(three.cellRects[0].w - three.cellRects[0].h) <= 1, three && three.cellRects[0]);
+  H.check('the other two sit beside it, not below',
+    three && three.cellRects[1].left > three.cellRects[0].left, three && three.cellRects.map((c) => c.left));
 
-  console.log('\n== a group that shares one ratio keeps it ==');
-  H.check('three 16:9 images stay 16:9', read['three-wide'] && read['three-wide'].uniform === '1', read['three-wide']);
-  H.check('and are not squared', read['three-wide'] && read['three-wide'].cellAspect[0] === 'auto', read['three-wide']);
+  console.log('\n== four: 2x2 ==');
+  const four = read.four;
+  H.check('the container is square', four && Math.abs(four.gridRatio - 1) < 0.06, four && four.gridRatio);
+  H.check('four cells in two rows',
+    four && four.cells === 4 &&
+    Math.abs(four.cellRects[0].top - four.cellRects[1].top) <= 1 &&
+    four.cellRects[2].top > four.cellRects[0].top, four && four.cellRects);
 
-  console.log('\n== a mixed group is not marked uniform ==');
-  H.check('four mixed images are squared, not uniform',
-    read['four-mixed'] && read['four-mixed'].uniform === null, read['four-mixed']);
+  console.log('\n== past four: a "+N" on the last tile ==');
+  const seven = read.seven;
+  H.check('only four cells are drawn', seven && seven.cells === 4, seven && seven.cells);
+  H.check('the real total is carried', seven && seven.total === '7', seven && seven.total);
+  H.check('the fourth tile shows +3', seven && seven.more === '+3', seven && seven.more);
+
+  console.log('\n== the group reads as one object ==');
+  H.check('the tiles touch — a hairline gap', two && two.gap === '2px', two && two.gap);
+  H.check('inner corners are square, so only the outside is rounded',
+    two && two.innerRadius === '0px', two && two.innerRadius);
 
   H.check('no page errors', errors.length === 0, errors);
   await browser.close(); server.close(); H.report();
