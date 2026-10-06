@@ -89,6 +89,8 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 
 * **One tap on Send was sending a voice message.** Sending swaps the composer from the send button to the mic — and Android fires a set of synthetic mouse events after every touch, aimed at whatever is under your finger *by then*. So the mic got the tap, started recording, and the release sent it. It repeated, because each voice note reset the composer and put the mic back under your thumb.
 * **The send button looked wrong for the same reason** — the swap had already run, so the composer was showing the mic. That is the "isn’t lighting up" half of the report.
+* **A group of images of different sizes no longer goes ragged.** The attachment grid follows **Discord’s** layouts now: one image keeps its own proportions, two are a pair of squares, three are one large square with two stacked beside it, four are a 2×2, and anything past four shows four tiles with a **+N** on the last. Tiles touch, and only the outer corners are rounded — which is what makes a group read as one object rather than several adjacent cards.
+* **Images in a desktop grid were rendering at half height.** The grid’s own rules were written without the prefix of the rule they were overriding, so they lost a specificity tie — both were `!important`. A wide image rendered at its natural height inside a square cell, leaving half the tile empty.
 
 ## Version History
 

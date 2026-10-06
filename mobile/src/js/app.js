@@ -7574,6 +7574,7 @@ document.addEventListener('DOMContentLoaded', function() {
             'One tap on Send was also starting the mic. Sending swaps the composer from the send button to the mic, and Android fires a synthetic mouse event right after a touch aimed at whatever is under your finger by then \u2014 so it landed on the mic, started a recording, and the release sent it. One tap, a voice message nobody asked for, on repeat.',
             'That is also why the send button looked wrong and never lit up: the swap had already run, so the composer was showing the mic.',
           ]],
+            'And on the desktop, images in a grid were rendering at half height \u2014 the grid\u2019s own rules lost a specificity tie, so a wide photo sat at its natural height inside a square tile.',
           ['Version', [
             'Version: Bumped to v0.8.4-beta.'
           ]]
