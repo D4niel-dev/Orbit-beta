@@ -1086,10 +1086,10 @@
   margin-top: 14px !important;
 }
 
-/* Images: no bubble, no crop. `aspect-ratio: 1` + `object-fit: cover` in
-   mobile.css was forcing every photo into a square and cutting the edges off. */
+/* Images: no bubble. How much cropping depends on how many there are — see the
+   count rules below. A lone image is shown whole; a group is squared so it
+   cannot go ragged. */
 .message-row .msg-attachments .att-grid-cell {
-  aspect-ratio: auto !important;
   background: transparent !important;
   border-radius: var(--radius-lg) !important;
   overflow: hidden !important;
@@ -1097,10 +1097,63 @@
 }
 .message-row .msg-attachments .att-grid-cell img {
   width: 100% !important;
+  display: block;
+}
+
+/* ── ONE image keeps its own proportions ─────────────────────────────────────
+   A photo on its own is the message. Nothing to line it up against, so cropping
+   it to a square would only be losing picture. */
+.message-row .msg-attachments .att-grid[data-count="1"] .att-grid-cell {
+  aspect-ratio: auto !important;
+}
+.message-row .msg-attachments .att-grid[data-count="1"] .att-grid-cell img {
   height: auto !important;
   max-height: 340px;
   object-fit: contain !important;
-  display: block;
+}
+
+/* ── TWO or more: a grid, square by default ──────────────────────────────────
+   This is the bug. Every cell took its own image's height, so a 1:1 next to a
+   16:9 next to a 9:16 gave three different heights and the row went ragged —
+   the taller image set the row, the others floated inside it, and the grid
+   stopped reading as a grid. Squaring every cell means no image can disturb
+   another's size, whatever the mix is. */
+.message-row .msg-attachments .att-grid:not([data-count="1"]) {
+  grid-template-columns: repeat(2, 1fr) !important;
+  gap: 4px !important;
+}
+.message-row .msg-attachments .att-grid:not([data-count="1"]) .att-grid-cell {
+  aspect-ratio: 1 !important;
+}
+.message-row .msg-attachments .att-grid:not([data-count="1"]) .att-grid-cell img {
+  height: 100% !important;
+  object-fit: cover !important;
+}
+
+/* ── THREE: the odd one centres below the pair ───────────────────────────────
+   Two on top, the third centred underneath at the same width — not stranded in
+   the left column with a hole beside it. */
+.message-row .msg-attachments .att-grid[data-count="3"] .att-grid-cell:nth-child(3) {
+  grid-column: 1 / -1;
+  justify-self: center;
+  width: calc(50% - 2px);
+}
+
+/* ── Unless every image in the group shares one ratio ────────────────────────
+   Then there is nothing to disturb, so that ratio is kept and the group is
+   shown whole. Set from the loaded images (see _settleAttachmentGrid) — the
+   ratios are not known when the markup is written, and putting them in the
+   attachment would be a protocol change. */
+.message-row .msg-attachments .att-grid[data-uniform="1"] .att-grid-cell {
+  aspect-ratio: auto !important;
+}
+.message-row .msg-attachments .att-grid[data-uniform="1"] .att-grid-cell img {
+  height: auto !important;
+  max-height: 340px;
+  object-fit: contain !important;
+}
+.message-row .msg-attachments .att-grid[data-uniform="1"][data-count="3"] .att-grid-cell:nth-child(3) {
+  width: calc(50% - 2px);
 }
 
 /* Files keep a surface. */

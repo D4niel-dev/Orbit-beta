@@ -28,7 +28,7 @@
 
 | Channel           | Version     | Status                                                                                                                                                                                                                        |
 | ----------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Latest**        | v0.8.4-beta | One tap on Send was also starting the mic — Android’s synthetic mouse events land on whatever is under your finger by then, which was the mic, so it recorded and sent a voice note on repeat |
+| **Latest**        | v0.8.4-beta | A group of images of different sizes no longer goes ragged — one keeps its own proportions, several are squared, and three centre the odd one below the pair. One tap on Send was also starting the mic — Android’s synthetic mouse events land on whatever is under your finger by then, which was the mic, so it recorded and sent a voice note on repeat |
 |                   | v0.8.3-beta | The conversation screen reworked on both platforms — a message is no longer one box holding everything — plus reactions that straddle the bubble, the duplicate × removed, and the Local Vault brought into line |
 |                   | v0.8.2-beta | Maintenance release — the mobile restyle's own regressions closed out: a contacts list that flipped between two renderers, tabs hidden unless you already had a folder, and custom profile banners that had stopped rendering |
 | **Stable**        | v0.8.0-beta | Your theme and custom colours follow you between your own devices, message search runs on SQLite FTS5, and the update progress bar actually moves                                                                             |
@@ -804,7 +804,7 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 
 * **One tap on Send no longer fires the mic** — Android’s synthetic mouse events land on whatever is under the finger by then, which after the swap was the mic
 * **Both controls were double-firing on a real tap** — the mic started on touchstart and on the synthetic mousedown, send on touchend and on mouseup
-* **Mobile test suite** — 168 checks
+* **Mobile test suite** — 181 checks
 
 </details>
 

@@ -16,6 +16,7 @@ window.Changelog = {
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
         versionBlock('0.8.4-beta', 'Latest', [
           ['Fixes', [
+            'A group of images of different sizes no longer goes ragged. One image keeps its own proportions; two or more are squared so none can push the others around; and three put the odd one centred below the pair.',
             'One tap on Send was also starting the mic. Sending swaps the composer from the send button to the mic, and Android fires a synthetic mouse event right after a touch aimed at whatever is under your finger by then \u2014 so it landed on the mic, started a recording, and the release sent it. One tap, a voice message nobody asked for, on repeat.',
             'That is also why the send button looked wrong and never lit up: the swap had already run, so the composer was showing the mic.',
           ]],

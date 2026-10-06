@@ -2668,3 +2668,17 @@ html[data-theme="light"] #chat-welcome-host::before { opacity: 0.3; }
 .message-row:not(:has(.message-bubble)):has(.reactions-row) .msg-time {
   margin-top: 14px !important;
 }
+
+/* ── Three attachments: the odd one centres below the pair ───────────────────
+   Two on top, the third centred underneath at the same width — not stranded in
+   the left column with a hole beside it.
+
+   The RATIOS were already right: chat-panel.js picks one aspect for the whole
+   group (a lone image keeps its own; several keep a shared one; mixed falls back
+   to 1:1), so the desktop never had the ragged-row bug the mobile had. This is
+   the piece it was missing. */
+.att-grid[data-count="3"] > :nth-child(3) {
+  grid-column: 1 / -1;
+  justify-self: center;
+  width: calc(50% - 4px);
+}

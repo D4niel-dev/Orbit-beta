@@ -1015,7 +1015,11 @@ window.ChatPanel = {
             '</div>';
           }
         });
-        var gridSection = gridHtml ? '<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; width: 100%; min-width: 250px; max-width: 280px;">' + gridHtml + '</div>' : '';
+        // `data-count` so the grid can lay out by how many there are — three
+        // images put the third centred below the first two, rather than
+        // stranding it in the left column with a hole beside it.
+        var gridCount = msg.attachments.filter(function (x) { return x.type !== 'video' && x.type !== 'audio'; }).length;
+        var gridSection = gridHtml ? '<div class="att-grid" data-count="' + gridCount + '" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; width: 100%; min-width: 250px; max-width: 280px;">' + gridHtml + '</div>' : '';
         // One wrapper, so the attachments can be styled as a group that sits
         // beside the bubble rather than inside it.
         attachmentsHtml = '<div class="msg-attachments">' +

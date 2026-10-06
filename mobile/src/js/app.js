@@ -1995,6 +1995,48 @@ document.addEventListener('DOMContentLoaded', function() {
     return 'file';
   }
 
+  /**
+   * Whether a group of images may keep their own proportions.
+   *
+   * The ratios are NOT known when the markup is written — the images are still
+   * loading, and one that arrived from a peer came over the wire with no
+   * dimensions attached. Adding them to the attachment would be a protocol
+   * change, so this runs after the fact instead: if every image in a group turns
+   * out to share one ratio there is nothing for them to disturb each other with,
+   * and the group is shown whole. Otherwise the CSS squares them.
+   *
+   * Called after each render and again on each image's load event, because a
+   * cached image is already complete and a fresh one is not.
+   */
+  function _settleAttachmentGrid(root) {
+    var scope = root || document;
+    var grids = scope.querySelectorAll('.att-grid:not([data-count="1"])');
+    for (var i = 0; i < grids.length; i++) {
+      var grid = grids[i];
+      var imgs = grid.querySelectorAll('img');
+      if (imgs.length < 2) continue;
+      var ratio = null, uniform = true;
+      for (var j = 0; j < imgs.length; j++) {
+        var img = imgs[j];
+        if (!img.complete || !img.naturalWidth) {
+          // Not measurable yet. Leave the square default in place — it is the
+          // safe answer — and look again when this one loads.
+          if (!img._gridHooked) {
+            img._gridHooked = true;
+            img.addEventListener('load', function () { _settleAttachmentGrid(); }, { once: true });
+          }
+          uniform = false;
+          break;
+        }
+        var r = img.naturalWidth / img.naturalHeight;
+        if (ratio === null) ratio = r;
+        else if (Math.abs(r - ratio) > 0.02) { uniform = false; break; }
+      }
+      if (uniform && ratio !== null) grid.setAttribute('data-uniform', '1');
+      else grid.removeAttribute('data-uniform');
+    }
+  }
+
   function renderMessages(chatId) {
     // The pinned bar belongs to the chat, so it repaints whenever the chat does.
     try { _renderPinnedBar(chatId); } catch (e) { /* the bar must never break the messages */ }
@@ -2655,6 +2697,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }, 150);
     renderLucide({ root: feed });
     injectMessageParticles(feed);
+    // Decide whether any image group may keep its own proportions. The images
+    // are still loading at this point, so this also hooks their load events and
+    // runs again — the square default holds until then.
+    _settleAttachmentGrid(feed);
   }
 
   function setupMessageSwipe() {
@@ -7552,6 +7598,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // added, which is why `npm run test:mobile` now asserts it.
         vBlock('0.8.4-beta', 'Latest', [
           ['Fixes', [
+            'A group of images of different sizes no longer goes ragged. One image keeps its own proportions; two or more are squared so none can push the others around; and three put the odd one centred below the pair.',
             'One tap on Send was also starting the mic. Sending swaps the composer from the send button to the mic, and Android fires a synthetic mouse event right after a touch aimed at whatever is under your finger by then \u2014 so it landed on the mic, started a recording, and the release sent it. One tap, a voice message nobody asked for, on repeat.',
             'That is also why the send button looked wrong and never lit up: the swap had already run, so the composer was showing the mic.',
           ]],
