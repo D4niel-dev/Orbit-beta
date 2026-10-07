@@ -57,6 +57,12 @@
             android:exported="false"
         />
 
+        <!-- Inline reply from the notification shade. Not exported: only the
+             PendingIntent we hand to the notification can reach it. -->
+        <receiver
+            android:name=".receivers.OrbitReplyReceiver"
+            android:exported="false" />
+
         <!-- Boot receiver to restart service after reboot -->
         <receiver android:name=".receivers.BootReceiver" android:exported="true">
             <intent-filter>

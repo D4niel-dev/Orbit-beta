@@ -611,11 +611,44 @@ public class OrbitP2PPlugin extends Plugin {
                     call.getString("text", ""),
                     call.getString("groupKey", null),
                     new android.content.Intent(getContext(), com.orbit.app.MainActivity.class),
-                    call.getString("avatar", null));
+                    call.getString("avatar", null),
+                    // Present only for a direct message — a group reply needs a
+                    // target the notification does not have, and a reply box that
+                    // cannot say where it is going is worse than none.
+                    call.getString("replyToChatId", null));
             call.resolve();
         } catch (Exception e) {
             call.reject("notify failed: " + e.getMessage());
         }
+    }
+
+    /**
+     * Replies typed into the notification shade while the app was not running.
+     *
+     * `peek` returns them and leaves them queued; the web layer sends each one and
+     * then calls `clearReplies`. Doing it in that order means a crash mid-send
+     * replays a reply rather than losing it — a duplicate is visible and
+     * fixable, a dropped message is neither.
+     */
+    @PluginMethod
+    public void getPendingReplies(PluginCall call) {
+        try {
+            com.getcapacitor.JSArray arr = new com.getcapacitor.JSArray();
+            for (org.json.JSONObject o : com.orbit.app.receivers.OrbitReplyReceiver.peek()) {
+                arr.put(o);
+            }
+            JSObject out = new JSObject();
+            out.put("replies", arr);
+            call.resolve(out);
+        } catch (Exception e) {
+            call.reject("could not read pending replies: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void clearPendingReplies(PluginCall call) {
+        com.orbit.app.receivers.OrbitReplyReceiver.clear();
+        call.resolve();
     }
 
     @PluginMethod

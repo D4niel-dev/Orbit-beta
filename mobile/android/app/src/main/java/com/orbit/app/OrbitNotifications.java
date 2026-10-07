@@ -158,6 +158,26 @@ public final class OrbitNotifications {
      */
     public static void post(Context ctx, Kind kind, String title, String text,
                             String groupKey, Intent contentIntent, String avatarDataUrl) {
+        post(ctx, kind, title, text, groupKey, contentIntent, avatarDataUrl, null);
+    }
+
+    /**
+     * @param replyToChatId when set, the notification carries an inline reply box
+     *        that answers without opening Orbit. This is the interaction people
+     *        actually use a messenger for — you get a message, you answer it, you
+     *        put the phone down — and making them open the app to do it is what
+     *        makes an app feel like a website in a wrapper.
+     *
+     *        ⚠ Only the reply path that Android can complete while the app is
+     *        running is wired. A reply typed with Orbit closed is QUEUED by
+     *        OrbitReplyReceiver and sent when the app is next opened, because
+     *        delivering it immediately would mean running the P2P stack from a
+     *        broadcast receiver. The notification stays until then rather than
+     *        pretending it went.
+     */
+    public static void post(Context ctx, Kind kind, String title, String text,
+                            String groupKey, Intent contentIntent, String avatarDataUrl,
+                            String replyToChatId) {
         if (ctx == null) return;
         try {
             ensureChannels(ctx);
@@ -184,6 +204,27 @@ public final class OrbitNotifications {
             int id = (groupKey == null || groupKey.isEmpty())
                     ? (int) (System.currentTimeMillis() & 0x7FFFFFFF)
                     : groupKey.hashCode();
+
+            if (replyToChatId != null && !replyToChatId.isEmpty()) {
+                androidx.core.app.RemoteInput remoteInput = new androidx.core.app.RemoteInput.Builder(
+                        "orbit_reply_text").setLabel("Reply").build();
+
+                Intent replyIntent = new Intent(ctx, com.orbit.app.receivers.OrbitReplyReceiver.class);
+                replyIntent.putExtra(com.orbit.app.receivers.OrbitReplyReceiver.EXTRA_CHAT_ID, replyToChatId);
+                replyIntent.putExtra(com.orbit.app.receivers.OrbitReplyReceiver.EXTRA_NOTIF_ID, id);
+
+                // One request code per notification, or every reply is delivered
+                // to whichever notification registered last.
+                PendingIntent replyPi = PendingIntent.getBroadcast(ctx, id, replyIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE);
+
+                NotificationCompat.Action action = new NotificationCompat.Action.Builder(
+                        R.drawable.ic_notify_orbit, "Reply", replyPi)
+                        .addRemoteInput(remoteInput)
+                        .setAllowGeneratedReplies(true)
+                        .build();
+                b.addAction(action);
+            }
 
             NotificationManagerCompat.from(ctx).notify(id, b.build());
         } catch (SecurityException e) {

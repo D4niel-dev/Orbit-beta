@@ -4797,6 +4797,63 @@ document.addEventListener('DOMContentLoaded', function() {
 
   window.checkPendingShare = checkPendingShare;
 
+  /* ══ Replies typed into the notification shade ═════════════════════════════
+     Android delivers an inline reply to OrbitReplyReceiver, which queues it —
+     the process may not have been alive, and a broadcast receiver cannot run the
+     P2P stack. This drains the queue and sends each one through the normal path.
+
+     It sends by filling the composer and calling the same send the button calls,
+     rather than writing a second send path. A reply that behaves differently from
+     a typed message would be a bug waiting to be found.
+
+     Order is preserved, and the queue is only cleared after every send has been
+     attempted: a crash mid-drain replays a reply rather than losing it. */
+  var _repliesBusy = false;
+
+  function checkPendingReplies() {
+    var plugins = (window.Capacitor && window.Capacitor.Plugins) || {};
+    var bridge = plugins.OrbitP2P;
+    if (!bridge || typeof bridge.getPendingReplies !== 'function') return;
+    if (_repliesBusy) return;
+    _repliesBusy = true;
+
+    bridge.getPendingReplies().then(function (res) {
+      var replies = (res && res.replies) || [];
+      if (!replies.length) { _repliesBusy = false; return; }
+
+      var i = 0;
+      var next = function () {
+        if (i >= replies.length) {
+          // Only now: everything has been attempted.
+          if (typeof bridge.clearPendingReplies === 'function') {
+            var c = bridge.clearPendingReplies();
+            if (c && c.catch) c.catch(function () {});
+          }
+          _repliesBusy = false;
+          return;
+        }
+        var r = replies[i++];
+        try {
+          if (activeChatId !== r.chatId) openChat(r.chatId);
+          var input = document.getElementById('chat-input');
+          if (input) {
+            input.value = r.text;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+          setTimeout(function () {
+            try { sendMessage(); } catch (e) { /* the next one still goes */ }
+            setTimeout(next, 320);
+          }, 200);
+        } catch (e) {
+          setTimeout(next, 120);
+        }
+      };
+      next();
+    }).catch(function () { _repliesBusy = false; });
+  }
+
+  window.checkPendingReplies = checkPendingReplies;
+
   /* ══ Undo send ═════════════════════════════════════════════════════════════
      A few seconds to take a message back after it has gone.
 
@@ -12322,6 +12379,23 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   window.orbitPushPeerAvatars = pushPeerAvatarsToNative;
 
+  /**
+   * Where an inline notification reply should go, or null if it is ambiguous.
+   *
+   * Direct messages only. A group notification carries a group id, and replying
+   * into a group from a notification would put a message in front of everyone
+   * with no chance to check who it was meant for.
+   */
+  function _replyTargetFor(data) {
+    if (!data || !data.chatId) return null;
+    var chatId = String(data.chatId);
+    if (chatId === 'echo' || chatId === 'local-echo') return null;
+    try { if (_isGroupChat(chatId)) return null; } catch (e) { return null; }
+    return chatId;
+  }
+
+  window.__probeReplyTarget = _replyTargetFor;   // pure, and worth asserting on
+
   function showNativeNotification(title, body, data, kind) {
     if (NOTIFY_KINDS.indexOf(kind) === -1) kind = 'MESSAGE';
     try {
@@ -12336,7 +12410,12 @@ document.addEventListener('DOMContentLoaded', function() {
           title: title,
           text: body,
           groupKey: (data && (data.groupKey || data.chatId)) || null,
-          avatar: _notificationAvatar(data)
+          avatar: _notificationAvatar(data),
+          // An inline reply box, but only where a reply has one obvious
+          // destination. In a group the notification cannot say who it is
+          // replying to, and a box that cannot say where it is going is worse
+          // than no box.
+          replyToChatId: _replyTargetFor(data)
         });
         if (p && p.catch) p.catch(function () {});
         return;
@@ -13635,8 +13714,11 @@ document.addEventListener('DOMContentLoaded', function() {
   // that arrived while Orbit was already open — singleTask means it came through
   // onNewIntent, and the app may have been sitting in the background).
   setTimeout(checkPendingShare, 1200);
+  setTimeout(checkPendingReplies, 1500);
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible') setTimeout(checkPendingShare, 400);
+    if (document.visibilityState !== 'visible') return;
+    setTimeout(checkPendingShare, 400);
+    setTimeout(checkPendingReplies, 500);
   });
 
   // ── App lock: when to ask ──────────────────────────────────────────────────
