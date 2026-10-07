@@ -6590,14 +6590,19 @@ document.addEventListener('DOMContentLoaded', function() {
         // every other row here: icon, title, description.
         return '<div class="settings-section-label">Local Vault</div>' +
         '<div class="vault-block" data-search="Local Vault encrypted backup restore files">' +
+          // The file note used to be a SEPARATE block below this card, which is
+          // why it read as out of place: it repeated what the card already said,
+          // it had no icon where the card has one, and redesign.css left-aligns
+          // it while the card is a row. It is the third line of the card now, so
+          // the row reads as one object: what happened, when, and where it lives.
           '<div class="settings-item-card vault-status-card" id="vault-status">' +
             '<div class="settings-item-icon"><i data-lucide="shield-check"></i></div>' +
             '<div class="settings-item-info">' +
               '<span class="settings-item-title">' + (_vLastBackupTxt ? 'Last backup' : 'No backup yet') + '</span>' +
-              '<span class="settings-item-desc">' + (_vLastBackupTxt ? escapeHtml(_vLastBackupTxt) : 'Backups are stored as a single JSON file in the app data folder (vault/)') + '</span>' +
+              '<span class="settings-item-desc">' + (_vLastBackupTxt ? escapeHtml(_vLastBackupTxt) : 'No backup has been written yet') + '</span>' +
+              '<span class="settings-item-meta">A single JSON file in the app data folder (vault/)</span>' +
             '</div>' +
           '</div>' +
-          (_vLastBackupTxt ? '<div class="vault-status-sub">A single JSON file in the app data folder (vault/).</div>' : '') +
         '</div>' +
         card('lock', 'Encrypt Vault', 'Protect exports with a passphrase (PBKDF2 + AES-GCM)',
           '<button class="settings-toggle ' + (s.vaultEncrypt ? 'on' : '') + '" id="vault-encrypt-toggle"></button>') +
