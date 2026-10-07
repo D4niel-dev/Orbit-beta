@@ -3398,6 +3398,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     MStore.addMessage(activeChatId, newMsg);
     _startDisappearTimer(activeChatId, newMsg.id);
+    _offerUndoSend(activeChatId, newMsg);
     stagedFiles = [];
     renderFilePreview();
 
@@ -4669,6 +4670,58 @@ document.addEventListener('DOMContentLoaded', function() {
   // The chat id is passed in, not read from window: activeChatId is a module-local in this
   // app, so window.activeChatId is undefined and the bar silently rendered for no chat.
   // renderMessages already receives it; the poller reuses the last one seen.
+  /* ══ Undo send ═════════════════════════════════════════════════════════════
+     A few seconds to take a message back after it has gone.
+
+     This is a real retraction, not a local hide: `MESSAGE_DELETE` already exists
+     in the protocol, the desktop broadcasts it, and the mobile already handles
+     receiving it. Undo sends the same packet, so the message disappears for the
+     other side too rather than leaving them reading something you think you
+     unsent. A "delete" that only deletes it for you is worse than none.
+
+     The window is short on purpose. It is for "wrong chat" and "sent too soon",
+     not for changing your mind about what you said. */
+  var UNDO_WINDOW_MS = 6000;
+
+  function _offerUndoSend(chatId, msg) {
+    if (!msg || !msg.id) return;
+    // The echo bot is not a peer and has nothing to retract.
+    if (chatId === 'echo' || chatId === 'local-echo') return;
+
+    showToast('Message sent', 'success', {
+      label: 'Undo',
+      duration: UNDO_WINDOW_MS,
+      onTap: function () { _undoSend(chatId, msg.id); }
+    });
+  }
+
+  /** Delete locally and tell the peer. Both, or it is not an undo. */
+  function _undoSend(chatId, msgId) {
+    try { MStore.deleteMessage(chatId, msgId); } catch (e) { /* already gone */ }
+
+    try {
+      var myId = MStore.user && MStore.user.id;
+      var P = window.Orbit && window.Orbit.Protocol;
+      if (P && myId && window.Orbit.P2P) {
+        var payload = { msgId: msgId, chatId: chatId };
+        var pkt = P.createPacket(P.Types.MESSAGE_DELETE, myId, chatId, payload);
+        if (_isGroupChat(chatId)) {
+          // A group has to hear it too, or the retraction stops at one member.
+          var g = (MStore.groups || []).find(function (x) { return String(x.id) === String(chatId); });
+          (g && g.members ? g.members : []).forEach(function (m) {
+            var mid = String(m && m.id ? m.id : m);
+            if (mid && mid !== String(myId)) { try { window.Orbit.P2P.send(mid, pkt); } catch (e) {} }
+          });
+        } else {
+          window.Orbit.P2P.send(chatId, pkt);
+        }
+      }
+    } catch (e) { /* the local delete already happened; the peer just keeps it */ }
+
+    try { renderMessages(chatId); renderChatList(); } catch (e) {}
+    showToast('Message undone', 'info');
+  }
+
   /* ══ App lock ══════════════════════════════════════════════════════════════
      Ported from the desktop's PinLockScreen. The desktop verifies through
      Electron's main process; there is none here, so shared/ui/app-lock.js hashes
@@ -12336,7 +12389,16 @@ document.addEventListener('DOMContentLoaded', function() {
     } catch(e) {}
   }
 
-  function showToast(msg, type) {
+  /**
+   * A toast. `action` is optional: `{ label, onTap, duration }`.
+   *
+   * The action exists for undo. A toast that says "Message deleted" and a toast
+   * that says "Message deleted · Undo" are the same toast — the difference is
+   * whether you can change your mind, and an undo you cannot reach in time is
+   * not an undo. So an action also sets its own (longer) duration, and the
+   * progress bar is what tells you how long you have.
+   */
+  function showToast(msg, type, action) {
     var container = document.getElementById('toast-container');
     if (!container) { console.warn('[Orbit] toast-container missing'); return; }
     var el = document.createElement('div');
@@ -12345,18 +12407,44 @@ document.addEventListener('DOMContentLoaded', function() {
     var icons = { info: 'info', success: 'check-circle', error: 'alert-circle', warning: 'alert-triangle' };
     var iconName = icons[type] || 'info';
 
-    el.innerHTML = '<i data-lucide="' + iconName + '"></i><span class="toast-text">' + escapeHtml(msg) + '</span><div class="toast-bar"></div>';
+    var actionHtml = (action && action.label)
+      ? '<button class="toast-action">' + escapeHtml(action.label) + '</button>'
+      : '';
+    el.innerHTML = '<i data-lucide="' + iconName + '"></i><span class="toast-text">' + escapeHtml(msg) +
+      '</span>' + actionHtml + '<div class="toast-bar"></div>';
 
     container.appendChild(el);
     if (window.lucide) lucide.createIcons({ root: el });
 
-    var duration = 2500;
-    setTimeout(function() {
+    var gone = false;
+    var dismiss = function () {
+      if (gone) return;
+      gone = true;
       el.style.opacity = '0';
       el.style.transform = 'translateY(-24px) scale(0.95)';
       el.style.transition = 'opacity 0.3s, transform 0.3s';
       setTimeout(function() { el.remove(); }, 300);
-    }, duration);
+    };
+
+    if (action && action.label) {
+      var btn = el.querySelector('.toast-action');
+      if (btn) {
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          dismiss();
+          if (typeof action.onTap === 'function') action.onTap();
+        });
+      }
+    }
+
+    var duration = (action && action.duration) || 2500;
+    // The bar shrinks over the toast's life, so the window is visible rather than
+    // something you have to guess at. It is driven by the existing toastShrink
+    // keyframes — which are hardcoded to 2.5s — so an action toast has to move
+    // the animation, not add a transition on top of it.
+    var bar = el.querySelector('.toast-bar');
+    if (bar && action && action.label) bar.style.animationDuration = duration + 'ms';
+    setTimeout(dismiss, duration);
   }
   window.showToast = showToast;
 

@@ -4136,3 +4136,30 @@
 .app-lock-key:active { background: var(--bg-hover, var(--border-subtle)); }
 .app-lock-key.blank { border: none; background: transparent; pointer-events: none; }
 .app-lock-key i { width: 22px; height: 22px; }
+
+/* ══ The toast action ══════════════════════════════════════════════════════
+   "Message sent" and "Message sent · Undo" are the same toast. The difference is
+   whether you can change your mind, so the action is the point rather than a
+   decoration — it gets a real hit target and the accent colour. */
+.toast-mobile .toast-action {
+  flex: 0 0 auto;
+  margin-left: 4px;
+  padding: 5px 11px;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent-soft, rgba(10, 132, 255, 0.18));
+  color: var(--accent-primary);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  /* A thumb target, not a text link. */
+  min-height: 30px;
+}
+.toast-mobile .toast-action:active { background: rgba(10, 132, 255, 0.3); }
+/* The toast has to lay out as a row for the action to sit beside the text. */
+.toast-mobile {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.toast-mobile .toast-text { flex: 1; min-width: 0; }
