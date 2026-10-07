@@ -35,7 +35,7 @@
   <!-- v0.8.1-beta redesign layer. MUST load last: mobile.css redefines several
        selectors more than once, and this sheet restates what the redesign
        changes rather than editing that file in place. -->
-  <link rel="stylesheet" href="styles/redesign.css?v=20261007b">
+  <link rel="stylesheet" href="styles/redesign.css?v=20261007d">
 
   <!-- Syntax Highlighting (Prism) -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
@@ -332,8 +332,31 @@
     <!-- Group Members Panel (slide-in overlay) -->
     <div id="members-overlay-backdrop" class="overlay-backdrop" style="display:none;"></div>
     <div id="image-preview-overlay">
-      <button class="close-btn" id="btn-close-image-preview">&times;</button>
-      <div class="preview-wrap"><img id="image-preview-img" src="" alt="Preview"></div>
+      <!-- Left is the exit, right is the download. Both corners, so neither is
+           under a thumb reaching for the other. -->
+      <button class="close-btn" id="btn-close-image-preview" aria-label="Close">&times;</button>
+      <button class="viewer-btn viewer-download" id="btn-download-image" aria-label="Download">
+        <i data-lucide="download"></i><span class="viewer-dl-label"></span>
+      </button>
+
+      <!-- Only shown when the message holds more than one image. -->
+      <button class="viewer-nav viewer-prev" id="btn-prev-image" aria-label="Previous image">
+        <i data-lucide="chevron-left"></i>
+      </button>
+      <button class="viewer-nav viewer-next" id="btn-next-image" aria-label="Next image">
+        <i data-lucide="chevron-right"></i>
+      </button>
+
+      <div class="preview-wrap" id="image-preview-wrap">
+        <img id="image-preview-img" src="" alt="Preview">
+      </div>
+
+      <!-- Zoom lives bottom-right, out of the way of the picture's middle. -->
+      <div class="viewer-zoom">
+        <button class="viewer-btn" id="btn-zoom-out" aria-label="Zoom out"><i data-lucide="minus"></i></button>
+        <button class="viewer-btn" id="btn-zoom-in" aria-label="Zoom in"><i data-lucide="plus"></i></button>
+      </div>
+      <div class="viewer-counter" id="image-viewer-counter"></div>
     </div>
     <div id="video-preview-overlay">
       <button class="close-btn" id="btn-close-video-preview">&times;</button>
@@ -465,7 +488,7 @@
   setTimeout(function() { window._loadImageCropper(); }, 1500);
   </script>
 
-  <script src="js/app.js?v=20261007a"></script>
+  <script src="js/app.js?v=20261007b"></script>
 
   <!-- v0.2.8 Components -->
   <script src="js/components/navigation.js?v=20261004e"></script>

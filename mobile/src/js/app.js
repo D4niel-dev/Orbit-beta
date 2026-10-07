@@ -2619,11 +2619,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var msgs = MStore.getMessages(activeChatId);
         var msg = msgs.find(function(m) { return String(m.id) === String(msgId); });
         if (msg && msg.attachments) {
-          var att = msg.attachments.find(function(a) { return String(a.id) === attId; });
-          if (att && att.url) {
-            document.getElementById('image-preview-img').src = att.url;
-            document.getElementById('image-preview-overlay').classList.add('open');
-          }
+          openImageViewer(msg, attId);
         }
       });
     });
@@ -5990,6 +5986,228 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     return out;
   }
+
+  /* ══ The image viewer ══════════════════════════════════════════════════════
+     Opened from a picture in the chat. It walks the images of THAT MESSAGE —
+     the group you tapped in — because that is the set the grid put in front of
+     you, and it is the one a swipe is expected to move through.
+
+     State is deliberately tiny: which message, which index, and how far in.
+     Everything on screen is derived from those three, so the buttons, the
+     counter and the picture cannot disagree. */
+  var _viewer = { msg: null, list: [], index: 0, scale: 1, tx: 0, ty: 0, springBack: null };
+  var VIEWER_MIN = 1;     // fully out — below this it springs back
+  var VIEWER_MAX = 4;
+
+  function openImageViewer(msg, attId) {
+    var list = (msg.attachments || []).filter(function(a) { return a.type === 'image' && a.url; });
+    if (!list.length) return;
+    var idx = list.findIndex(function(a) { return String(a.id) === String(attId); });
+    _viewer.msg = msg;
+    _viewer.list = list;
+    _viewer.index = idx < 0 ? 0 : idx;
+    _resetViewerZoom();
+    _renderViewer();
+    document.getElementById('image-preview-overlay').classList.add('open');
+    if (window.lucide) { try { window.lucide.createIcons({ root: document.getElementById('image-preview-overlay') }); } catch (e) {} }
+  }
+
+  function _resetViewerZoom() {
+    _viewer.scale = 1; _viewer.tx = 0; _viewer.ty = 0;
+    if (_viewer.springBack) { clearTimeout(_viewer.springBack); _viewer.springBack = null; }
+    _applyViewerTransform();
+  }
+
+  function _applyViewerTransform() {
+    var img = document.getElementById('image-preview-img');
+    var overlay = document.getElementById('image-preview-overlay');
+    if (!img || !overlay) return;
+    img.style.transform = 'translate(' + _viewer.tx + 'px,' + _viewer.ty + 'px) scale(' + _viewer.scale + ')';
+    overlay.classList.toggle('is-zoomed', _viewer.scale !== 1);
+    var out = document.getElementById('btn-zoom-out');
+    if (out) out.disabled = false;
+  }
+
+  /** Paint everything from the state — picture, counter, and which ends are live. */
+  function _renderViewer() {
+    var overlay = document.getElementById('image-preview-overlay');
+    var img = document.getElementById('image-preview-img');
+    if (!overlay || !img) return;
+    var cur = _viewer.list[_viewer.index];
+    if (!cur) return;
+    img.src = cur.url;
+    img.alt = cur.name || 'Image';
+
+    var single = _viewer.list.length < 2;
+    overlay.classList.toggle('is-single', single);
+
+    var counter = document.getElementById('image-viewer-counter');
+    if (counter) counter.textContent = (_viewer.index + 1) + ' of ' + _viewer.list.length;
+
+    // At the ends the buttons stay in place but go dead — moving them would shift
+    // the layout under a thumb that is mid-tap.
+    var prev = document.getElementById('btn-prev-image');
+    var next = document.getElementById('btn-next-image');
+    if (prev) prev.disabled = single || _viewer.index === 0;
+    if (next) next.disabled = single || _viewer.index === _viewer.list.length - 1;
+
+    var dl = document.getElementById('btn-download-image');
+    if (dl) {
+      dl.disabled = false;
+      dl.classList.remove('is-done');
+      var lbl = dl.querySelector('.viewer-dl-label');
+      if (lbl) lbl.textContent = '';
+      dl.style.minWidth = '44px';
+    }
+    _resetViewerZoom();
+  }
+
+  function _viewerStep(dir) {
+    var next = _viewer.index + dir;
+    if (next < 0 || next >= _viewer.list.length) return;
+    _viewer.index = next;
+    _renderViewer();
+  }
+
+  /**
+   * Zoom by a step.
+   *
+   * Dan's rule for the ends: zoomed IN, stepping out to 1 stops there — that is
+   * the picture's own size and going below it is not useful. At 1, stepping out
+   * DOES shrink it, but only briefly: it springs back after a moment. So the
+   * gesture always answers, and you cannot end up stuck looking at a thumbnail.
+   */
+  function _viewerZoom(delta) {
+    if (_viewer.springBack) { clearTimeout(_viewer.springBack); _viewer.springBack = null; }
+    var from = _viewer.scale;
+    var to = Math.max(VIEWER_MIN * 0.6, Math.min(VIEWER_MAX, from + delta));
+    if (to > 1) to = Math.max(1, to);
+    _viewer.scale = to;
+    if (to <= 1) { _viewer.tx = 0; _viewer.ty = 0; }
+    _applyViewerTransform();
+    if (to < 1) {
+      // Below the original size: hold it, then let go.
+      _viewer.springBack = setTimeout(function() {
+        _viewer.springBack = null;
+        _viewer.scale = 1; _viewer.tx = 0; _viewer.ty = 0;
+        _applyViewerTransform();
+      }, 1400);
+    }
+  }
+
+  /** Two fingers: pinch to zoom, drag to pan once in. */
+  function _bindViewerGestures() {
+    var overlay = document.getElementById('image-preview-overlay');
+    var img = document.getElementById('image-preview-img');
+    if (!overlay || !img || overlay._gesturesBound) return;
+    overlay._gesturesBound = true;
+
+    var startDist = 0, startScale = 1, startX = 0, startY = 0, panFrom = null, pinchMid = null;
+
+    var dist = function(t) {
+      var dx = t[0].clientX - t[1].clientX, dy = t[0].clientY - t[1].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    };
+
+    overlay.addEventListener('touchstart', function(e) {
+      if (e.touches.length === 2) {
+        startDist = dist(e.touches);
+        startScale = _viewer.scale;
+        pinchMid = { x: (e.touches[0].clientX + e.touches[1].clientX) / 2, y: (e.touches[0].clientY + e.touches[1].clientY) / 2 };
+        panFrom = null;
+        if (_viewer.springBack) { clearTimeout(_viewer.springBack); _viewer.springBack = null; }
+      } else if (e.touches.length === 1 && _viewer.scale > 1) {
+        panFrom = { x: e.touches[0].clientX - _viewer.tx, y: e.touches[0].clientY - _viewer.ty };
+      }
+    }, { passive: true });
+
+    overlay.addEventListener('touchmove', function(e) {
+      if (e.touches.length === 2 && startDist > 0) {
+        e.preventDefault();
+        var scale = Math.max(1, Math.min(VIEWER_MAX, startScale * (dist(e.touches) / startDist)));
+        _viewer.scale = scale;
+        if (scale === 1) { _viewer.tx = 0; _viewer.ty = 0; }
+        _applyViewerTransform();
+      } else if (e.touches.length === 1 && panFrom) {
+        e.preventDefault();
+        _viewer.tx = e.touches[0].clientX - panFrom.x;
+        _viewer.ty = e.touches[0].clientY - panFrom.y;
+        _applyViewerTransform();
+      }
+    }, { passive: false });
+
+    overlay.addEventListener('touchend', function() {
+      startDist = 0; panFrom = null; pinchMid = null;
+    }, { passive: true });
+  }
+
+  /** Keep the file. The label carries the state, because a spinner on a button
+   *  this small is noise and the words are clearer. */
+  function _downloadViewerImage() {
+    var cur = _viewer.list[_viewer.index];
+    if (!cur || !cur.url) return;
+    var btn = document.getElementById('btn-download-image');
+    var lbl = btn ? btn.querySelector('.viewer-dl-label') : null;
+    if (!btn || btn.disabled) return;
+    btn.disabled = true;
+    if (lbl) lbl.textContent = 'Downloading';
+    btn.style.minWidth = btn.offsetWidth + 'px';
+
+    var done = function(ok) {
+      if (lbl) lbl.textContent = ok ? 'Downloaded' : 'Failed';
+      if (ok) btn.classList.add('is-done');
+      setTimeout(function() {
+        btn.disabled = false;
+        btn.classList.remove('is-done');
+        if (lbl) lbl.textContent = '';
+        btn.style.minWidth = '44px';
+      }, 2000);
+    };
+
+    var name = cur.name || ('orbit-image-' + Date.now() + '.png');
+    fetch(cur.url)
+      .then(function(r) { return r.blob(); })
+      .then(function(blob) {
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function() { URL.revokeObjectURL(url); }, 4000);
+        done(true);
+      })
+      .catch(function() { done(false); });
+  }
+
+  function _bindImageViewer() {
+    var overlay = document.getElementById('image-preview-overlay');
+    if (!overlay || overlay._bound) return;
+    overlay._bound = true;
+    var on = function(id, fn) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener('click', function(e) { e.stopPropagation(); fn(); });
+    };
+    on('btn-close-image-preview', function() {
+      _resetViewerZoom();
+      overlay.classList.remove('open');
+    });
+    on('btn-prev-image', function() { _viewerStep(-1); });
+    on('btn-next-image', function() { _viewerStep(1); });
+    on('btn-zoom-in', function() { _viewerZoom(0.5); });
+    on('btn-zoom-out', function() { _viewerZoom(-0.5); });
+    on('btn-download-image', _downloadViewerImage);
+    // Tapping the backdrop closes; tapping the picture must not.
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay || e.target.id === 'image-preview-wrap') {
+        _resetViewerZoom();
+        overlay.classList.remove('open');
+      }
+    });
+    _bindViewerGestures();
+  }
+  window.openImageViewer = openImageViewer;
 
   /**
    * The avatar images the network map draws, keyed by URL.
@@ -12930,6 +13148,8 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('image-preview-overlay').addEventListener('click', function(e) {
     if (e.target === this) this.classList.remove('open');
   });
+  // The viewer's own controls: prev/next, zoom, download, and pinch.
+  _bindImageViewer();
   document.getElementById('btn-close-video-preview').addEventListener('click', function() {
     var player = document.getElementById('video-preview-player');
     player.pause();

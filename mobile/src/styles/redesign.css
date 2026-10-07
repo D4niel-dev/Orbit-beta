@@ -3825,3 +3825,136 @@
   animation: updateDlSpin 0.7s linear infinite;
 }
 @keyframes updateDlSpin { to { transform: rotate(360deg); } }
+
+/* ══ The image viewer ══════════════════════════════════════════════════════
+   It had a close button and nothing else — no way to reach the next picture,
+   no zoom, no way to keep the file. The controls sit in the corners so none of
+   them is under a thumb reaching for another, and the picture keeps the middle.
+
+   Everything is sized for a thumb: 44px, the smallest comfortable target. */
+#image-preview-overlay {
+  padding: 0 !important;
+  touch-action: none;
+  /* Opaque. At 0.92 the chat behind showed through as blocks, which reads as
+     a second image rather than as the one you are looking at. */
+  background: #000 !important;
+}
+#image-preview-overlay .preview-wrap {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  border-radius: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-image: none !important;
+  background: #000;
+}
+#image-preview-overlay img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  will-change: transform;
+  transform-origin: center center;
+  transition: transform 0.18s ease-out;
+}
+#image-preview-overlay.is-zoomed img {
+  /* While zoomed, a transition fights the finger. */
+  transition: none;
+}
+
+/* ── The corner buttons ─────────────────────────────────────────────────── */
+#image-preview-overlay .viewer-btn,
+#image-preview-overlay .close-btn {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(28, 28, 32, 0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #fff;
+  cursor: pointer;
+  z-index: 2;
+  padding: 0;
+}
+#image-preview-overlay .viewer-btn i,
+#image-preview-overlay .close-btn i { width: 20px; height: 20px; }
+#image-preview-overlay .close-btn {
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  left: 12px;
+  font-size: 24px;
+  line-height: 1;
+}
+#image-preview-overlay .viewer-download {
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  right: 12px;
+  width: auto;
+  min-width: 44px;
+  padding: 0 14px;
+  gap: 7px;
+  border-radius: 22px;
+}
+#image-preview-overlay .viewer-dl-label {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+#image-preview-overlay .viewer-download.is-done { background: rgba(48, 209, 88, 0.9); }
+#image-preview-overlay .viewer-download:disabled { opacity: 0.7; }
+
+/* ── Previous / next ────────────────────────────────────────────────────── */
+#image-preview-overlay .viewer-nav {
+  top: 50%;
+  transform: translateY(-50%);
+  width: 48px;
+  height: 48px;
+}
+#image-preview-overlay .viewer-prev { left: 8px; }
+#image-preview-overlay .viewer-next { right: 8px; }
+#image-preview-overlay .viewer-nav i { width: 26px; height: 26px; }
+/* At the ends the button stays put — the layout must not shift under a thumb
+   between taps — but it stops responding and stops looking live. */
+#image-preview-overlay .viewer-nav:disabled {
+  opacity: 0.28;
+  cursor: default;
+}
+/* A single image has nothing to step through, so the pair is not drawn at all
+   rather than drawn dead. */
+#image-preview-overlay.is-single .viewer-nav { display: none; }
+
+/* ── Zoom ───────────────────────────────────────────────────────────────── */
+#image-preview-overlay .viewer-zoom {
+  position: absolute;
+  right: 12px;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  gap: 10px;
+  z-index: 2;
+}
+#image-preview-overlay .viewer-zoom .viewer-btn { position: static; }
+#image-preview-overlay .viewer-zoom .viewer-btn:disabled { opacity: 0.28; cursor: default; }
+
+#image-preview-overlay .viewer-counter {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  padding: 5px 12px;
+  border-radius: 14px;
+  background: rgba(28, 28, 32, 0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  z-index: 2;
+}
+#image-preview-overlay.is-single .viewer-counter { display: none; }
