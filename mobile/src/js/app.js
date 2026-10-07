@@ -8361,7 +8361,7 @@ document.addEventListener('DOMContentLoaded', function() {
           ['Version', [
             'Version: Bumped to v0.8.5-beta.'
           ]]
-        ]),
+        ]) +
         vBlock('0.8.4-beta', '', [
           ['Fixes', [
             'A group of images of different sizes no longer goes ragged. The grid follows Discord now: one image keeps its own proportions, two are a pair of squares, three are one large square with two stacked beside it, four are a 2x2, and anything past four shows four tiles with a +N on the last.',

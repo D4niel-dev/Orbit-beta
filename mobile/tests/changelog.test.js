@@ -95,6 +95,30 @@ for (const [label, file, fn] of [
     wrong.map(v => v + ' -> ' + JSON.stringify(tags[v])));
 }
 
+// ⚠ The list is ONE long expression: `vBlock(a) + vBlock(b) + vBlock(c)`.
+// A COMMA where a `+` belongs turns it into a comma-expression, JavaScript keeps
+// only the LAST operand, and the panel renders ONE version while every other
+// check still passes — "it rendered a version heading" was true throughout.
+//
+// This shipped in v0.8.5 and Dan found it on a phone: the other 57 releases were
+// simply not there. Caught by counting, not by looking.
+console.log('\n== every block is joined with +, not a comma ==');
+for (const [label, file, fn] of [
+  ['mobile', 'mobile/src/js/app.js', 'vBlock'],
+  ['desktop', 'desktop/src/js/components/changelog.js', 'versionBlock']
+]) {
+  const src = fs.readFileSync(path.join(REPO, file), 'utf8');
+  const blocks = (src.match(new RegExp('^\\s*' + fn + "\\(\\s*'", 'gm')) || []).length;
+  // Each block is closed by `])` and, unless it is the last, joined by `+`.
+  const joins = (src.match(/^\s*\]\) \+$/gm) || []).length;
+  check(label + ': every block is joined with + (found ' + blocks + ' blocks, ' + joins + ' joins)',
+    blocks === joins, { blocks: blocks, joins: joins });
+
+  // And no block is terminated by a comma, which is the exact bug.
+  const commaEnded = (src.match(/^\s*\]\),\s*$/gm) || []).length;
+  check(label + ': no block ends with a comma', commaEnded === 0, commaEnded);
+}
+
 // A version that appears twice would mean an entry was renamed rather than added,
 // which is how a released version once vanished from the README history.
 console.log('\n== no version appears twice ==');

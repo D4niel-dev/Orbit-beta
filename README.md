@@ -30,8 +30,6 @@
 | ----------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Latest**        | v0.8.5-beta | The phone catches up with the desktop — Orbit is in the Android share sheet, a notification can be answered without opening the app, and there is a PIN lock, plus link previews, a real image viewer and a network map that shows faces instead of letters |
 |                   | v0.8.4-beta | A group of images of different sizes no longer goes ragged — the attachment grid now follows Discord’s layouts.  One tap on Send was also starting the mic — Android’s synthetic mouse events land on whatever is under your finger by then, which was the mic, so it recorded and sent a voice note on repeat |
-|                   | v0.8.3-beta | The conversation screen reworked on both platforms — a message is no longer one box holding everything — plus reactions that straddle the bubble, the duplicate × removed, and the Local Vault brought into line |
-|                   | v0.8.2-beta | Maintenance release — the mobile restyle's own regressions closed out: a contacts list that flipped between two renderers, tabs hidden unless you already had a folder, and custom profile banners that had stopped rendering |
 | **Stable**        | v0.8.0-beta | Your theme and custom colours follow you between your own devices, message search runs on SQLite FTS5, and the update progress bar actually moves                                                                             |
 | Legacy **Stable** | v0.1.1-beta | Legacy stable release                                                                                                                                                                                                         |
 
@@ -822,7 +820,7 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Image viewer** — previous/next, zoom by button or pinch, and download
 * **Undo send** — a real retraction that tells the other side too; off by default
 * **Fixed:** the What’s New button did nothing, and the viewer’s arrows were never styled at all
-* **Mobile test suite** — 189 checks
+* **Mobile test suite** — 196 checks
 
 </details>
 

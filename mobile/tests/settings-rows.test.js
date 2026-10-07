@@ -9,6 +9,8 @@
 // does not check that the block is shaped correctly, so it stayed green while the
 // button was dead. A source scan for the malformation was tried and reported
 // "well-formed" while the bug was live — so this opens the thing and looks.
+const fs = require('fs');
+const path = require('path');
 const H = require('./harness.js');
 
 const SEED = {
@@ -43,19 +45,45 @@ const SEED = {
   const opened = await page.evaluate(() => {
     const o = document.getElementById('changelog-overlay');
     if (!o) return { open: false };
+    const modal = o.querySelector('div');
     const body = o.textContent || '';
+    // The wrapper vBlock() emits per version. Counting THESE is the point.
+    const blocks = modal ? (modal.innerHTML.match(/border-bottom:1px solid/g) || []).length : 0;
     return {
       open: getComputedStyle(o).display !== 'none',
       hasClose: !!document.getElementById('changelog-close-mobile'),
       length: body.trim().length,
       mentionsLatest: /Latest/.test(body),
       // A version heading, so it rendered entries rather than an empty shell.
-      hasVersion: /v0\.8\.\d/.test(body)
+      hasVersion: /v0\.8\.\d/.test(body),
+      blocks: blocks
     };
   });
   console.log('  ' + JSON.stringify(opened));
   H.check('the overlay opened', opened.open, opened);
   H.check('it rendered a version heading', opened.hasVersion, opened);
+
+  // ⚠ "A version heading exists" was too weak and let a real bug through: the
+  // list is one long `A + B + C` expression, and a stray COMMA where a `+`
+  // belonged made JavaScript take only the LAST operand — so the panel rendered
+  // exactly ONE version (the newest, via the comma's other side) and silently
+  // dropped the other 57. Everything still "had a version heading". Count the
+  // blocks, not their existence.
+  // Count the entries in the SOURCE list — reading the same DOM twice would be a
+  // tautology that passes whatever the renderer does.
+  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'js', 'app.js'), 'utf8');
+  const expected = (src.match(/^\s*vBlock\('/gm) || []).length;
+  H.check('it rendered MORE than one version, not just the newest', opened.blocks > 1,
+    { rendered: opened.blocks, expected: expected });
+  H.check('it rendered every version in the list', opened.blocks === expected,
+    { rendered: opened.blocks, expected: expected });
+  // And the oldest must be reachable, because that is what "the other versions"
+  // means to someone scrolling.
+  const oldest = await page.evaluate(() => {
+    const o = document.getElementById('changelog-overlay');
+    return /v0\.0\.\d-beta/.test(o ? o.textContent : '');
+  });
+  H.check('the oldest release is in the list too', oldest, oldest);
   H.check('it has real content, not an empty shell', opened.length > 200, opened);
   H.check('it has a close button', opened.hasClose, opened);
 
