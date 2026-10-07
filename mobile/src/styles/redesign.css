@@ -3865,7 +3865,14 @@
   transition: none;
 }
 
-/* ── The corner buttons ─────────────────────────────────────────────────── */
+/* ── The corner buttons ───────────────────────────────────────────────────
+   Matched to the DESKTOP's image viewer, which Dan pointed at:
+     background: rgba(0,0,0,0.5)   border-radius: 50%   48px
+     prev/next at left/right: 20px, and not drawn at all until there are two.
+
+   No backdrop-filter. On a black viewer it has nothing to blur and renders as a
+   dark blob behind the button instead of a clean disc — which is what it looked
+   like next to the desktop's flat 50% black. */
 #image-preview-overlay .viewer-btn,
 #image-preview-overlay .close-btn {
   position: absolute;
@@ -3876,20 +3883,21 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(28, 28, 32, 0.72);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(0, 0, 0, 0.5);
   color: #fff;
   cursor: pointer;
-  z-index: 2;
+  z-index: 10;
   padding: 0;
+  transition: background 0.2s;
 }
+#image-preview-overlay .viewer-btn:active,
+#image-preview-overlay .close-btn:active { background: rgba(0, 0, 0, 0.7); }
 #image-preview-overlay .viewer-btn i,
-#image-preview-overlay .close-btn i { width: 20px; height: 20px; }
+#image-preview-overlay .close-btn i { width: 22px; height: 22px; }
 #image-preview-overlay .close-btn {
   top: calc(12px + env(safe-area-inset-top, 0px));
   left: 12px;
-  font-size: 24px;
+  font-size: 26px;
   line-height: 1;
 }
 #image-preview-overlay .viewer-download {
@@ -3910,23 +3918,23 @@
 #image-preview-overlay .viewer-download:disabled { opacity: 0.7; }
 
 /* ── Previous / next ────────────────────────────────────────────────────── */
-#image-preview-overlay .viewer-nav {
+#image-preview-overlay .viewer-nav.viewer-btn {
   top: 50%;
   transform: translateY(-50%);
   width: 48px;
   height: 48px;
 }
-#image-preview-overlay .viewer-prev { left: 8px; }
-#image-preview-overlay .viewer-next { right: 8px; }
-#image-preview-overlay .viewer-nav i { width: 26px; height: 26px; }
+#image-preview-overlay .viewer-prev { left: 20px; right: auto; }
+#image-preview-overlay .viewer-next { right: 20px; left: auto; }
+#image-preview-overlay .viewer-nav.viewer-btn i { width: 28px; height: 28px; }
 /* At the ends the button stays put — the layout must not shift under a thumb
    between taps — but it stops responding and stops looking live. */
 #image-preview-overlay .viewer-nav:disabled {
-  opacity: 0.28;
+  opacity: 0.3;
   cursor: default;
 }
 /* A single image has nothing to step through, so the pair is not drawn at all
-   rather than drawn dead. */
+   rather than drawn dead. The desktop does the same with display:none. */
 #image-preview-overlay.is-single .viewer-nav { display: none; }
 
 /* ── Zoom ───────────────────────────────────────────────────────────────── */
@@ -3936,10 +3944,10 @@
   bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   display: flex;
   gap: 10px;
-  z-index: 2;
+  z-index: 10;
 }
 #image-preview-overlay .viewer-zoom .viewer-btn { position: static; }
-#image-preview-overlay .viewer-zoom .viewer-btn:disabled { opacity: 0.28; cursor: default; }
+#image-preview-overlay .viewer-zoom .viewer-btn:disabled { opacity: 0.3; cursor: default; }
 
 #image-preview-overlay .viewer-counter {
   position: absolute;
