@@ -4670,6 +4670,133 @@ document.addEventListener('DOMContentLoaded', function() {
   // The chat id is passed in, not read from window: activeChatId is a module-local in this
   // app, so window.activeChatId is undefined and the bar silently rendered for no chat.
   // renderMessages already receives it; the poller reuses the last one seen.
+  /* ══ Sharing INTO Orbit ════════════════════════════════════════════════════
+     A photo or link shared from another app. Android parks the intent in
+     OrbitSharePlugin (see that file for why it is parked rather than delivered),
+     and this collects it and asks which chat it is for.
+
+     It asks rather than guessing. Sharing to a person you did not mean is worse
+     than one extra tap, and "send to the last chat" is exactly the kind of
+     helpfulness that sends a photo to the wrong person. */
+  function _shareBridge() {
+    var cap = window.Capacitor;
+    return (cap && cap.Plugins && cap.Plugins.OrbitShare) || null;
+  }
+
+  var _shareBusy = false;
+
+  /** Collect a parked share, if there is one. Safe to call often. */
+  function checkPendingShare() {
+    var bridge = _shareBridge();
+    if (!bridge || _shareBusy) return;
+    bridge.getPending().then(function (res) {
+      var share = res && res.share;
+      if (!share) return;
+      _shareBusy = true;
+      bridge.clear().catch(function () {}).then(function () {
+        _shareBusy = false;
+        _openSharePicker(share);
+      });
+    }).catch(function () { /* no plugin, or nothing parked */ });
+  }
+
+  /** Which chat? A list of the people and groups you can actually send to. */
+  function _openSharePicker(share) {
+    // Deduped by id: MStore.chats can carry the same chat twice — a
+    // friend-derived entry alongside a stored one — and the same person listed
+    // twice in a picker reads as two different people.
+    var seen = {};
+    var chats = (MStore.chats || []).filter(function (c) {
+      if (!c || c.id == null) return false;
+      var k = String(c.id);
+      if (seen[k]) return false;
+      seen[k] = true;
+      return true;
+    });
+    if (!chats.length) { showToast('No chats to share into yet', 'info'); return; }
+
+    var rows = chats.map(function (c) {
+      var initial = (c.name || '?').charAt(0).toUpperCase();
+      var avatar = c.avatar
+        ? '<img src="' + escapeHtml(c.avatar) + '" alt="">'
+        : escapeHtml(initial);
+      return '<div class="share-pick-row" data-chat="' + escapeHtml(String(c.id)) + '">' +
+        '<div class="share-pick-avatar">' + avatar + '</div>' +
+        '<div class="share-pick-name">' + escapeHtml(c.name || c.id) + '</div>' +
+      '</div>';
+    }).join('');
+
+    var what = share.files && share.files.length
+      ? (share.files.length + (share.files.length === 1 ? ' file' : ' files'))
+      : 'a link';
+
+    var html =
+      '<div class="share-pick">' +
+        '<div class="share-pick-head">' +
+          '<div class="share-pick-title">Share to\u2026</div>' +
+          '<div class="share-pick-sub">' + escapeHtml(what) + '</div>' +
+        '</div>' +
+        '<div class="share-pick-list">' + rows + '</div>' +
+      '</div>';
+
+    var sheet = window.OrbitSheet;
+    if (sheet && sheet.showCustom) sheet.showCustom(html);
+    else return;
+
+    var root = document.querySelector('.share-pick');
+    if (!root) return;
+    root.querySelectorAll('.share-pick-row').forEach(function (row) {
+      row.addEventListener('click', function () {
+        var chatId = row.getAttribute('data-chat');
+        if (sheet && sheet.hide) sheet.hide();
+        _deliverShare(chatId, share);
+      });
+    });
+  }
+
+  /** Put the shared thing into the composer as an attachment, ready to send. */
+  function _deliverShare(chatId, share) {
+    try {
+      if (activeChatId !== chatId) openChat(chatId);
+    } catch (e) { /* the send below will surface it */ }
+
+    setTimeout(function () {
+      try {
+        (share.files || []).forEach(function (f) {
+          // The attach path already accepts { type, name, url } with a data URL.
+          var kind = /^image\//.test(f.mimeType) ? 'image'
+            : /^video\//.test(f.mimeType) ? 'video'
+            : /^audio\//.test(f.mimeType) ? 'audio'
+            : 'file';
+          stagedFiles.push({
+            id: 'sf_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+            type: kind,
+            name: f.name,
+            size: f.size,
+            mimeType: f.mimeType,
+            url: f.dataUrl
+          });
+        });
+        if (typeof renderFilePreview === 'function') renderFilePreview();
+        if (typeof updateSendButton === 'function') updateSendButton();
+        // A shared link goes in the box rather than being sent blind: you may
+        // want to say something about it.
+        if (share.text) {
+          var input = document.getElementById('chat-input');
+          if (input) {
+            input.value = input.value ? (input.value + ' ' + share.text) : share.text;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+        }
+        showToast('Ready to send', 'info');
+      } catch (e) {
+        showToast('Could not attach the shared item', 'error');
+      }
+    }, 260);
+  }
+
+  window.checkPendingShare = checkPendingShare;
+
   /* ══ Undo send ═════════════════════════════════════════════════════════════
      A few seconds to take a message back after it has gone.
 
@@ -13502,6 +13629,15 @@ document.addEventListener('DOMContentLoaded', function() {
   });
   // The viewer's own controls: prev/next, zoom, download, and pinch.
   _bindImageViewer();
+
+  // ── Sharing in from another app ────────────────────────────────────────────
+  // Checked on load (a share that started the app) and on every return (a share
+  // that arrived while Orbit was already open — singleTask means it came through
+  // onNewIntent, and the app may have been sitting in the background).
+  setTimeout(checkPendingShare, 1200);
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') setTimeout(checkPendingShare, 400);
+  });
 
   // ── App lock: when to ask ──────────────────────────────────────────────────
   // Lock on launch always, so a cold start is never open. Lock when backgrounded

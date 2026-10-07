@@ -25,8 +25,13 @@ public class MainActivity extends BridgeActivity {
 
         // Register plugin BEFORE super.onCreate() — known requirement from v0.0.9.1-beta fix
         registerPlugin(OrbitP2PPlugin.class);
+        registerPlugin(com.orbit.app.plugins.OrbitSharePlugin.class);
 
         super.onCreate(savedInstanceState);
+
+        // A share that started the app. This runs before the WebView exists, so
+        // the intent is parked for the web layer to collect when it is ready.
+        com.orbit.app.plugins.OrbitSharePlugin.stashIntent(getApplicationContext(), getIntent());
 
         // API 33+ requires the runtime POST_NOTIFICATIONS permission before any
         // notification can be posted. The manifest entry alone is not enough, and
@@ -38,6 +43,22 @@ public class MainActivity extends BridgeActivity {
         enableImmersiveMode();
         createNotificationChannels();
         startForegroundService();
+    }
+
+    /**
+     * A share arriving while Orbit is already running.
+     *
+     * `singleTask` in the manifest means Android reuses this instance instead of
+     * starting a second copy, so the intent lands here rather than in onCreate —
+     * and if the web layer had already collected the previous one, this is a
+     * fresh share that needs its own stash.
+     */
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        // Keep getIntent() in step, or a later read returns the stale one.
+        setIntent(intent);
+        com.orbit.app.plugins.OrbitSharePlugin.stashIntent(getApplicationContext(), intent);
     }
 
     @Override
