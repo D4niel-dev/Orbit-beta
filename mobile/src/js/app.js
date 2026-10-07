@@ -1998,6 +1998,7 @@ document.addEventListener('DOMContentLoaded', function() {
   function renderMessages(chatId) {
     // The pinned bar belongs to the chat, so it repaints whenever the chat does.
     try { _renderPinnedBar(chatId); } catch (e) { /* the bar must never break the messages */ }
+    try { _renderLinkPreviewBar(chatId); } catch (e) { /* nor must this one */ }
     try { _wireJumpChip(); _updateJumpChip(); } catch (e) { /* nor the chip */ }
     // Never render without a chat.
     //
@@ -4668,6 +4669,101 @@ document.addEventListener('DOMContentLoaded', function() {
   // The chat id is passed in, not read from window: activeChatId is a module-local in this
   // app, so window.activeChatId is undefined and the bar silently rendered for no chat.
   // renderMessages already receives it; the poller reuses the last one seen.
+  /* ══ The link preview bar ══════════════════════════════════════════════════
+     Shows what the most recent link in this chat leads to, directly above the
+     pinned card — and, when nothing is pinned, in its place.
+
+     It is deliberately about the MOST RECENT link rather than every link: a
+     preview is there to answer "what is this?", and the thing you are looking at
+     is the thing just sent. An older link's card would sit there permanently,
+     describing something nobody is talking about any more. */
+  var _lpBarUrl = null;        // what is showing now
+  var _lpDismissed = {};       // url -> true, for this session
+
+  function _latestLinkUrl(chatId) {
+    var LP = window.OrbitLinkPreview;
+    if (!LP || !chatId) return null;
+    var msgs = MStore.getMessages(chatId) || [];
+    // Newest first. Only what a person actually typed is considered — a URL
+    // inside a quoted reply or a forwarded blob is not what the chat is about.
+    for (var i = msgs.length - 1; i >= 0; i--) {
+      var text = msgs[i] && msgs[i].text;
+      if (!text) continue;
+      var url = LP.firstUrl(text);
+      if (url) return url;
+    }
+    return null;
+  }
+
+  function _renderLinkPreviewBar(chatIdArg) {
+    var el = document.getElementById('link-preview-bar');
+    if (!el) return;
+    var chatId = chatIdArg || activeChatId;
+    var url = _latestLinkUrl(chatId);
+    if (!url || _lpDismissed[url]) {
+      if (el.style.display !== 'none') { el.style.display = 'none'; el.innerHTML = ''; _lpBarUrl = null; }
+      return;
+    }
+
+    var LP = window.OrbitLinkPreview;
+    var esc = window.escapeHtml || function (v) { return String(v == null ? '' : v); };
+
+    // Paint the domain immediately, then fill in the title and image when the
+    // page answers. A bar that appears only after a network round-trip would
+    // feel broken on a slow connection.
+    if (_lpBarUrl !== url) {
+      _lpBarUrl = url;
+      el.innerHTML =
+        '<div class="link-preview-bar" data-url="' + esc(url) + '">' +
+          '<div class="link-preview-bar-thumb"><i data-lucide="link-2"></i></div>' +
+          '<div class="link-preview-bar-body">' +
+            '<span class="link-preview-bar-site">' + esc(LP.hostOf(url)) + '</span>' +
+            '<span class="link-preview-bar-title">' + esc(LP.hostOf(url)) + '</span>' +
+          '</div>' +
+          '<button class="link-preview-bar-close" aria-label="Dismiss"><i data-lucide="x"></i></button>' +
+        '</div>';
+      el.style.display = '';
+      if (window.lucide) { try { window.lucide.createIcons({ root: el }); } catch (e) {} }
+
+      var box = el.querySelector('.link-preview-bar');
+      if (box) {
+        box.addEventListener('click', function (e) {
+          if (e.target.closest('.link-preview-bar-close')) return;
+          window.open(url, '_blank');
+        });
+        var close = box.querySelector('.link-preview-bar-close');
+        if (close) {
+          close.addEventListener('click', function (e) {
+            e.stopPropagation();
+            // Dismissed for the session, not for good: the next link in the chat
+            // is a different question and deserves its own answer.
+            _lpDismissed[url] = true;
+            el.style.display = 'none';
+            el.innerHTML = '';
+            _lpBarUrl = null;
+          });
+        }
+      }
+    }
+
+    LP.preview(url).then(function (p) {
+      // The chat may have moved on while the page was loading.
+      if (!p || _lpBarUrl !== url) return;
+      var box = el.querySelector('.link-preview-bar');
+      if (!box) return;
+      var site = box.querySelector('.link-preview-bar-site');
+      var title = box.querySelector('.link-preview-bar-title');
+      var thumb = box.querySelector('.link-preview-bar-thumb');
+      if (site) site.textContent = p.site || LP.hostOf(url);
+      if (title) title.textContent = p.title || LP.hostOf(url);
+      if (thumb && p.image) {
+        thumb.innerHTML = '<img src="' + esc(p.image) + '" alt="" ' +
+          'onerror="this.parentNode.innerHTML=\'<i data-lucide=&quot;link-2&quot;></i>\'">';
+        if (window.lucide) { try { window.lucide.createIcons({ root: thumb }); } catch (e) {} }
+      }
+    });
+  }
+
   var _pinnedBarChatId = null;
   function _renderPinnedBar(chatIdArg) {
     var el = document.getElementById('pinned-messages-bar');

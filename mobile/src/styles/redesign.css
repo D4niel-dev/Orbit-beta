@@ -3966,3 +3966,82 @@
   z-index: 2;
 }
 #image-preview-overlay.is-single .viewer-counter { display: none; }
+
+/* ══ The link preview bar ══════════════════════════════════════════════════
+   What the most recent link in the chat leads to. It sits directly above the
+   pinned card; with nothing pinned it is the only thing in that slot.
+
+   The old card was a row with a link icon and the domain, which tells you
+   nothing you could not read off the URL. This carries the page's own title and
+   image, so it answers the question the URL raises instead of restating it. */
+#link-preview-bar {
+  margin: 0 12px 4px;
+}
+.link-preview-bar {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 10px;
+  border-radius: 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+.link-preview-bar:active { background: var(--bg-hover, var(--border-subtle)); }
+.link-preview-bar-thumb {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border-radius: 10px;
+  object-fit: cover;
+  background: var(--bg-hover, var(--border-subtle));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  overflow: hidden;
+}
+.link-preview-bar-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.link-preview-bar-thumb i { width: 18px; height: 18px; }
+.link-preview-bar-body { min-width: 0; flex: 1; }
+.link-preview-bar-site {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.link-preview-bar-title {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.3;
+  margin-top: 1px;
+  /* Two lines at most: a preview is a glance, not a paragraph. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.link-preview-bar-close {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+.link-preview-bar-close i { width: 16px; height: 16px; }
