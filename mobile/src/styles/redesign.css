@@ -4163,3 +4163,40 @@
   gap: 8px;
 }
 .toast-mobile .toast-text { flex: 1; min-width: 0; }
+
+/* ══ Undo send ═════════════════════════════════════════════════════════════
+   On the message, not in a toast. A toast per send stacks up when you send
+   several quickly, and covers the chat you are trying to read — for a feature
+   most people will leave off.
+
+   It sits at the message's trailing edge, where the eye already is after
+   sending, and is only ever on the newest message. */
+.msg-undo-chip {
+  position: absolute;
+  right: 10px;
+  bottom: -11px;
+  z-index: 3;
+  padding: 4px 12px;
+  border-radius: 11px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  color: var(--accent-primary);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1;
+  min-height: 22px;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+  animation: undoChipIn 0.16s ease-out;
+}
+.msg-undo-chip:active { background: var(--bg-hover, var(--border-subtle)); }
+@keyframes undoChipIn {
+  from { opacity: 0; transform: translateY(-3px) scale(0.94); }
+  to { opacity: 1; transform: none; }
+}
+/* The message row has to be the positioning context, or the chip lands
+   somewhere unrelated on the page. */
+.message-row { position: relative; }
+/* The chip hangs below the bubble. Absolutely positioned, it does NOT make the
+   row taller — so without this it sits on top of the next message. */
+.message-row.has-undo-chip { padding-bottom: 14px; }

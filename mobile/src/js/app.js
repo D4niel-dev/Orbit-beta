@@ -4682,17 +4682,57 @@ document.addEventListener('DOMContentLoaded', function() {
      The window is short on purpose. It is for "wrong chat" and "sent too soon",
      not for changing your mind about what you said. */
   var UNDO_WINDOW_MS = 6000;
+  var _undoChipTimer = null;
 
+  /**
+   * Offer the undo ON THE MESSAGE ITSELF, not in a toast.
+   *
+   * Dan's call, and he was right: a toast per send is a downgrade. Send five
+   * messages quickly and you get five stacked toasts covering the chat — for a
+   * feature most people will never use. The affordance belongs where the message
+   * is, so it costs nothing when you are not looking at it.
+   *
+   * Off unless asked for. The hold menu already deletes, so this is a
+   * convenience for people who send fast and regret fast, not a default.
+   */
   function _offerUndoSend(chatId, msg) {
     if (!msg || !msg.id) return;
+    if (!MStore.settings.undoSend) return;
     // The echo bot is not a peer and has nothing to retract.
     if (chatId === 'echo' || chatId === 'local-echo') return;
 
-    showToast('Message sent', 'success', {
-      label: 'Undo',
-      duration: UNDO_WINDOW_MS,
-      onTap: function () { _undoSend(chatId, msg.id); }
-    });
+    if (_undoChipTimer) { clearTimeout(_undoChipTimer); _undoChipTimer = null; }
+
+    var draw = function () {
+      // Remove any chip from a previous send first: only the newest message is
+      // undoable, so only the newest message may offer it.
+      Array.prototype.forEach.call(document.querySelectorAll('.msg-undo-chip'), function (c) { c.remove(); });
+      Array.prototype.forEach.call(document.querySelectorAll('.has-undo-chip'), function (r) { r.classList.remove('has-undo-chip'); });
+      var row = document.querySelector('[data-msg-id="' + msg.id + '"]');
+      if (!row) return;
+      var chip = document.createElement('button');
+      chip.className = 'msg-undo-chip';
+      chip.textContent = 'Undo';
+      chip.addEventListener('click', function (e) {
+        e.stopPropagation();
+        _clearUndoChip();
+        _undoSend(chatId, msg.id);
+      });
+      row.classList.add('has-undo-chip');
+      row.appendChild(chip);
+    };
+    setTimeout(draw, 60);
+
+    _undoChipTimer = setTimeout(function () {
+      _clearUndoChip();
+      _undoChipTimer = null;
+    }, UNDO_WINDOW_MS);
+  }
+
+  /** Take the chip (and the room it reserved) away. */
+  function _clearUndoChip() {
+    Array.prototype.forEach.call(document.querySelectorAll('.msg-undo-chip'), function (c) { c.remove(); });
+    Array.prototype.forEach.call(document.querySelectorAll('.has-undo-chip'), function (r) { r.classList.remove('has-undo-chip'); });
   }
 
   /** Delete locally and tell the peer. Both, or it is not an undo. */
@@ -6826,6 +6866,11 @@ document.addEventListener('DOMContentLoaded', function() {
           '<button class="settings-toggle ' + (s.enterToSend ? 'on' : '') + '" id="set-enter-send"></button>') +
         card('arrow-left', 'Swipe to Reply', 'Swipe left on a message to reply',
           '<button class="settings-toggle ' + (s.swipeToReply !== false ? 'on' : '') + '" id="set-swipe-reply"></button>') +
+        // Off by default. Deleting from the hold menu already covers this, so
+        // undo is for people who send fast and regret fast — and it should not
+        // put anything on screen for everyone else.
+        card('undo-2', 'Undo Send', 'A short window to take a message back after sending',
+          '<button class="settings-toggle ' + (s.undoSend ? 'on' : '') + '" id="set-undo-send"></button>') +
         card('users', 'Show Avatars', 'Show profile pictures in chats',
           '<button class="settings-toggle ' + (s.showChatAvatars !== false ? 'on' : '') + '" id="set-chat-avatars"></button>') +
         card('move-right', 'Message Animation', 'How new messages appear',
@@ -7228,6 +7273,15 @@ document.addEventListener('DOMContentLoaded', function() {
       case 'chat':
         bindToggle('set-enter-send', function(on) { s.enterToSend = on; MStore.save(); }, s.enterToSend);
         bindToggle('set-swipe-reply', function(on) { s.swipeToReply = on; MStore.save(); }, s.swipeToReply !== false);
+        bindToggle('set-undo-send', function(on) {
+          s.undoSend = on; MStore.save();
+          // Turning it off should take the chip away now, not at the end of a
+          // window the user has just said they do not want.
+          if (!on) {
+            if (_undoChipTimer) { clearTimeout(_undoChipTimer); _undoChipTimer = null; }
+            _clearUndoChip();
+          }
+        }, !!s.undoSend);
         bindToggle('set-chat-avatars', function(on) { s.showChatAvatars = on; MStore.save(); renderChatList(); }, s.showChatAvatars !== false);
         bindSelect('set-msg-anim', function(v) { s.messageAnim = v; MStore.save(); if (activeChatId) renderMessages(activeChatId); });
         bindToggle('set-compact-spacing', function(on) { s.experimentalCompactSpacing = on; MStore.save(); if (on) document.documentElement.setAttribute('data-compact-spacing', 'true'); else document.documentElement.removeAttribute('data-compact-spacing'); if (activeChatId) renderMessages(activeChatId); }, s.experimentalCompactSpacing);
