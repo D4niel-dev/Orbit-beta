@@ -112,9 +112,9 @@ window.UpdateNotice = {
     // pct < 0 hides the bar. Called from the streaming loop with the same numbers the
     // label uses, so the three cannot disagree.
     var setProgress = function (pct, received, total) {
-      // The download modal is the one on screen now, so it takes the bar. The changelog's
-      // copy stays wired as a fallback: this function must not depend on which modal is up.
-      var dl = document.getElementById('orbit-download-modal');
+      // The download sheet is the one on screen now, so it takes the bar. The changelog's
+      // copy stays wired as a fallback: this function must not depend on which is up.
+      var dl = document.getElementById('orbit-dl-sheet') || document.getElementById('orbit-download-modal');
       var wrap = dl ? dl.querySelector('#orbit-dl-fill') : overlay.querySelector('#update-modal-progress');
       var fill = dl ? dl.querySelector('#orbit-dl-fill') : overlay.querySelector('#update-modal-progress-fill');
       var note = dl ? dl.querySelector('#orbit-dl-note') : overlay.querySelector('#update-modal-progress-note');
@@ -124,15 +124,19 @@ window.UpdateNotice = {
         if (pct == null || pct < 0) { wrap.style.display = 'none'; return; }
         wrap.style.display = 'block';
       }
-      fill.style.width = Math.max(0, Math.min(100, pct < 0 ? 0 : pct)) + '%';
+      var shown = Math.max(0, Math.min(100, pct < 0 ? 0 : pct));
+      fill.style.width = shown + '%';
+      // The number is the thing you actually read while waiting, so it is its own
+      // element rather than being buried in the note.
+      var pctEl = dl ? dl.querySelector('#orbit-dl-pct') : null;
+      if (pctEl && !dl.classList.contains('is-installing')) pctEl.textContent = shown + '%';
       if (note) {
-        // The desktop's wording, with the time appended.
-        var line = (total && received != null)
-          ? (_bytes(received) + ' of ' + _bytes(total) + ' \u00b7 ' + pct + '%')
-          : ('Downloading\u2026 ' + pct + '%');
-        var eta = _eta(received, total);
-        note.textContent = eta ? (line + ' \u00b7 ' + eta) : line;
+        note.textContent = (total && received != null)
+          ? (_bytes(received) + ' of ' + _bytes(total))
+          : ('Downloading\u2026 ' + shown + '%');
       }
+      var etaEl = dl ? dl.querySelector('#orbit-dl-eta') : null;
+      if (etaEl) etaEl.textContent = _eta(received, total) || '';
     };
     setLabel('Starting download\u2026');
 
@@ -183,6 +187,7 @@ window.UpdateNotice = {
         // refusing the download — the updater has to work under both transports.
         if (!resp.body || typeof resp.body.getReader !== 'function') {
           setLabel('Downloading\u2026');
+          self._setDownloadState('downloading', 'Downloading the update');
           return resp.arrayBuffer().then(function (ab) {
             var bytes = new Uint8Array(ab);
             if (!bytes.length) throw new Error('The download came back empty');
@@ -278,7 +283,11 @@ window.UpdateNotice = {
         // and the buffered path returns bytes.length, so this is right for both. Reading
         // `received` directly here was the crash.
         setProgress(100, bytes, total || bytes);
+        // The bytes are all in. Say so before the installer takes over — the old
+        // title stayed on "Downloading" right through the install.
+        self._setDownloadState('done', _bytes(bytes) + ' downloaded');
         setLabel('Opening installer\u2026');
+        self._setDownloadState('installing', 'Follow the prompt to finish');
         return P2P.installApk({ path: APK_PATH }).then(function () {
           return bytes;
         });
@@ -307,32 +316,81 @@ window.UpdateNotice = {
      Dan's read on it is right: you have already read the release notes by the time you tap
      Download, so watching a progress bar inside a list of notes you are not reading is the
      wrong place for it. Tens of megabytes takes a while, and it deserves the whole screen. */
+  /* A sheet rather than a centred modal. A download is a WAIT, not a question,
+     so it should not black out the app and sit in the middle of the screen
+     pretending to be a decision. The styling lives in redesign.css now — the old
+     version was all inline, which is why it could not use the app's tokens and
+     why its title stayed "Downloading Orbit…" through the install. */
   _showDownloadModal() {
-    var old = document.getElementById('orbit-download-modal');
-    if (old) old.remove();
-    var box = document.createElement('div');
-    box.id = 'orbit-download-modal';
-    box.style.cssText = 'position:fixed;inset:0;z-index:100000;display:flex;align-items:center;' +
-      'justify-content:center;padding:16px;box-sizing:border-box;background:rgba(0,0,0,0.6);';
-    box.innerHTML =
-      '<div style="background:var(--bg-surface);border-radius:16px;padding:20px;max-width:340px;width:100%;' +
-        'border:1px solid var(--border-subtle);box-shadow:0 20px 60px rgba(0,0,0,0.4);">' +
-        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">' +
-          '<i data-lucide="download-cloud" style="width:18px;height:18px;color:var(--accent-primary);"></i>' +
-          '<div style="font-weight:700;font-size:15px;color:var(--text-primary);">Downloading Orbit\u2026</div>' +
+    this._hideDownloadModal();
+    var html =
+      '<div class="update-dl-sheet" id="orbit-dl-sheet">' +
+        '<div class="update-dl-head">' +
+          '<div class="update-dl-icon" id="orbit-dl-icon"><i data-lucide="download-cloud"></i></div>' +
+          '<div class="update-dl-titles">' +
+            '<span class="update-dl-title" id="orbit-dl-title">Downloading Orbit</span>' +
+            '<span class="update-dl-sub" id="orbit-dl-sub">Getting ready\u2026</span>' +
+          '</div>' +
+          '<span class="update-dl-pct" id="orbit-dl-pct">0%</span>' +
         '</div>' +
-        '<div style="height:6px;border-radius:3px;background:var(--border-subtle);overflow:hidden;margin-bottom:10px;">' +
-          '<div id="orbit-dl-fill" style="height:100%;width:0%;background:var(--accent-primary);' +
-            'transition:width .15s linear;"></div>' +
+        '<div class="update-dl-track"><div class="update-dl-fill" id="orbit-dl-fill"></div></div>' +
+        '<div class="update-dl-meta">' +
+          '<span id="orbit-dl-note">Starting\u2026</span>' +
+          '<span id="orbit-dl-eta"></span>' +
         '</div>' +
-        '<div id="orbit-dl-note" style="font-size:12px;color:var(--text-secondary);">Starting\u2026</div>' +
       '</div>';
-    document.body.appendChild(box);
-    if (window.lucide) { try { window.lucide.createIcons({ root: box }); } catch (e) { /* non-fatal */ } }
-    return box;
+
+    var sheet = (typeof window !== 'undefined' && window.OrbitSheet)
+      ? window.OrbitSheet
+      : (typeof OrbitSheet !== 'undefined' ? OrbitSheet : null);
+    if (sheet && typeof sheet.showCustom === 'function') {
+      sheet.showCustom(html);
+    } else {
+      // No sheet available — fall back to the same markup as a plain overlay so
+      // the download still shows something.
+      var box = document.createElement('div');
+      box.id = 'orbit-download-modal';
+      box.style.cssText = 'position:fixed;inset:0;z-index:100000;display:flex;align-items:flex-end;' +
+        'justify-content:center;background:rgba(0,0,0,0.45);';
+      box.innerHTML = '<div style="background:var(--bg-surface);border-radius:20px 20px 0 0;width:100%;">' + html + '</div>';
+      document.body.appendChild(box);
+    }
+    var root = document.getElementById('orbit-dl-sheet');
+    if (window.lucide && root) { try { window.lucide.createIcons({ root: root }); } catch (e) { /* non-fatal */ } }
+    return root;
+  },
+
+  /**
+   * Move the download through its states. The old modal had one — "Downloading
+   * Orbit…" — and kept it while the installer ran, which is the part Dan noticed.
+   */
+  _setDownloadState(state, sub) {
+    var sheet = document.getElementById('orbit-dl-sheet');
+    if (!sheet) return;
+    sheet.classList.toggle('is-done', state === 'done');
+    sheet.classList.toggle('is-installing', state === 'installing');
+    var title = sheet.querySelector('#orbit-dl-title');
+    var icon = sheet.querySelector('#orbit-dl-icon');
+    var subEl = sheet.querySelector('#orbit-dl-sub');
+    var TITLES = { downloading: 'Downloading Orbit', done: 'Downloaded', installing: 'Installing' };
+    var ICONS = { downloading: 'download-cloud', done: 'check-circle-2', installing: 'package-open' };
+    if (title) title.textContent = TITLES[state] || TITLES.downloading;
+    if (subEl && sub !== undefined) subEl.textContent = sub;
+    if (icon) {
+      icon.innerHTML = '<i data-lucide="' + (ICONS[state] || ICONS.downloading) + '"></i>';
+      if (window.lucide) { try { window.lucide.createIcons({ root: icon }); } catch (e) { /* non-fatal */ } }
+    }
+    if (state === 'installing') {
+      var pct = sheet.querySelector('#orbit-dl-pct');
+      if (pct) pct.innerHTML = '<span class="update-dl-spinner"></span>';
+    }
   },
 
   _hideDownloadModal() {
+    var sheet = (typeof window !== 'undefined' && window.OrbitSheet)
+      ? window.OrbitSheet
+      : (typeof OrbitSheet !== 'undefined' ? OrbitSheet : null);
+    if (sheet && typeof sheet.hide === 'function') { try { sheet.hide(); } catch (e) { /* non-fatal */ } }
     var box = document.getElementById('orbit-download-modal');
     if (box) box.remove();
   },

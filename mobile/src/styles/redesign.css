@@ -3729,3 +3729,99 @@
   opacity: 0.75;
   margin-top: 3px !important;
 }
+
+/* ══ The update download ═══════════════════════════════════════════════════
+   This was a centred modal built entirely from inline styles, so it could not
+   use the app's tokens and could not change as the download moved on: the title
+   said "Downloading Orbit…" while it was installing, and the only feedback was a
+   6px bar and a line of small grey text.
+
+   It is a sheet now, which is calmer in two ways — it does not black out the app
+   behind it, and it does not sit in the middle of the screen pretending to be a
+   decision. A download is a wait, not a question. The state is carried by the
+   icon and the title, the percentage is the thing you actually read, and the
+   bytes and time left are support beneath it. */
+.update-dl-sheet {
+  padding: 20px 18px calc(20px + env(safe-area-inset-bottom, 0px));
+}
+.update-dl-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.update-dl-icon {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft, rgba(10, 132, 255, 0.14));
+  color: var(--accent-primary);
+}
+.update-dl-icon i { width: 20px; height: 20px; }
+.update-dl-titles { min-width: 0; flex: 1; }
+.update-dl-title {
+  display: block;
+  font-size: 16px;
+  font-weight: 650;
+  color: var(--text-primary);
+  line-height: 1.25;
+}
+.update-dl-sub {
+  display: block;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+.update-dl-pct {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.update-dl-track {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--bg-hover, var(--border-subtle));
+  overflow: hidden;
+}
+.update-dl-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 4px;
+  background: var(--accent-primary);
+  transition: width 0.2s linear;
+}
+.update-dl-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Downloaded, waiting on the installer. The bar is full and the accent stops
+   being about progress — there is nothing left to wait for. */
+.update-dl-sheet.is-done .update-dl-icon {
+  background: rgba(48, 209, 88, 0.16);
+  color: #30D158;
+}
+.update-dl-sheet.is-done .update-dl-fill { background: #30D158; }
+
+/* Installing: the number is gone, so the title and a spinner carry it. */
+.update-dl-sheet.is-installing .update-dl-pct { display: none; }
+.update-dl-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--border-subtle);
+  border-top-color: var(--accent-primary);
+  animation: updateDlSpin 0.7s linear infinite;
+}
+@keyframes updateDlSpin { to { transform: rotate(360deg); } }
