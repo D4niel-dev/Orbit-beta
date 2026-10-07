@@ -5991,6 +5991,58 @@ document.addEventListener('DOMContentLoaded', function() {
     return out;
   }
 
+  /**
+   * The avatar images the network map draws, keyed by URL.
+   *
+   * The map is a CANVAS, so an avatar is an image the draw loop has to have
+   * already decoded — it cannot be a lazy <img> the browser fills in later. Each
+   * entry is `{ img, ok }`; `ok` flips when it loads, and because the map redraws
+   * on a one-second interval the picture appears on the next tick with no
+   * scheduling of its own. A URL that fails is remembered as failed so it is not
+   * retried every second forever, and the node falls back to the initial.
+   */
+  var _netMapAvatarCache = {};
+  function _netMapAvatar(url) {
+    if (!url) return null;
+    var hit = _netMapAvatarCache[url];
+    if (hit) return hit.ok ? hit.img : null;
+    var entry = { img: new Image(), ok: false };
+    _netMapAvatarCache[url] = entry;
+    entry.img.onload = function () { entry.ok = entry.img.naturalWidth > 0; };
+    entry.img.onerror = function () { entry.ok = false; };
+    entry.img.src = url;
+    // A data: URL or a cached image can be complete before onload is attached.
+    if (entry.img.complete && entry.img.naturalWidth > 0) entry.ok = true;
+    return entry.ok ? entry.img : null;
+  }
+
+  /**
+   * Draw a node as a circular avatar, or its initial when there is no picture.
+   * The caller has already set up the arc; this fills it.
+   */
+  function _netMapNodeFace(ctx, img, initial, x, y, r, fallbackFill) {
+    if (img) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.clip();
+      // Cover the circle, so a non-square avatar is not squashed.
+      var scale = Math.max((r * 2) / img.naturalWidth, (r * 2) / img.naturalHeight);
+      var w = img.naturalWidth * scale, h = img.naturalHeight * scale;
+      ctx.drawImage(img, x - w / 2, y - h / 2, w, h);
+      ctx.restore();
+    } else {
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = fallbackFill;
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(initial, x, y + 1);
+    }
+  }
+
   function drawNetworkMap() {
     var canvas = document.getElementById('network-map-canvas-mobile');
     if (!canvas) return;
@@ -6063,19 +6115,16 @@ document.addEventListener('DOMContentLoaded', function() {
     ctx.arc(cx, cy, 16, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(10,132,255,0.25)';
     ctx.fill();
+    var myInitial = MStore.user && MStore.user.name ? MStore.user.name.charAt(0).toUpperCase() : 'Y';
+    // Your own picture, falling back to your initial. The ring is drawn after,
+    // so it sits on top of the avatar rather than under it.
+    ctx.font = '600 13px "DM Sans", sans-serif';
+    _netMapNodeFace(ctx, _netMapAvatar(MStore.user && MStore.user.avatar), myInitial, cx, cy, 13, '#0A84FF');
     ctx.beginPath();
     ctx.arc(cx, cy, 13, 0, Math.PI * 2);
-    ctx.fillStyle = '#0A84FF';
-    ctx.fill();
     ctx.strokeStyle = 'rgba(255,255,255,0.85)';
     ctx.lineWidth = 2;
     ctx.stroke();
-    ctx.fillStyle = '#fff';
-    ctx.font = '600 13px "DM Sans", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    var myInitial = MStore.user && MStore.user.name ? MStore.user.name.charAt(0).toUpperCase() : 'Y';
-    ctx.fillText(myInitial, cx, cy + 1);
     ctx.font = '10px "DM Sans", sans-serif';
     ctx.fillStyle = 'rgba(255,255,255,0.6)';
     ctx.fillText('You', cx, cy + 28);
@@ -6087,18 +6136,16 @@ document.addEventListener('DOMContentLoaded', function() {
       var connected = _netMapIsConnected(peer.id, peer.friend);
       var name = peer.friend ? (peer.friend.name || peer.id) : peer.id;
       var letter = name.charAt(0).toUpperCase();
+      // A friend with a picture shows it; otherwise the coloured initial, which
+      // is what every node used to be.
+      var peerFill = peer.friend ? _netMapColor(peer.id) : '#8E8E93';
+      ctx.font = '600 12px "DM Sans", sans-serif';
+      _netMapNodeFace(ctx, _netMapAvatar(peer.friend && peer.friend.avatar), letter, px, py, 13, peerFill);
       ctx.beginPath();
       ctx.arc(px, py, 13, 0, Math.PI * 2);
-      ctx.fillStyle = peer.friend ? _netMapColor(peer.id) : '#8E8E93';
-      ctx.fill();
       ctx.strokeStyle = connected ? 'rgba(10,132,255,0.9)' : 'rgba(255,255,255,0.3)';
       ctx.lineWidth = 2;
       ctx.stroke();
-      ctx.fillStyle = '#fff';
-      ctx.font = '600 12px "DM Sans", sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(letter, px, py + 1);
       var label = name.length > 12 ? name.slice(0, 12) + '…' : name;
       ctx.fillStyle = 'rgba(255,255,255,0.75)';
       ctx.font = '10px "DM Sans", sans-serif';
