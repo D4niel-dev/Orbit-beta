@@ -4669,6 +4669,78 @@ document.addEventListener('DOMContentLoaded', function() {
   // The chat id is passed in, not read from window: activeChatId is a module-local in this
   // app, so window.activeChatId is undefined and the bar silently rendered for no chat.
   // renderMessages already receives it; the poller reuses the last one seen.
+  /* ══ App lock ══════════════════════════════════════════════════════════════
+     Ported from the desktop's PinLockScreen. The desktop verifies through
+     Electron's main process; there is none here, so shared/ui/app-lock.js hashes
+     with PBKDF2-SHA256 and keeps the result on settings. */
+  function _appLockOn() {
+    return !!(window.OrbitAppLock && window.OrbitAppLock.isEnabled(MStore.settings));
+  }
+  function _appLockDesc() {
+    if (!_appLockOn()) return 'Require a PIN to open Orbit';
+    return 'On \u00b7 ' + (MStore.settings.appLock && MStore.settings.appLock.lockOnBackground !== false
+      ? 'locks when backgrounded'
+      : 'locks on launch only');
+  }
+
+  /**
+   * Ask for a PIN, twice, and store the hash. Two prompts because a mistyped PIN
+   * you cannot read back is a lock you cannot open.
+   */
+  function _promptSetPin(after) {
+    var AL = window.OrbitAppLock;
+    if (!AL) return;
+    var first = null;
+    var ask = function (title, cb) {
+      var overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:210000;background:rgba(0,0,0,0.6);' +
+        'display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;';
+      overlay.innerHTML =
+        '<div style="background:var(--bg-surface);border-radius:16px;padding:20px;width:100%;max-width:320px;border:1px solid var(--border-subtle);">' +
+          '<div style="font-size:15px;font-weight:650;color:var(--text-primary);margin-bottom:4px;">' + title + '</div>' +
+          '<div style="font-size:12.5px;color:var(--text-secondary);margin-bottom:14px;">4 to 8 digits</div>' +
+          '<input type="tel" inputmode="numeric" maxlength="8" class="vault-pass-input" style="width:100%;letter-spacing:0.4em;text-align:center;font-size:20px;" autocomplete="off">' +
+          '<div style="display:flex;gap:8px;margin-top:16px;">' +
+            '<button class="settings-btn-secondary" style="flex:1;">Cancel</button>' +
+            '<button class="settings-btn-primary" style="flex:1;">Continue</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(overlay);
+      var input = overlay.querySelector('input');
+      var btns = overlay.querySelectorAll('button');
+      setTimeout(function () { try { input.focus(); } catch (e) {} }, 60);
+      btns[0].addEventListener('click', function () { overlay.remove(); });
+      btns[1].addEventListener('click', function () {
+        var v = (input.value || '').trim();
+        if (!/^\d{4,8}$/.test(v)) { input.value = ''; input.placeholder = '4 to 8 digits'; return; }
+        overlay.remove();
+        cb(v);
+      });
+    };
+    ask('Choose a PIN', function (v1) {
+      first = v1;
+      ask('Enter it again', function (v2) {
+        if (v1 !== v2) { _toast('The PINs did not match', 'error'); return; }
+        AL.setPin(v1).then(function (cfg) {
+          MStore.settings.appLock = cfg;
+          MStore.save();
+          _toast('App Lock is on', 'success');
+          if (after) after();
+        }).catch(function () { _toast('Could not set the PIN', 'error'); });
+      });
+    });
+  }
+
+  /** Lock the app now, unless it is already showing. */
+  function lockApp() {
+    if (!_appLockOn()) return;
+    var AL = window.OrbitAppLock;
+    if (!AL || AL.isShowing()) return;
+    // Anything already open sits under the lock; the overlay's z-index is above
+    // every sheet and modal, so nothing needs closing to be safe.
+    AL.show(MStore.settings, function () {});
+  }
+
   /* ══ The link preview bar ══════════════════════════════════════════════════
      Shows what the most recent link in this chat leads to, directly above the
      pinned card — and, when nothing is pinned, in its place.
@@ -6738,7 +6810,20 @@ document.addEventListener('DOMContentLoaded', function() {
         card('at-sign', '@Mentions Only', 'Only notify when mentioned in groups',
           '<button class="settings-toggle ' + (s.notifyGroupMentions ? 'on' : '') + '" id="notify-mentions"></button>');
       case 'privacy':
-        return card('shield', 'Privacy Mode', 'Attachments not saved to database',
+        // App Lock sits first: it is the only thing here that stops someone
+        // reading your messages with the phone in their hand. Everything below
+        // it protects the data on disk.
+        return card('lock-keyhole', 'App Lock', _appLockDesc(),
+          '<button class="settings-toggle ' + (_appLockOn() ? 'on' : '') + '" id="set-app-lock"></button>') +
+        (_appLockOn() ? (
+          card('timer', 'Lock When Backgrounded', 'Ask for the PIN when you come back to Orbit',
+            '<button class="settings-toggle ' + (s.appLock && s.appLock.lockOnBackground !== false ? 'on' : '') + '" id="set-app-lock-bg"></button>') +
+          '<div id="row-change-pin" data-search="Change PIN app lock" style="cursor:pointer;">' +
+            card('key-round', 'Change PIN', 'Set a new PIN',
+              '<div class="settings-item-action"><i data-lucide="chevron-right" style="width:18px;height:18px;color:var(--text-muted);"></i></div>') +
+          '</div>'
+        ) : '') +
+        card('shield', 'Privacy Mode', 'Attachments not saved to database',
           '<button class="settings-toggle ' + (s.privacyMode ? 'on' : '') + '" id="set-privacy"></button>') +
         card('lock', 'End-to-End Encryption', 'AES-256-GCM for direct messages',
           '<button class="settings-toggle ' + (s.e2eeEnabled ? 'on' : '') + '" id="set-e2ee"></button>') +
@@ -7121,6 +7206,35 @@ document.addEventListener('DOMContentLoaded', function() {
         bindToggle('notify-mentions', function(on) { s.notifyGroupMentions = on; MStore.save(); }, s.notifyGroupMentions);
         break;
       case 'privacy':
+        bindToggle('set-app-lock', function(on) {
+          if (on) {
+            // Turning it on needs a PIN before it means anything. If the prompt
+            // is cancelled the toggle has to fall back, or the switch would read
+            // "on" with nothing behind it.
+            _promptSetPin(function () { showSettingsSection('privacy'); });
+            setTimeout(function () {
+              if (!_appLockOn()) {
+                var t = document.getElementById('set-app-lock');
+                if (t) t.classList.remove('on');
+              }
+            }, 400);
+          } else {
+            s.appLock = null;
+            MStore.save();
+            if (window.OrbitAppLock) window.OrbitAppLock.clearAttempts();
+            _toast('App Lock is off', 'info');
+            showSettingsSection('privacy');
+          }
+        }, _appLockOn());
+        bindToggle('set-app-lock-bg', function(on) {
+          s.appLock = s.appLock || {};
+          s.appLock.lockOnBackground = on;
+          MStore.save();
+        }, !(s.appLock && s.appLock.lockOnBackground === false));
+        (function () {
+          var row = document.getElementById('row-change-pin');
+          if (row) row.addEventListener('click', function () { _promptSetPin(function () { showSettingsSection('privacy'); }); });
+        })();
         bindToggle('set-privacy', function(on) { s.privacyMode = on; MStore.save(); var badge = document.getElementById('btn-privacy-badge'); if (badge) badge.style.display = on ? 'flex' : 'none'; }, s.privacyMode);
         bindToggle('set-e2ee', function(on) {
           s.e2eeEnabled = on; MStore.save();
@@ -13246,6 +13360,24 @@ document.addEventListener('DOMContentLoaded', function() {
   });
   // The viewer's own controls: prev/next, zoom, download, and pinch.
   _bindImageViewer();
+
+  // ── App lock: when to ask ──────────────────────────────────────────────────
+  // Lock on launch always, so a cold start is never open. Lock when backgrounded
+  // only if asked, because switching apps to copy something and coming back is
+  // not the same as handing the phone to someone.
+  (function () {
+    var AL = window.OrbitAppLock;
+    if (!AL) return;
+    if (AL.isEnabled(MStore.settings)) setTimeout(function () { lockApp(); }, 300);
+
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState !== 'visible') return;
+      if (!_appLockOn()) return;
+      var cfg = MStore.settings.appLock || {};
+      if (cfg.lockOnBackground === false) return;
+      lockApp();
+    });
+  })();
   document.getElementById('btn-close-video-preview').addEventListener('click', function() {
     var player = document.getElementById('video-preview-player');
     player.pause();

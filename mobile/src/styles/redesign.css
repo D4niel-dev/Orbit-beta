@@ -4045,3 +4045,94 @@
   padding: 0;
 }
 .link-preview-bar-close i { width: 16px; height: 16px; }
+
+/* ══ App lock ══════════════════════════════════════════════════════════════
+   A keypad rather than a text field: a PIN on a phone is six digits and a
+   thumb, and a keyboard covering half the screen is the wrong instrument.
+
+   The dots fill as you type so you can see how much is entered without any of
+   it being readable over your shoulder. */
+#app-lock-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 200000;
+  background: var(--bg-base, #0B0B0F);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+}
+.app-lock-inner {
+  width: 100%;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.app-lock-logo {
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft, rgba(10, 132, 255, 0.14));
+  color: var(--accent-primary);
+  margin-bottom: 18px;
+}
+.app-lock-logo i { width: 26px; height: 26px; }
+.app-lock-title {
+  font-size: 18px;
+  font-weight: 650;
+  color: var(--text-primary);
+}
+.app-lock-msg {
+  /* Reserved height, so the keypad does not jump when a message appears. */
+  min-height: 20px;
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+.app-lock-dots {
+  display: flex;
+  gap: 14px;
+  margin: 22px 0 30px;
+}
+.app-lock-dot {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-strong, rgba(255, 255, 255, 0.28));
+  transition: background 0.12s, border-color 0.12s, transform 0.12s;
+}
+.app-lock-dot.filled {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  transform: scale(1.12);
+}
+.app-lock-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  width: 100%;
+}
+.app-lock-key {
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 24px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  font-variant-numeric: tabular-nums;
+}
+.app-lock-key:active { background: var(--bg-hover, var(--border-subtle)); }
+.app-lock-key.blank { border: none; background: transparent; pointer-events: none; }
+.app-lock-key i { width: 22px; height: 22px; }
