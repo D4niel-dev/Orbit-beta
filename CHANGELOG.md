@@ -1,5 +1,30 @@
 # Orbit Changelog
 
+## v0.8.5-beta
+
+> **Note:** The phone catches up with the desktop. Orbit now appears in the Android share sheet, a notification can be answered without opening the app, and the app can be locked behind a PIN — plus link previews, a real image viewer, and a network map that shows faces instead of letters.
+
+### Features
+
+- **Orbit Is in the Android Share Sheet** — Sharing a photo used to mean opening Orbit, finding the chat, and hunting for the picture. Android's own flow — share, then pick a person — is the one your thumb already knows, and Orbit is in it now. Share a photo, a video, a PDF or a link and it asks **which chat** rather than guessing: sharing to the wrong person is worse than one extra tap, and "send to the last chat" is exactly the helpfulness that sends a photo to the wrong person. The text lands in the composer rather than being sent blind, so you can still say something about it.
+- **Reply to a Message From the Notification** — A direct message notification carries a Reply box, so you can answer without opening Orbit. This is the interaction people actually use a messenger for: you get a message, you answer it, you put the phone down. ⚠ **Replies typed while Orbit is closed are queued, not sent on the spot** — sending them immediately would mean running the whole P2P stack from a broadcast receiver, so they go when the app is next opened and the notification **stays until then** rather than pretending. DMs only: a group notification cannot say who you are replying to, and a box that cannot say where it is going is worse than no box.
+- **App Lock** — A PIN in front of the app, ported from the desktop's lock screen. Six digits on a keypad rather than a text field, because a PIN on a phone is digits and a thumb and a keyboard covering half the screen is the wrong instrument. The PIN is stored as a **PBKDF2-SHA256 hash** with a per-install salt, not as the PIN. Five wrong attempts starts a 30-second cooldown, and that cooldown lives outside settings — **a cooldown you can clear by restarting the app is not a cooldown**. Locks on launch always; locks on return only if you ask, because switching apps to copy something is not the same as handing the phone to someone.
+- **Link Previews** — The old card showed the domain, which tells you nothing you could not read off the URL. It fetches the page and reads its Open Graph tags now, so it shows what the link actually leads to: the page's own title and image, above the composer. It follows the **most recent** link rather than every link, because a preview answers "what is this?" and the thing you are looking at is the thing just sent.
+- **The Image Viewer Grew Up** — It had a close button and nothing else. It now steps through the images of the message you tapped in, with previous/next, zoom (buttons and pinch), and a download button. At the ends the buttons **go dead but stay put** — moving them would shift the layout under a thumb that is mid-tap. Zooming out past the picture's own size springs back after a moment, so the gesture always answers and you cannot get stuck looking at a thumbnail.
+- **The Network Map Shows Faces, Not Letters** — Nodes were a coloured circle with an initial. A friend with a picture shows it now. The map is a canvas, so the avatar has to be decoded before the draw loop paints, and a URL that fails is remembered as failed rather than retried every second forever.
+- **Undo Send** — A short window to take a message back after sending. It is a **real retraction, not a local hide**: it sends the same `MESSAGE_DELETE` the desktop already broadcasts, so the message disappears for the other side too. A "delete" that only deletes it for you is worse than none, because you believe it is gone. **Off by default**, in Settings → Chat — the hold menu already deletes, so this is for people who send fast and regret fast. When it is on, the affordance sits on the message itself rather than in a toast: send five messages quickly and five toasts would cover the chat you are trying to read.
+
+### Improved
+
+- **The Update Download Is a Sheet, With States That Change** — It was a centred modal built entirely from inline styles, so it could not use the app's tokens, and it had exactly **one** state: the title said "Downloading Orbit…" while the installer was running. It is a bottom sheet now — a download is a wait, not a question, so it should not black out the app and sit mid-screen pretending to be a decision. Downloading, Downloaded and Installing each get their own icon, title and colour, and the percentage is the thing you actually read while waiting.
+- **The Local Vault's Stray Line** — "A single JSON file in the app data folder (vault/)" was a separate block **below** the status card, which is exactly why it read as out of place: it repeated what the card already said, it had no icon where the card has one, and it was left-aligned while the card is a row. It is the card's third line now.
+
+### Fixed
+
+- **The What's New Button Did Nothing** — A docs edit had broken both hardcoded blocks behind it. Found by tapping it rather than by reading it.
+- **The Image Viewer's Prev/Next Were Never Styled At All** — The markup was `class="viewer-nav viewer-prev"` and every rule was written against `.viewer-btn`, so **not one matched** and the buttons fell back to the browser default: square, transparent, sitting in the flow side by side. CSS fails silently on a selector that matches nothing. They match the desktop's now — 50% black discs at both edges, no blur.
+- **The Viewer's Backdrop Was 92% Opaque** — The chat behind showed through as blocks, so a picture in the feed read as a dark rectangle beside the one you were viewing. Opaque now.
+
 ## v0.8.4-beta
 
 > **Note:** One tap on Send was sending a voice message. Android fires a set of synthetic mouse events after every touch, aimed at whatever is under your finger *by then* — and sending swapped the composer to the mic before they arrived.

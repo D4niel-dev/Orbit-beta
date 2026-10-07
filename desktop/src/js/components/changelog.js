@@ -14,7 +14,30 @@ window.Changelog = {
         '<button id="changelog-close" style="background:transparent;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;"><i data-lucide="x" style="width:20px;height:20px;"></i></button>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:20px;">' +
-        versionBlock('0.8.4-beta', 'Latest', [
+        versionBlock('0.8.5-beta', 'Latest', [
+          ['New', [
+            'Orbit is in the Android share sheet. Share a photo, a video, a PDF or a link from any app and it asks which chat \u2014 sharing to the wrong person is worse than one extra tap, and "send to the last chat" is exactly the helpfulness that sends a photo to the wrong person.',
+            'A notification can be answered without opening the app. Direct messages get a Reply box. Replies typed while Orbit is closed are queued and sent when you next open it, and the notification stays until then rather than pretending.',
+            'App Lock: a PIN in front of the app, six digits on a keypad. Stored as a PBKDF2 hash, five wrong tries starts a 30-second cooldown that survives a restart. Locks on launch always, and on return only if you ask.',
+            'Link previews. The old card showed the domain, which tells you nothing you could not read off the URL \u2014 it fetches the page and shows its own title and image now, for the most recent link in the chat.',
+            'The image viewer grew up: previous/next through the images of the message you tapped, zoom by button or pinch, and a download button. At the ends the arrows go dead but stay put, so nothing shifts under your thumb mid-tap.',
+            'The network map shows faces instead of letters.',
+            'Undo send \u2014 a real retraction, not a local hide: it tells the other side too, so the message is gone for them as well. Off by default, in Settings \u203a Chat.',
+          ]],
+          ['Improved', [
+            'The update download is a bottom sheet with states that change. It used to be a centred modal that said "Downloading Orbit\u2026" even while it was installing.',
+            'The Local Vault\u2019s file note is the third line of its card now, instead of a stray block floating below it.',
+          ]],
+          ['Fixes', [
+            'The What\u2019s New button did nothing \u2014 a docs edit had broken both hardcoded blocks behind it.',
+            'The image viewer\u2019s prev/next arrows were never styled at all: the rules were written against a class the buttons did not have, so not one matched and they fell back to the browser default. They match the desktop\u2019s now.',
+            'The viewer\u2019s backdrop was 92% opaque, so the chat behind showed through as blocks and read as a second image.',
+          ]],
+          ['Version', [
+            'Version: Bumped to v0.8.5-beta.'
+          ]]
+        ]),
+        versionBlock('0.8.4-beta', '', [
           ['Fixes', [
             'A group of images of different sizes no longer goes ragged. The grid follows Discord now: one image keeps its own proportions, two are a pair of squares, three are one large square with two stacked beside it, four are a 2x2, and anything past four shows four tiles with a +N on the last.',
             'One tap on Send was also starting the mic. Sending swaps the composer from the send button to the mic, and Android fires a synthetic mouse event right after a touch aimed at whatever is under your finger by then \u2014 so it landed on the mic, started a recording, and the release sent it. One tap, a voice message nobody asked for, on repeat.',

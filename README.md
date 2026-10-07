@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v084-beta">v0.8.4-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v085-beta">v0.8.5-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,8 @@
 
 | Channel           | Version     | Status                                                                                                                                                                                                                        |
 | ----------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Latest**        | v0.8.4-beta | A group of images of different sizes no longer goes ragged — the attachment grid now follows Discord’s layouts.  One tap on Send was also starting the mic — Android’s synthetic mouse events land on whatever is under your finger by then, which was the mic, so it recorded and sent a voice note on repeat |
+| **Latest**        | v0.8.5-beta | The phone catches up with the desktop — Orbit is in the Android share sheet, a notification can be answered without opening the app, and there is a PIN lock, plus link previews, a real image viewer and a network map that shows faces instead of letters |
+|                   | v0.8.4-beta | A group of images of different sizes no longer goes ragged — the attachment grid now follows Discord’s layouts.  One tap on Send was also starting the mic — Android’s synthetic mouse events land on whatever is under your finger by then, which was the mic, so it recorded and sent a voice note on repeat |
 |                   | v0.8.3-beta | The conversation screen reworked on both platforms — a message is no longer one box holding everything — plus reactions that straddle the bubble, the duplicate × removed, and the Local Vault brought into line |
 |                   | v0.8.2-beta | Maintenance release — the mobile restyle's own regressions closed out: a contacts list that flipped between two renderers, tabs hidden unless you already had a folder, and custom profile banners that had stopped rendering |
 | **Stable**        | v0.8.0-beta | Your theme and custom colours follow you between your own devices, message search runs on SQLite FTS5, and the update progress bar actually moves                                                                             |
@@ -85,12 +86,13 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage app for desktop and Android** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
-## Highlights (v0.8.4-beta)
+## Highlights (v0.8.5-beta)
 
-* **One tap on Send was sending a voice message.** Sending swaps the composer from the send button to the mic — and Android fires a set of synthetic mouse events after every touch, aimed at whatever is under your finger *by then*. So the mic got the tap, started recording, and the release sent it. It repeated, because each voice note reset the composer and put the mic back under your thumb.
-* **The send button looked wrong for the same reason** — the swap had already run, so the composer was showing the mic. That is the "isn’t lighting up" half of the report.
-* **A group of images of different sizes no longer goes ragged.** The attachment grid follows **Discord’s** layouts now: one image keeps its own proportions, two are a pair of squares, three are one large square with two stacked beside it, four are a 2×2, and anything past four shows four tiles with a **+N** on the last. Tiles touch, and only the outer corners are rounded — which is what makes a group read as one object rather than several adjacent cards.
-* **Images in a desktop grid were rendering at half height.** The grid’s own rules were written without the prefix of the rule they were overriding, so they lost a specificity tie — both were `!important`. A wide image rendered at its natural height inside a square cell, leaving half the tile empty.
+* **The phone catches up with the desktop.** Orbit is in the **Android share sheet**, a notification can be **answered without opening the app**, and the app can be locked behind a **PIN** — plus link previews, a real image viewer, and a network map that shows faces instead of letters.
+* **Share into Orbit asks which chat** rather than guessing. Sharing to the wrong person is worse than one extra tap, and "send to the last chat" is exactly the helpfulness that sends a photo to the wrong person. A shared link lands in the composer, not sent blind, so you can still say something about it.
+* **Replies typed while Orbit is closed are queued, not sent on the spot** — sending them immediately would mean running the whole P2P stack from a broadcast receiver. They go when the app is next opened, and the notification **stays until then** rather than pretending.
+* **Undo send is a real retraction, not a local hide.** It sends the same `MESSAGE_DELETE` the desktop already broadcasts, so the message is gone for the other side too — a "delete" that only deletes it for you is worse than none, because you believe it is gone. Off by default.
+* **The image viewer’s prev/next arrows were never styled at all.** The rules were written against a class the buttons did not have, so **not one matched** and they fell back to the browser default: square, transparent, side by side. CSS fails silently on a selector that matches nothing. They match the desktop’s now.
 
 ## Version History
 
@@ -801,12 +803,26 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 
 </details>
 
-<details open>
+<details>
 <summary>v0.8.4-beta</summary>
 
 * **One tap on Send no longer fires the mic** — Android’s synthetic mouse events land on whatever is under the finger by then, which after the swap was the mic
 * **Both controls were double-firing on a real tap** — the mic started on touchstart and on the synthetic mousedown, send on touchend and on mouseup
 * **Mobile test suite** — 183 checks
+
+</details>
+
+<details open>
+<summary>v0.8.5-beta</summary>
+
+* **Orbit is in the Android share sheet** — share a photo, video, PDF or link from any app, then pick a chat
+* **Reply from the notification** — direct messages get a Reply box; replies typed with Orbit closed are queued and sent when it next opens, and the notification stays until then
+* **App Lock** — a six-digit PIN, PBKDF2-hashed, five wrong tries and a 30-second cooldown that survives a restart
+* **Link previews** — the page’s own title and image for the most recent link in the chat
+* **Image viewer** — previous/next, zoom by button or pinch, and download
+* **Undo send** — a real retraction that tells the other side too; off by default
+* **Fixed:** the What’s New button did nothing, and the viewer’s arrows were never styled at all
+* **Mobile test suite** — 189 checks
 
 </details>
 
