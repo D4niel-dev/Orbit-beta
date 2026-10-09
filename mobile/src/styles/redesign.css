@@ -4272,7 +4272,7 @@
 }
 .bk-icon {
   width: 36px; height: 36px; flex: 0 0 36px;
-  border-radius: var(--r-sm);
+  border-radius: var(--radius-sm);
   background: var(--bg-raised);
   color: var(--text-secondary);
   display: grid; place-items: center;
@@ -4290,7 +4290,7 @@
 .bk-restore {
   flex: 0 0 auto;
   padding: 6px 13px; min-height: 30px;
-  border-radius: var(--r-sm);
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border-subtle);
   background: var(--bg-raised);
   color: var(--accent-primary);
@@ -4306,7 +4306,7 @@
 .bk-empty-sub code {
   font-family: var(--font-mono); font-size: .9em;
   background: var(--bg-raised); border: 1px solid var(--border-subtle);
-  border-radius: var(--r-xs); padding: 0 4px;
+  border-radius: var(--radius-sm); padding: 0 4px;
 }
 
 .bk-body { padding: 2px 18px 4px; }
@@ -4315,7 +4315,7 @@
   padding: 10px 12px;
   background: var(--bg-raised);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--r-md);
+  border-radius: var(--radius-md);
 }
 .bk-note {
   margin-top: 12px;
@@ -4333,7 +4333,9 @@
 .bk-actions button {
   width: 100%;
   min-height: 42px;
-  border-radius: var(--r-sm);
+  /* 8px, not the 12px the settings buttons use: a full-width button at 12px
+     reads as a pill, and this is a decision, not a decoration. */
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border-subtle);
   background: var(--bg-raised);
   color: var(--text-secondary);
