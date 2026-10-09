@@ -5048,7 +5048,28 @@ document.addEventListener('DOMContentLoaded', function() {
     var el = document.getElementById('link-preview-bar');
     if (!el) return;
     var chatId = chatIdArg || activeChatId;
-    var url = _latestLinkUrl(chatId);
+
+    // ⚠ The composer comes FIRST, and that ordering is the whole fix.
+    //
+    // This used to read only the chat's messages, so the bar could not appear
+    // until the link had already been sent — the one moment a preview is
+    // useless, because the decision is made. A preview answers "what does this
+    // lead to?", and that question belongs to the moment the link is in the box.
+    //
+    // The input wins over the last sent message on purpose: if you are typing a
+    // new link, that is the one you are asking about. Falling back to the chat
+    // keeps the old behaviour for a chat that has a link and an empty composer.
+    var typed = '';
+    try {
+      var inputEl = document.getElementById('chat-input');
+      // Only when the composer belongs to the chat being painted.
+      if (inputEl && inputEl.value && chatId === activeChatId) {
+        var found = inputEl.value.match(/https?:\/\/[^\s]+/);
+        if (found) typed = found[0];
+      }
+    } catch (e) { /* the bar must never break the composer */ }
+
+    var url = typed || _latestLinkUrl(chatId);
     if (!url || _lpDismissed[url]) {
       if (el.style.display !== 'none') { el.style.display = 'none'; el.innerHTML = ''; _lpBarUrl = null; }
       return;
@@ -13302,6 +13323,16 @@ document.addEventListener('DOMContentLoaded', function() {
     this.style.height = 'auto';
     this.style.height = Math.min(this.scrollHeight, 150) + 'px';
     updateSendButton();
+
+    // ⚠ The preview bar was only ever painted from renderMessages(), so it
+    // appeared AFTER the message went — which is the one moment a preview is
+    // useless, because you have already decided to send the link. A preview
+    // answers "what does this lead to?" and that question belongs to the moment
+    // the link is in the box, not the moment it has left.
+    //
+    // Guarded, like the other two bars: the composer must never break because a
+    // preview could not be fetched.
+    try { _renderLinkPreviewBar(activeChatId); } catch (e) { /* never fatal */ }
 
     // @mention detection
     if (!_mentionDropdown) _mentionDropdown = document.getElementById('mention-dropdown');
