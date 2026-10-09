@@ -244,10 +244,29 @@ window.ImageViewer = {
   },
 
   open(imgObj) {
+    this.openGallery([imgObj], 0);
+  },
+
+  /**
+   * Open a list of images at one of them.
+   *
+   * ⚠ ONE FUNNEL. `openFromMessage` had this four lines inline and the staged
+   * attachments need the same thing, so it lives here now and both call it. The
+   * viewer was always built for a gallery — it carries `galleryImages`, a
+   * `currentIndex` and prev/next buttons — it was just never handed more than
+   * one image by anything except a message.
+   *
+   * @param {Array} images  [{ url, name }]
+   * @param {number} index  which one to land on
+   */
+  openGallery(images, index) {
     if (!this.container) return;
-    this.galleryImages = [imgObj];
-    this.currentIndex = 0;
-    this.showImage(imgObj);
+    var list = (images || []).filter(function (i) { return i && i.url; });
+    if (!list.length) return;
+    var at = Math.max(0, Math.min(index || 0, list.length - 1));
+    this.galleryImages = list;
+    this.currentIndex = at;
+    this.showImage(list[at]);
     this.container.style.display = 'flex';
   },
 
@@ -272,12 +291,10 @@ window.ImageViewer = {
     }
     
     if (msg && msg.attachments) {
-      this.galleryImages = msg.attachments.filter(function(a) { return a.type === 'image'; });
-      if (this.galleryImages.length > 0) {
-        var index = this.galleryImages.findIndex(function(a) { return String(a.id) === String(attId); });
-        this.currentIndex = index !== -1 ? index : 0;
-        this.showImage(this.galleryImages[this.currentIndex]);
-        this.container.style.display = 'flex';
+      var gallery = msg.attachments.filter(function(a) { return a.type === 'image'; });
+      if (gallery.length > 0) {
+        var index = gallery.findIndex(function(a) { return String(a.id) === String(attId); });
+        this.openGallery(gallery, index !== -1 ? index : 0);
         return;
       }
       // gallery empty — fall through to fallback

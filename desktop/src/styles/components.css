@@ -2747,3 +2747,109 @@ html[data-theme="light"] #chat-welcome-host::before { opacity: 0.3; }
   font-weight: 600;
   color: #fff;
 }
+
+/* ══ Staged attachments ════════════════════════════════════════════════════
+   The strip above the composer, brought in line with the mobile's.
+
+   ⚠ Three things were missing here and the first two are the same shape as the
+   mobile's were. A staged image was a bare <img>, so a photo that took a moment
+   to decode was an empty 64px box with nothing happening in it. And the remove
+   BUTTON was never rendered — the document-level handler for `.btn-remove-file`
+   has existed the whole time, so the handler matched nothing and a staged file
+   could not be taken back. */
+.fp-tile {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  cursor: pointer;
+  /* A staged attachment is the one thing on screen that is not part of the app
+     yet — a thing you are about to send, resting on the conversation. */
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .45);
+  transition: transform .16s cubic-bezier(.16, 1, .3, 1), box-shadow .16s;
+}
+.fp-tile:active {
+  transform: translateY(1px) scale(.98);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .4);
+}
+.fp-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: opacity .18s;
+}
+/* Held back until it is ready, so what you see while it loads is the spinner
+   rather than a half-painted frame. */
+.fp-tile.is-loading img { opacity: 0; }
+
+.fp-doc {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+}
+.fp-name {
+  font-size: 9px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+  text-align: center;
+  margin-top: 4px;
+  color: var(--text-secondary);
+}
+
+.fp-spin {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.fp-tile.is-loading .fp-spin { display: flex; }
+.fp-spin::after {
+  content: "";
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, .18);
+  border-top-color: var(--accent-primary);
+  animation: fpSpin .7s linear infinite;
+}
+@keyframes fpSpin { to { transform: rotate(360deg); } }
+
+/* Inside the tile on purpose: the tile is `overflow: hidden`, so anything
+   hanging off the corner would be clipped and unpressable. */
+.fp-tile .btn-remove-file {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  z-index: 2;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, .62);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background .16s, transform .16s;
+}
+.fp-tile .btn-remove-file:hover { background: var(--accent-danger); }
+.fp-tile .btn-remove-file:active { transform: scale(.9); }
+.fp-tile .btn-remove-file svg { width: 11px; height: 11px; stroke-width: 2.8; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fp-tile, .fp-tile img, .fp-tile .btn-remove-file { transition: none; }
+  .fp-spin::after { animation-duration: 2s; }
+}

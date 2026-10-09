@@ -2034,7 +2034,13 @@ window.ChatPanel = {
               img.onload = function() {
                 entry.width = img.naturalWidth;
                 entry.height = img.naturalHeight;
-                URL.revokeObjectURL(img.src);
+                // ⚠ DO NOT REVOKE HERE. `img.src` is `entry.url` — the SAME blob
+                // URL the tile renders and the message is sent with. Revoking it
+                // once the dimensions were read killed the URL for every later
+                // use, so the image worked in the strip (already decoded and
+                // cached) and failed everywhere after it. The revoke belongs
+                // where the entry actually leaves: the remove handler, and after
+                // a successful send.
               };
               img.src = entry.url;
             })(entry);
@@ -2429,25 +2435,75 @@ window.ChatPanel = {
     let html = '';
     this.stagedFiles.forEach((staged, index) => {
       var fileType = this.getFileIcon(staged.name, staged.mimeType || '');
+      var safeName = window.Sanitize.escapeHtml(staged.name);
+      // ⚠ THERE WAS A BLANK LINE WHERE THIS BUTTON GOES. The document-level
+      // handler for `.btn-remove-file` has existed the whole time — it splices
+      // the file out and revokes the blob URL — but the renderer never emitted
+      // the button, so the handler matched nothing and a staged file could not
+      // be taken back. Same dead-handler shape as the mobile's.
+      var removeBtn = '<button class="btn-remove-file" data-index="' + index + '"' +
+        ' title="Remove" aria-label="Remove ' + safeName + '">' +
+        '<i data-lucide="x"></i></button>';
+
       if (fileType === 'image') {
-        html += '<div style="position:relative; width: 64px; height: 64px; border-radius: 8px; overflow:hidden; flex-shrink:0; border: 1px solid var(--border-subtle);">' +
-          '<img src="' + staged.url + '" style="width:100%; height:100%; object-fit:cover;">' +
-          
+        // The tile is a container now, so it can hold a spinner and the remove
+        // button. It used to be a bare <img>, which meant a photo that took a
+        // moment to decode was an empty box with nothing happening in it.
+        html += '<div class="fp-tile is-loading" data-index="' + index + '" title="Click to view">' +
+          '<div class="fp-spin" aria-hidden="true"></div>' +
+          '<img src="' + staged.url + '" alt="">' +
+          removeBtn +
         '</div>';
       } else {
         var icon = this.getFileIconLucide(fileType);
         var colorMap = { pdf: '#ef4444', word: '#3b82f6', sheet: '#22c55e', archive: '#f59e0b', code: '#8b5cf6', audio: '#ec4899', video: '#a855f7', text: '#6b7280' };
         var iconColor = colorMap[fileType] || 'var(--text-muted)';
-        html += '<div style="position:relative; width: 64px; height: 64px; border-radius: 8px; background:var(--bg-surface); display:flex; flex-direction:column; align-items:center; justify-content:center; flex-shrink:0; padding:4px; border: 1px solid var(--border-subtle);">' +
-          '<i data-lucide="' + icon + '" style="width:22px;height:22px;color:' + iconColor + '; margin-bottom:4px;"></i>' +
-          '<span style="font-size:9px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; text-align:center;">' + window.Sanitize.escapeHtml(staged.name) + '</span>' +
-          
+        html += '<div class="fp-tile" data-index="' + index + '">' +
+          '<div class="fp-doc">' +
+            '<i data-lucide="' + icon + '" style="width:22px;height:22px;color:' + iconColor + ';"></i>' +
+            '<span class="fp-name">' + safeName + '</span>' +
+          '</div>' +
+          removeBtn +
         '</div>';
       }
     });
     
     area.innerHTML = html;
     lucide.createIcons({ root: area });
+
+    // The spinner comes off when the image is actually ready. `complete` is
+    // checked as well as the event: a cached image has already loaded by the
+    // time this runs, so `load` never fires and the spinner would sit there
+    // turning over a photo that is plainly visible underneath it.
+    area.querySelectorAll('.fp-tile.is-loading img').forEach(function (img) {
+      var tile = img.parentNode;
+      var done = function () { if (tile) tile.classList.remove('is-loading'); };
+      if (img.complete && img.naturalWidth > 0) { done(); return; }
+      img.addEventListener('load', done, { once: true });
+      img.addEventListener('error', done, { once: true });
+    });
+
+    // Clicking a tile LOOKS at it. It must not send and must not open the chat.
+    // ⚠ The remove button is deliberately NOT wired here — the document-level
+    // handler already does that, and a second listener would splice twice.
+    const self = this;
+    area.querySelectorAll('.fp-tile[data-index]').forEach(function (tile) {
+      tile.addEventListener('click', function (e) {
+        if (e.target.closest('.btn-remove-file')) return;
+        var idx = parseInt(tile.getAttribute('data-index'), 10);
+        var target = self.stagedFiles[idx];
+        if (!target || self.getFileIcon(target.name, target.mimeType || '') !== 'image') return;
+        // Only the images, so prev/next in the viewer steps between pictures
+        // rather than landing on a PDF.
+        var gallery = self.stagedFiles.filter(function (s) {
+          return s.url && self.getFileIcon(s.name, s.mimeType || '') === 'image';
+        });
+        var at = gallery.indexOf(target);
+        if (window.ImageViewer && window.ImageViewer.openGallery) {
+          window.ImageViewer.openGallery(gallery, at < 0 ? 0 : at);
+        }
+      });
+    });
   },
 
   showReactionPicker(x, y, msgId) {
@@ -3410,6 +3466,10 @@ window.ChatPanel = {
     this._pendingSlashSpoiler = false;
     window.store.addMessage(activeChatId, localMsg);
 
+    // The blobs have been read and sent, so this is where they are released.
+    // Nothing revokes them otherwise and a long session would hold every image
+    // it ever sent.
+    this.stagedFiles.forEach(function (s) { if (s && s.url) { try { URL.revokeObjectURL(s.url); } catch (e) {} } });
     this.stagedFiles = [];
     this.renderPreviewArea();
     this.replyingTo = null;
