@@ -214,6 +214,13 @@ var OrbitAccounts = {
     // Opens the scanner. Scanning a desktop's code pairs the device and opens a
     // direct connection (QR pairing v2, already shipped) — that part works today.
     // Carrying the account ACROSS that connection is the next piece.
+    //
+    // ⚠ Clear the return-to BEFORE closing. `close()` honours `_returnTo`, so
+    // arriving here from the profile card meant close() re-opened the card 220ms
+    // later — the same moment the scanner opens, so the profile landed on top of
+    // the camera. Tapping Pair is leaving for a destination, not dismissing the
+    // sheet, so it must not take the "go back where I came from" path.
+    this._returnTo = null;
     this.close();
     setTimeout(function() {
       if (typeof window.openScanner === 'function') window.openScanner('desktop');
