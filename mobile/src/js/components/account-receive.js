@@ -183,21 +183,26 @@ window.OrbitAccountReceive = {
 
   /* ── import ────────────────────────────────────────────────────────────── */
 
-  _import: function (bundle, packet) {
-    var self = this;
-    var account = bundle.data;
-    if (!account || !account.user) { self._fail('malformed'); return; }
-
-    this.setStatus('Saving…');
+  /**
+   * Write an imported account onto the store, as a NEW account.
+   *
+   * ⚠ ONE FUNNEL. Both "Link a phone" and "Restore from a backup file" land here.
+   * They were about to be two copies of the same twenty lines, and the two would
+   * have drifted — the vault one would have missed the per-chat message write and
+   * looked fine until the next boot, which is the exact bug this function's
+   * comment already warns about.
+   *
+   * @returns {string|null} the new account id, or null if it could not be made.
+   */
+  applyAccount: function (account) {
+    if (!account || !account.user) return null;
 
     // A NEW account, never over the active one. createAccount() switches to it
     // and leaves a default identity, which is then replaced wholesale.
-    var newId;
     try {
-      newId = MStore.createAccount();
+      MStore.createAccount();
     } catch (e) {
-      self._fail('malformed');
-      return;
+      return null;
     }
 
     MStore.user = account.user;
@@ -226,9 +231,19 @@ window.OrbitAccountReceive = {
       });
       if (MStore.syncAccountRecord) MStore.syncAccountRecord();
     } catch (e) {
-      self._fail('malformed');
-      return;
+      return null;
     }
+    return MStore.user && MStore.user.id ? MStore.user.id : 'ok';
+  },
+
+  _import: function (bundle, packet) {
+    var self = this;
+    var account = bundle.data;
+    if (!account || !account.user) { self._fail('malformed'); return; }
+
+    this.setStatus('Saving…');
+
+    if (!this.applyAccount(account)) { self._fail('malformed'); return; }
 
     this.setProgress(1);
     this.setStatus('Done — ' + (account.user.name || 'account') + ' is on this phone', 'ok');

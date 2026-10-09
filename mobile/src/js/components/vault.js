@@ -401,11 +401,137 @@
     });
   }
 
+  /* ══ Finding a backup FILE to restore from ══════════════════════════════════
+     Two different things are called "a backup" in this app and they are not
+     interchangeable:
+
+       a VAULT   — a directory this app writes (vault/OrbitVault-…), chunked, and
+                   optionally encrypted. listVaults()/restoreVault() handle it.
+       a BACKUP  — a single .orzip/.zip file the DESKTOP writes, holding the whole
+                   account as one JSON blob.
+
+     Dan's ask is the second one, and the reason is recovery: **deleting and
+     reinstalling the app does not remove a file you saved, but it does remove
+     everything in the app's own data directory** — so a fresh install should
+     look for its own old backups instead of making the user go hunting.
+
+     So this scans BOTH places a file could plausibly be:
+       • the app data root   (what survived, or what a share put there)
+       • vault/              (where a user is told to put things)
+
+     Nothing here is allowed to throw: a missing directory is the normal case on
+     a fresh install, and a scan that fails must look like "nothing found", not
+     like a crash in Settings. */
+
+  var BACKUP_EXT = /\.(orzip|zip)$/i;
+
+  function _readDir(F, path) {
+    return F.readdir({ path: path, directory: 'DATA' })
+      .then(function (res) {
+        return (res.files || []).map(function (f) {
+          return typeof f === 'string' ? { name: f } : f;
+        });
+      })
+      .catch(function () { return []; });   // no such directory is not an error
+  }
+
+  /** One candidate file, with the facts a person needs to choose between them. */
+  function _describeFile(F, dirPath, entry) {
+    var full = dirPath ? dirPath + '/' + entry.name : entry.name;
+    return F.stat({ path: full, directory: 'DATA' })
+      .then(function (st) {
+        return {
+          name: entry.name,
+          path: full,
+          size: st.size || 0,
+          mtime: st.mtime || null
+        };
+      })
+      .catch(function () {
+        return { name: entry.name, path: full, size: 0, mtime: null };
+      });
+  }
+
+  /**
+   * Every restorable backup file, newest first.
+   *
+   * ⚠ The app root is read with path '' — Capacitor's readdir on the Data
+   * directory with an empty path lists the root itself. Both listings are
+   * de-duplicated by path, because a user who put a file in vault/ AND left a
+   * copy at the root should not see it twice.
+   */
+  function findBackupFiles() {
+    var F = fs();
+    if (!F) return Promise.resolve([]);
+
+    return Promise.all([_readDir(F, ''), _readDir(F, 'vault')]).then(function (results) {
+      var jobs = [];
+      results.forEach(function (entries, i) {
+        var dirPath = i === 0 ? '' : 'vault';
+        entries.forEach(function (e) {
+          if (!e || !e.name || !BACKUP_EXT.test(e.name)) return;
+          jobs.push(_describeFile(F, dirPath, e));
+        });
+      });
+      return Promise.all(jobs);
+    }).then(function (files) {
+      var seen = {};
+      return files.filter(function (f) {
+        if (seen[f.path]) return false;
+        seen[f.path] = true;
+        return true;
+      }).sort(function (a, b) {
+        // Newest first; a file with no mtime sorts last rather than winning.
+        var am = a.mtime || 0, bm = b.mtime || 0;
+        return bm - am;
+      });
+    }).catch(function () { return []; });
+  }
+
+  /** Read one candidate. Returns {kind, backup, account} ready to restore. */
+  function readBackupFile(path) {
+    var F = fs();
+    if (!F) return Promise.reject(new Error('Filesystem plugin unavailable'));
+    if (!window.OrbitBackupArchive) return Promise.reject(new Error('Backup reader unavailable'));
+
+    return F.readFile({ path: path, directory: 'DATA' })
+      .then(function (res) {
+        // Capacitor hands back base64 for binary reads.
+        var b64 = typeof res.data === 'string' ? res.data : '';
+        if (!b64) throw new Error('The file is empty');
+        var bytes = b64ToBytes(b64);
+        return window.OrbitBackupArchive.read(bytes);
+      })
+      .then(function (r) {
+        // The translator already exists (shared/network/transfer.js) — the same
+        // one "Link a phone" uses, so a restored file and a transferred account
+        // cannot disagree about what the desktop's data means.
+        var T = window.OrbitAccountTransfer;
+        var account = (T && T.toMobileAccount) ? T.toMobileAccount(r.backup) : null;
+        return {
+          kind: r.kind,
+          backup: r.backup,
+          account: account,
+          summary: window.OrbitBackupArchive.describe(r.backup)
+        };
+      });
+  }
+
+  function b64ToBytes(b64) {
+    var clean = String(b64).replace(/\s/g, '');
+    var bin = atob(clean);
+    var out = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+
   window.OrbitVault = {
     CHUNK_BYTES: CHUNK_BYTES,
     exportVault: exportVault,
     restoreVault: restoreVault,
     listVaults: listVaults,
-    readManifest: readManifest
+    readManifest: readManifest,
+    findBackupFiles: findBackupFiles,
+    readBackupFile: readBackupFile
   };
 })();

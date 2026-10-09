@@ -7334,7 +7334,15 @@ document.addEventListener('DOMContentLoaded', function() {
         '<div class="settings-btn-row">' +
           '<button id="btn-vault-export" class="settings-btn-primary"><i data-lucide="download"></i> Export Vault Now</button>' +
           '<button id="btn-vault-restore" class="settings-btn-secondary"><i data-lucide="upload"></i> Restore Vault</button>' +
-        '</div>';
+        '</div>' +
+        // A vault and a backup FILE are different things (see vault.js), and the
+        // second one is what survives deleting the app. It gets its own row
+        // rather than being folded into "Restore Vault", because a user looking
+        // for the file they saved would not think to look inside a directory
+        // restore.
+        card('file-archive', 'Restore From a Backup File',
+          'Find .orzip or .zip backups in this app\u2019s folder and vault/',
+          '<button id="btn-vault-files" class="settings-btn-secondary" style="white-space:nowrap;">Find backups</button>');
       case 'folders':
         if (!s.experimentalFolders) return '';
         var folders = MStore.getChatFolders();
@@ -7604,6 +7612,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (vExpBtn) vExpBtn.addEventListener('click', function() { runVaultExport(true); });
         var vResBtn = document.getElementById('btn-vault-restore');
         if (vResBtn) vResBtn.addEventListener('click', runVaultRestore);
+        var vFileBtn = document.getElementById('btn-vault-files');
+        if (vFileBtn) vFileBtn.addEventListener('click', function() { showBackupFileSheet(); });
         break;
       case 'folders':
         _bindFolderActions();
@@ -7919,6 +7929,167 @@ document.addEventListener('DOMContentLoaded', function() {
       return JSON.parse(new TextDecoder().decode(pt));
     });
   }
+
+  /* ══ Restoring from a backup FILE ═══════════════════════════════════════════
+     The desktop writes a whole account as one .orzip/.zip. This finds those files
+     on the device and offers them back, which is the recovery path that matters
+     after a reinstall: the app's own data directory is gone, but a file the user
+     saved is not.
+
+     The scan lives in components/vault.js (findBackupFiles/readBackupFile) and the
+     write lives in account-receive.js (applyAccount) — the same funnel "Link a
+     phone" uses. This is only the sheet. */
+
+  function _fmtBytes(n) {
+    if (!n) return '0 KB';
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(0) + ' KB';
+    return (n / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  function _fmtWhen(ms) {
+    if (!ms) return '';
+    try {
+      var d = new Date(ms);
+      return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch (e) { return ''; }
+  }
+
+  function showBackupFileSheet() {
+    var V = window.OrbitVault;
+    if (!V || !V.findBackupFiles) { showToast('Restore is not available in this build', 'error'); return; }
+
+    var sheet = window.OrbitSheet;
+    if (!sheet || !sheet.showCustom) return;
+
+    // Show the search before it finishes: on a cold start the filesystem plugin
+    // takes a moment, and a sheet that appears empty then fills in reads as
+    // broken. The spinner is honest about what is happening.
+    sheet.showCustom(
+      '<div class="bk-sheet">' +
+        '<div class="bk-head">' +
+          '<div class="bk-title">Backup files</div>' +
+          '<div class="bk-sub">Looking in this app\u2019s folder and vault/\u2026</div>' +
+        '</div>' +
+        '<div class="bk-busy"><span class="acct-spinner"></span></div>' +
+      '</div>');
+
+    V.findBackupFiles().then(function (files) {
+      var root = document.querySelector('.bk-sheet');
+      if (!root) return;   // the sheet was closed while we were looking
+
+      var body;
+      if (!files.length) {
+        body =
+          '<div class="bk-empty">' +
+            '<div class="bk-empty-title">No backup files found</div>' +
+            '<div class="bk-empty-sub">A backup is a single <strong>.orzip</strong> or <strong>.zip</strong> file ' +
+            'made by Orbit on a desktop. Put one in this app\u2019s folder or in <code>vault/</code> and look again.</div>' +
+          '</div>';
+      } else {
+        body = '<div class="bk-list">' + files.map(function (f, i) {
+          return '<div class="bk-row" data-i="' + i + '">' +
+            '<div class="bk-icon"><i data-lucide="file-archive"></i></div>' +
+            '<div class="bk-info">' +
+              '<span class="bk-name">' + escapeHtml(f.name) + '</span>' +
+              // ⚠ The full path was here and always truncated to "Orbit-B…" — the
+              // name and the path start with the same words, so the tail that got
+              // cut was the only part that differed. Show the FOLDER, which is
+              // the thing a person is actually choosing between.
+              '<span class="bk-meta">' + escapeHtml(_fmtBytes(f.size)) +
+                (f.mtime ? ' \u00b7 ' + escapeHtml(_fmtWhen(f.mtime)) : '') +
+                ' \u00b7 ' + (f.path.indexOf('vault/') === 0 ? 'in vault/' : 'app folder') + '</span>' +
+            '</div>' +
+            '<button class="bk-restore" data-i="' + i + '">Restore</button>' +
+          '</div>';
+        }).join('') + '</div>';
+      }
+
+      root.innerHTML =
+        '<div class="bk-head">' +
+          '<div class="bk-title">Backup files</div>' +
+          '<div class="bk-sub">' + (files.length
+            ? files.length + (files.length === 1 ? ' file found' : ' files found') +
+              ' \u00b7 looked in this app\u2019s folder and vault/'
+            : 'Looked in this app\u2019s folder and vault/') + '</div>' +
+        '</div>' + body;
+
+      if (window.lucide) { try { lucide.createIcons({ root: root }); } catch (e) {} }
+
+      Array.prototype.forEach.call(root.querySelectorAll('.bk-restore'), function (btn) {
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var f = files[parseInt(btn.getAttribute('data-i'), 10)];
+          if (f) _restoreFromBackupFile(f, btn);
+        });
+      });
+    });
+  }
+
+  function _restoreFromBackupFile(file, btn) {
+    var V = window.OrbitVault;
+    if (btn) { btn.disabled = true; btn.textContent = 'Reading\u2026'; }
+
+    V.readBackupFile(file.path).then(function (r) {
+      if (!r.account || !r.account.user) {
+        throw new Error('That backup does not contain an account');
+      }
+      var name = r.account.user.name || 'an account';
+      var msgs = Object.keys(r.account.messages || {}).reduce(function (n, k) {
+        return n + (r.account.messages[k] || []).length;
+      }, 0);
+
+      // Restoring REPLACES everything, so it gets a real confirmation that names
+      // what is about to be imported rather than a generic "are you sure".
+      return _confirmImportBackupFile(name, msgs, r.kind).then(function (ok) {
+        if (!ok) { if (btn) { btn.disabled = false; btn.textContent = 'Restore'; } return; }
+
+        var R = window.OrbitAccountReceive;
+        if (!R || !R.applyAccount) throw new Error('The importer is unavailable');
+        var newId = R.applyAccount(r.account);
+        if (!newId) throw new Error('Could not save the restored account');
+
+        if (window.OrbitSheet && window.OrbitSheet.hide) window.OrbitSheet.hide();
+        showToast('Restored ' + name + ' \u2014 reopening\u2026', 'success');
+        // Reload so the app boots as the restored account; the network layer has
+        // to pick up the new identity, exactly as switching accounts does.
+        setTimeout(function () { window.location.reload(); }, 1400);
+      });
+    }).catch(function (e) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Restore'; }
+      showToast(e && e.message ? e.message : 'Could not read that backup', 'error');
+    });
+  }
+
+  /** A confirmation that says what is being restored, not just "are you sure". */
+  function _confirmImportBackupFile(name, messageCount, kind) {
+    return new Promise(function (resolve) {
+      var overlay = document.createElement('div');
+      overlay.className = 'bk-confirm-overlay';
+      overlay.innerHTML =
+        '<div class="bk-confirm">' +
+          '<div class="bk-confirm-title">Restore ' + escapeHtml(name) + '?</div>' +
+          '<div class="bk-confirm-body">' +
+            escapeHtml(String(messageCount)) + ' messages will be added as a <strong>new account</strong>. ' +
+            'Nothing already on this phone is replaced or deleted \u2014 the restored account sits alongside ' +
+            'your current ones, and you can switch between them.' +
+            '<div class="bk-confirm-src">From a <code>.' + escapeHtml(kind === 'zip' ? 'zip' : 'orzip') + '</code> backup</div>' +
+          '</div>' +
+          '<div class="bk-confirm-actions">' +
+            '<button class="bk-cancel">Cancel</button>' +
+            '<button class="bk-go">Restore</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(overlay);
+
+      function done(v) { overlay.remove(); resolve(v); }
+      overlay.querySelector('.bk-cancel').addEventListener('click', function () { done(false); });
+      overlay.querySelector('.bk-go').addEventListener('click', function () { done(true); });
+      overlay.addEventListener('click', function (e) { if (e.target === overlay) done(false); });
+    });
+  }
+
+  window.showBackupFileSheet = showBackupFileSheet;
 
   /**
    * Export the whole account using the v2 chunked format (see components/vault.js).
