@@ -432,11 +432,49 @@
   height: 19px;
   stroke-width: 1.9;
 }
+/* ══ Only the ACTIVE tab is labelled ═══════════════════════════════════════
+   Four labelled tabs is four words competing for a 62px bar, and three of them
+   are always the wrong word — you are looking at one panel. The label now
+   belongs to the tab you are actually on.
+
+   ⚠ NO JAVASCRIPT. Every tab is `flex: 1`, so collapsing a label cannot change
+   the pill's width, and `setActive()` already toggles the class. This is a style
+   on a class that was already there — the least code that does the job.
+
+   ⚠ `max-height` and `padding-top` are layout properties, which the usual rule
+   says not to animate. It is a deliberate exception and a narrow one: this is a
+   single 14px label, not a list, and the alternative is `transform: scaleY()`,
+   which squashes the glyphs. The `opacity` and `translateY` carry the feel; the
+   height just gets out of the way. */
+.orbit-tabbar .tab {
+  gap: 0;   /* the label carries its own spacing, so it can collapse entirely */
+}
 .orbit-tabbar .tab span {
   font-size: 9.5px;
   font-weight: 600;
   letter-spacing: .07em;
   text-transform: uppercase;
+  max-height: 0;
+  padding-top: 0;
+  opacity: 0;
+  overflow: hidden;
+  transform: translateY(-2px);
+  transition:
+    max-height 220ms var(--ease),
+    padding-top 220ms var(--ease),
+    opacity 150ms var(--ease),
+    transform 220ms var(--ease);
+}
+.orbit-tabbar .tab.active span {
+  max-height: 14px;
+  padding-top: 4px;
+  opacity: 1;
+  transform: none;
+}
+/* The label stays in the accessibility tree when collapsed — opacity, not
+   `display: none` — and the button carries an aria-label regardless. */
+@media (prefers-reduced-motion: reduce) {
+  .orbit-tabbar .tab span { transition: none; }
 }
 
 /* Active = tinted capsule + accent icon. Deliberately NOT a solid accent fill:
