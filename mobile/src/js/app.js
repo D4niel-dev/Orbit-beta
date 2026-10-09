@@ -5983,32 +5983,86 @@ document.addEventListener('DOMContentLoaded', function() {
     var html = '';
     stagedFiles.forEach(function(s, i) {
       if (s.type === 'image' && s.url) {
-        html += '<div class="file-preview-item">' +
-          '<img src="' + s.url + '" loading="lazy">' +
-          "</div>";
+        // ⚠ THE TILE USED TO BE NOTHING BUT AN <img>. So while a photo decoded
+        // — a full-resolution camera shot can take a second — the user got an
+        // empty 54x54 box with no indication anything was happening. The tile is
+        // now a container with a spinner and a remove button, and the image sits
+        // on top of them.
+        html += '<div class="file-preview-item is-loading" data-i="' + i + '">' +
+          '<div class="fp-spinner" aria-hidden="true"></div>' +
+          '<img src="' + s.url + '" alt="">' +
+          '<button class="fp-x" data-i="' + i + '" aria-label="Remove ' +
+            escapeHtml(s.name || 'image') + '">' +
+            '<i data-lucide="x"></i></button>' +
+          '</div>';
       } else if (s.type === 'video') {
-        html += '<div class="file-preview-item">' +
+        html += '<div class="file-preview-item" data-i="' + i + '">' +
           '<div class="file-icon" style="color:#a855f7;"><i data-lucide="video"></i></div>' +
+          '<button class="fp-x" data-i="' + i + '" aria-label="Remove ' +
+            escapeHtml(s.name || 'video') + '"><i data-lucide="x"></i></button>' +
           "</div>";
       } else if (s.type === 'audio') {
-        html += '<div class="file-preview-item">' +
+        html += '<div class="file-preview-item" data-i="' + i + '">' +
           '<div class="file-icon" style="color:#ec4899;"><i data-lucide="music"></i></div>' +
+          '<button class="fp-x" data-i="' + i + '" aria-label="Remove ' +
+            escapeHtml(s.name || 'audio') + '"><i data-lucide="x"></i></button>' +
           "</div>";
       } else {
-        html += '<div class="file-preview-item">' +
+        html += '<div class="file-preview-item" data-i="' + i + '">' +
           '<div class="file-icon"><i data-lucide="file"></i></div>' +
+          '<button class="fp-x" data-i="' + i + '" aria-label="Remove ' +
+            escapeHtml(s.name || 'file') + '"><i data-lucide="x"></i></button>' +
           "</div>";
       }
     });
     area.innerHTML = html;
     renderLucide(area);
 
-    area.querySelectorAll('.file-preview-remove').forEach(function(btn) {
+    // The spinner comes off when the image is actually ready. `complete` is
+    // checked as well as the event: a cached image may already have loaded by
+    // the time this runs, and then `load` never fires — which would leave a
+    // spinner turning over a photo that is plainly visible underneath it.
+    area.querySelectorAll('.file-preview-item.is-loading img').forEach(function(img) {
+      var tile = img.parentNode;
+      var done = function() { if (tile) tile.classList.remove('is-loading'); };
+      if (img.complete && img.naturalWidth > 0) { done(); return; }
+      img.addEventListener('load', done, { once: true });
+      img.addEventListener('error', done, { once: true });
+    });
+
+    // ⚠ This handler used to be wired to `.file-preview-remove`, an element the
+    // renderer never emitted — so it matched nothing and did nothing, and a
+    // staged image could not be taken back. It is wired to the button that
+    // actually exists now.
+    area.querySelectorAll('.fp-x').forEach(function(btn) {
       btn.addEventListener('click', function(e) {
         e.stopPropagation();
-        var idx = parseInt(this.getAttribute('data-index'), 10);
+        var idx = parseInt(this.getAttribute('data-i'), 10);
+        if (isNaN(idx) || idx < 0 || idx >= stagedFiles.length) return;
+        // Only THIS one leaves; everything else still sends.
         stagedFiles.splice(idx, 1);
         renderFilePreview();
+        updateSendButton();
+      });
+    });
+
+    // Tapping a tile LOOKS at it. It must not send, and it must not open the
+    // chat — so the tile is its own click target and the x stops propagation.
+    // The viewer is the app's existing lightbox: it already takes a list of
+    // { url, type } and already knows how to page through them, which is
+    // exactly the shape stagedFiles has.
+    area.querySelectorAll('.file-preview-item').forEach(function(tile) {
+      tile.addEventListener('click', function(e) {
+        if (e.target.closest('.fp-x')) return;
+        var idx = parseInt(this.getAttribute('data-i'), 10);
+        var viewable = stagedFiles.filter(function(s) { return s.type === 'image' && s.url; });
+        if (!viewable.length) return;
+        var target = stagedFiles[idx];
+        if (!target || target.type !== 'image') return;
+        var at = viewable.indexOf(target);
+        if (typeof window.openLightbox === 'function') {
+          window.openLightbox(at < 0 ? 0 : at, viewable);
+        }
       });
     });
   }

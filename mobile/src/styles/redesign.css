@@ -4530,3 +4530,64 @@
 /* A common floor so a two-line bio does not make one card taller than its
    neighbour in the same row. */
 #friends-list.contacts-grid > .friend-row { min-height: 168px; justify-content: flex-start; }
+
+/* ══ Attachment preview: loading, remove, view ═════════════════════════════
+   A staged image used to be a bare <img> in a 56px tile, so a photo that took
+   a second to decode was an empty box with nothing happening in it. */
+.file-preview-item img { transition: opacity .18s var(--ease); }
+/* The image stays invisible until it is actually ready, so what you see while
+   it loads is the spinner rather than a half-painted frame. */
+.file-preview-item.is-loading img { opacity: 0; }
+
+.file-preview-item .fp-spinner {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.file-preview-item.is-loading .fp-spinner { display: flex; }
+.file-preview-item .fp-spinner::after {
+  content: "";
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, .18);
+  border-top-color: var(--accent-primary);
+  animation: fpSpin .7s linear infinite;
+}
+@keyframes fpSpin { to { transform: rotate(360deg); } }
+
+/* The remove control. It sits INSIDE the tile because the tile is
+   `overflow: hidden` — anything hanging off the corner would be clipped away
+   and become unpressable. */
+.file-preview-item .fp-x {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  z-index: 2;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, .62);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.file-preview-item .fp-x:active {
+  background: var(--accent-danger);
+  transform: scale(.9);
+}
+.file-preview-item .fp-x svg { width: 11px; height: 11px; stroke-width: 2.8; }
+
+/* A tile you can look at should say so. */
+.file-preview-item[data-i] { cursor: pointer; }
+
+@media (prefers-reduced-motion: reduce) {
+  .file-preview-item .fp-spinner::after { animation-duration: 2s; }
+  .file-preview-item img { transition: none; }
+}
