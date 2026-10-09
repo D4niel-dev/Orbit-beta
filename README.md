@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>Current version:</strong> <a href="CHANGELOG.md#v085-beta">v0.8.5-beta</a>
+  <strong>Current version:</strong> <a href="CHANGELOG.md#v086-beta">v0.8.6-beta</a>
 </p>
 
 <p align="center">
@@ -28,7 +28,8 @@
 
 | Channel           | Version     | Status                                                                                                                                                                                                                        |
 | ----------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Latest**        | v0.8.5-beta | The phone catches up with the desktop — Orbit is in the Android share sheet, a notification can be answered without opening the app, and there is a PIN lock, plus link previews, a real image viewer and a network map that shows faces instead of letters |
+| **Latest**        | v0.8.6-beta | Four bugs that each broke something you do every day — an emoji you could not send, a link preview that arrived too late to be useful, a profile card that opened on top of the camera, and a backup file the app could read but never offered you — plus filters and a display style for Contacts, and a rebuilt attachment preview |
+|                   | v0.8.5-beta | The phone catches up with the desktop — Orbit is in the Android share sheet, a notification can be answered without opening the app, and there is a PIN lock, plus link previews, a real image viewer and a network map that shows faces instead of letters |
 |                   | v0.8.4-beta | A group of images of different sizes no longer goes ragged — the attachment grid now follows Discord’s layouts.  One tap on Send was also starting the mic — Android’s synthetic mouse events land on whatever is under your finger by then, which was the mic, so it recorded and sent a voice note on repeat |
 | **Stable**        | v0.8.0-beta | Your theme and custom colours follow you between your own devices, message search runs on SQLite FTS5, and the update progress bar actually moves                                                                             |
 | Legacy **Stable** | v0.1.1-beta | Legacy stable release                                                                                                                                                                                                         |
@@ -84,13 +85,14 @@ Whether you are sharing files at home, coordinating in a small office, or experi
 
 Orbit is a **beta-stage app for desktop and Android** aimed at trusted private networks — not a replacement for hardened internet-scale messengers yet, but a serious step toward practical local messaging.
 
-## Highlights (v0.8.5-beta)
+## Highlights (v0.8.6-beta)
 
-* **The phone catches up with the desktop.** Orbit is in the **Android share sheet**, a notification can be **answered without opening the app**, and the app can be locked behind a **PIN** — plus link previews, a real image viewer, and a network map that shows faces instead of letters.
-* **Share into Orbit asks which chat** rather than guessing. Sharing to the wrong person is worse than one extra tap, and "send to the last chat" is exactly the helpfulness that sends a photo to the wrong person. A shared link lands in the composer, not sent blind, so you can still say something about it.
-* **Replies typed while Orbit is closed are queued, not sent on the spot** — sending them immediately would mean running the whole P2P stack from a broadcast receiver. They go when the app is next opened, and the notification **stays until then** rather than pretending.
-* **Undo send is a real retraction, not a local hide.** It sends the same `MESSAGE_DELETE` the desktop already broadcasts, so the message is gone for the other side too — a "delete" that only deletes it for you is worse than none, because you believe it is gone. Off by default.
-* **The image viewer’s prev/next arrows were never styled at all.** The rules were written against a class the buttons did not have, so **not one matched** and they fell back to the browser default: square, transparent, side by side. CSS fails silently on a selector that matches nothing. They match the desktop’s now.
+* **An emoji picked from the picker could not be sent.** It was not the empty-check — an emoji passes that, and typing one always worked. The picker set the input's value directly, and **assigning `.value` fires no `input` event**, so nothing that watches the composer ever ran: the send button never appeared and the box sat there showing the **mic**. The message was not rejected; **there was no button to press.**
+* **Restore from a backup file.** The Local Vault finds `.orzip` and `.zip` backups in the app's own folder and in `vault/` — **the files that survive deleting the app** — and adds the account *alongside* what is on the phone rather than over it. ⚠ `.orzip` is not a zip: the desktop writes it with gzip and a house extension, so the format is decided by the file's first two bytes, never by its name.
+* **Link previews now appear while you type.** The bar used to appear only *after* the message had gone, which is the one moment a preview is useless — you have already decided. And the card **inside** a sent message printed the domain **twice**: once as the title, once as the full URL underneath. It uses the page's own title and image now, from the same fetch the bar uses.
+* **The attachment preview was rebuilt, starting from a measurement.** A staged image was a bare `<img>` in a 56px tile, so a full-resolution photo was **an empty box with nothing happening in it**. There is a spinner now; each tile carries an **×** that takes that one image out of the send while the rest go normally; and tapping one **looks** at it instead of sending it.
+* **Contacts gained filters and a display style** — All / Online / Offline / Groups with live counts, and a choice of a dense list or a grid of large avatars. Every row has its actions now: a group used to be a row you could only tap.
+* **Tapping "Pair a desktop" re-opened the profile card** — a race. The account switcher closes back to where it was opened from, and that landed the card on top of the camera on the same 220ms timer that opens the scanner.
 
 ## Version History
 
@@ -810,7 +812,7 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 
 </details>
 
-<details open>
+<details>
 <summary>v0.8.5-beta</summary>
 
 * **Orbit is in the Android share sheet** — share a photo, video, PDF or link from any app, then pick a chat
@@ -820,6 +822,20 @@ Orbit is a **beta-stage app for desktop and Android** aimed at trusted private n
 * **Image viewer** — previous/next, zoom by button or pinch, and download
 * **Undo send** — a real retraction that tells the other side too; off by default
 * **Fixed:** the What’s New button did nothing, and the viewer’s arrows were never styled at all
+* **Mobile test suite** — 196 checks
+
+</details>
+
+<details open>
+<summary>v0.8.6-beta</summary>
+
+* **Restore from a backup file** — the Local Vault finds `.orzip`/`.zip` backups in the app’s own folder and in `vault/`, the files that survive deleting the app, and adds the account *alongside* what is on the phone rather than over it
+* **An emoji picked from the picker could not be sent** — not the empty-check, which was fine; the picker set the input’s value directly and assigning `.value` fires no `input` event, so the send button never appeared and the composer kept showing the mic
+* **Link previews while you type** — the bar used to appear only after the message had gone, and the card inside a sent message printed the domain twice
+* **Contacts** — filter chips with live counts, a list/grid display style, and actions on every row; groups had none at all before
+* **The attachment preview, rebuilt** — a spinner while an image decodes, an × on each to take it out of the send, and tapping one looks at it full screen instead of sending
+* **Only the active tab keeps its label**
+* **Fixed:** tapping “Pair a desktop” re-opened the profile card on top of the camera, and the restore button had no corner radius at all — it was written against a token this app does not define
 * **Mobile test suite** — 196 checks
 
 </details>

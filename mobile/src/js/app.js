@@ -8683,7 +8683,26 @@ document.addEventListener('DOMContentLoaded', function() {
         // changelog.js is the other hand-maintained copy; they are separate files
         // and both have to be updated. A release is not done until this block is
         // added, which is why `npm run test:mobile` now asserts it.
-        vBlock('0.8.5-beta', 'Latest', [
+        vBlock('0.8.6-beta', 'Latest', [
+          ['New', [
+            'Restore from a backup file. The Local Vault now finds .orzip and .zip backups in this app\u2019s folder and in vault/ \u2014 the files that survive deleting the app \u2014 and adds the account alongside what is already here rather than over it.',
+            'Link previews while you type. The bar used to appear only after the message had gone, which is the one moment a preview is useless.',
+            'The link card inside a sent message shows the page\u2019s own title and image now. It used to print the domain twice \u2014 as the title, and then the full URL underneath it.',
+            'Contacts gained filters \u2014 All, Online, Offline, Groups, each with a live count \u2014 and a display style: a dense list, or a grid of large avatars.',
+            'Every contact row has its actions now. Groups had none at all before this \u2014 a group was a row you could only tap.',
+            'The attachment preview was rebuilt. A staged image used to be an empty box until it decoded; there is a spinner now, an \u00d7 on each one to take it out of the send, and tapping an image looks at it full screen instead of sending it.',
+            'Only the active tab keeps its label. Three labels you are not on is three words competing for a 62px bar.',
+          ]],
+          ['Fixes', [
+            'An emoji picked from the picker could not be sent. It was not the empty-check \u2014 an emoji passes that. The picker set the input\u2019s value directly, and assigning .value fires no input event, so the send button never appeared and the composer kept showing the mic.',
+            'Tapping \u201cPair a desktop\u201d no longer re-opens the profile card on top of the camera.',
+            'The restore button had no corner radius at all \u2014 it was written against a token this app does not define, and an undefined var() is dropped silently.',
+          ]],
+          ['Version', [
+            'Version: Bumped to v0.8.6-beta.'
+          ]]
+        ]) +
+        vBlock('0.8.5-beta', '', [
           ['New', [
             'Orbit is in the Android share sheet. Share a photo, a video, a PDF or a link from any app and it asks which chat \u2014 sharing to the wrong person is worse than one extra tap, and "send to the last chat" is exactly the helpfulness that sends a photo to the wrong person.',
             'A notification can be answered without opening the app. Direct messages get a Reply box. Replies typed while Orbit is closed are queued and sent when you next open it, and the notification stays until then rather than pretending.',
