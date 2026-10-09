@@ -5648,6 +5648,14 @@ document.addEventListener('DOMContentLoaded', function() {
         input.focus();
         var pos = start + e.detail.unicode.length;
         input.setSelectionRange(pos, pos);
+
+        // ⚠ THE BUG WAS HERE. Assigning .value fires nothing, so nothing that
+        // watches the composer ever learned the box had content. Pick an emoji
+        // and the composer still showed the MIC — the send button never
+        // appeared, so an emoji-only message could not be sent. Typing worked
+        // fine, which is why this survived: the text path fires `input` for
+        // free and the picker path does not.
+        input.dispatchEvent(new Event('input', { bubbles: true }));
       }
     });
     container.appendChild(picker);
