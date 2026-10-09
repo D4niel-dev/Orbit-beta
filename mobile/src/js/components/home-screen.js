@@ -742,16 +742,6 @@ var OrbitHome = {
       return String(g.name || '').toLowerCase().indexOf(query) !== -1;
     });
 
-    if (friends.length === 0 && groups.length === 0) {
-      container.innerHTML = window.OrbitEmpty.html({
-        icon: query ? 'search-x' : 'users-round',
-        title: query ? 'No matches' : 'No friends yet',
-        hint: query ? 'Try a different search.' : 'Add a friend by scanning their QR code or entering their IP address.',
-        muted: !!query
-      });
-      return;
-    }
-    
     // Split by presence, then sort each group by name. The old code sorted
     // `friends` in place — `Array.sort` mutates, so this silently reordered
     // MStore.friends every render.
@@ -763,6 +753,46 @@ var OrbitHome = {
     var all = friends.slice();
     var onlineFriends = all.filter(isFriendOnline).sort(byName);
     var offlineFriends = all.filter(function(f) { return !isFriendOnline(f); }).sort(byName);
+    var groupsAll = groups;
+
+    // ⚠ THE CHIPS COME AFTER THE SPLIT, not before, because their counts have to
+    // describe the whole set while the rows below describe the slice. Computing
+    // them from the same arrays the sections draw from is what stops the count
+    // and the list disagreeing.
+    //
+    // ⚠ The chip filter is deliberately NOT persisted: which slice you are
+    // looking at is momentary, and should survive a tab switch but not a
+    // restart. The DISPLAY STYLE is the opposite — list or grid is how you like
+    // to read, so that one lives in settings and comes back.
+    var chip = OrbitHome._contactsFilter || 'all';
+    this.renderContactsFilters({
+      all: onlineFriends.length + offlineFriends.length + groupsAll.length,
+      online: onlineFriends.length,
+      offline: offlineFriends.length,
+      groups: groupsAll.length
+    });
+
+    if (chip === 'online') offlineFriends = [];
+    if (chip === 'offline') onlineFriends = [];
+    if (chip !== 'all' && chip !== 'groups') groups = [];
+    if (chip === 'groups') { onlineFriends = []; offlineFriends = []; }
+
+    // ⚠ The empty state is checked HERE, after the chip filter, not before it.
+    // Checked earlier, filtering to Groups with no groups would pass the
+    // "there is something to show" test and then draw nothing at all — a blank
+    // screen with no explanation.
+    var nothing = !onlineFriends.length && !offlineFriends.length && !groups.length;
+    if (nothing) {
+      var chipEmpty = !query && chip !== 'all';
+      container.innerHTML = window.OrbitEmpty.html({
+        icon: query ? 'search-x' : (chipEmpty ? 'filter' : 'users-round'),
+        title: query ? 'No matches' : (chipEmpty ? 'Nothing here' : 'No friends yet'),
+        hint: query ? 'Try a different search.'
+            : (chipEmpty ? 'Nothing in this filter yet — try All.' : 'Add a friend by scanning their QR code or entering their IP address.'),
+        muted: !!query || chipEmpty
+      });
+      return;
+    }
 
     function renderFriendRow(friend) {
       var displayName = friend.name || friend.peerId || 'Unknown';
@@ -793,6 +823,14 @@ var OrbitHome = {
       row += '  <button class="friend-action" title="Message" aria-label="Message ' +
              OrbitHome._escapeAttr(displayName) + '" onclick="event.stopPropagation();' + openIt + '">' +
              '<i data-lucide="message-circle"></i></button>';
+      // The row had exactly one action, so everything else a person can do with a
+      // contact was reachable only by long-pressing — which is not discoverable
+      // and does not exist on a desktop. This opens the SAME sheet the long-press
+      // opens (`showChatContextMenu`), so there is one place those actions live.
+      row += '  <button class="friend-more" title="More" aria-label="More actions for ' +
+             OrbitHome._escapeAttr(displayName) + '" onclick="event.stopPropagation();OrbitHome.showChatContextMenu(\'' +
+             OrbitHome._escapeJs('dm_' + peerId) + '\')">' +
+             '<i data-lucide="more-vertical"></i></button>';
       row += '</div>';
       return row;
     }
@@ -825,13 +863,98 @@ var OrbitHome = {
         html += '    <div class="chat-row-name">' + OrbitHome._escape(gName) + '</div>';
         html += '    <div class="friend-sub">' + n + ' member' + (n === 1 ? '' : 's') + '</div>';
         html += '  </div>';
+        // A group gets the same two affordances a friend does: open it, or act on
+        // it. It used to have none, so a group was a row you could only tap.
+        html += '  <button class="friend-action" title="Open" aria-label="Open ' + OrbitHome._escapeAttr(gName) +
+                '" onclick="event.stopPropagation();OrbitHome._onChatClick(\'' + OrbitHome._escapeJs(gid) + '\')">' +
+                '<i data-lucide="message-circle"></i></button>';
+        html += '  <button class="friend-more" title="More" aria-label="More actions for ' + OrbitHome._escapeAttr(gName) +
+                '" onclick="event.stopPropagation();OrbitHome.showChatContextMenu(\'' + OrbitHome._escapeJs(gid) + '\')">' +
+                '<i data-lucide="more-vertical"></i></button>';
         html += '</div>';
       });
     }
 
+    // Display style is a class on the container, so the same markup can read as
+    // a dense list or as a face-first grid. The rows are identical either way —
+    // only the layout changes, which is why this needs no second renderer.
+    container.classList.toggle('contacts-grid', this._contactsDisplay() === 'grid');
     container.innerHTML = html;
     this._addAvatarFrames();
     if (window.lucide) lucide.createIcons();
+  },
+
+  /* -- Contacts: filters and display style ---------------------------------- */
+
+  /** 'all' | 'online' | 'offline' | 'groups'. Momentary — not persisted. */
+  _contactsFilter: 'all',
+
+  /** 'list' | 'grid'. How you like to read, so it is remembered. */
+  _contactsDisplay: function() {
+    var s = MStore.settings || {};
+    return s.contactsDisplay === 'grid' ? 'grid' : 'list';
+  },
+
+  setContactsFilter: function(id) {
+    OrbitHome._contactsFilter = id || 'all';
+    OrbitHome.renderFriendsList();
+  },
+
+  toggleContactsDisplay: function() {
+    var next = OrbitHome._contactsDisplay() === 'grid' ? 'list' : 'grid';
+    MStore.settings.contactsDisplay = next;
+    try { MStore.save(); } catch (e) {}
+    OrbitHome.renderFriendsList();
+    var btn = document.getElementById('btn-contacts-style');
+    if (btn && window.lucide) {
+      btn.innerHTML = '<i data-lucide="' + (next === 'grid' ? 'list' : 'layout-grid') + '"></i>';
+      try { lucide.createIcons({ root: btn }); } catch (e) {}
+    }
+  },
+
+  /**
+   * The chips above the list.
+   *
+   * ⚠ A chip with a zero count is DISABLED, not hidden. Hiding it would make the
+   * row of chips change width as people come online, and a filter you cannot see
+   * is a filter you will not remember exists. Disabled says "this exists, and
+   * there is nothing in it right now", which is the truth.
+   */
+  renderContactsFilters: function(counts) {
+    var host = document.getElementById('contacts-filters');
+    if (!host) return;
+    counts = counts || { all: 0, online: 0, offline: 0, groups: 0 };
+    var active = OrbitHome._contactsFilter || 'all';
+
+    var defs = [
+      { id: 'all', label: 'All' },
+      { id: 'online', label: 'Online' },
+      { id: 'offline', label: 'Offline' },
+      { id: 'groups', label: 'Groups' }
+    ];
+
+    host.innerHTML = defs.map(function(d) {
+      var n = counts[d.id] || 0;
+      var on = d.id === active;
+      return '<button class="cf-chip' + (on ? ' on' : '') + '"' +
+             ' data-filter="' + d.id + '"' +
+             ' role="tab" aria-selected="' + (on ? 'true' : 'false') + '"' +
+             (n === 0 && !on ? ' disabled' : '') + '>' +
+             OrbitHome._escape(d.label) +
+             '<span class="cf-n">' + n + '</span>' +
+             '</button>';
+    }).join('');
+
+    if (!host._wired) {
+      host._wired = true;
+      host.addEventListener('click', function(e) {
+        var b = e.target.closest ? e.target.closest('.cf-chip') : null;
+        if (!b || b.disabled) return;
+        e.preventDefault();
+        e.stopPropagation();
+        OrbitHome.setContactsFilter(b.getAttribute('data-filter'));
+      });
+    }
   },
 
   /** Add profile frame overlays to friend avatars that have one selected */

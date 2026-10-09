@@ -35,7 +35,7 @@
   <!-- v0.8.1-beta redesign layer. MUST load last: mobile.css redefines several
        selectors more than once, and this sheet restates what the redesign
        changes rather than editing that file in place. -->
-  <link rel="stylesheet" href="styles/redesign.css?v=20261009g">
+  <link rel="stylesheet" href="styles/redesign.css?v=20261009i">
 
   <!-- Syntax Highlighting (Prism) -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
@@ -120,6 +120,14 @@
         </div>
         <button id="btn-scan-qr" title="Scan QR"><i data-lucide="scan-qr-code"></i></button>
         <button id="btn-add-friend" title="Add friend"><i data-lucide="user-round-plus"></i></button>
+      </div>
+      <!-- Filters and the display style sit together, because both answer "what am
+           I looking at". The style toggle is here rather than in the header: the
+           header is already search + scan + add, and a fourth icon would make the
+           row read as four unrelated things. -->
+      <div class="contacts-bar">
+        <div class="contacts-filters" id="contacts-filters" role="tablist"></div>
+        <button id="btn-contacts-style" class="contacts-style" title="Display style" aria-label="Display style"><i data-lucide="layout-grid"></i></button>
       </div>
       <div id="friends-list" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
     </aside>
@@ -495,12 +503,12 @@
   setTimeout(function() { window._loadImageCropper(); }, 1500);
   </script>
 
-  <script src="js/app.js?v=20261009f"></script>
+  <script src="js/app.js?v=20261009g"></script>
 
   <!-- v0.2.8 Components -->
   <script src="js/components/navigation.js?v=20261004e"></script>
   <script src="js/components/chat-screen.js?v=20261002p"></script>
-  <script src="js/components/home-screen.js?v=20261004a"></script>
+  <script src="js/components/home-screen.js?v=20261009a"></script>
   <script src="js/components/account-switcher.js?v=20261009a"></script>
   <script src="js/components/account-receive.js?v=20261009c"></script>
 </body>

@@ -13662,6 +13662,18 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  // Contacts: display style. The chip filters wire themselves inside
+  // home-screen.js, because they are re-rendered on every paint and a listener
+  // added there would be replaced with the markup.
+  var contactsStyleBtn = document.getElementById('btn-contacts-style');
+  if (contactsStyleBtn) {
+    contactsStyleBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (window.OrbitHome && OrbitHome.toggleContactsDisplay) OrbitHome.toggleContactsDisplay();
+    });
+  }
+
   var searchActivityEl = document.getElementById('search-activity');
   if (searchActivityEl) {
     searchActivityEl.addEventListener('input', function() {
