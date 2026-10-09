@@ -8041,8 +8041,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
       // Restoring REPLACES everything, so it gets a real confirmation that names
       // what is about to be imported rather than a generic "are you sure".
-      return _confirmImportBackupFile(name, msgs, r.kind).then(function (ok) {
-        if (!ok) { if (btn) { btn.disabled = false; btn.textContent = 'Restore'; } return; }
+      return _confirmImportBackupFile(name, msgs, r.kind, file).then(function (ok) {
+        if (!ok) { showBackupFileSheet(); return; }
 
         var R = window.OrbitAccountReceive;
         if (!R || !R.applyAccount) throw new Error('The importer is unavailable');
@@ -8061,31 +8061,57 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  /** A confirmation that says what is being restored, not just "are you sure". */
-  function _confirmImportBackupFile(name, messageCount, kind) {
+  /**
+   * A confirmation that says what is being restored, not just "are you sure".
+   *
+   * ⚠ IT IS A SECOND STEP IN THE SAME SHEET, NOT A NEW DIALOG. A centred modal
+   * floating over the sheet was two surfaces doing one job, and it looked like a
+   * desktop dialog dropped into a phone app — the app's own vocabulary for a
+   * question is a bottom sheet with a Cancel pill. Replacing the sheet's content
+   * keeps one surface, and Cancel simply goes back to the list.
+   */
+  function _confirmImportBackupFile(name, messageCount, kind, file) {
     return new Promise(function (resolve) {
-      var overlay = document.createElement('div');
-      overlay.className = 'bk-confirm-overlay';
-      overlay.innerHTML =
-        '<div class="bk-confirm">' +
-          '<div class="bk-confirm-title">Restore ' + escapeHtml(name) + '?</div>' +
-          '<div class="bk-confirm-body">' +
-            escapeHtml(String(messageCount)) + ' messages will be added as a <strong>new account</strong>. ' +
-            'Nothing already on this phone is replaced or deleted \u2014 the restored account sits alongside ' +
-            'your current ones, and you can switch between them.' +
-            '<div class="bk-confirm-src">From a <code>.' + escapeHtml(kind === 'zip' ? 'zip' : 'orzip') + '</code> backup</div>' +
-          '</div>' +
-          '<div class="bk-confirm-actions">' +
-            '<button class="bk-cancel">Cancel</button>' +
-            '<button class="bk-go">Restore</button>' +
-          '</div>' +
-        '</div>';
-      document.body.appendChild(overlay);
+      var root = document.querySelector('.bk-sheet');
+      if (!root) { resolve(false); return; }
 
-      function done(v) { overlay.remove(); resolve(v); }
-      overlay.querySelector('.bk-cancel').addEventListener('click', function () { done(false); });
-      overlay.querySelector('.bk-go').addEventListener('click', function () { done(true); });
-      overlay.addEventListener('click', function (e) { if (e.target === overlay) done(false); });
+      root.innerHTML =
+        '<div class="bk-head">' +
+          '<div class="bk-title">Restore ' + escapeHtml(name) + '?</div>' +
+          '<div class="bk-sub">This adds a second account. Nothing is overwritten.</div>' +
+        '</div>' +
+        '<div class="bk-body">' +
+          '<div class="bk-src-row">' +
+            '<div class="bk-icon"><i data-lucide="file-archive"></i></div>' +
+            '<div class="bk-info">' +
+              '<span class="bk-name">' + escapeHtml(file ? file.name : 'backup') + '</span>' +
+              '<span class="bk-meta">' +
+                (file ? escapeHtml(_fmtBytes(file.size)) + ' \u00b7 ' : '') +
+                escapeHtml(String(messageCount)) + (messageCount === 1 ? ' message' : ' messages') +
+              '</span>' +
+            '</div>' +
+          '</div>' +
+          '<div class="bk-note">' +
+            'It will be added as a <strong>new account</strong>. Everything already on this phone ' +
+            'is left alone \u2014 the restored account sits alongside your current ones, and you can ' +
+            'switch between them.' +
+          '</div>' +
+        '</div>' +
+        // ⚠ ONE way out, not two. The sheet already pins its own Cancel pill, so
+        // an in-content Cancel was the same duplication the × removal fixed in
+        // v0.8.3 — two controls for one job, the smaller one harder to hit. This
+        // row carries only the decision: Restore. Leaving is the pill.
+        '<div class="bk-actions">' +
+          '<button class="bk-go">Restore</button>' +
+        '</div>';
+
+      if (window.lucide) { try { lucide.createIcons({ root: root }); } catch (e) {} }
+
+      root.querySelector('.bk-go').addEventListener('click', function () {
+        var go = root.querySelector('.bk-go');
+        if (go) { go.disabled = true; go.textContent = 'Restoring\u2026'; }
+        resolve(true);
+      });
     });
   }
 

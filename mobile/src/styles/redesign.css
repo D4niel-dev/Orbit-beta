@@ -4309,35 +4309,43 @@
   border-radius: var(--r-xs); padding: 0 4px;
 }
 
-.bk-confirm-overlay {
-  position: fixed; inset: 0; z-index: 100000;
-  background: rgba(0, 0, 0, .62);
-  display: flex; align-items: center; justify-content: center;
-  padding: 24px;
+.bk-body { padding: 2px 18px 4px; }
+.bk-src-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
 }
-.bk-confirm {
-  width: 100%; max-width: 380px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r-lg);
-  padding: 20px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, .5);
+.bk-note {
+  margin-top: 12px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-secondary);
 }
-.bk-confirm-title { font-size: 16px; font-weight: 650; color: var(--text-primary); margin-bottom: 8px; }
-.bk-confirm-body { font-size: 13.5px; color: var(--text-secondary); line-height: 1.6; }
-.bk-confirm-src {
-  margin-top: 10px; font-family: var(--font-mono); font-size: 10.5px; color: var(--text-muted);
+.bk-note strong { color: var(--text-primary); font-weight: 600; }
+
+/* Two answers, not equal ones: Cancel steps back, Restore is the accent. */
+.bk-actions {
+  display: flex; gap: 8px;
+  padding: 16px 18px 4px;
 }
-.bk-confirm-src code {
-  background: var(--bg-raised); border: 1px solid var(--border-subtle);
-  border-radius: var(--r-xs); padding: 1px 5px;
+.bk-actions button {
+  width: 100%;
+  min-height: 42px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-raised);
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 14px; font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease);
 }
-.bk-confirm-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
-.bk-confirm-actions button {
-  padding: 8px 15px; min-height: 34px;
-  border-radius: var(--r-sm); border: 1px solid var(--border-subtle);
-  background: var(--bg-raised); color: var(--text-secondary);
-  font-size: 13px; font-weight: 600; cursor: pointer;
+.bk-actions .bk-go {
+  background: var(--accent-primary);
+  border-color: transparent;
+  color: #fff;
 }
-.bk-confirm-actions .bk-go { background: var(--accent-primary); border-color: transparent; color: #fff; }
-.bk-confirm-actions .bk-go:active { background: var(--accent-hover); }
+.bk-actions .bk-go:active { background: var(--accent-hover); }
+.bk-actions .bk-go:disabled { opacity: .6; }
