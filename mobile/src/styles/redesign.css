@@ -4591,3 +4591,46 @@
   .file-preview-item .fp-spinner::after { animation-duration: 2s; }
   .file-preview-item img { transition: none; }
 }
+
+/* ══ Staged attachments lift off the composer ══════════════════════════════
+   ⚠ v0.8.6 ITEM 5, WHICH I SKIPPED. Dan asked for a shadow on the images about
+   to be sent, with a Discord screenshot as the reference. I built the loading
+   spinner, the remove button and the viewer in the same area and never added
+   this, so the tiles sat flat against the composer with only a hairline.
+
+   A staged attachment is the one thing on screen that is NOT part of the app yet
+   — it is a thing you are about to send, sitting on top of the conversation. The
+   shadow is what says that, and it is the same shadow the tab bar's pill already
+   uses so the two read as the same depth. */
+.file-preview-item {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .45);
+  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.file-preview-item:active {
+  transform: translateY(1px) scale(.98);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .4);
+}
+:root[data-theme="light"] .file-preview-item {
+  box-shadow: 0 4px 14px rgba(30, 40, 80, .18);
+}
+@media (prefers-reduced-motion: reduce) {
+  .file-preview-item { transition: none; }
+}
+
+/* The in-message card's thumbnail. It used to hold a link glyph and nothing
+   else, so the box was always empty. Now it can hold the page's own image, which
+   needs to fill the 70px strip rather than sit at its natural size. */
+.link-preview-mob-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+/* The title is the page's own now, so it can be long — clamp it rather than
+   letting one headline make a message twice the height of its neighbours. */
+.link-preview-mob-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

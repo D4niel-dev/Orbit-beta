@@ -2348,7 +2348,17 @@ document.addEventListener('DOMContentLoaded', function() {
           (gridSection ? gridSection + '<div style="height:6px;"></div>' : '') + largeHtml +
         '</div>';
       }
-      // Link Preview detection (mobile — basic card without OG fetch)
+      // Link Preview card.
+      //
+      // ⚠ This was "a basic card without OG fetch", and it showed it: a hardcoded
+      // link glyph where the thumbnail goes, the DOMAIN as the title, and then
+      // the FULL URL underneath — so the two lines said the same thing twice
+      // ("d4niel-dev.github.io" over "https://d4niel-dev.github.io/Orbit/").
+      //
+      // The composer's bar has fetched real titles and images for a while. The
+      // card now paints instantly from what it already knows — domain, glyph —
+      // and is upgraded in place when the same fetch answers, so a slow network
+      // never leaves an empty card.
       var linkPreviewHtml = '';
       if (m.text && MStore.settings.showLinkPreviews !== false) {
         var urlMatch = m.text.match(/(https?:\/\/[^\s]+)/);
@@ -2356,11 +2366,14 @@ document.addEventListener('DOMContentLoaded', function() {
           var url = urlMatch[1];
           var domain = '';
           try { domain = new URL(url).hostname; } catch(e) { domain = url; }
-          linkPreviewHtml = '<div class="link-preview-mob' + (isMine ? ' mine' : '') + '" onclick="window.open(\'' + escapeHtml(jsEscape(url)) + '\', \'_blank\')">' +
+          // The card is addressed by the message id so the upgrade can find THIS
+          // one — the same link can appear in several messages.
+          var lpKey = 'lp_' + String(m.id == null ? '' : m.id) + '_' + Math.random().toString(36).slice(2, 7);
+          linkPreviewHtml = '<div class="link-preview-mob' + (isMine ? ' mine' : '') + '" data-lp="' + escapeHtml(lpKey) + '" data-lp-url="' + escapeHtml(url) + '" onclick="window.open(\'' + escapeHtml(jsEscape(url)) + '\', \'_blank\')">' +
             '<div class="link-preview-mob-img"><i data-lucide="link-2" style="width:18px;height:18px;"></i></div>' +
             '<div class="link-preview-mob-body">' +
               '<div class="link-preview-mob-title">' + escapeHtml(domain) + '</div>' +
-              '<div class="link-preview-mob-url">' + escapeHtml(url) + '</div>' +
+              '<div class="link-preview-mob-url">' + escapeHtml(domain) + '</div>' +
             '</div>' +
           '</div>';
         }
@@ -2501,6 +2514,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (window.lucide && lucide.createIcons) {
       try { lucide.createIcons({ root: feed }); } catch (e) {}
     }
+    // The link cards are already painted with the domain and the glyph; this
+    // fills in the page's own title and image when the fetch answers.
+    try { _upgradeLinkCards(feed); } catch (e) { /* a card must never break the feed */ }
     // Tell the peer what we have seen. Guarded inside, so this only goes out
     // when the newest message actually changed.
     sendReadReceipt(chatId);
@@ -5131,6 +5147,54 @@ document.addEventListener('DOMContentLoaded', function() {
           'onerror="this.parentNode.innerHTML=\'<i data-lucide=&quot;link-2&quot;></i>\'">';
         if (window.lucide) { try { window.lucide.createIcons({ root: thumb }); } catch (e) {} }
       }
+    });
+  }
+
+  /**
+   * Upgrade the in-message link cards with the page's own title and image.
+   *
+   * ⚠ ONE SOURCE. This calls the same `OrbitLinkPreview.preview()` the composer's
+   * bar calls, so the card in a sent message and the bar above the composer
+   * cannot describe the same link differently — which is what they did when the
+   * card was written before the fetch existed.
+   *
+   * The card is already on screen and readable by the time this runs, so a failed
+   * or slow fetch simply leaves the domain and the glyph in place. Nothing here
+   * can empty a card that was already drawn.
+   */
+  function _upgradeLinkCards(root) {
+    var LP = window.OrbitLinkPreview;
+    if (!LP || !LP.preview) return;
+    var scope = root || document;
+    var cards = scope.querySelectorAll('[data-lp-url]');
+    if (!cards.length) return;
+
+    Array.prototype.forEach.call(cards, function (card) {
+      var url = card.getAttribute('data-lp-url');
+      if (!url || card.getAttribute('data-lp-done') === '1') return;
+      card.setAttribute('data-lp-done', '1');
+
+      Promise.resolve().then(function () { return LP.preview(url); }).then(function (p) {
+        if (!p || !card.isConnected) return;
+        var titleEl = card.querySelector('.link-preview-mob-title');
+        // Only replace the domain when there is a real title to replace it with.
+        if (titleEl && p.title && String(p.title).trim()) {
+          titleEl.textContent = String(p.title).trim();
+        }
+        var thumb = card.querySelector('.link-preview-mob-img');
+        if (thumb && p.image) {
+          var img = document.createElement('img');
+          img.alt = '';
+          img.src = p.image;
+          // A broken image falls back to the glyph rather than an empty box.
+          img.addEventListener('error', function () {
+            thumb.innerHTML = '<i data-lucide="link-2" style="width:18px;height:18px;"></i>';
+            if (window.lucide) { try { lucide.createIcons({ root: thumb }); } catch (e) {} }
+          }, { once: true });
+          thumb.innerHTML = '';
+          thumb.appendChild(img);
+        }
+      }).catch(function () { /* the card stays as painted */ });
     });
   }
 
